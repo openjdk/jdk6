@@ -51,6 +51,7 @@ public:
 
     /* sun.awt.windows.WObjectPeer field and method ids */
     static jfieldID pDataID;
+    static jfieldID destroyedID;
     static jfieldID targetID;
 
     static jmethodID getPeerForTargetMID;
