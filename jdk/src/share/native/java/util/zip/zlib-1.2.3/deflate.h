@@ -3,9 +3,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
+ * published by the Free Software Foundation.  Sun designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * by Sun in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -17,19 +17,13 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
  */
 
-/*
- * This file is available under and governed by the GNU General Public
- * License version 2 only, as published by the Free Software Foundation.
- * However, the following notice accompanied the original version of this
- * file and, per its terms, should not be removed:
- *
- * deflate.h -- internal compression state
- * Copyright (C) 1995-1998 Jean-loup Gailly
+/* deflate.h -- internal compression state
+ * Copyright (C) 1995-2004 Jean-loup Gailly
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -38,11 +32,20 @@
    subject to change. Applications should only use zlib.h.
  */
 
+/* @(#) $Id$ */
 
-#ifndef _DEFLATE_H
-#define _DEFLATE_H
+#ifndef DEFLATE_H
+#define DEFLATE_H
 
 #include "zutil.h"
+
+/* define NO_GZIP when compiling if you want to disable gzip header and
+   trailer creation by deflate().  NO_GZIP would be used to avoid linking in
+   the crc code when it is not needed.  For shared libraries, gzip encoding
+   should be left enabled. */
+#ifndef NO_GZIP
+#  define GZIP
+#endif
 
 /* ===========================================================================
  * Internal compression state.
@@ -70,6 +73,10 @@
 /* All codes must not exceed MAX_BITS bits */
 
 #define INIT_STATE    42
+#define EXTRA_STATE   69
+#define NAME_STATE    73
+#define COMMENT_STATE 91
+#define HCRC_STATE   103
 #define BUSY_STATE   113
 #define FINISH_STATE 666
 /* Stream status */
@@ -114,9 +121,10 @@ typedef struct internal_state {
     Bytef *pending_buf;  /* output still pending */
     ulg   pending_buf_size; /* size of pending_buf */
     Bytef *pending_out;  /* next pending byte to output to the stream */
-    int   pending;       /* nb of bytes in the pending buffer */
-    int   noheader;      /* suppress zlib header and adler32 */
-    Byte  data_type;     /* UNKNOWN, BINARY or ASCII */
+    uInt   pending;      /* nb of bytes in the pending buffer */
+    int   wrap;          /* bit 0 true for zlib, bit 1 true for gzip */
+    gz_headerp  gzhead;  /* gzip header information to write */
+    uInt   gzindex;      /* where in extra, name, or comment */
     Byte  method;        /* STORED (for zip only) or DEFLATED */
     int   last_flush;    /* value of flush param for previous deflate call */
 
@@ -344,4 +352,4 @@ void _tr_stored_block OF((deflate_state *s, charf *buf, ulg stored_len,
               flush = _tr_tally(s, distance, length)
 #endif
 
-#endif
+#endif /* DEFLATE_H */

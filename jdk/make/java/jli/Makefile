@@ -44,7 +44,6 @@ MS_RUNTIME_STATIC = true
 
 include $(BUILDDIR)/common/Defs.gmk
 
-ZLIB_VERSION = 1.1.3
 ZIP_SRC = $(SHARE_SRC)/native/java/util/zip/zlib-$(ZLIB_VERSION)
 LAUNCHER_SHARE_SRC = $(SHARE_SRC)/bin
 LAUNCHER_PLATFORM_SRC = $(PLATFORM_SRC)/bin
@@ -58,12 +57,10 @@ FILES_c = \
 	wildcard.c \
 	jli_util.c \
 	inflate.c \
-	infblock.c \
 	inftrees.c \
-	infcodes.c \
 	inffast.c \
-	infutil.c \
 	zadler32.c \
+	zcrc32.c \
 	zutil.c
 
 OTHER_CPPFLAGS += -DEXPAND_CLASSPATH_WILDCARDS
