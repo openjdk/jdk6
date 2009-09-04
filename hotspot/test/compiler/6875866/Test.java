@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2001 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2009 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,30 +19,28 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *
  */
 
-# include "incls/_precompiled.incl"
-# include "incls/_iterator.cpp.incl"
+/**
+ * @test
+ * @bug 6875866
+ * @summary Intrinsic for String.indexOf() is broken on x86 with SSE4.2
+ *
+ * @run main/othervm -Xcomp Test
+ */
 
-#ifdef ASSERT
-bool OopClosure::_must_remember_klasses = false;
-#endif
+public class Test {
 
-void ObjectToOopClosure::do_object(oop obj) {
-  obj->oop_iterate(_cl);
+  static int IndexOfTest(String str) {
+    return str.indexOf("11111xx1x");
+  }
+
+  public static void main(String args[]) {
+    String str = "11111xx11111xx1x";
+    int idx = IndexOfTest(str);
+    System.out.println("IndexOf = " + idx);
+    if (idx != 7) {
+      System.exit(97);
+    }
+  }
 }
-
-void VoidClosure::do_void() {
-  ShouldNotCallThis();
-}
-
-#ifdef ASSERT
-bool OopClosure::must_remember_klasses() {
-  return _must_remember_klasses;
-}
-void OopClosure::set_must_remember_klasses(bool v) {
-  _must_remember_klasses = v;
-}
-#endif
-

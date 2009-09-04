@@ -71,7 +71,6 @@
 
 // forward declaration for class -- see below for definition
 class SuperTypeClosure;
-class OopMapBlock;
 class JNIid;
 class jniIdMapBase;
 class BreakpointInfo;
@@ -99,6 +98,29 @@ class FieldPrinter: public FieldClosure {
 };
 #endif  // !PRODUCT
 
+// ValueObjs embedded in klass. Describes where oops are located in instances of
+// this klass.
+class OopMapBlock VALUE_OBJ_CLASS_SPEC {
+ public:
+  // Byte offset of the first oop mapped by this block.
+  int offset() const          { return _offset; }
+  void set_offset(int offset) { _offset = offset; }
+
+  // Number of oops in this block.
+  uint count() const         { return _count; }
+  void set_count(uint count) { _count = count; }
+
+  // sizeof(OopMapBlock) in HeapWords.
+  static const int size_in_words() {
+    return align_size_up(int(sizeof(OopMapBlock)), HeapWordSize) >>
+      LogHeapWordSize;
+  }
+
+ private:
+  int  _offset;
+  uint _count;
+};
+
 class instanceKlass: public Klass {
   friend class VMStructs;
  public:
@@ -113,6 +135,15 @@ class instanceKlass: public Klass {
     fully_initialized,                  // initialized (successfull final state)
     initialization_error                // error happened during initialization
   };
+
+  // smaller footprint for boolean flags
+  enum ClassFlags {
+    _noflags           = 0,             // initial value
+    _rewritten         = 0x00000001U,   // rewritten
+    _should_verify     = 0x00000002U,   // defineClass specified conditional verification
+    _has_nonstatic_fields = 0x00000004U, // for sizing with UseCompressedOops
+    _is_marked_dependent = 0x00000008U  // used for marking during flushing and deoptimization
+   };
 
  public:
   oop* oop_block_beg() const { return adr_array_klasses(); }
@@ -191,10 +222,8 @@ class instanceKlass: public Klass {
   int             _nonstatic_field_size;
   int             _static_field_size;    // number words used by static fields (oop and non-oop) in this klass
   int             _static_oop_field_size;// number of static oop fields in this klass
-  int             _nonstatic_oop_map_size;// number of nonstatic oop-map blocks allocated at end of this klass
-  bool            _is_marked_dependent;  // used for marking during flushing and deoptimization
-  bool            _rewritten;            // methods rewritten.
-  bool            _has_nonstatic_fields; // for sizing with UseCompressedOops
+  int             _nonstatic_oop_map_size;// size in words of nonstatic oop map blocks
+  int             _class_flags;          // internal class state flags
   u2              _minor_version;        // minor version number of class file
   u2              _major_version;        // major version number of class file
   ClassState      _init_state;           // state of class
@@ -230,8 +259,8 @@ class instanceKlass: public Klass {
   friend class SystemDictionary;
 
  public:
-  bool has_nonstatic_fields() const        { return _has_nonstatic_fields; }
-  void set_has_nonstatic_fields(bool b)    { _has_nonstatic_fields = b; }
+  bool has_nonstatic_fields() const        { return (_class_flags & _has_nonstatic_fields) != 0; }
+  void set_has_nonstatic_fields()          { _class_flags |= _has_nonstatic_fields; }
 
   // field sizes
   int nonstatic_field_size() const         { return _nonstatic_field_size; }
@@ -338,11 +367,16 @@ class instanceKlass: public Klass {
   bool is_in_error_state() const           { return _init_state == initialization_error; }
   bool is_reentrant_initialization(Thread *thread)  { return thread == _init_thread; }
   int  get_init_state()                    { return _init_state; } // Useful for debugging
-  bool is_rewritten() const                { return _rewritten; }
+  bool is_rewritten() const                { return (_class_flags & _rewritten) != 0; }
+
+  // defineClass specified verification
+  bool should_verify_class() const         { return (_class_flags & _should_verify) != 0; }
+  void set_should_verify_class()           { _class_flags |= _should_verify; }
 
   // marking
-  bool is_marked_dependent() const         { return _is_marked_dependent; }
-  void set_is_marked_dependent(bool value) { _is_marked_dependent = value; }
+  bool is_marked_dependent() const         { return (_class_flags & _is_marked_dependent) != 0; }
+  void set_is_marked_dependent()           { _class_flags |= _is_marked_dependent; }
+  void clear_is_marked_dependent()         { _class_flags &= ~_is_marked_dependent; }
 
   // initialization (virtuals from Klass)
   bool should_be_initialized() const;  // means that initialize should be called
@@ -424,8 +458,16 @@ class instanceKlass: public Klass {
   void set_source_debug_extension(symbolOop n){ oop_store_without_check((oop*) &_source_debug_extension, (oop) n); }
 
   // nonstatic oop-map blocks
-  int nonstatic_oop_map_size() const        { return _nonstatic_oop_map_size; }
-  void set_nonstatic_oop_map_size(int size) { _nonstatic_oop_map_size = size; }
+  static int nonstatic_oop_map_size(unsigned int oop_map_count) {
+    return oop_map_count * OopMapBlock::size_in_words();
+  }
+  unsigned int nonstatic_oop_map_count() const {
+    return _nonstatic_oop_map_size / OopMapBlock::size_in_words();
+  }
+  int nonstatic_oop_map_size() const { return _nonstatic_oop_map_size; }
+  void set_nonstatic_oop_map_size(int words) {
+    _nonstatic_oop_map_size = words;
+  }
 
   // RedefineClasses() support for previous versions:
   void add_previous_version(instanceKlassHandle ikh, BitMap *emcp_methods,
@@ -715,7 +757,8 @@ private:
 #else
   void set_init_state(ClassState state) { _init_state = state; }
 #endif
-  void set_rewritten()                  { _rewritten = true; }
+  void clear_class_flags()              { _class_flags = _noflags; }
+  void set_rewritten()                  { _class_flags |= _rewritten; }
   void set_init_thread(Thread *thread)  { _init_thread = thread; }
 
   u2 idnum_allocated_count() const      { return _idnum_allocated_count; }
@@ -838,21 +881,6 @@ inline u2 instanceKlass::next_method_idnum() {
   }
 }
 
-
-// ValueObjs embedded in klass. Describes where oops are located in instances of this klass.
-
-class OopMapBlock VALUE_OBJ_CLASS_SPEC {
- private:
-  jushort _offset;    // Offset of first oop in oop-map block
-  jushort _length;    // Length of oop-map block
- public:
-  // Accessors
-  jushort offset() const          { return _offset; }
-  void set_offset(jushort offset) { _offset = offset; }
-
-  jushort length() const          { return _length; }
-  void set_length(jushort length) { _length = length; }
-};
 
 /* JNIid class for jfieldIDs only */
 class JNIid: public CHeapObj {
