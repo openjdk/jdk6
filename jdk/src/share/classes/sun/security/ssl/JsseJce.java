@@ -63,6 +63,29 @@ final class JsseJce {
     // If yes, then all the EC based crypto we need is available.
     private static volatile Boolean ecAvailable;
 
+    // Flag indicating whether Kerberos crypto is available.
+    // If true, then all the Kerberos-based crypto we need is available.
+    private final static boolean kerberosAvailable;
+    static {
+        boolean temp;
+        try {
+            AccessController.doPrivileged(
+                new PrivilegedExceptionAction<Void>() {
+                    public Void run() throws Exception {
+                        // Test for Kerberos using the bootstrap class loader
+                        Class.forName("sun.security.krb5.PrincipalName", true,
+                                null);
+                        return null;
+                    }
+                });
+            temp = true;
+
+        } catch (Exception e) {
+            temp = false;
+        }
+        kerberosAvailable = temp;
+    }
+
     static {
         // force FIPS flag initialization
         // Because isFIPS() is synchronized and cryptoProvider is not modified
@@ -186,6 +209,10 @@ final class JsseJce {
 
     static void clearEcAvailable() {
         ecAvailable = null;
+    }
+
+    static boolean isKerberosAvailable() {
+        return kerberosAvailable;
     }
 
     /**
