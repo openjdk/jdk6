@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2004 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.types.basic;
@@ -27,6 +27,7 @@ package sun.jvm.hotspot.types.basic;
 import java.util.*;
 import sun.jvm.hotspot.debugger.*;
 import sun.jvm.hotspot.types.*;
+import sun.jvm.hotspot.runtime.VM;
 
 /** <P> This is a basic implementation of the TypeDataBase interface.
     It allows an external type database builder to add types to be
@@ -57,7 +58,7 @@ public class BasicTypeDataBase implements TypeDataBase {
   private Type jintType;
   private Type jlongType;
   private Type jshortType;
-  
+
   /** For debugging */
   private static final boolean DEBUG;
   static {
@@ -146,7 +147,7 @@ public class BasicTypeDataBase implements TypeDataBase {
   }
 
   public long getOopSize() {
-    return machDesc.getOopSize();
+    return VM.getVM().getOopSize();
   }
 
   public boolean addressTypeIsEqualToType(Address addr, Type type) {
@@ -271,11 +272,11 @@ public class BasicTypeDataBase implements TypeDataBase {
   public Iterator getTypes() {
     return nameToTypeMap.values().iterator();
   }
- 
+
   public Iterator getIntConstants() {
     return nameToIntConstantMap.keySet().iterator();
   }
- 
+
   public Iterator getLongConstants() {
     return nameToLongConstantMap.keySet().iterator();
   }
@@ -355,7 +356,7 @@ public class BasicTypeDataBase implements TypeDataBase {
     if (!curType.equals(type)) {
       throw new RuntimeException("a different type of name \"" + type.getName() + "\" was present");
     }
-    
+
     nameToTypeMap.remove(type.getName());
   }
 

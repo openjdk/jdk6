@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)matcher.hpp	1.188 07/07/19 19:08:27 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class Compile;
@@ -51,7 +48,7 @@ class Matcher : public PhaseTransform {
   void ReduceOper( State *s, int newrule, Node *&mem, MachNode *mach );
 
   // If this node already matched using "rule", return the MachNode for it.
-  MachNode* find_shared_constant(Node* con, uint rule);
+  MachNode* find_shared_node(Node* n, uint rule);
 
   // Convert a dense opcode number to an expanded rule number
   const int *_reduceOp;
@@ -60,11 +57,11 @@ class Matcher : public PhaseTransform {
 
   // Map dense opcode number to info on when rule is swallowed constant.
   const bool *_swallowed;
-  
+
   // Map dense rule number to determine if this is an instruction chain rule
   const uint _begin_inst_chain_rule;
   const uint _end_inst_chain_rule;
-  
+
   // We want to clone constants and possible CmpI-variants.
   // If we do not clone CmpI, then we can have many instances of
   // condition codes alive at once.  This is OK on some chips and
@@ -79,14 +76,15 @@ class Matcher : public PhaseTransform {
 
   // Node labeling iterator for instruction selection
   Node *Label_Root( const Node *n, State *svec, Node *control, const Node *mem );
-  
+
   Node *transform( Node *dummy );
 
   Node_List &_proj_list;        // For Machine nodes killing many values
 
-  Node_Array _shared_constants;
+  Node_Array _shared_nodes;
 
   debug_only(Node_Array _old2new_map;)   // Map roots of ideal-trees to machine-roots
+  debug_only(Node_Array _new2old_map;)   // Maps machine nodes back to ideal
 
   // Accessors for the inherited field PhaseTransform::_nodes:
   void   grow_new_node_array(uint idx_limit) {
@@ -107,6 +105,8 @@ class Matcher : public PhaseTransform {
 #ifdef ASSERT
   // Make sure only new nodes are reachable from this node
   void verify_new_nodes_only(Node* root);
+
+  Node* _mem_node;   // Ideal memory node consumed by mach node
 #endif
 
 public:
@@ -166,7 +166,7 @@ public:
   // List of IfFalse or IfTrue Nodes that indicate a taken null test.
   // List is valid in the post-matching space.
   Node_List _null_check_tests;
-  void collect_null_checks( Node *proj );
+  void collect_null_checks( Node *proj, Node *orig_proj );
   void validate_null_checks( );
 
   Matcher( Node_List &proj_list );
@@ -256,7 +256,7 @@ public:
     return stack_alignment_in_bytes() / (VMRegImpl::stack_slot_size);
   }
 
-  // Array mapping arguments to registers.  Argument 0 is usually the 'this' 
+  // Array mapping arguments to registers.  Argument 0 is usually the 'this'
   // pointer.  Registers can include stack-slots and regular registers.
   static void calling_convention( BasicType *, VMRegPair *, uint len, bool is_outgoing );
 
@@ -289,7 +289,7 @@ public:
   // Java-Interpreter calling convention
   // (what you use when calling between compiled-Java and Interpreted-Java
 
-  // Number of callee-save + always-save registers 
+  // Number of callee-save + always-save registers
   // Ignores frame pointer and "special" registers
   static int  number_of_saved_registers();
 
@@ -308,10 +308,10 @@ public:
   static OptoReg::Name  interpreter_frame_pointer_reg();
   static const RegMask &interpreter_frame_pointer_reg_mask();
 
-  // Java-Native calling convention 
+  // Java-Native calling convention
   // (what you use when intercalling between Java and C++ code)
 
-  // Array mapping arguments to registers.  Argument 0 is usually the 'this' 
+  // Array mapping arguments to registers.  Argument 0 is usually the 'this'
   // pointer.  Registers can include stack-slots and regular registers.
   static void c_calling_convention( BasicType*, VMRegPair *, uint );
   // Frame pointer. The frame pointer is kept at the base of the stack
@@ -324,7 +324,7 @@ public:
   virtual int      regnum_to_fpu_offset(int regnum);
 
   // Is this branch offset small enough to be addressed by a short branch?
-  bool is_short_branch_offset(int offset);
+  bool is_short_branch_offset(int rule, int offset);
 
   // Optional scaling for the parameter to the ClearArray/CopyArray node.
   static const bool init_array_count_is_in_bytes;
@@ -337,7 +337,7 @@ public:
   // be subsumed into complex addressing expressions or compute them into
   // registers?  True for Intel but false for most RISCs
   static const bool clone_shift_expressions;
-  
+
   // Is it better to copy float constants, or load them directly from memory?
   // Intel can load a float constant from a direct address, requiring no
   // extra registers.  Most RISCs will have to materialize an address into a
@@ -391,5 +391,9 @@ public:
 
 #ifdef ASSERT
   void dump_old2new_map();      // machine-independent to machine-dependent
+
+  Node* find_old_node(Node* new_node) {
+    return _new2old_map[new_node->_idx];
+  }
 #endif
 };

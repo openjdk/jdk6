@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)gcCause.hpp	1.24 07/05/05 17:05:40 JVM"
-#endif
 /*
  * Copyright 2002-2006 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 //
@@ -63,6 +60,8 @@ class GCCause : public AllStatic {
     _old_generation_too_full_to_scavenge,
     _adaptive_size_policy,
 
+    _g1_inc_collection_pause,
+
     _last_ditch_collection,
     _last_gc_cause
   };
@@ -71,12 +70,14 @@ class GCCause : public AllStatic {
     return (cause == GCCause::_java_lang_system_gc ||
             cause == GCCause::_jvmti_force_gc);
   }
+
   inline static bool is_serviceability_requested_gc(GCCause::Cause
-						             cause) {
+                                                             cause) {
     return (cause == GCCause::_jvmti_force_gc ||
-	    cause == GCCause::_heap_inspection || 
-	    cause == GCCause::_heap_dump);
+            cause == GCCause::_heap_inspection ||
+            cause == GCCause::_heap_dump);
   }
+
   // Return a string describing the GCCause.
   static const char* to_string(GCCause::Cause cause);
   // Return true if the GCCause is for a full collection.

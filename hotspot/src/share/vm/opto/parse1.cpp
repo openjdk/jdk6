@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)parse1.cpp	1.493 07/05/17 15:59:31 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -32,17 +29,17 @@
 // the most. Some of the non-static variables are needed in bytecodeInfo.cpp
 // and eventually should be encapsulated in a proper class (gri 8/18/98).
 
-int nodes_created              = 0; int nodes_created_old              = 0;
-int methods_parsed             = 0; int methods_parsed_old             = 0;
-int methods_seen               = 0; int methods_seen_old               = 0;
+int nodes_created              = 0;
+int methods_parsed             = 0;
+int methods_seen               = 0;
+int blocks_parsed              = 0;
+int blocks_seen                = 0;
 
-int explicit_null_checks_inserted = 0, explicit_null_checks_inserted_old = 0;
-int explicit_null_checks_elided   = 0, explicit_null_checks_elided_old   = 0;
+int explicit_null_checks_inserted = 0;
+int explicit_null_checks_elided   = 0;
 int all_null_checks_found         = 0, implicit_null_checks              = 0;
 int implicit_null_throws          = 0;
 
-int parse_idx = 0;
-size_t parse_arena = 0;
 int reclaim_idx  = 0;
 int reclaim_in   = 0;
 int reclaim_node = 0;
@@ -64,6 +61,7 @@ void Parse::print_statistics() {
   tty->cr();
   if (methods_seen != methods_parsed)
     tty->print_cr("Reasons for parse failures (NOT cumulative):");
+  tty->print_cr("Blocks parsed: %d  Blocks seen: %d", blocks_parsed, blocks_seen);
 
   if( explicit_null_checks_inserted )
     tty->print_cr("%d original NULL checks - %d elided (%2d%%); optimizer leaves %d,", explicit_null_checks_inserted, explicit_null_checks_elided, (100*explicit_null_checks_elided)/explicit_null_checks_inserted, all_null_checks_found);
@@ -90,14 +88,14 @@ Node *Parse::fetch_interpreter_state(int index,
                                      Node *local_addrs_base) {
   Node *mem = memory(Compile::AliasIdxRaw);
   Node *adr = basic_plus_adr( local_addrs_base, local_addrs, -index*wordSize );
-  
+
   // Very similar to LoadNode::make, except we handle un-aligned longs and
   // doubles on Sparc.  Intel can handle them just fine directly.
   Node *l;
   switch( bt ) {                // Signature is flattened
   case T_INT:     l = new (C, 3) LoadINode( 0, mem, adr, TypeRawPtr::BOTTOM ); break;
   case T_FLOAT:   l = new (C, 3) LoadFNode( 0, mem, adr, TypeRawPtr::BOTTOM ); break;
-  case T_ADDRESS: 
+  case T_ADDRESS:
   case T_OBJECT:  l = new (C, 3) LoadPNode( 0, mem, adr, TypeRawPtr::BOTTOM, TypeInstPtr::BOTTOM ); break;
   case T_LONG:
   case T_DOUBLE: {
@@ -105,11 +103,11 @@ Node *Parse::fetch_interpreter_state(int index,
     // refers to the back half of the long/double.  Recompute adr.
     adr = basic_plus_adr( local_addrs_base, local_addrs, -(index+1)*wordSize );
     if( Matcher::misaligned_doubles_ok ) {
-      l = (bt == T_DOUBLE) 
+      l = (bt == T_DOUBLE)
         ? (Node*)new (C, 3) LoadDNode( 0, mem, adr, TypeRawPtr::BOTTOM )
         : (Node*)new (C, 3) LoadLNode( 0, mem, adr, TypeRawPtr::BOTTOM );
     } else {
-      l = (bt == T_DOUBLE) 
+      l = (bt == T_DOUBLE)
         ? (Node*)new (C, 3) LoadD_unalignedNode( 0, mem, adr, TypeRawPtr::BOTTOM )
         : (Node*)new (C, 3) LoadL_unalignedNode( 0, mem, adr, TypeRawPtr::BOTTOM );
     }
@@ -216,7 +214,7 @@ void Parse::load_interpreter_state(Node* osr_buf) {
     // Try and copy the displaced header to the BoxNode
     Node *displaced_hdr = fetch_interpreter_state((index*2) + 1, T_ADDRESS, monitors_addr, osr_buf);
 
-   
+
     store_to_memory(control(), box, displaced_hdr, T_ADDRESS, Compile::AliasIdxRaw);
 
     // Build a bogus FastLockNode (no code will be generated) and push the
@@ -296,7 +294,7 @@ void Parse::load_interpreter_state(Node* osr_buf) {
 
   // End the OSR migration
   make_runtime_call(RC_LEAF, OptoRuntime::osr_end_Type(),
-                    CAST_FROM_FN_PTR(address, SharedRuntime::OSR_migration_end), 
+                    CAST_FROM_FN_PTR(address, SharedRuntime::OSR_migration_end),
                     "OSR_migration_end", TypeRawPtr::BOTTOM,
                     osr_buf);
 
@@ -375,6 +373,12 @@ Parse::Parse(JVMState* caller, ciMethod* parse_method, float expected_uses)
   if (_flow->failing()) {
     C->record_method_not_compilable_all_tiers(_flow->failure_reason());
   }
+
+#ifndef PRODUCT
+  if (_flow->has_irreducible_entry()) {
+    C->set_parsed_irreducible_loop(true);
+  }
+#endif
 
   if (_expected_uses <= 0) {
     _prof_factor = 1;
@@ -466,7 +470,7 @@ Parse::Parse(JVMState* caller, ciMethod* parse_method, float expected_uses)
     assert(C->is_osr_compilation() == this->is_osr_parse(), "OSR in sync");
     if (C->tf() != tf()) {
       MutexLockerEx ml(Compile_lock, Mutex::_no_safepoint_check_flag);
-      assert(C->env()->system_dictionary_modification_counter_changed(), 
+      assert(C->env()->system_dictionary_modification_counter_changed(),
              "Must invalidate if TypeFuncs differ");
     }
   } else {
@@ -477,7 +481,7 @@ Parse::Parse(JVMState* caller, ciMethod* parse_method, float expected_uses)
   methods_parsed++;
 #ifndef PRODUCT
   // add method size here to guarantee that inlined methods are added too
-  if (TimeCompiler) 
+  if (TimeCompiler)
     _total_bytes_compiled += method()->code_size();
 
   show_parse_info();
@@ -559,116 +563,91 @@ Parse::Parse(JVMState* caller, ciMethod* parse_method, float expected_uses)
   set_map(entry_map);
   do_exits();
 
-  // Collect a few more statistics.
-  parse_idx += C->unique(); 
-  parse_arena += C->node_arena()->used(); 
-
   if (log)  log->done("parse nodes='%d' memory='%d'",
                       C->unique(), C->node_arena()->used());
 }
 
 //---------------------------do_all_blocks-------------------------------------
 void Parse::do_all_blocks() {
-  _blocks_merged = 0;
-  _blocks_parsed = 0;
+  bool has_irreducible = flow()->has_irreducible_entry();
 
-  int old_blocks_merged = -1;
-  int old_blocks_parsed = -1;
+  // Walk over all blocks in Reverse Post-Order.
+  while (true) {
+    bool progress = false;
+    for (int rpo = 0; rpo < block_count(); rpo++) {
+      Block* block = rpo_at(rpo);
 
-  for (int tries = 0; ; tries++) {
-    visit_blocks();
-    if (failing())  return; // Check for bailout
+      if (block->is_parsed()) continue;
 
-    // No need for a work list.  The outer loop is hardly ever repeated.
-    // The following loop traverses the blocks in a reasonable pre-order,
-    // as produced by the ciTypeFlow pass.
-
-    // This loop can be taken more than once if there are two entries to
-    // a loop (irreduceable CFG), and the edge which ciTypeFlow chose
-    // as the first predecessor to the loop goes dead in the parser,
-    // due to parse-time optimization.  (Could happen with obfuscated code.)
-
-    // Look for progress, or the lack of it:
-    if (_blocks_parsed == block_count()) {
-      // That's all, folks.
-      if (TraceOptoParse) {
-        tty->print_cr("All blocks parsed.");
+      if (!block->is_merged()) {
+        // Dead block, no state reaches this block
+        continue;
       }
-      break;
+
+      // Prepare to parse this block.
+      load_state_from(block);
+
+      if (stopped()) {
+        // Block is dead.
+        continue;
+      }
+
+      blocks_parsed++;
+
+      progress = true;
+      if (block->is_loop_head() || block->is_handler() || has_irreducible && !block->is_ready()) {
+        // Not all preds have been parsed.  We must build phis everywhere.
+        // (Note that dead locals do not get phis built, ever.)
+        ensure_phis_everywhere();
+
+        // Leave behind an undisturbed copy of the map, for future merges.
+        set_map(clone_map());
+      }
+
+      if (control()->is_Region() && !block->is_loop_head() && !has_irreducible && !block->is_handler()) {
+        // In the absence of irreducible loops, the Region and Phis
+        // associated with a merge that doesn't involve a backedge can
+        // be simplfied now since the RPO parsing order guarantees
+        // that any path which was supposed to reach here has already
+        // been parsed or must be dead.
+        Node* c = control();
+        Node* result = _gvn.transform_no_reclaim(control());
+        if (c != result && TraceOptoParse) {
+          tty->print_cr("Block #%d replace %d with %d", block->rpo(), c->_idx, result->_idx);
+        }
+        if (result != top()) {
+          record_for_igvn(result);
+        }
+      }
+
+      // Parse the block.
+      do_one_block();
+
+      // Check for bailouts.
+      if (failing())  return;
     }
 
-    // How much work was done this time around?
-    int new_blocks_merged = _blocks_merged - old_blocks_merged;
-    int new_blocks_parsed = _blocks_parsed - old_blocks_parsed;
-    if (new_blocks_merged == 0) {
-      if (TraceOptoParse) {
-        tty->print_cr("All live blocks parsed; %d dead blocks.", block_count() - _blocks_parsed);
-      }
-      // No new blocks have become parseable.  Some blocks are just dead.
+    // with irreducible loops multiple passes might be necessary to parse everything
+    if (!has_irreducible || !progress) {
       break;
     }
-    assert(new_blocks_parsed > 0, "must make progress");
-    assert(tries < block_count(), "the pre-order cannot be this bad!");
-
-    old_blocks_merged = _blocks_merged;
-    old_blocks_parsed = _blocks_parsed;
   }
+
+  blocks_seen += block_count();
 
 #ifndef PRODUCT
   // Make sure there are no half-processed blocks remaining.
   // Every remaining unprocessed block is dead and may be ignored now.
-  for (int po = 0; po < block_count(); po++) {
-    Block* block = pre_order_at(po);
+  for (int rpo = 0; rpo < block_count(); rpo++) {
+    Block* block = rpo_at(rpo);
     if (!block->is_parsed()) {
       if (TraceOptoParse) {
-        tty->print("Skipped dead block %d at bci:%d", po, block->start());
-        assert(!block->is_merged(), "no half-processed blocks");
+        tty->print_cr("Skipped dead block %d at bci:%d", rpo, block->start());
       }
+      assert(!block->is_merged(), "no half-processed blocks");
     }
   }
 #endif
-}
-
-//---------------------------visit_blocks--------------------------------------
-void Parse::visit_blocks() {
-  // Walk over all blocks, parsing every one that has been reached (merged).
-  for (int po = 0; po < block_count(); po++) {
-    Block* block = pre_order_at(po);
-
-    if (block->is_parsed()) {
-      // Do not parse twice.
-      continue;
-    }
-
-    if (!block->is_merged()) {
-      // No state on this block.  It had not yet been reached.
-      // Delay reaching it until later.
-      continue;
-    }
-
-    // Prepare to parse this block.
-    load_state_from(block);
-
-    if (stopped()) {
-      // Block is dead.
-      continue;
-    }
-
-    if (!block->is_ready() || block->is_handler()) {
-      // Not all preds have been parsed.  We must build phis everywhere.
-      // (Note that dead locals do not get phis built, ever.)
-      ensure_phis_everywhere();
-
-      // Leave behind an undisturbed copy of the map, for future merges.
-      set_map(clone_map());
-    }
-
-    // Ready or not, parse the block.
-    do_one_block();
-
-    // Check for bailouts.
-    if (failing())  return;
-  }
 }
 
 //-------------------------------build_exits----------------------------------
@@ -694,7 +673,7 @@ void Parse::build_exits() {
   if (tf()->range()->cnt() > TypeFunc::Parms) {
     const Type* ret_type = tf()->range()->field_at(TypeFunc::Parms);
     // Don't "bind" an unloaded return klass to the ret_phi. If the klass
-    // becomes loaded during the subsequent parsing, the loaded and unloaded 
+    // becomes loaded during the subsequent parsing, the loaded and unloaded
     // types will not join when we transform and push in do_exits().
     const TypeOopPtr* ret_oop_type = ret_type->isa_oopptr();
     if (ret_oop_type && !ret_oop_type->klass()->is_loaded()) {
@@ -763,7 +742,7 @@ Node_Notes* Parse::make_node_notes(Node_Notes* caller_nn) {
 //--------------------------return_values--------------------------------------
 void Compile::return_values(JVMState* jvms) {
   GraphKit kit(jvms);
-  Node* ret = new (this, TypeFunc::Parms) ReturnNode(TypeFunc::Parms, 
+  Node* ret = new (this, TypeFunc::Parms) ReturnNode(TypeFunc::Parms,
                              kit.control(),
                              kit.i_o(),
                              kit.reset_memory(),
@@ -839,7 +818,7 @@ bool Parse::can_rerun_bytecode() {
   case Bytecodes::_checkcast:
   case Bytecodes::_instanceof:
   case Bytecodes::_athrow:
-  case Bytecodes::_anewarray: 
+  case Bytecodes::_anewarray:
   case Bytecodes::_newarray:
   case Bytecodes::_multianewarray:
   case Bytecodes::_new:
@@ -850,7 +829,7 @@ bool Parse::can_rerun_bytecode() {
 
   case Bytecodes::_invokestatic:
   case Bytecodes::_invokespecial:
-  case Bytecodes::_invokevirtual: 
+  case Bytecodes::_invokevirtual:
   case Bytecodes::_invokeinterface:
     return false;
     break;
@@ -976,7 +955,7 @@ void Parse::do_exits() {
   if (do_synch || DTraceMethodProbes) {
     // First move the exception list out of _exits:
     GraphKit kit(_exits.transfer_exceptions_into_jvms());
-    SafePointNode* normal_map = kit.map();  // keep this guy safe 
+    SafePointNode* normal_map = kit.map();  // keep this guy safe
     // Now re-collect the exceptions into _exits:
     SafePointNode* ex_map;
     while ((ex_map = kit.pop_exception_state()) != NULL) {
@@ -1024,9 +1003,9 @@ void Parse::do_exits() {
 // For OSR, the map contains a single RawPtr parameter.
 // Initial monitor locking for sync. methods is performed by do_method_entry.
 SafePointNode* Parse::create_entry_map() {
-  // Check for really stupid bail-out cases.  
+  // Check for really stupid bail-out cases.
   uint len = TypeFunc::Parms + method()->max_locals() + method()->max_stack();
-  if (len >= 32760) { 
+  if (len >= 32760) {
     C->record_method_not_compilable_all_tiers("too many local variables");
     return NULL;
   }
@@ -1093,13 +1072,13 @@ void Parse::do_method_entry() {
   set_sp(0);                      // Java Stack Pointer
 
   NOT_PRODUCT( count_compiled_calls(true/*at_method_entry*/, false/*is_inline*/); )
-  
+
   if (DTraceMethodProbes) {
     make_dtrace_method_entry(method());
   }
 
   // If the method is synchronized, we need to construct a lock node, attach
-  // it to the Start node, and pin it there.  
+  // it to the Start node, and pin it there.
   if (method()->is_synchronized()) {
     // Insert a FastLockNode right after the Start which takes as arguments
     // the current thread pointer, the "this" pointer & the address of the
@@ -1115,7 +1094,7 @@ void Parse::do_method_entry() {
       ciInstance* mirror = _method->holder()->java_mirror();
       const TypeInstPtr *t_lock = TypeInstPtr::make(mirror);
       lock_obj = makecon(t_lock);
-    } else {                  // Else pass the "this" pointer, 
+    } else {                  // Else pass the "this" pointer,
       lock_obj = local(0);    // which is Parm0 from StartNode
     }
     // Clear out dead values from the debug info.
@@ -1137,24 +1116,24 @@ void Parse::init_blocks() {
   _blocks = NEW_RESOURCE_ARRAY(Block, _block_count);
   Copy::zero_to_bytes(_blocks, sizeof(Block)*_block_count);
 
-  int po;
+  int rpo;
 
   // Initialize the structs.
-  for (po = 0; po < block_count(); po++) {
-    Block* block = pre_order_at(po);
-    block->init_node(this, po);
+  for (rpo = 0; rpo < block_count(); rpo++) {
+    Block* block = rpo_at(rpo);
+    block->init_node(this, rpo);
   }
 
   // Collect predecessor and successor information.
-  for (po = 0; po < block_count(); po++) {
-    Block* block = pre_order_at(po);
+  for (rpo = 0; rpo < block_count(); rpo++) {
+    Block* block = rpo_at(rpo);
     block->init_graph(this);
   }
 }
 
 //-------------------------------init_node-------------------------------------
-void Parse::Block::init_node(Parse* outer, int po) {
-  _flow = outer->flow()->pre_order_at(po);
+void Parse::Block::init_node(Parse* outer, int rpo) {
+  _flow = outer->flow()->rpo_at(rpo);
   _pred_count = 0;
   _preds_parsed = 0;
   _count = 0;
@@ -1180,7 +1159,7 @@ void Parse::Block::init_graph(Parse* outer) {
   int p = 0;
   for (int i = 0; i < ns+ne; i++) {
     ciTypeFlow::Block* tf2 = (i < ns) ? tfs->at(i) : tfe->at(i-ns);
-    Block* block2 = outer->pre_order_at(tf2->pre_order());
+    Block* block2 = outer->rpo_at(tf2->rpo());
     _successors[i] = block2;
 
     // Accumulate pred info for the other block, too.
@@ -1204,7 +1183,7 @@ void Parse::Block::init_graph(Parse* outer) {
 
   // Note: We never call next_path_num along exception paths, so they
   // never get processed as "ready".  Also, the input phis of exception
-  // handlers get specially processed, so that 
+  // handlers get specially processed, so that
 }
 
 //---------------------------successor_for_bci---------------------------------
@@ -1293,7 +1272,7 @@ void Parse::BytecodeParseHistogram::set_initial_state( Bytecodes::Code bc ) {
 
 //----------------------------record_change--------------------------------
 // Record results of parsing one bytecode
-void Parse::BytecodeParseHistogram::record_change() { 
+void Parse::BytecodeParseHistogram::record_change() {
   if( PrintParseStatistics && !_parser->is_osr_parse() ) {
     ++_bytecodes_parsed[_initial_bytecode];
     _nodes_constructed [_initial_bytecode] += (_compiler->unique() - _initial_node_count);
@@ -1371,10 +1350,11 @@ void Parse::do_one_block() {
     int nt = b->all_successors();
 
     tty->print("Parsing block #%d at bci [%d,%d), successors: ",
-                  block()->pre_order(), block()->start(), block()->limit());
+                  block()->rpo(), block()->start(), block()->limit());
     for (int i = 0; i < nt; i++) {
-      tty->print((( i < ns) ? " %d" : " %d(e)"), b->successor_at(i)->pre_order());
+      tty->print((( i < ns) ? " %d" : " %d(e)"), b->successor_at(i)->rpo());
     }
+    if (b->is_loop_head()) tty->print("  lphd");
     tty->print_cr("");
   }
 
@@ -1503,8 +1483,8 @@ void Parse::merge_exception(int target_bci) {
 void Parse::handle_missing_successor(int target_bci) {
 #ifndef PRODUCT
   Block* b = block();
-  int trap_bci = b->flow()->has_trap()? b->flow()->trap_bci(): -1; 
-  tty->print_cr("### Missing successor at bci:%d for block #%d (trap_bci:%d)", target_bci, b->pre_order(), trap_bci);
+  int trap_bci = b->flow()->has_trap()? b->flow()->trap_bci(): -1;
+  tty->print_cr("### Missing successor at bci:%d for block #%d (trap_bci:%d)", target_bci, b->rpo(), trap_bci);
 #endif
   ShouldNotReachHere();
 }
@@ -1512,7 +1492,7 @@ void Parse::handle_missing_successor(int target_bci) {
 //--------------------------merge_common---------------------------------------
 void Parse::merge_common(Parse::Block* target, int pnum) {
   if (TraceOptoParse) {
-    tty->print("Merging state at block #%d bci:%d", target->pre_order(), target->start());
+    tty->print("Merging state at block #%d bci:%d", target->rpo(), target->start());
   }
 
   // Zap extra stack slots to top
@@ -1537,6 +1517,7 @@ void Parse::merge_common(Parse::Block* target, int pnum) {
     // which must not be allowed into this block's map.)
     if (pnum > PhiNode::Input         // Known multiple inputs.
         || target->is_handler()       // These have unpredictable inputs.
+        || target->is_loop_head()     // Known multiple inputs
         || control()->is_Region()) {  // We must hide this guy.
       // Add a Region to start the new basic block.  Phis will be added
       // later lazily.
@@ -1578,15 +1559,21 @@ void Parse::merge_common(Parse::Block* target, int pnum) {
 
     // Compute where to merge into
     // Merge incoming control path
-    r->set_req(pnum, newin->control());
+    r->init_req(pnum, newin->control());
 
     if (pnum == 1) {            // Last merge for this Region?
-      _gvn.transform_no_reclaim(r);
+      if (!block()->flow()->is_irreducible_entry()) {
+        Node* result = _gvn.transform_no_reclaim(r);
+        if (r != result && TraceOptoParse) {
+          tty->print_cr("Block #%d replace %d with %d", block()->rpo(), r->_idx, result->_idx);
+        }
+      }
       record_for_igvn(r);
     }
 
     // Update all the non-control inputs to map:
     assert(TypeFunc::Parms == newin->jvms()->locoff(), "parser map should contain only youngest jvms");
+    bool check_elide_phi = target->is_SEL_backedge(save_block);
     for (uint j = 1; j < newin->req(); j++) {
       Node* m = map()->in(j);   // Current state of target.
       Node* n = newin->in(j);   // Incoming change to target state.
@@ -1606,7 +1593,11 @@ void Parse::merge_common(Parse::Block* target, int pnum) {
           merge_memory_edges(n->as_MergeMem(), pnum, nophi);
           continue;
         default:                // All normal stuff
-          if (phi == NULL)  phi = ensure_phi(j, nophi);
+          if (phi == NULL) {
+            if (!check_elide_phi || !target->can_elide_SEL_phi(j)) {
+              phi = ensure_phi(j, nophi);
+            }
+          }
           break;
         }
       }
@@ -1739,9 +1730,13 @@ void Parse::ensure_phis_everywhere() {
   uint nof_monitors = map()->jvms()->nof_monitors();
 
   assert(TypeFunc::Parms == map()->jvms()->locoff(), "parser map should contain only youngest jvms");
+  bool check_elide_phi = block()->is_SEL_head();
   for (uint i = TypeFunc::Parms; i < monoff; i++) {
-    ensure_phi(i);
+    if (!check_elide_phi || !block()->can_elide_SEL_phi(i)) {
+      ensure_phi(i);
+    }
   }
+
   // Even monitors need Phis, though they are well-structured.
   // This is true for OSR methods, and also for the rare cases where
   // a monitor object is the subject of a replace_in_map operation.
@@ -1829,7 +1824,7 @@ PhiNode *Parse::ensure_phi(int idx, bool nocreate) {
     map->set_req(idx, top());
     return NULL;
   }
- 
+
   // Do not create phis for top either.
   // A top on a non-null control flow must be an unused even after the.phi.
   if (t == Type::TOP || t == Type::HALF) {
@@ -1839,7 +1834,7 @@ PhiNode *Parse::ensure_phi(int idx, bool nocreate) {
 
   PhiNode* phi = PhiNode::make(region, o, t);
   gvn().set_type(phi, t);
-  if (DoEscapeAnalysis) record_for_igvn(phi);
+  if (C->do_escape_analysis()) record_for_igvn(phi);
   map->set_req(idx, phi);
   return phi;
 }
@@ -1904,7 +1899,7 @@ void Parse::call_register_finalizer() {
   // finalization.  In general this will fold up since the concrete
   // class is often visible so the access flags are constant.
   Node* klass_addr = basic_plus_adr( receiver, receiver, oopDesc::klass_offset_in_bytes() );
-  Node* klass = _gvn.transform(new (C, 3) LoadKlassNode(NULL, immutable_memory(), klass_addr, TypeInstPtr::KLASS));
+  Node* klass = _gvn.transform( LoadKlassNode::make(_gvn, immutable_memory(), klass_addr, TypeInstPtr::KLASS) );
 
   Node* access_flags_addr = basic_plus_adr(klass, klass, Klass::access_flags_offset_in_bytes() + sizeof(oopDesc));
   Node* access_flags = make_load(NULL, access_flags_addr, TypeInt::INT, T_INT);
@@ -1947,7 +1942,7 @@ void Parse::call_register_finalizer() {
     set_all_memory( _gvn.transform(mem_phi) );
     set_i_o(        _gvn.transform(io_phi) );
   }
-  
+
   set_control( _gvn.transform(result_rgn) );
 }
 
@@ -1983,7 +1978,7 @@ void Parse::return_current(Node* value) {
     }
     mms.memory()->add_req(mms.memory2());
   }
-  
+
   // frame pointer is always same, already captured
   if (value != NULL) {
     // If returning oops to an interface-return, there is a silent free
@@ -2052,7 +2047,7 @@ void Parse::add_safepoint() {
   Node* mem = MergeMemNode::make(C, map()->memory());
 
   mem = _gvn.transform(mem);
-  
+
   // Pass control through the safepoint
   sfpnt->init_req(TypeFunc::Control  , control());
   // Fix edges normally used by a call

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)c1_GraphBuilder.hpp	1.75 07/05/17 15:49:37 JVM"
-#endif
 /*
- * Copyright 1999-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class MemoryBuffer;
@@ -62,7 +59,7 @@ class GraphBuilder VALUE_OBJ_CLASS_SPEC {
     BlockBegin*  _continuation;
 
     // Without return value of inlined method on stack
-    ValueStack*  _continuation_state; 
+    ValueStack*  _continuation_state;
 
     // Was this ScopeData created only for the parsing and inlining of
     // a jsr?
@@ -286,8 +283,6 @@ class GraphBuilder VALUE_OBJ_CLASS_SPEC {
   Dependencies* dependency_recorder() const; // = compilation()->dependencies()
   bool direct_compare(ciKlass* k);
 
-  void kill_field(ciField* field);
-  void kill_array(Value value);
   void kill_all();
 
   ValueStack* lock_stack();
@@ -391,4 +386,3 @@ class GraphBuilder VALUE_OBJ_CLASS_SPEC {
 
   BlockBegin* start() const                      { return _start; }
 };
-

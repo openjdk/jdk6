@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)forms.hpp	1.150 07/05/05 17:05:00 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // FORMS.HPP - ADL Parser Generic and Utility Forms Classes
@@ -106,7 +103,7 @@ public:
   // value of the key is returned; NULL if the key was not previously defined.
   const Form  *Insert(const char *name, Form *form); // A new key-value
 
-  // Find finds the value of a given key; or NULL if not found.  
+  // Find finds the value of a given key; or NULL if not found.
   // The dictionary is NOT changed.
   const Form  *operator [](const char *name) const;  // Do a lookup
 
@@ -144,7 +141,7 @@ public:
   virtual bool           is_cisc_mem(FormDict &globals) const { return false; }
 
   // Public Methods
-  Form(int formType=0, int line=0) 
+  Form(int formType=0, int line=0)
     : _next(NULL), _linenum(line), _ftype(formType) { };
   ~Form() {};
 
@@ -154,8 +151,8 @@ public:
   }
 
   // Check constraints after parsing
-  virtual bool verify()    { return true; }       
- 
+  virtual bool verify()    { return true; }
+
   virtual void dump()      { output(stderr); }    // Debug printer
   // Write info to output files
   virtual void output(FILE *fp)    { fprintf(fp,"Form Output"); }
@@ -171,7 +168,8 @@ public:
     idealD      =  5,  // Double  type
     idealB      =  6,  // Byte    type
     idealC      =  7,  // Char    type
-    idealS      =  8   // String  type
+    idealS      =  8,  // String  type
+    idealN      =  9   // Narrow oop types
   };
   // Convert ideal name to a DataType, return DataType::none if not a 'ConX'
   Form::DataType  ideal_to_const_type(const char *ideal_type_name) const;
@@ -179,7 +177,7 @@ public:
   Form::DataType  ideal_to_sReg_type(const char *name) const;
   // Convert ideal name to a DataType, return DataType::none if not a 'RegX
   Form::DataType  ideal_to_Reg_type(const char *name) const;
-  
+
   // Convert ideal name to a DataType, return DataType::none if not a 'LoadX
   Form::DataType is_load_from_memory(const char *opType) const;
   // Convert ideal name to a DataType, return DataType::none if not a 'StoreX
@@ -258,31 +256,31 @@ private:
   Form *_cur2;                     // Nested iterator
   int   _justReset2;
 
-public: 
-  void addForm(Form * entry) { 
+public:
+  void addForm(Form * entry) {
     if (_tail==NULL) { _root = _tail = _cur = entry;}
     else { _tail->_next = entry; _tail = entry;}
   };
   Form * current() { return _cur; };
-  Form * iter()    { if (_justReset) _justReset = 0; 
-                     else if (_cur)  _cur = _cur->_next; 
+  Form * iter()    { if (_justReset) _justReset = 0;
+                     else if (_cur)  _cur = _cur->_next;
                      return _cur;};
   void   reset()   { if (_root) {_cur = _root; _justReset = 1;} };
 
   // Second iterator, state is internal
   Form * current2(){ return _cur2; };
-  Form * iter2()   { if (_justReset2) _justReset2 = 0; 
-                    else if (_cur2)  _cur2 = _cur2->_next; 
+  Form * iter2()   { if (_justReset2) _justReset2 = 0;
+                    else if (_cur2)  _cur2 = _cur2->_next;
                     return _cur2;};
   void   reset2()  { if (_root) {_cur2 = _root; _justReset2 = 1;} };
 
-  int  count() { 
+  int  count() {
     int  count = 0; reset();
     for( Form *cur; (cur =  iter()) != NULL; ) { ++count; };
     return count;
   }
 
-  void dump() { 
+  void dump() {
     reset();
     Form *cur;
     for(; (cur =  iter()) != NULL; ) {
@@ -290,7 +288,7 @@ public:
     };
   }
 
-  bool verify() { 
+  bool verify() {
     bool verified = true;
 
     reset();
@@ -302,7 +300,7 @@ public:
     return verified;
   }
 
-  void output(FILE* fp) { 
+  void output(FILE* fp) {
     reset();
     Form *cur;
     for( ; (cur =  iter()) != NULL; ) {
@@ -321,24 +319,26 @@ class NameList {
 
 private:
   int                _cur;         // Insert next entry here; count of entries
-  int  	             _max;         // Number of spaces allocated
+  int                _max;         // Number of spaces allocated
   const char       **_names;       // Array of names
 
 protected:
   int                _iter;        // position during iteration
   bool               _justReset;   // Set immediately after reset
 
-                                   
-public:                            
+
+public:
   static const char *_signal;      // reserved user-defined string
+  static const char *_signal2;      // reserved user-defined string
+  static const char *_signal3;      // reserved user-defined string
   enum               { Not_in_list = -1 };
 
-  void  addName(const char *name);       
+  void  addName(const char *name);
   void  add_signal();
   void  clear();                   // Remove all entries
 
-  int   count() const;                   
-                                   
+  int   count() const;
+
   void  reset();                   // Reset iteration
   const char *iter();              // after reset(), first element : else next
   const char *current();           // return current element in iteration.
@@ -378,7 +378,7 @@ class PreserveIter {
   }
 
 };
-  
+
 
 //------------------------------NameAndList------------------------------------
 // Storage for a name and an associated list of names
@@ -408,14 +408,14 @@ public:
   void  dump();                    // output to stderr
   void  output(FILE *fp);          // Output list of names to 'fp'
 };
-  
+
 //------------------------------ComponentList---------------------------------
 // Component lists always have match rule operands first, followed by parameter
 // operands which do not appear in the match list (in order of declaration).
 class ComponentList : private NameList {
 private:
   int   _matchcnt;                 // Count of match rule operands
-                                   
+
 public:
 
   // This is a batch program.  (And I have a destructor bug!)
@@ -426,7 +426,7 @@ public:
 
   int  count();
   int  match_count() { return _matchcnt; } // Get count of match rule opers
-                                   
+
   Component *iter();               // after reset(), first element : else next
   Component *match_iter();         // after reset(), first element : else next
   Component *post_match_iter();    // after reset(), first element : else next
@@ -452,7 +452,7 @@ public:
   int        label_position();
   // Find position for the Method when looked up for output via "format"
   int        method_position();
-                                  
+
   void       dump();               // output to stderr
   void       output(FILE *fp);     // Output list of names to 'fp'
 
@@ -506,7 +506,7 @@ public:
     Zero     = 0,
     Max      = 0x7fffffff
   };
-  const char *_external_name;  // if !NULL, then print this instead of _expr 
+  const char *_external_name;  // if !NULL, then print this instead of _expr
   const char *_expr;
   int         _min_value;
   int         _max_value;
@@ -571,7 +571,7 @@ public:
   // Return # of key-value pairs in dict
   int Size(void) const;
 
-  // define inserts the given key-value pair into the dictionary, 
+  // define inserts the given key-value pair into the dictionary,
   // and records the name in order for later output, ...
   const Expr  *define(const char *name, Expr *expr);
 
@@ -579,7 +579,7 @@ public:
   // value of the key is returned; NULL if the key was not previously defined.
   const Expr  *Insert(const char *name, Expr *expr); // A new key-value
 
-  // Find finds the value of a given key; or NULL if not found.  
+  // Find finds the value of a given key; or NULL if not found.
   // The dictionary is NOT changed.
   const Expr  *operator [](const char *name) const;  // Do a lookup
 
@@ -587,6 +587,3 @@ public:
   void print_asserts(FILE *fp);
   void dump();
 };
-
-
-

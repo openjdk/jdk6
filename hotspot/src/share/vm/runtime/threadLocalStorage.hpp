@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)threadLocalStorage.hpp	1.45 07/05/05 17:07:00 JVM"
-#endif
 /*
- * Copyright 1997-2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Interface for thread local storage
@@ -50,17 +47,17 @@ class ThreadLocalStorage : AllStatic {
   // Initialization
   // Called explicitly from VMThread::activate_system instead of init_globals.
   static void init();
+  static bool is_initialized();
 
  private:
   static int     _thread_index;
- 
+
   static void    generate_code_for_get_thread();
- 
+
   // Processor dependent parts of set_thread and initialization
   static void pd_set_thread(Thread* thread);
   static void pd_init();
   // Invalidate any thread cacheing or optimization schemes.
   static void pd_invalidate_all();
-  
-};
 
+};

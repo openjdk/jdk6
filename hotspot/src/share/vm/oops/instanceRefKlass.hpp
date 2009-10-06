@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)instanceRefKlass.hpp	1.62 07/05/29 09:44:21 JVM"
-#endif
 /*
  * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,13 +19,13 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
-// An instanceRefKlass is a specialized instanceKlass for Java 
+// An instanceRefKlass is a specialized instanceKlass for Java
 // classes that are subclasses of java/lang/ref/Reference.
 //
-// These classes are used to implement soft/weak/final/phantom 
+// These classes are used to implement soft/weak/final/phantom
 // references and finalization, and need special treatment by the
 // garbage collector.
 //
@@ -50,7 +47,7 @@ class instanceRefKlass: public instanceKlass {
   // Casting from klassOop
   static instanceRefKlass* cast(klassOop k) {
     assert(k->klass_part()->oop_is_instanceRef(), "cast to instanceRefKlass");
-    return (instanceRefKlass*) k->klass_part(); 
+    return (instanceRefKlass*) k->klass_part();
   }
 
   // allocation
@@ -75,7 +72,15 @@ class instanceRefKlass: public instanceKlass {
   int oop_oop_iterate##nv_suffix##_m(oop obj, OopClosureType* blk, MemRegion mr);
 
   ALL_OOP_OOP_ITERATE_CLOSURES_1(InstanceRefKlass_OOP_OOP_ITERATE_DECL)
-  ALL_OOP_OOP_ITERATE_CLOSURES_3(InstanceRefKlass_OOP_OOP_ITERATE_DECL)
+  ALL_OOP_OOP_ITERATE_CLOSURES_2(InstanceRefKlass_OOP_OOP_ITERATE_DECL)
+
+#ifndef SERIALGC
+#define InstanceRefKlass_OOP_OOP_ITERATE_BACKWARDS_DECL(OopClosureType, nv_suffix)      \
+  int oop_oop_iterate_backwards##nv_suffix(oop obj, OopClosureType* blk);
+
+  ALL_OOP_OOP_ITERATE_CLOSURES_1(InstanceRefKlass_OOP_OOP_ITERATE_BACKWARDS_DECL)
+  ALL_OOP_OOP_ITERATE_CLOSURES_2(InstanceRefKlass_OOP_OOP_ITERATE_BACKWARDS_DECL)
+#endif // !SERIALGC
 
   static void release_and_notify_pending_list_lock(BasicLock *pending_list_basic_lock);
   static void acquire_pending_list_lock(BasicLock *pending_list_basic_lock);

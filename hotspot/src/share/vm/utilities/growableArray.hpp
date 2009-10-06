@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)growableArray.hpp	1.55 07/05/05 17:07:09 JVM"
-#endif
 /*
- * Copyright 1997-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // A growable array.
@@ -72,8 +69,8 @@ extern "C" {
 
 class GenericGrowableArray : public ResourceObj {
  protected:
-  int    _len;		// current length
-  int    _max;		// maximum length
+  int    _len;          // current length
+  int    _max;          // maximum length
   Arena* _arena;        // Indicates where allocation occurs:
                         //   0 means default ResourceArea
                         //   1 means on C heap
@@ -90,7 +87,7 @@ class GenericGrowableArray : public ResourceObj {
   // Where are we going to allocate memory?
   bool on_C_heap() { return _arena == (Arena*)1; }
   bool on_stack () { return _arena == NULL;      }
-  bool on_arena () { return _arena >  (Arena*)1;  } 
+  bool on_arena () { return _arena >  (Arena*)1;  }
 
   // This GA will use the resource stack for storage if c_heap==false,
   // Else it will use the C heap.  Use clear_and_deallocate to avoid leaks.
@@ -114,16 +111,27 @@ class GenericGrowableArray : public ResourceObj {
   }
 
   void* raw_allocate(int elementSize);
+
+  // some uses pass the Thread explicitly for speed (4990299 tuning)
+  void* raw_allocate(Thread* thread, int elementSize) {
+    assert(on_stack(), "fast ResourceObj path only");
+    return (void*)resource_allocate_bytes(thread, elementSize * _max);
+  }
 };
 
 template<class E> class GrowableArray : public GenericGrowableArray {
  private:
-  E*     _data; 	// data array
+  E*     _data;         // data array
 
   void grow(int j);
   void raw_at_put_grow(int i, const E& p, const E& fill);
   void  clear_and_deallocate();
  public:
+  GrowableArray(Thread* thread, int initial_size) : GenericGrowableArray(initial_size, 0, false) {
+    _data = (E*)raw_allocate(thread, sizeof(E));
+    for (int i = 0; i < _max; i++) ::new ((void*)&_data[i]) E();
+  }
+
   GrowableArray(int initial_size, bool C_heap = false) : GenericGrowableArray(initial_size, 0, C_heap) {
     _data = (E*)raw_allocate(sizeof(E));
     for (int i = 0; i < _max; i++) ::new ((void*)&_data[i]) E();
@@ -152,20 +160,22 @@ template<class E> class GrowableArray : public GenericGrowableArray {
                                 // Does nothing for resource and arena objects
   ~GrowableArray()              { if (on_C_heap()) clear_and_deallocate(); }
 
-  void  clear()    		{ _len = 0; }
-  int   length() const  	{ return _len; }
-  void	trunc_to(int l)		{ assert(l <= _len,"cannot increase length"); _len = l; }
-  bool  is_empty() const  	{ return _len == 0; }
-  bool  is_nonempty() const 	{ return _len != 0; }
-  bool  is_full() const   	{ return _len == _max; }
+  void  clear()                 { _len = 0; }
+  int   length() const          { return _len; }
+  void  trunc_to(int l)         { assert(l <= _len,"cannot increase length"); _len = l; }
+  bool  is_empty() const        { return _len == 0; }
+  bool  is_nonempty() const     { return _len != 0; }
+  bool  is_full() const         { return _len == _max; }
   DEBUG_ONLY(E* data_addr() const      { return _data; })
 
   void print();
 
-  void append(const E& elem) {
+  int append(const E& elem) {
     check_nesting();
     if (_len == _max) grow(_len);
-    _data[_len++] = elem;
+    int idx = _len++;
+    _data[idx] = elem;
+    return idx;
   }
 
   void append_if_missing(const E& elem) {
@@ -187,7 +197,7 @@ template<class E> class GrowableArray : public GenericGrowableArray {
     return _data[0];
   }
 
-  E top() const {                                                  
+  E top() const {
     assert(_len > 0, "empty list");
     return _data[_len-1];
   }
@@ -317,7 +327,7 @@ template<class E> void GrowableArray<E>::raw_at_put_grow(int i, const E& p, cons
 // destructor.
 template<class E> void GrowableArray<E>::clear_and_deallocate() {
     assert(on_C_heap(),
-  	   "clear_and_deallocate should only be called when on C heap");
+           "clear_and_deallocate should only be called when on C heap");
     clear();
     if (_data != NULL) {
       for (int i = 0; i < _max; i++) _data[i].~E();

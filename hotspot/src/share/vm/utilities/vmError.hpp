@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)vmError.hpp	1.18 07/07/19 19:18:33 JVM"
-#endif
 /*
  * Copyright 2003-2007 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 
@@ -43,7 +40,7 @@ class VMError : public StackObj {
 
   Thread *     _thread;      // NULL if it's native thread
 
-  
+
   // additional info for crashes
   address      _pc;          // faulting PC
   void *       _siginfo;     // ExceptionRecord on Windows,
@@ -53,13 +50,13 @@ class VMError : public StackObj {
 
   // additional info for VM internal errors
   const char * _filename;
-  int          _lineno;
+  size_t       _lineno;
 
   // used by fatal error handler
   int          _current_step;
   const char * _current_step_info;
   int          _verbose;
-    
+
   // used by reporting about OOM
   size_t       _size;
 
@@ -73,8 +70,8 @@ class VMError : public StackObj {
   // generate an error report
   void report(outputStream* st);
 
-  // accessor 
-  const char* message()		{ return _message; }
+  // accessor
+  const char* message()         { return _message; }
 
 public:
   // Constructor for crashes
@@ -104,4 +101,3 @@ public:
   // signal was not changed by error reporter
   static address get_resetted_sighandler(int sig);
 };
-

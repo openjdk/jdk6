@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)atomic.cpp	1.14 07/05/05 17:06:42 JVM"
-#endif
 /*
- * Copyright 2001-2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -46,4 +43,16 @@ jbyte Atomic::cmpxchg(jbyte exchange_value, volatile jbyte* dest, jbyte compare_
     new_val_as_bytes[offset] = exchange_value;
   }
   return cur_as_bytes[offset];
+}
+
+unsigned Atomic::xchg(unsigned int exchange_value, volatile unsigned int* dest) {
+  assert(sizeof(unsigned int) == sizeof(jint), "more work to do");
+  return (unsigned int)Atomic::xchg((jint)exchange_value, (volatile jint*)dest);
+}
+
+unsigned Atomic::cmpxchg(unsigned int exchange_value,
+                         volatile unsigned int* dest, unsigned int compare_value) {
+  assert(sizeof(unsigned int) == sizeof(jint), "more work to do");
+  return (unsigned int)Atomic::cmpxchg((jint)exchange_value, (volatile jint*)dest,
+                                       (jint)compare_value);
 }

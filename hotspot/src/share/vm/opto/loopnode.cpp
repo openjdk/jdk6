@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)loopnode.cpp	1.262 07/10/23 13:12:50 JVM"
-#endif
 /*
- * Copyright 1998-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -1075,8 +1072,6 @@ bool IdealLoopTree::beautify_loops( PhaseIdealLoop *phase ) {
       phase->_igvn.add_users_to_worklist(l->fast_out(i));
   }
 
-  phase->C->print_method("After beautify loops", 3);
-
   // Now recursively beautify nested loops
   if( _child ) result |= _child->beautify_loops( phase );
   if( _next  ) result |= _next ->beautify_loops( phase );
@@ -1119,7 +1114,7 @@ void IdealLoopTree::allpaths_check_safepts(VectorSet &visited, Node_List &stack)
 // Given dominators, try to find loops with calls that must always be
 // executed (call dominates loop tail).  These loops do not need non-call
 // safepoints (ncsfpt).
-// 
+//
 // A complication is that a safepoint in a inner loop may be needed
 // by an outer loop. In the following, the inner loop sees it has a
 // call (block 3) on every path from the head (block 2) to the
@@ -1140,7 +1135,7 @@ void IdealLoopTree::allpaths_check_safepts(VectorSet &visited, Node_List &stack)
 //              v    +--+
 //        exit  4
 //
-// 
+//
 // This method creates a list (_required_safept) of ncsfpt nodes that must
 // be protected is created for each loop. When a ncsfpt maybe deleted, it
 // is first looked for in the lists for the outer loops of the current loop.
@@ -1176,7 +1171,7 @@ void IdealLoopTree::check_safepts(VectorSet &visited, Node_List &stack) {
     ch->check_safepts(visited, stack);
     ch = ch->_next;
   }
-  
+
   if (!_head->is_CountedLoop() && !_has_sfpt && _parent != NULL && !_irreducible) {
     bool  has_call         = false; // call on dom-path
     bool  has_local_ncsfpt = false; // ncsfpt on dom-path at this loop depth
@@ -1208,7 +1203,7 @@ void IdealLoopTree::check_safepts(VectorSet &visited, Node_List &stack) {
             // If inner loop has call on dom-path, so does outer loop
             if (nlpt->_has_sfpt) {
               has_call = true;
-              _has_sfpt = 1; 
+              _has_sfpt = 1;
               break;
             }
             // Skip to head of inner loop
@@ -1284,7 +1279,7 @@ void IdealLoopTree::counted_loop( PhaseIdealLoop *phase ) {
     // Visit all children, looking for Phis
     for (DUIterator i = cl->outs(); cl->has_out(i); i++) {
       Node *out = cl->out(i);
-      if (!out->is_Phi())  continue; // Looking for phis
+      if (!out->is_Phi() || out == phi)  continue; // Looking for other phis
       PhiNode* phi2 = out->as_Phi();
       Node *incr2 = phi2->in( LoopNode::LoopBackControl );
       // Look for induction variables of the form:  X += constant
@@ -1344,7 +1339,7 @@ void IdealLoopTree::counted_loop( PhaseIdealLoop *phase ) {
       }
     }
   } else if (_parent != NULL && !_irreducible) {
-    // Not a counted loop. 
+    // Not a counted loop.
     // Look for a safepoint on the idom-path to remove, preserving the first one
     bool found = false;
     Node* n = tail();
@@ -1392,6 +1387,37 @@ void IdealLoopTree::dump( ) const {
 }
 
 #endif
+
+static void log_loop_tree(IdealLoopTree* root, IdealLoopTree* loop, CompileLog* log) {
+  if (loop == root) {
+    if (loop->_child != NULL) {
+      log->begin_head("loop_tree");
+      log->end_head();
+      if( loop->_child ) log_loop_tree(root, loop->_child, log);
+      log->tail("loop_tree");
+      assert(loop->_next == NULL, "what?");
+    }
+  } else {
+    Node* head = loop->_head;
+    log->begin_head("loop");
+    log->print(" idx='%d' ", head->_idx);
+    if (loop->_irreducible) log->print("irreducible='1' ");
+    if (head->is_Loop()) {
+      if (head->as_Loop()->is_inner_loop()) log->print("inner_loop='1' ");
+      if (head->as_Loop()->is_partial_peel_loop()) log->print("partial_peel_loop='1' ");
+    }
+    if (head->is_CountedLoop()) {
+      CountedLoopNode* cl = head->as_CountedLoop();
+      if (cl->is_pre_loop())  log->print("pre_loop='%d' ",  cl->main_idx());
+      if (cl->is_main_loop()) log->print("main_loop='%d' ", cl->_idx);
+      if (cl->is_post_loop()) log->print("post_loop='%d' ",  cl->main_idx());
+    }
+    log->end_head();
+    if( loop->_child ) log_loop_tree(root, loop->_child, log);
+    log->tail("loop");
+    if( loop->_next  ) log_loop_tree(root, loop->_next, log);
+  }
+}
 
 //=============================================================================
 //------------------------------PhaseIdealLoop---------------------------------
@@ -1473,6 +1499,8 @@ PhaseIdealLoop::PhaseIdealLoop( PhaseIterGVN &igvn, const PhaseIdealLoop *verify
       }
       // Reset loop nesting depth
       _ltree_root->set_nest( 0 );
+
+      C->print_method("After beautify loops", 3);
     }
   }
 
@@ -1558,13 +1586,13 @@ PhaseIdealLoop::PhaseIdealLoop( PhaseIterGVN &igvn, const PhaseIdealLoop *verify
       if (!lpt->is_counted() || !lpt->is_inner()) continue;
 
       lpt->reassociate_invariants(this);
-      
+
       // Because RCE opportunities can be masked by split_thru_phi,
       // look for RCE candidates and inhibit split_thru_phi
       // on just their loop-phi's for this pass of loop opts
       if( SplitIfBlocks && do_split_ifs ) {
         if (lpt->policy_range_check(this)) {
-          lpt->_rce_candidate = true;
+          lpt->_rce_candidate = 1; // = true
         }
       }
     }
@@ -1627,10 +1655,13 @@ PhaseIdealLoop::PhaseIdealLoop( PhaseIterGVN &igvn, const PhaseIdealLoop *verify
   // Cleanup any modified bits
   _igvn.optimize();
 
-  // Do not repeat loop optimizations if irreducible loops are present
-  // by claiming no-progress.
-  if( _has_irreducible_loops )
-    C->clear_major_progress();
+  // disable assert until issue with split_flow_path is resolved (6742111)
+  // assert(!_has_irreducible_loops || C->parsed_irreducible_loop() || C->is_osr_compilation(),
+  //        "shouldn't introduce irreducible loops");
+
+  if (C->log() != NULL) {
+    log_loop_tree(_ltree_root, _ltree_root, C->log());
+  }
 }
 
 #ifndef PRODUCT
@@ -2148,7 +2179,7 @@ int PhaseIdealLoop::build_loop_tree_impl( Node *n, int pre_order ) {
     // as well?  If so, then I found another entry into the loop.
     while( is_postvisited(l->_head) ) {
       // found irreducible
-      l->_irreducible = true;
+      l->_irreducible = 1; // = true
       l = l->_parent;
       _has_irreducible_loops = true;
       // Check for bad CFG here to prevent crash, and bailout of compile
@@ -2202,6 +2233,12 @@ int PhaseIdealLoop::build_loop_tree_impl( Node *n, int pre_order ) {
               (iff->as_If()->_prob >= 0.01) )
             innermost->_has_call = 1;
         }
+      } else if( n->is_Allocate() && n->as_Allocate()->_is_scalar_replaceable ) {
+        // Disable loop optimizations if the loop has a scalar replaceable
+        // allocation. This disabling may cause a potential performance lost
+        // if the allocation is not eliminated for some reason.
+        innermost->_allow_optimizations = false;
+        innermost->_has_call = 1; // = true
       }
     }
   }
@@ -2622,13 +2659,16 @@ void PhaseIdealLoop::build_loop_late_post( Node *n, const PhaseIdealLoop *verify
     case Op_LoadF:
     case Op_LoadI:
     case Op_LoadKlass:
+    case Op_LoadNKlass:
     case Op_LoadL:
     case Op_LoadS:
     case Op_LoadP:
+    case Op_LoadN:
     case Op_LoadRange:
     case Op_LoadD_unaligned:
     case Op_LoadL_unaligned:
     case Op_StrComp:            // Does a bunch of load-like effects
+    case Op_AryEq:
       pinned = false;
     }
     if( pinned ) {
@@ -2726,11 +2766,7 @@ void PhaseIdealLoop::dump( ) const {
 }
 
 void PhaseIdealLoop::dump( IdealLoopTree *loop, uint idx, Node_List &rpo_list ) const {
-
-  // Indent by loop nesting depth
-  for( uint x = 0; x < loop->_nest; x++ )
-    tty->print("  ");
-  tty->print_cr("---- Loop N%d-N%d ----", loop->_head->_idx,loop->_tail->_idx);
+  loop->dump_head();
 
   // Now scan for CFG nodes in the same loop
   for( uint j=idx; j > 0;  j-- ) {
@@ -2824,7 +2860,7 @@ void LoopTreeIterator::next() {
   } else {
     while (_curnt != _root && _curnt->_next == NULL) {
       _curnt = _curnt->_parent;
-    }      
+    }
     if (_curnt == _root) {
       _curnt = NULL;
       assert(done(), "must be done.");
@@ -2834,4 +2870,3 @@ void LoopTreeIterator::next() {
     }
   }
 }
-

@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)jniFastGetField.cpp	1.8 07/05/05 17:06:32 JVM"
-#endif
 /*
  * Copyright 2004 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -40,4 +37,3 @@ address JNI_FastGetField::find_slowcase_pc(address pc) {
   }
   return (address)-1;
 }
-

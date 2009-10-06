@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)superword.cpp	1.8 08/03/26 10:13:00 JVM"
-#endif
 /*
- * Copyright 2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2007-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -51,10 +48,10 @@ SuperWord::SuperWord(PhaseIdealLoop* phase) :
   _n_idx_list(arena(), 8),                // scratch list of (node,index) pairs
   _stk(arena(), 8, 0, NULL),              // scratch stack of nodes
   _nlist(arena(), 8, 0, NULL),            // scratch list of nodes
-  _lpt(NULL),          	                  // loop tree node
-  _lp(NULL),           	                  // LoopNode
-  _bb(NULL),           	                  // basic block
-  _iv(NULL)           	                  // induction var
+  _lpt(NULL),                             // loop tree node
+  _lp(NULL),                              // LoopNode
+  _bb(NULL),                              // basic block
+  _iv(NULL)                               // induction var
 {}
 
 //------------------------------transform_loop---------------------------
@@ -67,6 +64,11 @@ void SuperWord::transform_loop(IdealLoopTree* lpt) {
   // Check for no control flow in body (other than exit)
   Node *cl_exit = cl->loopexit();
   if (cl_exit->in(0) != lpt->_head) return;
+
+  // Make sure the are no extra control users of the loop backedge
+  if (cl->back_control()->outcnt() != 1) {
+    return;
+  }
 
   // Check for pre-loop ending with CountedLoopEnd(Bool(Cmp(x,Opaque1(limit))))
   CountedLoopEndNode* pre_end = get_pre_loop_end(cl);
@@ -82,7 +84,7 @@ void SuperWord::transform_loop(IdealLoopTree* lpt) {
   set_lpt(lpt);
   set_lp(cl);
 
- // For now, define one block which is the entire loop body 
+ // For now, define one block which is the entire loop body
   set_bb(cl);
 
   assert(_packset.length() == 0, "packset must be empty");
@@ -162,7 +164,8 @@ void SuperWord::find_adjacent_refs() {
   Node_List memops;
   for (int i = 0; i < _block.length(); i++) {
     Node* n = _block.at(i);
-    if (n->is_Mem() && in_bb(n)) {
+    if (n->is_Mem() && in_bb(n) &&
+        is_java_primitive(n->as_Mem()->memory_type())) {
       int align = memory_alignment(n->as_Mem(), 0);
       if (align != bottom_align) {
         memops.push(n);
@@ -484,7 +487,7 @@ bool SuperWord::stmts_can_pack(Node* s1, Node* s2, int align) {
         }
       }
     }
-  } 
+  }
   return false;
 }
 
@@ -573,7 +576,7 @@ void SuperWord::set_alignment(Node* s1, Node* s2, int align) {
 int SuperWord::data_size(Node* s) {
   const Type* t = velt_type(s);
   BasicType  bt = t->array_element_basic_type();
-  int bsize = type2aelembytes[bt];
+  int bsize = type2aelembytes(bt);
   assert(bsize != 0, "valid size");
   return bsize;
 }
@@ -958,7 +961,7 @@ void SuperWord::co_locate_pack(Node_List* pk) {
       _igvn.hash_delete(ld);
       ld->set_req(MemNode::Memory, first_mem);
       _igvn._worklist.push(ld);
-    }        
+    }
   }
 }
 
@@ -1154,7 +1157,7 @@ bool SuperWord::is_vector_use(Node* use, int u_idx) {
 // Construct reverse postorder list of block members
 void SuperWord::construct_bb() {
   Node* entry = bb();
-  
+
   assert(_stk.length() == 0,            "stk is empty");
   assert(_block.length() == 0,          "block is empty");
   assert(_data_entry.length() == 0,     "data_entry is empty");
@@ -1193,8 +1196,10 @@ void SuperWord::construct_bb() {
     Node *n = lp()->fast_out(i);
     if (in_bb(n) && (n->is_Phi() && n->bottom_type() == Type::MEMORY)) {
       Node* n_tail  = n->in(LoopNode::LoopBackControl);
-      _mem_slice_head.push(n);
-      _mem_slice_tail.push(n_tail);
+      if (n_tail != n->in(LoopNode::EntryControl)) {
+        _mem_slice_head.push(n);
+        _mem_slice_tail.push(n_tail);
+      }
     }
   }
 
@@ -1283,10 +1288,10 @@ void SuperWord::bb_insert_after(Node* n, int pos) {
   // Make room
   for (int i = _block.length() - 1; i >= n_pos; i--) {
     _block.at_put_grow(i+1, _block.at(i));
-  }    
+  }
   for (int j = _node_info.length() - 1; j >= n_pos; j--) {
     _node_info.at_put_grow(j+1, _node_info.at(j));
-  }    
+  }
   // Set value
   _block.at_put_grow(n_pos, n);
   _node_info.at_put_grow(n_pos, SWNodeInfo::initial);
@@ -1350,7 +1355,7 @@ void SuperWord::compute_vector_element_type() {
     const Type* vt = container_type(t);
     set_velt_type(n, vt);
   }
-  
+
   // Propagate narrowed type backwards through operations
   // that don't depend on higher order bits
   for (int i = _block.length() - 1; i >= 0; i--) {
@@ -1421,8 +1426,9 @@ int SuperWord::memory_alignment(MemNode* s, int iv_adjust_in_bytes) {
 //---------------------------container_type---------------------------
 // Smallest type containing range of values
 const Type* SuperWord::container_type(const Type* t) {
-  if (t->isa_aryptr()) {
-    t = t->is_aryptr()->elem();
+  const Type* tp = t->make_ptr();
+  if (tp && tp->isa_aryptr()) {
+    t = tp->is_aryptr()->elem();
   }
   if (t->basic_type() == T_INT) {
     if (t->higher_equal(TypeInt::BOOL))  return TypeInt::BOOL;
@@ -1605,7 +1611,7 @@ void SuperWord::align_initial_loop_index(MemNode* align_to_ref) {
   //     (e - lim) % V == 0
   //   Solving for lim:
   //     (e - lim0 + N) % V == 0
-  //     N = [V - (e - lim0) % V] % V
+  //     N = (V - (e - lim0)) % V
   //     lim = lim0 - (V - (e - lim0)) % V
 
   int stride   = iv_stride();

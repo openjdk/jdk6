@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)opcodes.cpp	1.15 07/05/05 17:06:24 JVM"
-#endif
 /*
- * Copyright 1998-2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // ----------------------------------------------------------------------------
@@ -32,6 +29,7 @@
 const char *NodeClassNames[] = {
   "Node",
   "Set",
+  "RegN",
   "RegI",
   "RegP",
   "RegF",
@@ -43,4 +41,3 @@ const char *NodeClassNames[] = {
   "_last_class_name",
 };
 #undef macro
-

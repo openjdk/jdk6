@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)psOldGen.hpp	1.37 07/05/05 17:05:30 JVM"
-#endif
 /*
- * Copyright 2001-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class PSMarkSweepDecorator;
@@ -44,7 +41,7 @@ class PSOldGen : public CHeapObj {
   // Performance Counters
   PSGenerationCounters*    _gen_counters;
   SpaceCounters*           _space_counters;
-  
+
   // Sizing information, in bytes, set in constructor
   const size_t _init_gen_size;
   const size_t _min_gen_size;
@@ -95,28 +92,28 @@ class PSOldGen : public CHeapObj {
  public:
   // Initialize the generation.
   PSOldGen(ReservedSpace rs, size_t alignment,
-	   size_t initial_size, size_t min_size, size_t max_size,
+           size_t initial_size, size_t min_size, size_t max_size,
            const char* perf_data_name, int level);
 
   PSOldGen(size_t initial_size, size_t min_size, size_t max_size,
            const char* perf_data_name, int level);
 
   void initialize(ReservedSpace rs, size_t alignment,
-		  const char* perf_data_name, int level);
+                  const char* perf_data_name, int level);
   void initialize_virtual_space(ReservedSpace rs, size_t alignment);
   void initialize_work(const char* perf_data_name, int level);
 
   MemRegion reserved() const                { return _reserved; }
-  virtual size_t max_gen_size() 	    { return _max_gen_size; }
-  size_t min_gen_size() 		    { return _min_gen_size; }
+  virtual size_t max_gen_size()             { return _max_gen_size; }
+  size_t min_gen_size()                     { return _min_gen_size; }
 
   // Returns limit on the maximum size of the generation.  This
   // is the same as _max_gen_size for PSOldGen but need not be
   // for a derived class.
   virtual size_t gen_size_limit();
 
-  bool is_in(const void* p) const           { 
-    return _virtual_space->contains((void *)p); 
+  bool is_in(const void* p) const           {
+    return _virtual_space->contains((void *)p);
   }
 
   bool is_in_reserved(const void* p) const {
@@ -170,7 +167,7 @@ class PSOldGen : public CHeapObj {
   virtual void print() const;
   virtual void print_on(outputStream* st) const;
   void print_used_change(size_t prev_used) const;
-  
+
   void verify(bool allow_dirty);
   void verify_object_start_array();
 
@@ -188,4 +185,8 @@ class PSOldGen : public CHeapObj {
 
   // Printing support
   virtual const char* name() const { return _name; }
+
+  // Debugging support
+  // Save the tops of all spaces for later use during mangling.
+  void record_spaces_top() PRODUCT_RETURN;
 };

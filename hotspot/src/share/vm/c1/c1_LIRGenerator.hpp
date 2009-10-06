@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)c1_LIRGenerator.hpp	1.14 07/06/18 14:25:25 JVM"
-#endif
 /*
  * Copyright 2005-2006 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // The classes responsible for code emission and register allocation
@@ -70,9 +67,9 @@ class ResolveNode: public CompilationResourceObj {
   bool       _assigned;      // Value assigned to this Node?
   bool       _visited;       // Node already visited?
   bool       _start_node;    // Start node already visited?
-  
+
  public:
-  ResolveNode(LIR_Opr operand) 
+  ResolveNode(LIR_Opr operand)
     : _operand(operand)
     , _assigned(false)
     , _visited(false)
@@ -81,7 +78,7 @@ class ResolveNode: public CompilationResourceObj {
   // accessors
   LIR_Opr operand() const           { return _operand; }
   int no_of_destinations() const    { return _destinations.length(); }
-  ResolveNode* destination_at(int i)     { return _destinations[i]; } 
+  ResolveNode* destination_at(int i)     { return _destinations[i]; }
   bool assigned() const             { return _assigned; }
   bool visited() const              { return _visited; }
   bool start_node() const           { return _start_node; }
@@ -148,6 +145,7 @@ class PhiResolver: public CompilationResourceObj {
 
 // only the classes below belong in the same file
 class LIRGenerator: public InstructionVisitor, public BlockClosure {
+
  private:
   Compilation*  _compilation;
   ciMethod*     _method;    // method that we are compiling
@@ -157,6 +155,7 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
   Values        _instruction_for_operand;
   BitMap2D      _vreg_flags; // flags which can be set on a per-vreg basis
   LIR_List*     _lir;
+  BarrierSet*   _bs;
 
   LIRGenerator* gen() {
     return this;
@@ -170,14 +169,12 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
 #endif
   LIR_List* lir() const {
     return _lir;
-  }  
+  }
 
   // a simple cache of constants used within a block
   GrowableArray<LIR_Const*>       _constants;
   LIR_OprList                     _reg_for_constants;
   Values                          _unpinned_constants;
-
-  LIR_Const*                      _card_table_base;
 
   friend class PhiResolver;
 
@@ -198,8 +195,6 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
   // get a constant into a register and get track of what register was used
   LIR_Opr load_constant(Constant* x);
   LIR_Opr load_constant(LIR_Const* constant);
-
-  LIR_Const* card_table_base() const { return _card_table_base; }
 
   void  set_result(Value x, LIR_Opr opr)           {
     assert(opr->is_valid(), "must set to valid value");
@@ -256,12 +251,17 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
 
   // generic interface
 
+  void pre_barrier(LIR_Opr addr_opr, bool patch,  CodeEmitInfo* info);
   void post_barrier(LIR_OprDesc* addr, LIR_OprDesc* new_val);
 
   // specific implementations
+  // pre barriers
+
+  void G1SATBCardTableModRef_pre_barrier(LIR_Opr addr_opr, bool patch,  CodeEmitInfo* info);
 
   // post barriers
 
+  void G1SATBCardTableModRef_post_barrier(LIR_OprDesc* addr, LIR_OprDesc* new_val);
   void CardTableModRef_post_barrier(LIR_OprDesc* addr, LIR_OprDesc* new_val);
 
 

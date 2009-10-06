@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)stackValue.cpp	1.28 07/05/24 14:38:39 JVM"
-#endif
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -89,6 +86,22 @@ StackValue* StackValue::create_stack_value(const frame* fr, const RegisterMap* r
     case Location::lng:
       // Long   value in an aligned adjacent pair
       return new StackValue(*(intptr_t*)value_addr);
+    case Location::narrowoop: {
+      union { intptr_t p; narrowOop noop;} value;
+      value.p = (intptr_t) CONST64(0xDEADDEAFDEADDEAF);
+      if (loc.is_register()) {
+        // The callee has no clue whether the register holds an int,
+        // long or is unused.  He always saves a long.  Here we know
+        // a long was saved, but we only want an int back.  Narrow the
+        // saved long to the int that the JVM wants.
+        value.noop =  (narrowOop) *(julong*) value_addr;
+      } else {
+        value.noop = *(narrowOop*) value_addr;
+      }
+      // Decode narrowoop and wrap a handle around the oop
+      Handle h(oopDesc::decode_heap_oop(value.noop));
+      return new StackValue(h);
+    }
 #endif
     case Location::oop: {
       Handle h(*(oop *)value_addr); // Wrap a handle around the oop
@@ -115,9 +128,9 @@ StackValue* StackValue::create_stack_value(const frame* fr, const RegisterMap* r
     union { intptr_t p; jint ji;} value;
     value.p = (intptr_t) CONST64(0xDEADDEAFDEADDEAF);
     value.ji = (jint)((ConstantIntValue*)sv)->value();
-    return new StackValue(value.p); 
+    return new StackValue(value.p);
   } else if (sv->is_constant_oop()) {
-    // constant oop        
+    // constant oop
     return new StackValue(((ConstantOopReadValue *)sv)->value());
 #ifdef _LP64
   } else if (sv->is_constant_double()) {
@@ -138,8 +151,8 @@ StackValue* StackValue::create_stack_value(const frame* fr, const RegisterMap* r
   }
 
   // Unknown ScopeValue type
-  ShouldNotReachHere();    
-  return new StackValue((intptr_t) 0);   // dummy  
+  ShouldNotReachHere();
+  return new StackValue((intptr_t) 0);   // dummy
 }
 
 
@@ -149,7 +162,7 @@ BasicLock* StackValue::resolve_monitor_lock(const frame* fr, Location location) 
   // (stack picture)
   // high: [     ]  word_offset + 1
   // low   [     ]  word_offset
-  //       
+  //
   // sp->  [     ]  0
   // the word_offset is the distance from the stack pointer to the lowest address
   // The frame's original stack pointer, before any extension by its callee
@@ -164,7 +177,7 @@ void StackValue::print_on(outputStream* st) const {
   switch(_type) {
     case T_INT:
       st->print("%d (int) %f (float) %x (hex)",  *(int *)&_i, *(float *)&_i,  *(int *)&_i);
-      break;    
+      break;
 
     case T_OBJECT:
      _o()->print_value_on(st);
@@ -172,7 +185,7 @@ void StackValue::print_on(outputStream* st) const {
      break;
 
     case T_CONFLICT:
-     st->print("conflict"); 
+     st->print("conflict");
      break;
 
     default:
@@ -181,4 +194,3 @@ void StackValue::print_on(outputStream* st) const {
 }
 
 #endif
-

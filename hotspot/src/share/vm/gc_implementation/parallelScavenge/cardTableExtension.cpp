@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)cardTableExtension.cpp	1.35 07/09/25 16:47:41 JVM"
-#endif
 /*
- * Copyright 2001-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -31,17 +28,16 @@
 // Checks an individual oop for missing precise marks. Mark
 // may be either dirty or newgen.
 class CheckForUnmarkedOops : public OopClosure {
-  PSYoungGen* _young_gen;
+ private:
+  PSYoungGen*         _young_gen;
   CardTableExtension* _card_table;
-  HeapWord* _unmarked_addr;
-  jbyte* _unmarked_card;
+  HeapWord*           _unmarked_addr;
+  jbyte*              _unmarked_card;
 
- public:
-  CheckForUnmarkedOops( PSYoungGen* young_gen, CardTableExtension* card_table ) :
-    _young_gen(young_gen), _card_table(card_table), _unmarked_addr(NULL) { }
-
-  virtual void do_oop(oop* p) {
-    if (_young_gen->is_in_reserved(*p) &&
+ protected:
+  template <class T> void do_oop_work(T* p) {
+    oop obj = oopDesc::load_decode_heap_oop_not_null(p);
+    if (_young_gen->is_in_reserved(obj) &&
         !_card_table->addr_is_marked_imprecise(p)) {
       // Don't overwrite the first missing card mark
       if (_unmarked_addr == NULL) {
@@ -51,6 +47,13 @@ class CheckForUnmarkedOops : public OopClosure {
     }
   }
 
+ public:
+  CheckForUnmarkedOops(PSYoungGen* young_gen, CardTableExtension* card_table) :
+    _young_gen(young_gen), _card_table(card_table), _unmarked_addr(NULL) { }
+
+  virtual void do_oop(oop* p)       { CheckForUnmarkedOops::do_oop_work(p); }
+  virtual void do_oop(narrowOop* p) { CheckForUnmarkedOops::do_oop_work(p); }
+
   bool has_unmarked_oop() {
     return _unmarked_addr != NULL;
   }
@@ -59,14 +62,15 @@ class CheckForUnmarkedOops : public OopClosure {
 // Checks all objects for the existance of some type of mark,
 // precise or imprecise, dirty or newgen.
 class CheckForUnmarkedObjects : public ObjectClosure {
-  PSYoungGen* _young_gen;
+ private:
+  PSYoungGen*         _young_gen;
   CardTableExtension* _card_table;
 
  public:
   CheckForUnmarkedObjects() {
     ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
     assert(heap->kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
-    
+
     _young_gen = heap->young_gen();
     _card_table = (CardTableExtension*)heap->barrier_set();
     // No point in asserting barrier set type here. Need to make CardTableExtension
@@ -78,7 +82,7 @@ class CheckForUnmarkedObjects : public ObjectClosure {
   // we test for missing precise marks first. If any are found, we don't
   // fail unless the object head is also unmarked.
   virtual void do_object(oop obj) {
-    CheckForUnmarkedOops object_check( _young_gen, _card_table );
+    CheckForUnmarkedOops object_check(_young_gen, _card_table);
     obj->oop_iterate(&object_check);
     if (object_check.has_unmarked_oop()) {
       assert(_card_table->addr_is_marked_imprecise(obj), "Found unmarked young_gen object");
@@ -88,19 +92,25 @@ class CheckForUnmarkedObjects : public ObjectClosure {
 
 // Checks for precise marking of oops as newgen.
 class CheckForPreciseMarks : public OopClosure {
-  PSYoungGen* _young_gen;
+ private:
+  PSYoungGen*         _young_gen;
   CardTableExtension* _card_table;
+
+ protected:
+  template <class T> void do_oop_work(T* p) {
+    oop obj = oopDesc::load_decode_heap_oop_not_null(p);
+    if (_young_gen->is_in_reserved(obj)) {
+      assert(_card_table->addr_is_marked_precise(p), "Found unmarked precise oop");
+      _card_table->set_card_newgen(p);
+    }
+  }
 
  public:
   CheckForPreciseMarks( PSYoungGen* young_gen, CardTableExtension* card_table ) :
     _young_gen(young_gen), _card_table(card_table) { }
 
-  virtual void do_oop(oop* p) {
-    if (_young_gen->is_in_reserved(*p)) {
-      assert(_card_table->addr_is_marked_precise(p), "Found unmarked precise oop");
-      _card_table->set_card_newgen(p);
-    }
-  }
+  virtual void do_oop(oop* p)       { CheckForPreciseMarks::do_oop_work(p); }
+  virtual void do_oop(narrowOop* p) { CheckForPreciseMarks::do_oop_work(p); }
 };
 
 // We get passed the space_top value to prevent us from traversing into
@@ -108,7 +118,7 @@ class CheckForPreciseMarks : public OopClosure {
 void CardTableExtension::scavenge_contents(ObjectStartArray* start_array,
                                            MutableSpace* sp,
                                            HeapWord* space_top,
-                                           PSPromotionManager* pm) 
+                                           PSPromotionManager* pm)
 {
   assert(start_array != NULL && sp != NULL && pm != NULL, "Sanity");
   assert(start_array->covered_region().contains(sp->used_region()),
@@ -192,20 +202,20 @@ void CardTableExtension::scavenge_contents(ObjectStartArray* start_array,
         }
         // scan oops in objects
         // hoisted the if (depth_first) check out of the loop
-	if (depth_first){ 
-	  do {
-	    oop(bottom_obj)->push_contents(pm);
-	    bottom_obj += oop(bottom_obj)->size();
-	    assert(bottom_obj <= sp_top, "just checking");
-	  } while (bottom_obj < top);
-	  pm->drain_stacks_cond_depth();
-	} else {
-	  do {
-	    oop(bottom_obj)->copy_contents(pm);
-	    bottom_obj += oop(bottom_obj)->size();
-	    assert(bottom_obj <= sp_top, "just checking");
-	  } while (bottom_obj < top);
-	}
+        if (depth_first){
+          do {
+            oop(bottom_obj)->push_contents(pm);
+            bottom_obj += oop(bottom_obj)->size();
+            assert(bottom_obj <= sp_top, "just checking");
+          } while (bottom_obj < top);
+          pm->drain_stacks_cond_depth();
+        } else {
+          do {
+            oop(bottom_obj)->copy_contents(pm);
+            bottom_obj += oop(bottom_obj)->size();
+            assert(bottom_obj <= sp_top, "just checking");
+          } while (bottom_obj < top);
+        }
         // remember top oop* scanned
         prev_top = top;
       }
@@ -313,32 +323,32 @@ void CardTableExtension::scavenge_contents_parallel(ObjectStartArray* start_arra
       jbyte* following_clean_card = current_card;
 
       if (first_unclean_card < worker_end_card) {
-	oop* p = (oop*) start_array->object_start(addr_for(first_unclean_card));
-	assert((HeapWord*)p <= addr_for(first_unclean_card), "checking");
-	// "p" should always be >= "last_scanned" because newly GC dirtied
-	// cards are no longer scanned again (see comment at end
-	// of loop on the increment of "current_card").  Test that
-	// hypothesis before removing this code.
-	// If this code is removed, deal with the first time through
-	// the loop when the last_scanned is the object starting in
-	// the previous slice.
-	assert((p >= last_scanned) || 
-	       (last_scanned == first_object_within_slice),
-	       "Should no longer be possible");
-	if (p < last_scanned) {   
-	  // Avoid scanning more than once; this can happen because
-	  // newgen cards set by GC may a different set than the
-	  // originally dirty set
-	  p = last_scanned;
-	}
-	oop* to = (oop*)addr_for(following_clean_card);
+        oop* p = (oop*) start_array->object_start(addr_for(first_unclean_card));
+        assert((HeapWord*)p <= addr_for(first_unclean_card), "checking");
+        // "p" should always be >= "last_scanned" because newly GC dirtied
+        // cards are no longer scanned again (see comment at end
+        // of loop on the increment of "current_card").  Test that
+        // hypothesis before removing this code.
+        // If this code is removed, deal with the first time through
+        // the loop when the last_scanned is the object starting in
+        // the previous slice.
+        assert((p >= last_scanned) ||
+               (last_scanned == first_object_within_slice),
+               "Should no longer be possible");
+        if (p < last_scanned) {
+          // Avoid scanning more than once; this can happen because
+          // newgen cards set by GC may a different set than the
+          // originally dirty set
+          p = last_scanned;
+        }
+        oop* to = (oop*)addr_for(following_clean_card);
 
         // Test slice_end first!
         if ((HeapWord*)to > slice_end) {
           to = (oop*)slice_end;
         } else if (to > sp_top) {
-	  to = sp_top;
-	} 
+          to = sp_top;
+        }
 
         // we know which cards to scan, now clear them
         if (first_unclean_card <= worker_start_card+1)
@@ -350,56 +360,56 @@ void CardTableExtension::scavenge_contents_parallel(ObjectStartArray* start_arra
           *first_unclean_card++ = clean_card;
         }
 
-	const int interval = PrefetchScanIntervalInBytes;
-	// scan all objects in the range
-	if (interval != 0) {
+        const int interval = PrefetchScanIntervalInBytes;
+        // scan all objects in the range
+        if (interval != 0) {
           // hoisted the if (depth_first) check out of the loop
-	  if (depth_first) {
-	    while (p < to) {
-	      Prefetch::write(p, interval);
-	      oop m = oop(p);
-	      assert(m->is_oop_or_null(), "check for header");
-	      m->push_contents(pm); 
-	      p += m->size();
-	    }
-	    pm->drain_stacks_cond_depth();
-	  } else {
-	    while (p < to) {
-	      Prefetch::write(p, interval);
-	      oop m = oop(p);
-	      assert(m->is_oop_or_null(), "check for header");
-	      m->copy_contents(pm); 
-	      p += m->size();
-	    }
-	  }
-	} else {
+          if (depth_first) {
+            while (p < to) {
+              Prefetch::write(p, interval);
+              oop m = oop(p);
+              assert(m->is_oop_or_null(), "check for header");
+              m->push_contents(pm);
+              p += m->size();
+            }
+            pm->drain_stacks_cond_depth();
+          } else {
+            while (p < to) {
+              Prefetch::write(p, interval);
+              oop m = oop(p);
+              assert(m->is_oop_or_null(), "check for header");
+              m->copy_contents(pm);
+              p += m->size();
+            }
+          }
+        } else {
           // hoisted the if (depth_first) check out of the loop
-	  if (depth_first) {
-	    while (p < to) {
-	      oop m = oop(p);
-	      assert(m->is_oop_or_null(), "check for header");
-	      m->push_contents(pm);
-	      p += m->size();
-	    }
-	    pm->drain_stacks_cond_depth();
-	  } else {
-	    while (p < to) {
-	      oop m = oop(p);
-	      assert(m->is_oop_or_null(), "check for header");
-	      m->copy_contents(pm);
-	      p += m->size();
-	    }
-	  }
-	}
-	last_scanned = p;
+          if (depth_first) {
+            while (p < to) {
+              oop m = oop(p);
+              assert(m->is_oop_or_null(), "check for header");
+              m->push_contents(pm);
+              p += m->size();
+            }
+            pm->drain_stacks_cond_depth();
+          } else {
+            while (p < to) {
+              oop m = oop(p);
+              assert(m->is_oop_or_null(), "check for header");
+              m->copy_contents(pm);
+              p += m->size();
+            }
+          }
+        }
+        last_scanned = p;
       }
       // "current_card" is still the "following_clean_card" or
       // the current_card is >= the worker_end_card so the
       // loop will not execute again.
       assert((current_card == following_clean_card) ||
-	     (current_card >= worker_end_card),
-	"current_card should only be incremented if it still equals "
-	"following_clean_card");
+             (current_card >= worker_end_card),
+        "current_card should only be incremented if it still equals "
+        "following_clean_card");
       // Increment current_card so that it is not processed again.
       // It may now be dirty because a old-to-young pointer was
       // found on it an updated.  If it is now dirty, it cannot be
@@ -412,7 +422,7 @@ void CardTableExtension::scavenge_contents_parallel(ObjectStartArray* start_arra
 // This should be called before a scavenge.
 void CardTableExtension::verify_all_young_refs_imprecise() {
   CheckForUnmarkedObjects check;
-  
+
   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
   assert(heap->kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
 
@@ -495,10 +505,10 @@ bool CardTableExtension::addr_is_marked_precise(void *addr) {
 }
 
 // Assumes that only the base or the end changes.  This allows indentification
-// of the region that is being resized.  The 
+// of the region that is being resized.  The
 // CardTableModRefBS::resize_covered_region() is used for the normal case
 // where the covered regions are growing or shrinking at the high end.
-// The method resize_covered_region_by_end() is analogous to 
+// The method resize_covered_region_by_end() is analogous to
 // CardTableModRefBS::resize_covered_region() but
 // for regions that grow or shrink at the low end.
 void CardTableExtension::resize_covered_region(MemRegion new_region) {
@@ -523,7 +533,7 @@ void CardTableExtension::resize_covered_region(MemRegion new_region) {
       // This is a case where the covered region is growing or shrinking
       // at the start of the region.
       assert(changed_region != -1, "Don't expect to add a covered region");
-      assert(_covered[changed_region].byte_size() != new_region.byte_size(), 
+      assert(_covered[changed_region].byte_size() != new_region.byte_size(),
         "The sizes should be different here");
       resize_covered_region_by_end(changed_region, new_region);
       return;
@@ -531,7 +541,7 @@ void CardTableExtension::resize_covered_region(MemRegion new_region) {
   }
   // This should only be a new covered region (where no existing
   // covered region matches at the start or the end).
-  assert(_cur_covered_regions < _max_covered_regions, 
+  assert(_cur_covered_regions < _max_covered_regions,
     "An existing region should have been found");
   resize_covered_region_by_start(new_region);
 }
@@ -542,8 +552,8 @@ void CardTableExtension::resize_covered_region_by_start(MemRegion new_region) {
 }
 
 void CardTableExtension::resize_covered_region_by_end(int changed_region,
-  						      MemRegion new_region) {
-  assert(SafepointSynchronize::is_at_safepoint(), 
+                                                      MemRegion new_region) {
+  assert(SafepointSynchronize::is_at_safepoint(),
     "Only expect an expansion at the low end at a GC");
   debug_only(verify_guard();)
 #ifdef ASSERT
@@ -595,10 +605,10 @@ void CardTableExtension::resize_covered_region_by_end(int changed_region,
 }
 
 void CardTableExtension::resize_commit_uncommit(int changed_region,
-						MemRegion new_region) {
+                                                MemRegion new_region) {
   // Commit new or uncommit old pages, if necessary.
   MemRegion cur_committed = _committed[changed_region];
-  assert(_covered[changed_region].end() == new_region.end(), 
+  assert(_covered[changed_region].end() == new_region.end(),
     "The ends of the regions are expected to match");
   // Extend the start of this _committed region to
   // to cover the start of any previous _committed region.
@@ -608,14 +618,14 @@ void CardTableExtension::resize_commit_uncommit(int changed_region,
     // Only really need to set start of "cur_committed" to
     // the new start (min_prev_start) but assertion checking code
     // below use cur_committed.end() so make it correct.
-    MemRegion new_committed = 
-	MemRegion(min_prev_start, cur_committed.end());
+    MemRegion new_committed =
+        MemRegion(min_prev_start, cur_committed.end());
     cur_committed = new_committed;
   }
 #ifdef ASSERT
   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
-  assert(cur_committed.start() == 
-    (HeapWord*) align_size_up((uintptr_t) cur_committed.start(), 
+  assert(cur_committed.start() ==
+    (HeapWord*) align_size_up((uintptr_t) cur_committed.start(),
                               os::vm_page_size()),
     "Starts should have proper alignment");
 #endif
@@ -633,32 +643,32 @@ void CardTableExtension::resize_commit_uncommit(int changed_region,
     // Expand the committed region
     //
     // Case A
-    //						|+ guard +|
-    //				|+ cur committed +++++++++|
-    //			|+ new committed +++++++++++++++++|
+    //                                          |+ guard +|
+    //                          |+ cur committed +++++++++|
+    //                  |+ new committed +++++++++++++++++|
     //
     // Case B
-    //						|+ guard +|
-    //			      |+ cur committed +|
-    //			|+ new committed +++++++|
+    //                                          |+ guard +|
+    //                        |+ cur committed +|
+    //                  |+ new committed +++++++|
     //
     // These are not expected because the calculation of the
     // cur committed region and the new committed region
     // share the same end for the covered region.
     // Case C
-    //						|+ guard +|
-    //			      |+ cur committed +|
-    //			|+ new committed +++++++++++++++++|
+    //                                          |+ guard +|
+    //                        |+ cur committed +|
+    //                  |+ new committed +++++++++++++++++|
     // Case D
-    //						|+ guard +|
-    //			      |+ cur committed +++++++++++|
-    //			|+ new committed +++++++|
+    //                                          |+ guard +|
+    //                        |+ cur committed +++++++++++|
+    //                  |+ new committed +++++++|
 
-    HeapWord* new_end_for_commit = 
+    HeapWord* new_end_for_commit =
       MIN2(cur_committed.end(), _guard_region.start());
-    MemRegion new_committed = 
-      MemRegion(new_start_aligned, new_end_for_commit);
-    if(!new_committed.is_empty()) {
+    if(new_start_aligned < new_end_for_commit) {
+      MemRegion new_committed =
+        MemRegion(new_start_aligned, new_end_for_commit);
       if (!os::commit_memory((char*)new_committed.start(),
                              new_committed.byte_size())) {
         vm_exit_out_of_memory(new_committed.byte_size(),
@@ -667,7 +677,7 @@ void CardTableExtension::resize_commit_uncommit(int changed_region,
     }
   } else if (new_start_aligned > cur_committed.start()) {
     // Shrink the committed region
-    MemRegion uncommit_region = committed_unique_to_self(changed_region, 
+    MemRegion uncommit_region = committed_unique_to_self(changed_region,
       MemRegion(cur_committed.start(), new_start_aligned));
     if (!uncommit_region.is_empty()) {
       if (!os::uncommit_memory((char*)uncommit_region.start(),
@@ -682,21 +692,21 @@ void CardTableExtension::resize_commit_uncommit(int changed_region,
 }
 
 void CardTableExtension::resize_update_committed_table(int changed_region,
-						       MemRegion new_region) {
+                                                       MemRegion new_region) {
 
   jbyte* new_start = byte_for(new_region.start());
   // Set the new start of the committed region
   HeapWord* new_start_aligned =
-    (HeapWord*)align_size_down((uintptr_t)new_start, 
+    (HeapWord*)align_size_down((uintptr_t)new_start,
                              os::vm_page_size());
-  MemRegion new_committed = MemRegion(new_start_aligned, 
+  MemRegion new_committed = MemRegion(new_start_aligned,
     _committed[changed_region].end());
   _committed[changed_region] = new_committed;
   _committed[changed_region].set_start(new_start_aligned);
 }
 
 void CardTableExtension::resize_update_card_table_entries(int changed_region,
-						          MemRegion new_region) {
+                                                          MemRegion new_region) {
   debug_only(verify_guard();)
   MemRegion original_covered = _covered[changed_region];
   // Initialize the card entries.  Only consider the
@@ -714,7 +724,7 @@ void CardTableExtension::resize_update_card_table_entries(int changed_region,
 }
 
 void CardTableExtension::resize_update_covered_table(int changed_region,
-						     MemRegion new_region) {
+                                                     MemRegion new_region) {
   // Update the covered region
   _covered[changed_region].set_start(new_region.start());
   _covered[changed_region].set_word_size(new_region.word_size());
@@ -723,10 +733,10 @@ void CardTableExtension::resize_update_covered_table(int changed_region,
   // of order.
   for (int i = _cur_covered_regions-1 ; i > 0; i--) {
     if (_covered[i].start() < _covered[i-1].start()) {
-	MemRegion covered_mr = _covered[i-1];
-	_covered[i-1] = _covered[i];
-	_covered[i] = covered_mr;
-	MemRegion committed_mr = _committed[i-1];
+        MemRegion covered_mr = _covered[i-1];
+        _covered[i-1] = _covered[i];
+        _covered[i] = covered_mr;
+        MemRegion committed_mr = _committed[i-1];
       _committed[i-1] = _committed[i];
       _committed[i] = committed_mr;
       break;
@@ -734,9 +744,9 @@ void CardTableExtension::resize_update_covered_table(int changed_region,
   }
 #ifdef ASSERT
   for (int m = 0; m < _cur_covered_regions-1; m++) {
-    assert(_covered[m].start() <= _covered[m+1].start(), 
+    assert(_covered[m].start() <= _covered[m+1].start(),
       "Covered regions out of order");
-    assert(_committed[m].start() <= _committed[m+1].start(), 
+    assert(_committed[m].start() <= _committed[m+1].start(),
       "Committed regions out of order");
   }
 #endif
@@ -766,18 +776,17 @@ void CardTableExtension::resize_update_covered_table(int changed_region,
 //                               -------------
 //                               |           |
 //                               -------------
-//      		^ returns this
+//                      ^ returns this
 
 HeapWord* CardTableExtension::lowest_prev_committed_start(int ind) const {
   assert(_cur_covered_regions >= 0, "Expecting at least on region");
   HeapWord* min_start = _committed[ind].start();
   for (int j = 0; j < ind; j++) {
     HeapWord* this_start = _committed[j].start();
-    if ((this_start < min_start) && 
+    if ((this_start < min_start) &&
         !(_committed[j].intersection(_committed[ind])).is_empty()) {
        min_start = this_start;
     }
   }
   return min_start;
 }
-

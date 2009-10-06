@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)connode.hpp	1.160 07/05/05 17:06:13 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class PhaseTransform;
@@ -32,7 +29,7 @@ class MachNode;
 // Simple constants
 class ConNode : public TypeNode {
 public:
-  ConNode( const Type *t ) : TypeNode(t,1) { 
+  ConNode( const Type *t ) : TypeNode(t,1) {
     init_req(0, (Node*)Compile::current()->root());
     init_flags(Flag_is_Con);
   }
@@ -73,11 +70,15 @@ public:
     else
       return new (C, 1) ConPNode( TypeRawPtr::make(con) );
   }
+};
 
-  static ConPNode* make( Compile *C, ciObject* con ) {
-    return new (C, 1) ConPNode( TypeOopPtr::make_from_constant(con) );
-  }
 
+//------------------------------ConNNode--------------------------------------
+// Simple narrow oop constants
+class ConNNode : public ConNode {
+public:
+  ConNNode( const TypeNarrowOop *t ) : ConNode(t) {}
+  virtual int Opcode() const;
 };
 
 
@@ -127,7 +128,7 @@ public:
 // Place holder for the 2 conditional inputs to a CMove.  CMove needs 4
 // inputs: the Bool (for the lt/gt/eq/ne bits), the flags (result of some
 // compare), and the 2 values to select between.  The Matcher requires a
-// binary tree so we break it down like this: 
+// binary tree so we break it down like this:
 //     (CMove (Binary bol cmp) (Binary src1 src2))
 class BinaryNode : public Node {
 public:
@@ -147,7 +148,7 @@ public:
   CMoveNode( Node *bol, Node *left, Node *right, const Type *t ) : TypeNode(t,4)
   {
     init_class_id(Class_CMove);
-    // all inputs are nullified in Node::Node(int) 
+    // all inputs are nullified in Node::Node(int)
     // init_req(Control,NULL);
     init_req(Condition,bol);
     init_req(IfFalse,left);
@@ -199,7 +200,14 @@ public:
   virtual int Opcode() const;
 };
 
-//------------------------------ConstraintCastNode-------------------------------------
+//------------------------------CMoveNNode-------------------------------------
+class CMoveNNode : public CMoveNode {
+public:
+  CMoveNNode( Node *c, Node *bol, Node *left, Node *right, const Type* t ) : CMoveNode(bol,left,right,t) { init_req(Control,c); }
+  virtual int Opcode() const;
+};
+
+//------------------------------ConstraintCastNode-----------------------------
 // cast to a different range
 class ConstraintCastNode: public TypeNode {
 public:
@@ -228,10 +236,7 @@ public:
 // cast pointer to pointer (different type)
 class CastPPNode: public ConstraintCastNode {
 public:
-  CastPPNode (Node *n, const Type *t ): ConstraintCastNode(n, t) {
-    // Only CastPP is safe.  CastII can cause optimizer loops.
-    init_flags(Flag_is_dead_loop_safe);
-  }
+  CastPPNode (Node *n, const Type *t ): ConstraintCastNode(n, t) {}
   virtual int Opcode() const;
   virtual uint ideal_reg() const { return Op_RegP; }
   virtual Node *Ideal_DU_postCCP( PhaseCCP * );
@@ -243,10 +248,10 @@ class CheckCastPPNode: public TypeNode {
 public:
   CheckCastPPNode( Node *c, Node *n, const Type *t ) : TypeNode(t,2) {
     init_class_id(Class_CheckCastPP);
-    init_flags(Flag_is_dead_loop_safe);
     init_req(0, c);
     init_req(1, n);
   }
+
   virtual Node *Identity( PhaseTransform *phase );
   virtual const Type *Value( PhaseTransform *phase ) const;
   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
@@ -255,6 +260,45 @@ public:
   // No longer remove CheckCast after CCP as it gives me a place to hang
   // the proper address type - which is required to compute anti-deps.
   //virtual Node *Ideal_DU_postCCP( PhaseCCP * );
+};
+
+
+//------------------------------EncodeP--------------------------------
+// Encodes an oop pointers into its compressed form
+// Takes an extra argument which is the real heap base as a long which
+// may be useful for code generation in the backend.
+class EncodePNode : public TypeNode {
+ public:
+  EncodePNode(Node* value, const Type* type):
+    TypeNode(type, 2) {
+    init_class_id(Class_EncodeP);
+    init_req(0, NULL);
+    init_req(1, value);
+  }
+  virtual int Opcode() const;
+  virtual Node *Identity( PhaseTransform *phase );
+  virtual const Type *Value( PhaseTransform *phase ) const;
+  virtual uint  ideal_reg() const { return Op_RegN; }
+
+  virtual Node *Ideal_DU_postCCP( PhaseCCP *ccp );
+};
+
+//------------------------------DecodeN--------------------------------
+// Converts a narrow oop into a real oop ptr.
+// Takes an extra argument which is the real heap base as a long which
+// may be useful for code generation in the backend.
+class DecodeNNode : public TypeNode {
+ public:
+  DecodeNNode(Node* value, const Type* type):
+    TypeNode(type, 2) {
+    init_class_id(Class_DecodeN);
+    init_req(0, NULL);
+    init_req(1, value);
+  }
+  virtual int Opcode() const;
+  virtual Node *Identity( PhaseTransform *phase );
+  virtual const Type *Value( PhaseTransform *phase ) const;
+  virtual uint  ideal_reg() const { return Op_RegP; }
 };
 
 //------------------------------Conv2BNode-------------------------------------
@@ -502,10 +546,18 @@ class Opaque1Node : public Node {
   virtual uint hash() const ;                  // { return NO_HASH; }
   virtual uint cmp( const Node &n ) const;
 public:
-  Opaque1Node( Node *n ) : Node(0,n) {}
+  Opaque1Node( Compile* C, Node *n ) : Node(0,n) {
+    // Put it on the Macro nodes list to removed during macro nodes expansion.
+    init_flags(Flag_is_macro);
+    C->add_macro_node(this);
+  }
   // Special version for the pre-loop to hold the original loop limit
   // which is consumed by range check elimination.
-  Opaque1Node( Node *n, Node* orig_limit ) : Node(0,n,orig_limit) {}
+  Opaque1Node( Compile* C, Node *n, Node* orig_limit ) : Node(0,n,orig_limit) {
+    // Put it on the Macro nodes list to removed during macro nodes expansion.
+    init_flags(Flag_is_macro);
+    C->add_macro_node(this);
+  }
   Node* original_loop_limit() { return req()==3 ? in(2) : NULL; }
   virtual int Opcode() const;
   virtual const Type *bottom_type() const { return TypeInt::INT; }
@@ -525,7 +577,11 @@ class Opaque2Node : public Node {
   virtual uint hash() const ;                  // { return NO_HASH; }
   virtual uint cmp( const Node &n ) const;
 public:
-  Opaque2Node( Node *n ) : Node(0,n) {}
+  Opaque2Node( Compile* C, Node *n ) : Node(0,n) {
+    // Put it on the Macro nodes list to removed during macro nodes expansion.
+    init_flags(Flag_is_macro);
+    C->add_macro_node(this);
+  }
   virtual int Opcode() const;
   virtual const Type *bottom_type() const { return TypeInt::INT; }
 };
@@ -534,7 +590,7 @@ public:
 // The 2nd slow-half of a subtype check.  Scan the subklass's 2ndary superklass
 // array for an instance of the superklass.  Set a hidden internal cache on a
 // hit (cache is checked with exposed code in gen_subtype_check()).  Return
-// not zero for a miss or zero for a hit.  
+// not zero for a miss or zero for a hit.
 class PartialSubtypeCheckNode : public Node {
 public:
   PartialSubtypeCheckNode(Node* c, Node* sub, Node* super) : Node(c,sub,super) {}
@@ -543,7 +599,7 @@ public:
   virtual uint ideal_reg() const { return Op_RegP; }
 };
 
-// 
+//
 class MoveI2FNode : public Node {
  public:
   MoveI2FNode( Node *value ) : Node(0,value) {}

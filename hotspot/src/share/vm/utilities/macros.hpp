@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)macros.hpp	1.44 07/08/29 13:42:30 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Use this to mark code that needs to be cleaned up (for development only)
@@ -68,8 +65,10 @@
 // COMPILER2 variant
 #ifdef COMPILER2
 #define COMPILER2_PRESENT(code) code
+#define NOT_COMPILER2(code)
 #else // COMPILER2
 #define COMPILER2_PRESENT(code)
+#define NOT_COMPILER2(code) code
 #endif // COMPILER2
 
 
@@ -100,7 +99,7 @@
 #define CC_INTERP_ONLY(code) code
 #define NOT_CC_INTERP(code)
 #else
-#define CC_INTERP_ONLY(code) 
+#define CC_INTERP_ONLY(code)
 #define NOT_CC_INTERP(code) code
 #endif // CC_INTERP
 
@@ -147,6 +146,14 @@
 #define NOT_WINDOWS(code) code
 #endif
 
+#if defined(IA32) || defined(AMD64)
+#define X86
+#define X86_ONLY(code) code
+#else
+#undef X86
+#define X86_ONLY(code)
+#endif
+
 #ifdef IA32
 #define IA32_ONLY(code) code
 #define NOT_IA32(code)
@@ -182,4 +189,3 @@
 #define FIX_THIS(code) report_assertion_failure("FIX_THIS",__FILE__, __LINE__, "")
 
 #define define_pd_global(type, name, value) const type pd_##name = value;
-

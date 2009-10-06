@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)ciConstant.hpp	1.18 07/09/28 10:23:25 JVM"
-#endif
 /*
  * Copyright 1999-2003 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // ciConstant
@@ -56,16 +53,16 @@ public:
            "using the wrong ciConstant constructor");
     _type = type; _value._int = value;
   }
-  ciConstant(jlong value) { 
+  ciConstant(jlong value) {
     _type = T_LONG; _value._long = value;
   }
-  ciConstant(jfloat value) { 
+  ciConstant(jfloat value) {
     _type = T_FLOAT; _value._float = value;
   }
-  ciConstant(jdouble value) { 
+  ciConstant(jdouble value) {
     _type = T_DOUBLE; _value._double = value;
   }
-  ciConstant(BasicType type, ciObject* p) { 
+  ciConstant(BasicType type, ciObject* p) {
     _type = type; _value._object = p;
   }
 
@@ -113,4 +110,3 @@ public:
   // Debugging output
   void print();
 };
-

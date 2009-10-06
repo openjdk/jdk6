@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2002 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.debugger.dummy;
@@ -76,6 +76,10 @@ class DummyAddress implements Address {
     return new DummyAddress(debugger, badLong);
   }
 
+  public Address getCompOopAddressAt(long offset) throws UnalignedAddressException, UnmappedAddressException {
+    return new DummyAddress(debugger, badLong);
+  }
+
   //
   // Java-related routines
   //
@@ -113,6 +117,10 @@ class DummyAddress implements Address {
   }
 
   public OopHandle getOopHandleAt(long offset)
+    throws UnalignedAddressException, UnmappedAddressException, NotInHeapException {
+    return new DummyOopHandle(debugger, badLong);
+  }
+  public OopHandle getCompOopHandleAt(long offset)
     throws UnalignedAddressException, UnmappedAddressException, NotInHeapException {
     return new DummyOopHandle(debugger, badLong);
   }
@@ -287,7 +295,7 @@ class DummyAddress implements Address {
     DummyAddress p2 = (DummyAddress) p1.addOffsetTo(10);
     DummyAddress n1 = (DummyAddress) p2.addOffsetTo(10);
     DummyAddress n2 = (DummyAddress) n1.addOffsetTo(10);
-    
+
     // lessThan positive tests
     check(p1.lessThan(p2), "lessThan 1");
     check(p1.lessThan(n1), "lessThan 2");
@@ -350,13 +358,13 @@ class DummyAddress implements Address {
     check(!p1.greaterThan(n1), "greaterThan 14");
     check(!p2.greaterThan(n1), "greaterThan 15");
     check(!p1.greaterThan(p2), "greaterThan 16");
-    
+
     // greaterThanOrEqual positive tests
     check(p1.greaterThanOrEqual(p1), "greaterThanOrEqual 1");
     check(p2.greaterThanOrEqual(p2), "greaterThanOrEqual 2");
     check(n1.greaterThanOrEqual(n1), "greaterThanOrEqual 3");
     check(n2.greaterThanOrEqual(n2), "greaterThanOrEqual 4");
-    
+
     check(n2.greaterThanOrEqual(p1), "greaterThanOrEqual 5");
     check(n2.greaterThanOrEqual(p2), "greaterThanOrEqual 6");
     check(n2.greaterThanOrEqual(n1), "greaterThanOrEqual 7");

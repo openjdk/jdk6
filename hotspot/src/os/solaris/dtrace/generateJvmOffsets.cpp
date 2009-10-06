@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)generateJvmOffsets.cpp	1.33 07/05/05 17:04:38 JVM"
-#endif
 /*
- * Copyright 2003-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 /*
@@ -31,7 +28,7 @@
  * contents of __JvmOffsets[] table.
  * The __JvmOffsets[] table is located in generated JvmOffsets.cpp.
  *
- * GENOFFS_SCCS_VER 33
+ * GENOFFS_SCCS_VER 34
  */
 
 #include "generateJvmOffsets.h"
@@ -65,54 +62,54 @@
 
 LIR_Opr LIR_OprFact::illegalOpr = (LIR_Opr) 0;
 
-address StubRoutines::_call_stub_return_address = NULL; 
+address StubRoutines::_call_stub_return_address = NULL;
 
 StubQueue* AbstractInterpreter::_code = NULL;
 
 #endif /* defined(DEBUG) || defined(FASTDEBUG) */
 #endif /* COMPILER1 */
 
-#define GEN_OFFS(Type,Name)				\
-  switch(gen_variant) {					\
-  case GEN_OFFSET:					\
-    printf("#define OFFSET_%-33s %d\n",			\
-            #Type #Name, offset_of(Type, Name));	\
-    break;						\
-  case GEN_INDEX:					\
-    printf("#define IDX_OFFSET_%-33s %d\n",		\
-            #Type #Name, index++);			\
-    break;						\
-  case GEN_TABLE:					\
-    printf("\tOFFSET_%s,\n", #Type #Name);		\
-    break;						\
+#define GEN_OFFS(Type,Name)                             \
+  switch(gen_variant) {                                 \
+  case GEN_OFFSET:                                      \
+    printf("#define OFFSET_%-33s %d\n",                 \
+            #Type #Name, offset_of(Type, Name));        \
+    break;                                              \
+  case GEN_INDEX:                                       \
+    printf("#define IDX_OFFSET_%-33s %d\n",             \
+            #Type #Name, index++);                      \
+    break;                                              \
+  case GEN_TABLE:                                       \
+    printf("\tOFFSET_%s,\n", #Type #Name);              \
+    break;                                              \
   }
 
-#define GEN_SIZE(Type)					\
-  switch(gen_variant) {					\
-  case GEN_OFFSET:					\
-    printf("#define SIZE_%-35s %d\n",			\
-            #Type, sizeof(Type));			\
-    break;						\
-  case GEN_INDEX:					\
-    printf("#define IDX_SIZE_%-35s %d\n",		\
-            #Type, index++);				\
-    break;						\
-  case GEN_TABLE:					\
-    printf("\tSIZE_%s,\n", #Type);			\
-    break;						\
+#define GEN_SIZE(Type)                                  \
+  switch(gen_variant) {                                 \
+  case GEN_OFFSET:                                      \
+    printf("#define SIZE_%-35s %d\n",                   \
+            #Type, sizeof(Type));                       \
+    break;                                              \
+  case GEN_INDEX:                                       \
+    printf("#define IDX_SIZE_%-35s %d\n",               \
+            #Type, index++);                            \
+    break;                                              \
+  case GEN_TABLE:                                       \
+    printf("\tSIZE_%s,\n", #Type);                      \
+    break;                                              \
   }
 
-#define GEN_VALUE(String,Value)				\
-  switch(gen_variant) {					\
-  case GEN_OFFSET:					\
-    printf("#define %-40s %d\n", #String, Value);	\
-    break;						\
-  case GEN_INDEX:					\
+#define GEN_VALUE(String,Value)                         \
+  switch(gen_variant) {                                 \
+  case GEN_OFFSET:                                      \
+    printf("#define %-40s %d\n", #String, Value);       \
+    break;                                              \
+  case GEN_INDEX:                                       \
     printf("#define IDX_%-40s %d\n", #String, index++); \
-    break;						\
-  case GEN_TABLE:					\
-    printf("\t" #String ",\n");				\
-    break;						\
+    break;                                              \
+  case GEN_TABLE:                                       \
+    printf("\t" #String ",\n");                         \
+    break;                                              \
   }
 
 void gen_prologue(GEN_variant gen_variant) {
@@ -151,7 +148,7 @@ void gen_epilogue(GEN_variant gen_variant) {
 }
 
 int generateJvmOffsets(GEN_variant gen_variant) {
-  int index = 0;	/* It is used to generate JvmOffsetsIndex.h */
+  int index = 0;        /* It is used to generate JvmOffsetsIndex.h */
   int pointer_size = sizeof(void *);
   int data_model = (pointer_size == 4) ? PR_MODEL_ILP32 : PR_MODEL_LP64;
 
@@ -199,7 +196,7 @@ int generateJvmOffsets(GEN_variant gen_variant) {
   printf("\n");
 
   GEN_VALUE(OFFSET_HeapBlockHeader_used, offset_of(HeapBlock::Header, _used));
-  GEN_OFFS(oopDesc, _klass);
+  GEN_OFFS(oopDesc, _metadata);
   printf("\n");
 
   GEN_VALUE(AccessFlags_NATIVE, JVM_ACC_NATIVE);

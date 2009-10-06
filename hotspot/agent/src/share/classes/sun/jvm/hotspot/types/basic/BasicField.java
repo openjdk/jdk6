@@ -1,5 +1,5 @@
 /*
- * Copyright 2000 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.types.basic;
@@ -43,6 +43,19 @@ public class BasicField implements Field {
   /** Used for static fields only */
   private Address staticFieldAddress;
 
+  // Copy constructor to create NarrowOopField from OopField.
+  public BasicField(Field fld) {
+    BasicField field = (BasicField)fld;
+
+    this.db = field.db;
+    this.containingType = field.containingType;
+    this.name = field.name;
+    this.type = field.type;
+    this.size = field.size;
+    this.isStatic = field.isStatic;
+    this.offset = field.offset;
+    this.staticFieldAddress = field.staticFieldAddress;
+  }
   /** offsetInBytes is ignored if the field is static;
       staticFieldAddress is used only if the field is static. */
   public BasicField(BasicTypeDataBase db, Type containingType, String name, Type type,
@@ -56,7 +69,7 @@ public class BasicField implements Field {
     this.offset = offsetInBytes;
     this.staticFieldAddress = staticFieldAddress;
   }
-  
+
   public String getName() {
     return name;
   }
@@ -80,7 +93,7 @@ public class BasicField implements Field {
     }
     return offset;
   }
-  
+
   public Address getStaticFieldAddress() throws WrongTypeException {
     if (!isStatic) {
       throw new WrongTypeException("field \"" + name + "\" in class " +
@@ -88,7 +101,7 @@ public class BasicField implements Field {
     }
     return staticFieldAddress;
   }
-  
+
   //--------------------------------------------------------------------------------
   // Dereferencing operations for non-static fields
   //
@@ -160,6 +173,13 @@ public class BasicField implements Field {
       throw new WrongTypeException();
     }
     return addr.getOopHandleAt(offset);
+  }
+  public OopHandle getNarrowOopHandle(Address addr)
+    throws UnmappedAddressException, UnalignedAddressException, WrongTypeException, NotInHeapException {
+    if (isStatic) {
+      throw new WrongTypeException();
+    }
+    return addr.getCompOopHandleAt(offset);
   }
 
   //--------------------------------------------------------------------------------
@@ -233,5 +253,12 @@ public class BasicField implements Field {
       throw new WrongTypeException();
     }
     return staticFieldAddress.getOopHandleAt(0);
+  }
+  public OopHandle getNarrowOopHandle()
+    throws UnmappedAddressException, UnalignedAddressException, WrongTypeException, NotInHeapException {
+    if (!isStatic) {
+      throw new WrongTypeException();
+    }
+    return staticFieldAddress.getCompOopHandleAt(0);
   }
 }

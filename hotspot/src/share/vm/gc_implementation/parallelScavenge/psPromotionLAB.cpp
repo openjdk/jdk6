@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)psPromotionLAB.cpp	1.17 07/05/05 17:05:30 JVM"
-#endif
 /*
- * Copyright 2002-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2002-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +19,18 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
 #include "incls/_psPromotionLAB.cpp.incl"
 
-const size_t PSPromotionLAB::filler_header_size = align_object_size(typeArrayOopDesc::header_size(T_INT));
+size_t PSPromotionLAB::filler_header_size;
 
 // This is the shared initialization code. It sets up the basic pointers,
 // and allows enough extra space for a filler object. We call a virtual
 // method, "lab_is_valid()" to handle the different asserts the old/young
-// labs require. 
+// labs require.
 void PSPromotionLAB::initialize(MemRegion lab) {
   assert(lab_is_valid(lab), "Sanity");
 
@@ -44,12 +41,16 @@ void PSPromotionLAB::initialize(MemRegion lab) {
   set_end(end);
   set_top(bottom);
 
+  // Initialize after VM starts up because header_size depends on compressed
+  // oops.
+  filler_header_size = align_object_size(typeArrayOopDesc::header_size(T_INT));
+
   // We can be initialized to a zero size!
   if (free() > 0) {
     if (ZapUnusedHeapArea) {
       debug_only(Copy::fill_to_words(top(), free()/HeapWordSize, badHeapWord));
     }
-    
+
     // NOTE! We need to allow space for a filler object.
     assert(lab.word_size() >= filler_header_size, "lab is too small");
     end = end - filler_header_size;
@@ -68,13 +69,13 @@ void PSPromotionLAB::initialize(MemRegion lab) {
 void PSPromotionLAB::flush() {
   assert(_state != flushed, "Attempt to flush PLAB twice");
   assert(top() <= end(), "pointers out of order");
-  
+
   // If we were initialized to a zero sized lab, there is
   // nothing to flush
   if (_state == zero_size)
     return;
 
-  // PLAB's never allocate the last aligned_header_size 
+  // PLAB's never allocate the last aligned_header_size
   // so they can always fill with an array.
   HeapWord* tlab_end = end() + filler_header_size;
   typeArrayOop filler_oop = (typeArrayOop) top();
@@ -90,7 +91,7 @@ void PSPromotionLAB::flush() {
   HeapWord* elt_words = ((HeapWord*)filler_oop) + typeArrayOopDesc::header_size(T_INT);
   Copy::fill_to_words(elt_words, array_length, 0xDEAABABE);
 #endif
-  
+
   set_bottom(NULL);
   set_end(NULL);
   set_top(NULL);
@@ -100,7 +101,7 @@ void PSPromotionLAB::flush() {
 
 bool PSPromotionLAB::unallocate_object(oop obj) {
   assert(Universe::heap()->is_in(obj), "Object outside heap");
-  
+
   if (contains(obj)) {
     HeapWord* object_end = (HeapWord*)obj + obj->size();
     assert(object_end <= top(), "Object crosses promotion LAB boundary");
@@ -119,7 +120,7 @@ bool PSPromotionLAB::unallocate_object(oop obj) {
 void PSOldPromotionLAB::flush() {
   assert(_state != flushed, "Attempt to flush PLAB twice");
   assert(top() <= end(), "pointers out of order");
-  
+
   if (_state == zero_size)
     return;
 
@@ -150,11 +151,11 @@ bool PSYoungPromotionLAB::lab_is_valid(MemRegion lab) {
 bool PSOldPromotionLAB::lab_is_valid(MemRegion lab) {
   ParallelScavengeHeap* heap = (ParallelScavengeHeap*)Universe::heap();
   assert(heap->kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
-  assert(_start_array->covered_region().contains(lab), "Sanity");    
+  assert(_start_array->covered_region().contains(lab), "Sanity");
 
   PSOldGen* old_gen = heap->old_gen();
   MemRegion used = old_gen->object_space()->used_region();
-  
+
   if (used.contains(lab)) {
     return true;
   }

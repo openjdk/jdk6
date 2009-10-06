@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)vm_version_sparc.hpp	1.33 07/10/04 10:49:21 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class VM_Version: public Abstract_VM_Version {
@@ -67,6 +64,11 @@ protected:
 
   static bool is_niagara1(int features) { return (features & niagara1_m) == niagara1_m; }
 
+  static int maximum_niagara1_processor_count() { return 32; }
+  // Returns true if the platform is in the niagara line and
+  // newer than the niagara1.
+  static bool is_niagara1_plus();
+
 public:
   // Initialization
   static void initialize();
@@ -79,7 +81,7 @@ public:
   static bool has_vis1()                { return (_features & vis1_instructions_m) != 0; }
   static bool has_vis2()                { return (_features & vis2_instructions_m) != 0; }
 
-  static bool supports_compare_and_exchange() 
+  static bool supports_compare_and_exchange()
                                         { return has_v9(); }
 
   static bool is_ultra3()               { return (_features & ultra3_m) == ultra3_m; }
@@ -90,7 +92,7 @@ public:
 
   static const char* cpu_features()     { return _features_str; }
 
-  static intx L1_data_cache_line_size()  { 
+  static intx L1_data_cache_line_size()  {
     return 64;  // default prefetch block size on sparc
   }
 
@@ -132,4 +134,7 @@ public:
 
   // Override the Abstract_VM_Version implementation.
   static uint page_size_count() { return is_sun4v() ? 4 : 2; }
+
+  // Calculates the number of parallel threads
+  static unsigned int calc_parallel_worker_threads();
 };

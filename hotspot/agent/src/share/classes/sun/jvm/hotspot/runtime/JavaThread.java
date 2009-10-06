@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.runtime;
@@ -48,8 +48,10 @@ public class JavaThread extends Thread {
   private static AddressField  lastJavaPCField;
   private static CIntegerField threadStateField;
   private static AddressField  osThreadField;
+  private static AddressField  stackBaseField;
+  private static CIntegerField stackSizeField;
 
-  private static JavaThreadPDAccess access;		
+  private static JavaThreadPDAccess access;
 
   // JavaThreadStates read from underlying process
   private static int           UNINITIALIZED;
@@ -75,7 +77,7 @@ public class JavaThread extends Thread {
   private static synchronized void initialize(TypeDataBase db) {
     Type type = db.lookupType("JavaThread");
     Type anchorType = db.lookupType("JavaFrameAnchor");
-    
+
     nextField         = type.getAddressField("_next");
     threadObjField    = type.getOopField("_threadObj");
     anchorField       = type.getAddressField("_anchor");
@@ -83,6 +85,8 @@ public class JavaThread extends Thread {
     lastJavaPCField   = anchorType.getAddressField("_last_Java_pc");
     threadStateField  = type.getCIntegerField("_thread_state");
     osThreadField     = type.getAddressField("_osthread");
+    stackBaseField    = type.getAddressField("_stack_base");
+    stackSizeField    = type.getCIntegerField("_stack_size");
 
     UNINITIALIZED     = db.lookupIntConstant("_thread_uninitialized").intValue();
     NEW               = db.lookupIntConstant("_thread_new").intValue();
@@ -141,7 +145,7 @@ public class JavaThread extends Thread {
       there is no frame pointer or if it is not necessary on this
       platform. */
   public Address getLastJavaFP(){
-	return access.getLastJavaFP(addr);
+        return access.getLastJavaFP(addr);
   }
 
   /** Abstract accessor to last Java pc, implemented by
@@ -151,7 +155,7 @@ public class JavaThread extends Thread {
 
   /*
   public Address getLastJavaPC(){
-	return access.getLastJavaPC(addr);
+        return access.getLastJavaPC(addr);
   }
   */
 
@@ -162,7 +166,7 @@ public class JavaThread extends Thread {
       needed on some platforms; for example, see
       thread_solaris_sparc.hpp. */
   public Address getBaseOfStackPointer(){
-	return access.getBaseOfStackPointer(addr);
+        return access.getBaseOfStackPointer(addr);
   }
   // FIXME: not yet implementable
   //  public abstract void    setBaseOfStackPointer(Address fp);
@@ -182,7 +186,7 @@ public class JavaThread extends Thread {
 
   /** Internal routine implemented by platform-dependent subclasses */
   protected Frame getLastFramePD(){
-	return access.getLastFramePD(this, addr);
+        return access.getLastFramePD(this, addr);
   }
 
   /** Accessing frames. Returns the last Java VFrame or null if none
@@ -215,11 +219,11 @@ public class JavaThread extends Thread {
     if (f == null) return null;
     boolean imprecise = true;
     if (f.isInterpretedFrame() && !f.isInterpretedFrameValid()) {
-      if (DEBUG) {
-        System.out.println("Correcting for invalid interpreter frame");
-      }
-      f = f.sender(regMap);
-      imprecise = false;
+       if (DEBUG) {
+         System.out.println("Correcting for invalid interpreter frame");
+       }
+       f = f.sender(regMap);
+       imprecise = false;
     }
     VFrame vf = VFrame.newVFrame(f, regMap, this, true, imprecise);
     if (vf == null) {
@@ -238,7 +242,7 @@ public class JavaThread extends Thread {
       register map needs to be updated, for example during stack
       traversal -- see frame.hpp. */
   public RegisterMap newRegisterMap(boolean updateMap){
-	return access.newRegisterMap(this, updateMap);
+        return access.newRegisterMap(this, updateMap);
   }
 
   /** This is only designed to be used by the debugging system.
@@ -249,7 +253,7 @@ public class JavaThread extends Thread {
       been set up) this should still return the topmost frame and not
       the sender. Validity checks are done at higher levels. */
   public  Frame getCurrentFrameGuess(){
-	return access.getCurrentFrameGuess(this, addr);
+        return access.getCurrentFrameGuess(this, addr);
   }
 
   /** Also only intended for use by the debugging system. Provides the
@@ -258,7 +262,7 @@ public class JavaThread extends Thread {
       maps to this Java thread. Does not print a newline or leading or
       trailing spaces. */
   public  void printThreadIDOn(PrintStream tty) {
-	access.printThreadIDOn(addr,tty);
+        access.printThreadIDOn(addr,tty);
   }
 
   public void printThreadID() {
@@ -270,7 +274,7 @@ public class JavaThread extends Thread {
   }
 
   //
-  // Safepoint support 
+  // Safepoint support
   //
 
   public JavaThreadState getThreadState() {
@@ -312,6 +316,14 @@ public class JavaThread extends Thread {
     return (OSThread) VMObjectFactory.newObject(OSThread.class, osThreadField.getValue(addr));
   }
 
+  public Address getStackBase() {
+    return stackBaseField.getValue(addr);
+  }
+
+  public long getStackSize() {
+    return stackSizeField.getValue(addr);
+  }
+
   /** Gets the Java-side thread object for this JavaThread */
   public Oop getThreadObj() {
     return VM.getVM().getObjectHeap().newOop(threadObjField.getValue(addr));
@@ -335,7 +347,7 @@ public class JavaThread extends Thread {
 
     // FIXME: add in the rest of the routine from the VM
 
-    // Traverse the execution stack    
+    // Traverse the execution stack
     for(StackFrameStream fst = new StackFrameStream(this); !fst.isDone(); fst.next()) {
       fst.getCurrent().oopsDo(oopVisitor, fst.getRegisterMap());
     }
@@ -345,11 +357,18 @@ public class JavaThread extends Thread {
     if (Assert.ASSERTS_ENABLED) {
       Assert.that(VM.getVM().isDebugging(), "Not yet implemented for non-debugging system");
     }
-    Address highest = highestLock();
     Address sp      = lastSPDbg();
+    Address stackBase = getStackBase();
     // Be robust
-    if ((highest == null) || (sp == null)) return false;
-    return (highest.greaterThanOrEqual(a) && sp.lessThanOrEqual(a));
+    if (sp == null) return false;
+    return stackBase.greaterThanOrEqual(a) && sp.lessThanOrEqual(a);
+  }
+
+  public boolean isLockOwned(Address a) {
+    Address stackBase = getStackBase();
+    Address stackLimit = stackBase.addOffsetTo(-getStackSize());
+
+    return stackBase.greaterThanOrEqual(a) && stackLimit.lessThanOrEqual(a);
 
     // FIXME: should traverse MonitorArray/MonitorChunks as in VM
   }
@@ -359,7 +378,7 @@ public class JavaThread extends Thread {
     if (threadObj != null) {
       return OopUtilities.threadOopGetParkBlocker(threadObj);
     }
-    return null; 
+    return null;
   }
 
   public void printInfoOn(PrintStream tty) {
@@ -375,12 +394,12 @@ public class JavaThread extends Thread {
       Address minSP = sp;
       RegisterMap tmpMap = newRegisterMap(false);
       while ((tmpFrame != null) && (!tmpFrame.isFirstFrame())) {
-	  tmpFrame = tmpFrame.sender(tmpMap);
-	  if (tmpFrame != null) {
-	    sp = tmpFrame.getSP();
+          tmpFrame = tmpFrame.sender(tmpMap);
+          if (tmpFrame != null) {
+            sp = tmpFrame.getSP();
             maxSP = AddressOps.max(maxSP, sp);
             minSP = AddressOps.min(minSP, sp);
-	  }
+          }
       }
       tty.println("Stack in use by Java: " + minSP + " .. " + maxSP);
     } else {
@@ -411,7 +430,7 @@ public class JavaThread extends Thread {
     }
 
     Address pc        = fr.getPC();
-  
+
     if (Assert.ASSERTS_ENABLED) {
       if (pc == null) {
         Assert.that(VM.getVM().isDebugging(), "must have PC");

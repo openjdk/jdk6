@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)vm_version_sparc.cpp	1.56 07/07/02 18:40:59 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -31,9 +28,15 @@
 int VM_Version::_features = VM_Version::unknown_m;
 const char* VM_Version::_features_str = "";
 
+bool VM_Version::is_niagara1_plus() {
+  // This is a placeholder until the real test is determined.
+  return is_niagara1() &&
+    (os::processor_count() > maximum_niagara1_processor_count());
+}
+
 void VM_Version::initialize() {
   _features = determine_features();
-  PrefetchCopyIntervalInBytes = prefetch_copy_interval_in_bytes(); 
+  PrefetchCopyIntervalInBytes = prefetch_copy_interval_in_bytes();
   PrefetchScanIntervalInBytes = prefetch_scan_interval_in_bytes();
   PrefetchFieldsAhead         = prefetch_fields_ahead();
 
@@ -61,6 +64,15 @@ void VM_Version::initialize() {
     if (FLAG_IS_DEFAULT(UseInlineCaches)) {
       UseInlineCaches         = false;
     }
+#ifdef _LP64
+    // Single issue niagara1 is slower for CompressedOops
+    // but niagaras after that it's fine.
+    if (!is_niagara1_plus()) {
+      if (FLAG_IS_DEFAULT(UseCompressedOops)) {
+        FLAG_SET_ERGO(bool, UseCompressedOops, false);
+      }
+    }
+#endif // _LP64
 #ifdef COMPILER2
     // Indirect branch is the same cost as direct
     if (FLAG_IS_DEFAULT(UseJumpTables)) {
@@ -93,7 +105,7 @@ void VM_Version::initialize() {
   _features_str = strdup(strlen(buf) > 2 ? buf + 2 : buf);
 
 #ifndef PRODUCT
-  if (PrintMiscellaneous && Verbose) { 
+  if (PrintMiscellaneous && Verbose) {
     tty->print("Allocation: ");
     if (AllocatePrefetchStyle <= 0) {
       tty->print_cr("no prefetching");
@@ -125,7 +137,7 @@ int VM_Version::determine_features() {
   if (UseV8InstrsOnly) {
     NOT_PRODUCT(if (PrintMiscellaneous && Verbose) tty->print_cr("Version is Forced-V8");)
     return generic_v8_m;
-  } 
+  }
 
   int features = platform_features(unknown_m); // platform_features() is os_arch specific
 
@@ -162,4 +174,14 @@ void VM_Version::allow_all() {
 
 void VM_Version::revert() {
   _features = saved_features;
+}
+
+unsigned int VM_Version::calc_parallel_worker_threads() {
+  unsigned int result;
+  if (is_niagara1_plus()) {
+    result = nof_parallel_worker_threads(5, 16, 8);
+  } else {
+    result = nof_parallel_worker_threads(5, 8, 8);
+  }
+  return result;
 }

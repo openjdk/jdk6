@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)symtab.c	1.15 07/05/05 17:02:02 JVM"
-#endif
 /*
  * Copyright 2003-2005 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include <unistd.h>
@@ -95,7 +92,7 @@ struct symtab* build_symtab(int fd) {
     scn_cache[cnt].c_shdr = cursct;
     if (cursct->sh_type == SHT_SYMTAB || cursct->sh_type == SHT_STRTAB) {
       if ( (scn_cache[cnt].c_data = read_section_data(fd, &ehdr, cursct)) == NULL) {
-         goto quit; 
+         goto quit;
       }
     }
     cursct++;
@@ -193,9 +190,9 @@ void destroy_symtab(struct symtab* symtab) {
 
 uintptr_t search_symbol(struct symtab* symtab, uintptr_t base,
                       const char *sym_name, int *sym_size) {
-  ENTRY item; 
+  ENTRY item;
   ENTRY* ret = NULL;
-  
+
   // library does not have symbol table
   if (!symtab || !symtab->hash_table)
      return (uintptr_t)NULL;
@@ -213,7 +210,7 @@ uintptr_t search_symbol(struct symtab* symtab, uintptr_t base,
 quit:
   free(item.key);
   return (uintptr_t) NULL;
-} 
+}
 
 const char* nearest_symbol(struct symtab* symtab, uintptr_t offset,
                            uintptr_t* poffset) {

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)loopUnswitch.cpp	1.6 07/06/29 14:41:32 JVM"
-#endif
 /*
- * Copyright 2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2006-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -52,6 +49,9 @@
 // (ie. clone loop with an invariant test that does not exit the loop)
 bool IdealLoopTree::policy_unswitching( PhaseIdealLoop *phase ) const {
   if( !LoopUnswitching ) {
+    return false;
+  }
+  if (!_head->is_Loop()) {
     return false;
   }
   uint nodes_left = MaxNodeLimit - phase->C->unique();
@@ -205,7 +205,7 @@ ProjNode* PhaseIdealLoop::create_slow_version_of_loop(IdealLoopTree *loop,
 
   Node *cont      = _igvn.intcon(1);
   set_ctrl(cont, C->root());
-  Node* opq       = new (C, 2) Opaque1Node(cont);
+  Node* opq       = new (C, 2) Opaque1Node(C, cont);
   register_node(opq, outer_loop, entry, dom_depth(entry));
   Node *bol       = new (C, 2) Conv2BNode(opq);
   register_node(bol, outer_loop, entry, dom_depth(entry));

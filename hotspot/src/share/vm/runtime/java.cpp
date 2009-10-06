@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)java.cpp	1.223 07/07/16 14:37:42 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -47,7 +44,7 @@ GrowableArray<methodOop>* collected_profiled_methods;
 
 void collect_profiled_methods(methodOop m) {
   methodHandle mh(Thread::current(), m);
-  if ((m->method_data() != NULL) && 
+  if ((m->method_data() != NULL) &&
       (PrintMethodData || CompilerOracle::should_print(mh))) {
     collected_profiled_methods->push(m);
   }
@@ -72,7 +69,7 @@ void print_method_invocation_histogram() {
   tty->print_cr("Histogram Over MethodOop Invocation Counters (cutoff = %d):", MethodHistogramCutoff);
   tty->cr();
   tty->print_cr("____Count_(I+C)____Method________________________Module_________________");
-  unsigned total = 0, int_total = 0, comp_total = 0, static_total = 0, final_total = 0, 
+  unsigned total = 0, int_total = 0, comp_total = 0, static_total = 0, final_total = 0,
       synch_total = 0, nativ_total = 0, acces_total = 0;
   for (int index = 0; index < collected_invoked_methods->length(); index++) {
     methodOop m = collected_invoked_methods->at(index);
@@ -107,7 +104,7 @@ void print_method_profiling_data() {
   collected_profiled_methods = new GrowableArray<methodOop>(1024);
   SystemDictionary::methods_do(collect_profiled_methods);
   collected_profiled_methods->sort(&compare_methods);
-  
+
   int count = collected_profiled_methods->length();
   if (count > 0) {
     for (int index = 0; index < count; index++) {
@@ -136,7 +133,7 @@ AllocStats alloc_stats;
 // General statistics printing (profiling ...)
 
 void print_statistics() {
-  
+
 #ifdef ASSERT
 
   if (CountRuntimeCalls) {
@@ -212,7 +209,7 @@ void print_statistics() {
   }
   if (TimeOopMap) {
     GenerateOopMap::print_time();
-  }  
+  }
   if (ProfilerCheckIntervals) {
     PeriodicTask::print_intervals();
   }
@@ -221,7 +218,7 @@ void print_statistics() {
   }
   if (CountBytecodes || TraceBytecodes || StopInterpreterAt) {
     BytecodeCounter::print();
-  }  
+  }
   if (PrintBytecodePairHistogram) {
     BytecodePairHistogram::print();
   }
@@ -327,7 +324,7 @@ static ExitProc* exit_procs = NULL;
 extern "C" {
   void register_on_exit_function(void (*func)(void)) {
     ExitProc *entry = new ExitProc(func);
-    // Classic vm does not throw an exception in case the allocation failed, 
+    // Classic vm does not throw an exception in case the allocation failed,
     if (entry != NULL) {
       entry->set_next(exit_procs);
       exit_procs = entry;
@@ -345,9 +342,9 @@ void before_exit(JavaThread * thread) {
   static jint volatile _before_exit_status = BEFORE_EXIT_NOT_RUN;
 
   // Note: don't use a Mutex to guard the entire before_exit(), as
-  // JVMTI post_thread_end_event and post_vm_death_event will run native code. 
-  // A CAS or OSMutex would work just fine but then we need to manipulate 
-  // thread state for Safepoint. Here we use Monitor wait() and notify_all() 
+  // JVMTI post_thread_end_event and post_vm_death_event will run native code.
+  // A CAS or OSMutex would work just fine but then we need to manipulate
+  // thread state for Safepoint. Here we use Monitor wait() and notify_all()
   // for synchronization.
   { MutexLocker ml(BeforeExit_lock);
     switch (_before_exit_status) {
@@ -365,7 +362,7 @@ void before_exit(JavaThread * thread) {
     }
   }
 
-  // The only difference between this and Win32's _onexit procs is that 
+  // The only difference between this and Win32's _onexit procs is that
   // this version is invoked before any threads get killed.
   ExitProc* current = exit_procs;
   while (current != NULL) {
@@ -374,7 +371,7 @@ void before_exit(JavaThread * thread) {
     delete current;
     current = next;
   }
- 
+
   // Hang forever on exit if we're reporting an error.
   if (ShowMessageBoxOnError && is_error_reported()) {
     os::infinite_sleep();
@@ -384,7 +381,7 @@ void before_exit(JavaThread * thread) {
   WatcherThread::stop();
 
   // Print statistics gathered (profiling ...)
-  if (Arguments::has_profile()) {    
+  if (Arguments::has_profile()) {
     FlatProfiler::disengage();
     FlatProfiler::print(10);
   }
@@ -392,11 +389,6 @@ void before_exit(JavaThread * thread) {
   // shut down the StatSampler task
   StatSampler::disengage();
   StatSampler::destroy();
-
-  // shut down the TimeMillisUpdateTask
-  if (CacheTimeMillis) {
-    TimeMillisUpdateTask::disengage();
-  }
 
 #ifndef SERIALGC
   // stop CMS threads
@@ -414,7 +406,7 @@ void before_exit(JavaThread * thread) {
 
   if (Arguments::has_alloc_profile()) {
     HandleMark hm;
-    // Do one last collection to enumerate all the objects 
+    // Do one last collection to enumerate all the objects
     // allocated since the last one.
     Universe::heap()->collect(GCCause::_allocation_profiler);
     AllocationProfiler::disengage();
@@ -452,7 +444,7 @@ void before_exit(JavaThread * thread) {
   #undef BEFORE_EXIT_DONE
 }
 
-void vm_exit(int code) {  
+void vm_exit(int code) {
   Thread* thread = ThreadLocalStorage::thread_index() == -1 ? NULL
     : ThreadLocalStorage::get_thread_slow();
   if (thread == NULL) {
@@ -476,7 +468,7 @@ void vm_exit(int code) {
 }
 
 void notify_vm_shutdown() {
-  // For now, just a dtrace probe.  
+  // For now, just a dtrace probe.
   HS_DTRACE_PROBE(hotspot, vm__shutdown);
 }
 
@@ -510,14 +502,14 @@ void vm_shutdown()
   os::shutdown();
 }
 
-void vm_abort() {
+void vm_abort(bool dump_core) {
   vm_perform_shutdown_actions();
-  os::abort(PRODUCT_ONLY(false));
+  os::abort(dump_core);
   ShouldNotReachHere();
 }
 
 void vm_notify_during_shutdown(const char* error, const char* message) {
-  if (error != NULL) { 
+  if (error != NULL) {
     tty->print_cr("Error occurred during initialization of VM");
     tty->print("%s", error);
     if (message != NULL) {
@@ -546,18 +538,24 @@ void vm_exit_during_initialization(Handle exception) {
   java_lang_Throwable::print_stack_trace(exception(), tty);
   tty->cr();
   vm_notify_during_shutdown(NULL, NULL);
-  vm_abort();
+
+  // Failure during initialization, we don't want to dump core
+  vm_abort(false);
 }
 
 void vm_exit_during_initialization(symbolHandle ex, const char* message) {
   ResourceMark rm;
   vm_notify_during_shutdown(ex->as_C_string(), message);
-  vm_abort();
+
+  // Failure during initialization, we don't want to dump core
+  vm_abort(false);
 }
 
 void vm_exit_during_initialization(const char* error, const char* message) {
   vm_notify_during_shutdown(error, message);
-  vm_abort();
+
+  // Failure during initialization, we don't want to dump core
+  vm_abort(false);
 }
 
 void vm_shutdown_during_initialization(const char* error, const char* message) {
@@ -565,32 +563,104 @@ void vm_shutdown_during_initialization(const char* error, const char* message) {
   vm_shutdown();
 }
 
-jdk_version_info JDK_Version::_version_info = {0};
-bool JDK_Version::_pre_jdk16_version = false;
-int  JDK_Version::_jdk_version = 0;
+JDK_Version JDK_Version::_current;
 
 void JDK_Version::initialize() {
+  jdk_version_info info;
+  assert(!_current.is_valid(), "Don't initialize twice");
+
   void *lib_handle = os::native_java_library();
-  jdk_version_info_fn_t func = 
-    CAST_TO_FN_PTR(jdk_version_info_fn_t, hpi::dll_lookup(lib_handle, "JDK_GetVersionInfo0"));
+  jdk_version_info_fn_t func = CAST_TO_FN_PTR(jdk_version_info_fn_t,
+     os::dll_lookup(lib_handle, "JDK_GetVersionInfo0"));
 
   if (func == NULL) {
     // JDK older than 1.6
-    _pre_jdk16_version = true;
-    return;
-  }
-
-  if (func != NULL) {
-    (*func)(&_version_info, sizeof(_version_info));
-  }
-  if (jdk_major_version() == 1) {
-    _jdk_version = jdk_minor_version();
+    _current._partially_initialized = true;
   } else {
-    // If the release version string is changed to n.x.x (e.g. 7.0.0) in a future release
-    _jdk_version = jdk_major_version();
+    (*func)(&info, sizeof(info));
+
+    int major = JDK_VERSION_MAJOR(info.jdk_version);
+    int minor = JDK_VERSION_MINOR(info.jdk_version);
+    int micro = JDK_VERSION_MICRO(info.jdk_version);
+    int build = JDK_VERSION_BUILD(info.jdk_version);
+    if (major == 1 && minor > 4) {
+      // We represent "1.5.0" as "5.0", but 1.4.2 as itself.
+      major = minor;
+      minor = micro;
+      micro = 0;
+    }
+    _current = JDK_Version(major, minor, micro, info.update_version,
+                           info.special_update_version, build,
+                           info.thread_park_blocker == 1);
   }
+}
+
+void JDK_Version::fully_initialize(
+    uint8_t major, uint8_t minor, uint8_t micro, uint8_t update) {
+  // This is only called when current is less than 1.6 and we've gotten
+  // far enough in the initialization to determine the exact version.
+  assert(major < 6, "not needed for JDK version >= 6");
+  assert(is_partially_initialized(), "must not initialize");
+  if (major < 5) {
+    // JDK verison sequence: 1.2.x, 1.3.x, 1.4.x, 5.0.x, 6.0.x, etc.
+    micro = minor;
+    minor = major;
+    major = 1;
+  }
+  _current = JDK_Version(major, minor, micro, update);
 }
 
 void JDK_Version_init() {
   JDK_Version::initialize();
+}
+
+static int64_t encode_jdk_version(const JDK_Version& v) {
+  return
+    ((int64_t)v.major_version()          << (BitsPerByte * 5)) |
+    ((int64_t)v.minor_version()          << (BitsPerByte * 4)) |
+    ((int64_t)v.micro_version()          << (BitsPerByte * 3)) |
+    ((int64_t)v.update_version()         << (BitsPerByte * 2)) |
+    ((int64_t)v.special_update_version() << (BitsPerByte * 1)) |
+    ((int64_t)v.build_number()           << (BitsPerByte * 0));
+}
+
+int JDK_Version::compare(const JDK_Version& other) const {
+  assert(is_valid() && other.is_valid(), "Invalid version (uninitialized?)");
+  if (!is_partially_initialized() && other.is_partially_initialized()) {
+    return -(other.compare(*this)); // flip the comparators
+  }
+  assert(!other.is_partially_initialized(), "Not initialized yet");
+  if (is_partially_initialized()) {
+    assert(other.major_version() >= 6,
+           "Invalid JDK version comparison during initialization");
+    return -1;
+  } else {
+    uint64_t e = encode_jdk_version(*this);
+    uint64_t o = encode_jdk_version(other);
+    return (e > o) ? 1 : ((e == o) ? 0 : -1);
+  }
+}
+
+void JDK_Version::to_string(char* buffer, size_t buflen) const {
+  size_t index = 0;
+  if (!is_valid()) {
+    jio_snprintf(buffer, buflen, "%s", "(uninitialized)");
+  } else if (is_partially_initialized()) {
+    jio_snprintf(buffer, buflen, "%s", "(uninitialized) pre-1.6.0");
+  } else {
+    index += jio_snprintf(
+        &buffer[index], buflen - index, "%d.%d", _major, _minor);
+    if (_micro > 0) {
+      index += jio_snprintf(&buffer[index], buflen - index, ".%d", _micro);
+    }
+    if (_update > 0) {
+      index += jio_snprintf(&buffer[index], buflen - index, "_%02d", _update);
+    }
+    if (_special > 0) {
+      index += jio_snprintf(&buffer[index], buflen - index, "%c", _special);
+    }
+    if (_build > 0) {
+      index += jio_snprintf(&buffer[index], buflen - index, "-b%02d", _build);
+    }
+  }
 }

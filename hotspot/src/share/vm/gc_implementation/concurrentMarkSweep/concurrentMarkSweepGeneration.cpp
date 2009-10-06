@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)concurrentMarkSweepGeneration.cpp	1.293 08/10/30 20:45:16 JVM"
-#endif
 /*
  * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -43,11 +40,11 @@ bool          CMSCollector::_full_gc_requested          = false;
 // CMS-lock doesn't provide any fairness guarantees, but clients
 // should ensure that it is only held for very short, bounded
 // durations.
-// 
+//
 // When either of the CMS thread or the VM thread is involved in
 // collection operations during which it does not want the other
 // thread to interfere, it obtains the CMS token.
-// 
+//
 // If either thread tries to get the token while the other has
 // it, that thread waits. However, if the VM thread and CMS thread
 // both want the token, then the VM thread gets priority while the
@@ -55,28 +52,28 @@ bool          CMSCollector::_full_gc_requested          = false;
 // phases of the CMS thread's work do not block out the VM thread
 // for long periods of time as the CMS thread continues to hog
 // the token. (See bug 4616232).
-// 
+//
 // The baton-passing functions are, however, controlled by the
 // flags _foregroundGCShouldWait and _foregroundGCIsActive,
 // and here the low-level CMS lock, not the high level token,
 // ensures mutual exclusion.
-// 
+//
 // Two important conditions that we have to satisfy:
 // 1. if a thread does a low-level wait on the CMS lock, then it
 //    relinquishes the CMS token if it were holding that token
 //    when it acquired the low-level CMS lock.
 // 2. any low-level notifications on the low-level lock
 //    should only be sent when a thread has relinquished the token.
-// 
+//
 // In the absence of either property, we'd have potential deadlock.
-// 
+//
 // We protect each of the CMS (concurrent and sequential) phases
 // with the CMS _token_, not the CMS _lock_.
-// 
+//
 // The only code protected by CMS lock is the token acquisition code
 // itself, see ConcurrentMarkSweepThread::[de]synchronize(), and the
 // baton-passing code.
-// 
+//
 // Unfortunately, i couldn't come up with a good abstraction to factor and
 // hide the naked CGC_lock manipulation in the baton-passing code
 // further below. That's something we should try to do. Also, the proof
@@ -178,7 +175,7 @@ ConcurrentMarkSweepGeneration::ConcurrentMarkSweepGeneration(
 
   _cmsSpace = new CompactibleFreeListSpace(_bts, MemRegion(bottom, end),
                                            use_adaptive_freelists,
-					   dictionaryChoice);
+                                           dictionaryChoice);
   NOT_PRODUCT(debug_cms_space = _cmsSpace;)
   if (_cmsSpace == NULL) {
     vm_exit_during_initialization(
@@ -193,7 +190,8 @@ ConcurrentMarkSweepGeneration::ConcurrentMarkSweepGeneration(
   // depends on this property.
   debug_only(
     FreeChunk* junk = NULL;
-    assert(junk->prev_addr() == (void*)(oop(junk)->klass_addr()),
+    assert(UseCompressedOops ||
+           junk->prev_addr() == (void*)(oop(junk)->klass_addr()),
            "Offset of FreeChunk::_prev within FreeChunk must match"
            "  that of OopDesc::_klass within OopDesc");
   )
@@ -206,7 +204,7 @@ ConcurrentMarkSweepGeneration::ConcurrentMarkSweepGeneration(
     }
     for (uint i = 0; i < ParallelGCThreads; i++) {
       _par_gc_thread_states[i] = new CMSParGCThreadState(cmsSpace());
-      if (_par_gc_thread_states[i] == NULL) { 
+      if (_par_gc_thread_states[i] == NULL) {
         vm_exit_during_initialization("Could not allocate par gc structs");
       }
     }
@@ -227,6 +225,34 @@ ConcurrentMarkSweepGeneration::ConcurrentMarkSweepGeneration(
   assert(MinChunkSize >= oopDesc::header_size(), "just checking");
   assert(_dilatation_factor >= 1.0, "from previous assert");
 }
+
+
+// The field "_initiating_occupancy" represents the occupancy percentage
+// at which we trigger a new collection cycle.  Unless explicitly specified
+// via CMSInitiating[Perm]OccupancyFraction (argument "io" below), it
+// is calculated by:
+//
+//   Let "f" be MinHeapFreeRatio in
+//
+//    _intiating_occupancy = 100-f +
+//                           f * (CMSTrigger[Perm]Ratio/100)
+//   where CMSTrigger[Perm]Ratio is the argument "tr" below.
+//
+// That is, if we assume the heap is at its desired maximum occupancy at the
+// end of a collection, we let CMSTrigger[Perm]Ratio of the (purported) free
+// space be allocated before initiating a new collection cycle.
+//
+void ConcurrentMarkSweepGeneration::init_initiating_occupancy(intx io, intx tr) {
+  assert(io <= 100 && tr >= 0 && tr <= 100, "Check the arguments");
+  if (io >= 0) {
+    _initiating_occupancy = (double)io / 100.0;
+  } else {
+    _initiating_occupancy = ((100 - MinHeapFreeRatio) +
+                             (double)(tr * MinHeapFreeRatio) / 100.0)
+                            / 100.0;
+  }
+}
+
 
 void ConcurrentMarkSweepGeneration::ref_processor_init() {
   assert(collector() != NULL, "no collector");
@@ -267,7 +293,7 @@ CMSAdaptiveSizePolicy* CMSCollector::size_policy() {
 }
 
 CMSGCAdaptivePolicyCounters* CMSCollector::gc_adaptive_policy_counters() {
-  CMSGCAdaptivePolicyCounters* results = 
+  CMSGCAdaptivePolicyCounters* results =
     (CMSGCAdaptivePolicyCounters*) collector_policy()->counters();
   assert(
     results->kind() == GCPolicyCounters::CMSGCAdaptivePolicyCountersKind,
@@ -324,8 +350,8 @@ double CMSStats::time_until_cms_gen_full() const {
   size_t expected_promotion = gch->get_gen(0)->capacity();
   if (HandlePromotionFailure) {
     expected_promotion = MIN2(
-	(size_t) _cms_gen->gc_stats()->avg_promoted()->padded_average(),
-	expected_promotion);
+        (size_t) _cms_gen->gc_stats()->avg_promoted()->padded_average(),
+        expected_promotion);
   }
   if (cms_free > expected_promotion) {
     // Start a cms collection if there isn't enough space to promote
@@ -339,10 +365,10 @@ double CMSStats::time_until_cms_gen_full() const {
 
     if (PrintGCDetails && Verbose) {
       gclog_or_tty->print_cr("CMSStats::time_until_cms_gen_full: cms_free "
-	SIZE_FORMAT " expected_promotion " SIZE_FORMAT,
-	cms_free, expected_promotion);
+        SIZE_FORMAT " expected_promotion " SIZE_FORMAT,
+        cms_free, expected_promotion);
       gclog_or_tty->print_cr("  cms_free_dbl %f cms_consumption_rate %f",
-	cms_free_dbl, cms_consumption_rate() + 1.0);
+        cms_free_dbl, cms_consumption_rate() + 1.0);
     }
     // Add 1 in case the consumption rate goes to zero.
     return cms_free_dbl / (cms_consumption_rate() + 1.0);
@@ -384,7 +410,7 @@ double CMSStats::time_until_cms_start() const {
 // Return a duty cycle based on old_duty_cycle and new_duty_cycle, limiting the
 // amount of change to prevent wild oscillation.
 unsigned int CMSStats::icms_damped_duty_cycle(unsigned int old_duty_cycle,
-					      unsigned int new_duty_cycle) {
+                                              unsigned int new_duty_cycle) {
   assert(old_duty_cycle <= 100, "bad input value");
   assert(new_duty_cycle <= 100, "bad input value");
 
@@ -406,14 +432,14 @@ unsigned int CMSStats::icms_damped_duty_cycle(unsigned int old_duty_cycle,
 
   if (CMSTraceIncrementalPacing) {
     gclog_or_tty->print(" [icms_damped_duty_cycle(%d,%d) = %d] ",
-			   old_duty_cycle, new_duty_cycle, damped_duty_cycle);
+                           old_duty_cycle, new_duty_cycle, damped_duty_cycle);
   }
   return damped_duty_cycle;
 }
 
 unsigned int CMSStats::icms_update_duty_cycle_impl() {
   assert(CMSIncrementalPacing && valid(),
-	 "should be handled in icms_update_duty_cycle()");
+         "should be handled in icms_update_duty_cycle()");
 
   double cms_time_so_far = cms_timer().seconds();
   double scaled_duration = cms_duration_per_mb() * _cms_used_at_gc0_end / M;
@@ -428,7 +454,7 @@ unsigned int CMSStats::icms_update_duty_cycle_impl() {
     // Avoid very small duty cycles (1 or 2); 0 is allowed.
     if (new_duty_cycle > 2) {
       _icms_duty_cycle = icms_damped_duty_cycle(_icms_duty_cycle,
-						new_duty_cycle);
+                                                new_duty_cycle);
     }
   } else if (_allow_duty_cycle_reduction) {
     // The duty cycle is reduced only once per cms cycle (see record_cms_end()).
@@ -450,23 +476,23 @@ unsigned int CMSStats::icms_update_duty_cycle_impl() {
 void CMSStats::print_on(outputStream *st) const {
   st->print(" gc0_alpha=%d,cms_alpha=%d", _gc0_alpha, _cms_alpha);
   st->print(",gc0_dur=%g,gc0_per=%g,gc0_promo=" SIZE_FORMAT,
-	       gc0_duration(), gc0_period(), gc0_promoted());
+               gc0_duration(), gc0_period(), gc0_promoted());
   st->print(",cms_dur=%g,cms_dur_per_mb=%g,cms_per=%g,cms_alloc=" SIZE_FORMAT,
-	    cms_duration(), cms_duration_per_mb(),
-	    cms_period(), cms_allocated());
+            cms_duration(), cms_duration_per_mb(),
+            cms_period(), cms_allocated());
   st->print(",cms_since_beg=%g,cms_since_end=%g",
-	    cms_time_since_begin(), cms_time_since_end());
+            cms_time_since_begin(), cms_time_since_end());
   st->print(",cms_used_beg=" SIZE_FORMAT ",cms_used_end=" SIZE_FORMAT,
-	    _cms_used_at_gc0_begin, _cms_used_at_gc0_end);
+            _cms_used_at_gc0_begin, _cms_used_at_gc0_end);
   if (CMSIncrementalMode) {
     st->print(",dc=%d", icms_duty_cycle());
   }
 
   if (valid()) {
     st->print(",promo_rate=%g,cms_alloc_rate=%g",
-	      promotion_rate(), cms_allocation_rate());
+              promotion_rate(), cms_allocation_rate());
     st->print(",cms_consumption_rate=%g,time_until_full=%g",
-	      cms_consumption_rate(), time_until_cms_gen_full());
+              cms_consumption_rate(), time_until_cms_gen_full());
   }
   st->print(" ");
 }
@@ -480,7 +506,7 @@ bool CMSCollector::_foregroundGCShouldWait = false;
 CMSCollector::CMSCollector(ConcurrentMarkSweepGeneration* cmsGen,
                            ConcurrentMarkSweepGeneration* permGen,
                            CardTableRS*                   ct,
-			   ConcurrentMarkSweepPolicy*	  cp):
+                           ConcurrentMarkSweepPolicy*     cp):
   _cmsGen(cmsGen),
   _permGen(permGen),
   _ct(ct),
@@ -512,6 +538,7 @@ CMSCollector::CMSCollector(ConcurrentMarkSweepGeneration* cmsGen,
   _survivor_chunk_capacity(0), // -- ditto --
   _survivor_chunk_index(0),    // -- ditto --
   _ser_pmc_preclean_ovflw(0),
+  _ser_kac_preclean_ovflw(0),
   _ser_pmc_remark_ovflw(0),
   _par_pmc_remark_ovflw(0),
   _ser_kac_ovflw(0),
@@ -526,8 +553,8 @@ CMSCollector::CMSCollector(ConcurrentMarkSweepGeneration* cmsGen,
   _verification_mark_bm(0, Mutex::leaf + 1, "CMS_verification_mark_bm_lock"),
   _completed_initialization(false),
   _collector_policy(cp),
-  _unload_classes(false),
-  _unloaded_classes_last_cycle(false),
+  _should_unload_classes(false),
+  _concurrent_cycles_since_last_unload(0),
   _sweep_estimate(CMS_SweepWeight, CMS_SweepPadding)
 {
   if (ExplicitGCInvokesConcurrentAndUnloadsClasses) {
@@ -598,7 +625,7 @@ CMSCollector::CMSCollector(ConcurrentMarkSweepGeneration* cmsGen,
     // the MT case where it's not fixed yet; see 6178663.
     CMSCleanOnEnter = false;
   }
-  assert((_conc_workers != NULL) == (ParallelCMSThreads > 1), 
+  assert((_conc_workers != NULL) == (ParallelCMSThreads > 1),
          "Inconsistency");
 
   // Parallel task queues; these are shared for the
@@ -607,7 +634,7 @@ CMSCollector::CMSCollector(ConcurrentMarkSweepGeneration* cmsGen,
   {
     uint i;
     uint num_queues = (uint) MAX2(ParallelGCThreads, ParallelCMSThreads);
-  
+
     if ((CMSParallelRemarkEnabled || CMSConcurrentMTEnabled
          || ParallelRefProcEnabled)
         && num_queues > 0) {
@@ -627,7 +654,7 @@ CMSCollector::CMSCollector(ConcurrentMarkSweepGeneration* cmsGen,
         OopTaskQueue work_queue;
         char pad[64 - sizeof(OopTaskQueue)];  // prevent false sharing
       } OopTaskQueuePadded;
-    
+
       for (i = 0; i < num_queues; i++) {
         OopTaskQueuePadded *q_padded = new OopTaskQueuePadded();
         if (q_padded == NULL) {
@@ -643,26 +670,11 @@ CMSCollector::CMSCollector(ConcurrentMarkSweepGeneration* cmsGen,
     }
   }
 
-  // "initiatingOccupancy" is the occupancy ratio at which we trigger
-  // a new collection cycle.  Unless explicitly specified via
-  // CMSTriggerRatio, it is calculated by:
-  //   Let "f" be MinHeapFreeRatio in
-  //
-  //    intiatingOccupancy = 100-f +
-  //                         f * (CMSTriggerRatio/100)
-  // That is, if we assume the heap is at its desired maximum occupancy at the
-  // end of a collection, we let CMSTriggerRatio of the (purported) free
-  // space be allocated before initiating a new collection cycle.
-  if (CMSInitiatingOccupancyFraction > 0) {
-    _initiatingOccupancy = (double)CMSInitiatingOccupancyFraction / 100.0;
-  } else {
-    _initiatingOccupancy = ((100 - MinHeapFreeRatio) +
-                           (double)(CMSTriggerRatio *
-                                    MinHeapFreeRatio) / 100.0)
-			   / 100.0;
-  }
+  _cmsGen ->init_initiating_occupancy(CMSInitiatingOccupancyFraction, CMSTriggerRatio);
+  _permGen->init_initiating_occupancy(CMSInitiatingPermOccupancyFraction, CMSTriggerPermRatio);
+
   // Clip CMSBootstrapOccupancy between 0 and 100.
-  _bootstrap_occupancy = ((double)MIN2((intx)100, MAX2((intx)0, CMSBootstrapOccupancy)))
+  _bootstrap_occupancy = ((double)MIN2((uintx)100, MAX2((uintx)0, CMSBootstrapOccupancy)))
                          /(double)100;
 
   _full_gcs_since_conc_gc = 0;
@@ -773,7 +785,7 @@ void ConcurrentMarkSweepGeneration::update_counters() {
 }
 
 // this is an optimized version of update_counters(). it takes the
-// used value as a parameter rather than computing it. 
+// used value as a parameter rather than computing it.
 //
 void ConcurrentMarkSweepGeneration::update_counters(size_t used) {
   if (UsePerfData) {
@@ -798,11 +810,11 @@ void ConcurrentMarkSweepGeneration::printOccupancy(const char *s) {
   GenCollectedHeap* gch = GenCollectedHeap::heap();
   if (PrintGCDetails) {
     if (Verbose) {
-      gclog_or_tty->print(" [%d %s-%s: "SIZE_FORMAT"("SIZE_FORMAT")]", 
-	level(), short_name(), s, used(), capacity());
+      gclog_or_tty->print(" [%d %s-%s: "SIZE_FORMAT"("SIZE_FORMAT")]",
+        level(), short_name(), s, used(), capacity());
     } else {
-      gclog_or_tty->print(" [%d %s-%s: "SIZE_FORMAT"K("SIZE_FORMAT"K)]", 
-	level(), short_name(), s, used() / K, capacity() / K);
+      gclog_or_tty->print(" [%d %s-%s: "SIZE_FORMAT"K("SIZE_FORMAT"K)]",
+        level(), short_name(), s, used() / K, capacity() / K);
     }
   }
   if (Verbose) {
@@ -837,7 +849,7 @@ bool ConcurrentMarkSweepGeneration::promotion_attempt_is_safe(
     size_t max_promotion_in_bytes,
     bool younger_handles_promotion_failure) const {
 
-  // This is the most conservative test.  Full promotion is 
+  // This is the most conservative test.  Full promotion is
   // guaranteed if this is used. The multiplicative factor is to
   // account for the worst case "dilatation".
   double adjusted_max_promo_bytes = _dilatation_factor * max_promotion_in_bytes;
@@ -855,11 +867,11 @@ bool ConcurrentMarkSweepGeneration::promotion_attempt_is_safe(
       // With promotion failure handling the test for the ability
       // to support the promotion does not have to be guaranteed.
       // Use an average of the amount promoted.
-      result = max_available() >= (size_t) 
-	gc_stats()->avg_promoted()->padded_average();
+      result = max_available() >= (size_t)
+        gc_stats()->avg_promoted()->padded_average();
       if (PrintGC && Verbose && result) {
         gclog_or_tty->print_cr(
-	  "\nConcurrentMarkSweepGeneration::promotion_attempt_is_safe"
+          "\nConcurrentMarkSweepGeneration::promotion_attempt_is_safe"
           " max_available: " SIZE_FORMAT
           " avg_promoted: " SIZE_FORMAT,
           max_available(), (size_t)
@@ -894,7 +906,7 @@ ConcurrentMarkSweepGeneration::first_compaction_space() const {
 void ConcurrentMarkSweepGeneration::reset_after_compaction() {
   // Clear the promotion information.  These pointers can be adjusted
   // along with all the other pointers into the heap but
-  // compaction is expected to be a rare event with 
+  // compaction is expected to be a rare event with
   // a heap using cms so don't do it without seeing the need.
   if (ParallelGCThreads > 0) {
     for (uint i = 0; i < ParallelGCThreads; i++) {
@@ -934,12 +946,12 @@ void ConcurrentMarkSweepGeneration::compute_new_size() {
       size_t desired_capacity = (size_t)(used() / ((double) 1 - desired_free_percentage));
       gclog_or_tty->print_cr("\nFrom compute_new_size: ");
       gclog_or_tty->print_cr("  Free fraction %f", free_percentage);
-      gclog_or_tty->print_cr("  Desired free fraction %f", 
+      gclog_or_tty->print_cr("  Desired free fraction %f",
         desired_free_percentage);
-      gclog_or_tty->print_cr("  Maximum free fraction %f", 
+      gclog_or_tty->print_cr("  Maximum free fraction %f",
         maximum_free_percentage);
       gclog_or_tty->print_cr("  Capactiy "SIZE_FORMAT, capacity()/1000);
-      gclog_or_tty->print_cr("  Desired capacity "SIZE_FORMAT, 
+      gclog_or_tty->print_cr("  Desired capacity "SIZE_FORMAT,
         desired_capacity/1000);
       int prev_level = level() - 1;
       if (prev_level >= 0) {
@@ -951,17 +963,17 @@ void ConcurrentMarkSweepGeneration::compute_new_size() {
                                  prev_size/1000);
       }
       gclog_or_tty->print_cr("  unsafe_max_alloc_nogc "SIZE_FORMAT,
-	unsafe_max_alloc_nogc()/1000);
-      gclog_or_tty->print_cr("  contiguous available "SIZE_FORMAT, 
-	contiguous_available()/1000);
+        unsafe_max_alloc_nogc()/1000);
+      gclog_or_tty->print_cr("  contiguous available "SIZE_FORMAT,
+        contiguous_available()/1000);
       gclog_or_tty->print_cr("  Expand by "SIZE_FORMAT" (bytes)",
         expand_bytes);
     }
     // safe if expansion fails
-    expand(expand_bytes, 0, CMSExpansionCause::_satisfy_free_ratio); 
+    expand(expand_bytes, 0, CMSExpansionCause::_satisfy_free_ratio);
     if (PrintGCDetails && Verbose) {
-      gclog_or_tty->print_cr("  Expanded free fraction %f", 
-	((double) free()) / capacity());
+      gclog_or_tty->print_cr("  Expanded free fraction %f",
+        ((double) free()) / capacity());
     }
   }
 }
@@ -1029,7 +1041,7 @@ void CMSCollector::direct_allocated(HeapWord* start, size_t size) {
                                       // mark end of object
   }
   // check that oop looks uninitialized
-  assert(oop(start)->klass() == NULL, "_klass should be NULL");
+  assert(oop(start)->klass_or_null() == NULL, "_klass should be NULL");
 }
 
 void CMSCollector::promoted(bool par, HeapWord* start,
@@ -1070,13 +1082,13 @@ void CMSCollector::promoted(bool par, HeapWord* start,
         if (par) {
           _modUnionTable.par_mark_range(mr);
         } else {
-	  _modUnionTable.mark_range(mr);
+          _modUnionTable.mark_range(mr);
         }
       } else {  // not an obj array; we can just mark the head
         if (par) {
-	  _modUnionTable.par_mark(start);
+          _modUnionTable.par_mark(start);
         } else {
-	  _modUnionTable.mark(start);
+          _modUnionTable.mark(start);
         }
       }
     }
@@ -1120,8 +1132,8 @@ void CMSCollector::icms_update_allocation_limits()
       size_t adjustment = (size_t)adjustment_dbl;
       HeapWord* tmp_stop = _icms_stop_limit + adjustment;
       if (tmp_stop > _icms_stop_limit && tmp_stop < eden->end()) {
-	_icms_start_limit += adjustment;
-	_icms_stop_limit = tmp_stop;
+        _icms_start_limit += adjustment;
+        _icms_stop_limit = tmp_stop;
       }
     }
   }
@@ -1134,11 +1146,11 @@ void CMSCollector::icms_update_allocation_limits()
 
   if (CMSTraceIncrementalMode) {
     gclog_or_tty->print(" icms alloc limits:  "
-			   PTR_FORMAT "," PTR_FORMAT
-			   " (" SIZE_FORMAT "%%," SIZE_FORMAT "%%) ",
-			   _icms_start_limit, _icms_stop_limit,
-			   percent_of_space(eden, _icms_start_limit),
-			   percent_of_space(eden, _icms_stop_limit));
+                           PTR_FORMAT "," PTR_FORMAT
+                           " (" SIZE_FORMAT "%%," SIZE_FORMAT "%%) ",
+                           _icms_start_limit, _icms_stop_limit,
+                           percent_of_space(eden, _icms_start_limit),
+                           percent_of_space(eden, _icms_stop_limit));
     if (Verbose) {
       gclog_or_tty->print("eden:  ");
       eden->print_on(gclog_or_tty);
@@ -1150,39 +1162,39 @@ void CMSCollector::icms_update_allocation_limits()
 // that if this method is called with _icms_start_limit
 // and _icms_stop_limit both NULL, then it should return NULL
 // and not notify the icms thread.
-HeapWord* 
+HeapWord*
 CMSCollector::allocation_limit_reached(Space* space, HeapWord* top,
-				       size_t word_size)
+                                       size_t word_size)
 {
   // A start_limit equal to end() means the duty cycle is 0, so treat that as a
   // nop.
   if (CMSIncrementalMode && _icms_start_limit != space->end()) {
     if (top <= _icms_start_limit) {
       if (CMSTraceIncrementalMode) {
-	space->print_on(gclog_or_tty);
-	gclog_or_tty->stamp();
-	gclog_or_tty->print_cr(" start limit top=" PTR_FORMAT
-			       ", new limit=" PTR_FORMAT
-			       " (" SIZE_FORMAT "%%)",
-			       top, _icms_stop_limit,
-			       percent_of_space(space, _icms_stop_limit));
+        space->print_on(gclog_or_tty);
+        gclog_or_tty->stamp();
+        gclog_or_tty->print_cr(" start limit top=" PTR_FORMAT
+                               ", new limit=" PTR_FORMAT
+                               " (" SIZE_FORMAT "%%)",
+                               top, _icms_stop_limit,
+                               percent_of_space(space, _icms_stop_limit));
       }
       ConcurrentMarkSweepThread::start_icms();
-      assert(top < _icms_stop_limit, "Tautology"); 
-      if (word_size < pointer_delta(_icms_stop_limit, top)) { 
-	return _icms_stop_limit;
+      assert(top < _icms_stop_limit, "Tautology");
+      if (word_size < pointer_delta(_icms_stop_limit, top)) {
+        return _icms_stop_limit;
       }
 
       // The allocation will cross both the _start and _stop limits, so do the
       // stop notification also and return end().
       if (CMSTraceIncrementalMode) {
-	space->print_on(gclog_or_tty);
-	gclog_or_tty->stamp();
-	gclog_or_tty->print_cr(" +stop limit top=" PTR_FORMAT
-			       ", new limit=" PTR_FORMAT
-			       " (" SIZE_FORMAT "%%)",
-			       top, space->end(),
-			       percent_of_space(space, space->end()));
+        space->print_on(gclog_or_tty);
+        gclog_or_tty->stamp();
+        gclog_or_tty->print_cr(" +stop limit top=" PTR_FORMAT
+                               ", new limit=" PTR_FORMAT
+                               " (" SIZE_FORMAT "%%)",
+                               top, space->end(),
+                               percent_of_space(space, space->end()));
       }
       ConcurrentMarkSweepThread::stop_icms();
       return space->end();
@@ -1190,13 +1202,13 @@ CMSCollector::allocation_limit_reached(Space* space, HeapWord* top,
 
     if (top <= _icms_stop_limit) {
       if (CMSTraceIncrementalMode) {
-	space->print_on(gclog_or_tty);
-	gclog_or_tty->stamp();
-	gclog_or_tty->print_cr(" stop limit top=" PTR_FORMAT
-			       ", new limit=" PTR_FORMAT
-			       " (" SIZE_FORMAT "%%)",
-			       top, space->end(),
-			       percent_of_space(space, space->end()));
+        space->print_on(gclog_or_tty);
+        gclog_or_tty->stamp();
+        gclog_or_tty->print_cr(" stop limit top=" PTR_FORMAT
+                               ", new limit=" PTR_FORMAT
+                               " (" SIZE_FORMAT "%%)",
+                               top, space->end(),
+                               percent_of_space(space, space->end()));
       }
       ConcurrentMarkSweepThread::stop_icms();
       return space->end();
@@ -1206,38 +1218,38 @@ CMSCollector::allocation_limit_reached(Space* space, HeapWord* top,
       space->print_on(gclog_or_tty);
       gclog_or_tty->stamp();
       gclog_or_tty->print_cr(" end limit top=" PTR_FORMAT
-			     ", new limit=" PTR_FORMAT,
-			     top, NULL);
+                             ", new limit=" PTR_FORMAT,
+                             top, NULL);
     }
   }
 
   return NULL;
 }
 
-oop ConcurrentMarkSweepGeneration::promote(oop obj, size_t obj_size, oop* ref) {
+oop ConcurrentMarkSweepGeneration::promote(oop obj, size_t obj_size) {
   assert(obj_size == (size_t)obj->size(), "bad obj_size passed in");
   // allocate, copy and if necessary update promoinfo --
   // delegate to underlying space.
   assert_lock_strong(freelistLock());
 
-#ifndef	PRODUCT
+#ifndef PRODUCT
   if (Universe::heap()->promotion_should_fail()) {
     return NULL;
   }
-#endif	// #ifndef PRODUCT
+#endif  // #ifndef PRODUCT
 
-  oop res = _cmsSpace->promote(obj, obj_size, ref);
+  oop res = _cmsSpace->promote(obj, obj_size);
   if (res == NULL) {
     // expand and retry
     size_t s = _cmsSpace->expansionSpaceRequired(obj_size);  // HeapWords
-    expand(s*HeapWordSize, MinHeapDeltaBytes, 
+    expand(s*HeapWordSize, MinHeapDeltaBytes,
       CMSExpansionCause::_satisfy_promotion);
     // Since there's currently no next generation, we don't try to promote
     // into a more senior generation.
     assert(next_gen() == NULL, "assumption, based upon which no attempt "
                                "is made to pass on a possibly failing "
                                "promotion to next generation");
-    res = _cmsSpace->promote(obj, obj_size, ref);
+    res = _cmsSpace->promote(obj, obj_size);
   }
   if (res != NULL) {
     // See comment in allocate() about when objects should
@@ -1258,8 +1270,8 @@ oop ConcurrentMarkSweepGeneration::promote(oop obj, size_t obj_size, oop* ref) {
 
 HeapWord*
 ConcurrentMarkSweepGeneration::allocation_limit_reached(Space* space,
-					     HeapWord* top,
-					     size_t word_sz)
+                                             HeapWord* top,
+                                             size_t word_sz)
 {
   return collector()->allocation_limit_reached(space, top, word_sz);
 }
@@ -1267,13 +1279,13 @@ ConcurrentMarkSweepGeneration::allocation_limit_reached(Space* space,
 // Things to support parallel young-gen collection.
 oop
 ConcurrentMarkSweepGeneration::par_promote(int thread_num,
-					   oop old, markOop m,
-					   size_t word_sz) {
-#ifndef	PRODUCT
+                                           oop old, markOop m,
+                                           size_t word_sz) {
+#ifndef PRODUCT
   if (Universe::heap()->promotion_should_fail()) {
     return NULL;
   }
-#endif	// #ifndef PRODUCT
+#endif  // #ifndef PRODUCT
 
   CMSParGCThreadState* ps = _par_gc_thread_states[thread_num];
   PromotionInfo* promoInfo = &ps->promo;
@@ -1299,44 +1311,53 @@ ConcurrentMarkSweepGeneration::par_promote(int thread_num,
      }
   }
   oop obj = oop(obj_ptr);
-  assert(obj->klass() == NULL, "Object should be uninitialized here.");
+  assert(obj->klass_or_null() == NULL, "Object should be uninitialized here.");
   // Otherwise, copy the object.  Here we must be careful to insert the
   // klass pointer last, since this marks the block as an allocated object.
+  // Except with compressed oops it's the mark word.
   HeapWord* old_ptr = (HeapWord*)old;
   if (word_sz > (size_t)oopDesc::header_size()) {
     Copy::aligned_disjoint_words(old_ptr + oopDesc::header_size(),
-				 obj_ptr + oopDesc::header_size(),
-				 word_sz - oopDesc::header_size());
+                                 obj_ptr + oopDesc::header_size(),
+                                 word_sz - oopDesc::header_size());
   }
+
+  if (UseCompressedOops) {
+    // Copy gap missed by (aligned) header size calculation above
+    obj->set_klass_gap(old->klass_gap());
+  }
+
   // Restore the mark word copied above.
   obj->set_mark(m);
-  // Now we can track the promoted object, if necessary.  We take care 
+
+  // Now we can track the promoted object, if necessary.  We take care
   // To delay the transition from uninitialized to full object
   // (i.e., insertion of klass pointer) until after, so that it
   // atomically becomes a promoted object.
   if (promoInfo->tracking()) {
     promoInfo->track((PromotedObject*)obj, old->klass());
   }
-  // Finally, install the klass pointer.
+
+  // Finally, install the klass pointer (this should be volatile).
   obj->set_klass(old->klass());
 
   assert(old->is_oop(), "Will dereference klass ptr below");
   collector()->promoted(true,          // parallel
                         obj_ptr, old->is_objArray(), word_sz);
-  
+
   NOT_PRODUCT(
     Atomic::inc(&_numObjectsPromoted);
     Atomic::add((jint)CompactibleFreeListSpace::adjustObjectSize(obj->size()),
                 &_numWordsPromoted);
   )
 
-  return obj; 
+  return obj;
 }
 
 void
 ConcurrentMarkSweepGeneration::
 par_promote_alloc_undo(int thread_num,
-		       HeapWord* obj, size_t word_sz) {
+                       HeapWord* obj, size_t word_sz) {
   // CMS does not support promotion undo.
   ShouldNotReachHere();
 }
@@ -1387,12 +1408,12 @@ bool CMSCollector::shouldConcurrentCollect() {
   // If the rotation is not on the concurrent collection
   // type, don't start a concurrent collection.
   NOT_PRODUCT(
-    if (RotateCMSCollectionTypes && 
-	(_cmsGen->debug_collection_type() != 
-	  ConcurrentMarkSweepGeneration::Concurrent_collection_type)) {
-      assert(_cmsGen->debug_collection_type() != 
-	ConcurrentMarkSweepGeneration::Unknown_collection_type,
-	"Bad cms collection type");
+    if (RotateCMSCollectionTypes &&
+        (_cmsGen->debug_collection_type() !=
+          ConcurrentMarkSweepGeneration::Concurrent_collection_type)) {
+      assert(_cmsGen->debug_collection_type() !=
+        ConcurrentMarkSweepGeneration::Unknown_collection_type,
+        "Bad cms collection type");
       return false;
     }
   )
@@ -1414,7 +1435,8 @@ bool CMSCollector::shouldConcurrentCollect() {
     gclog_or_tty->print_cr("promotion_rate=%g", stats().promotion_rate());
     gclog_or_tty->print_cr("cms_allocation_rate=%g", stats().cms_allocation_rate());
     gclog_or_tty->print_cr("occupancy=%3.7f", _cmsGen->occupancy());
-    gclog_or_tty->print_cr("initiatingOccupancy=%3.7f", initiatingOccupancy());
+    gclog_or_tty->print_cr("initiatingOccupancy=%3.7f", _cmsGen->initiating_occupancy());
+    gclog_or_tty->print_cr("initiatingPermOccupancy=%3.7f", _permGen->initiating_occupancy());
   }
   // ------------------------------------------------------------------
 
@@ -1447,22 +1469,36 @@ bool CMSCollector::shouldConcurrentCollect() {
   // old gen want a collection cycle started. Each may use
   // an appropriate criterion for making this decision.
   // XXX We need to make sure that the gen expansion
-  // criterion dovetails well with this.
-  if (_cmsGen->shouldConcurrentCollect(initiatingOccupancy())) {
+  // criterion dovetails well with this. XXX NEED TO FIX THIS
+  if (_cmsGen->should_concurrent_collect()) {
     if (Verbose && PrintGCDetails) {
       gclog_or_tty->print_cr("CMS old gen initiated");
     }
     return true;
   }
 
-  if (cms_should_unload_classes() &&
-      _permGen->shouldConcurrentCollect(initiatingOccupancy())) {
-    if (Verbose && PrintGCDetails) {
-     gclog_or_tty->print_cr("CMS perm gen initiated");
+  // We start a collection if we believe an incremental collection may fail;
+  // this is not likely to be productive in practice because it's probably too
+  // late anyway.
+  GenCollectedHeap* gch = GenCollectedHeap::heap();
+  assert(gch->collector_policy()->is_two_generation_policy(),
+         "You may want to check the correctness of the following");
+  if (gch->incremental_collection_will_fail()) {
+    if (PrintGCDetails && Verbose) {
+      gclog_or_tty->print("CMSCollector: collect because incremental collection will fail ");
     }
     return true;
   }
 
+  if (CMSClassUnloadingEnabled && _permGen->should_concurrent_collect()) {
+    bool res = update_should_unload_classes();
+    if (res) {
+      if (Verbose && PrintGCDetails) {
+        gclog_or_tty->print_cr("CMS perm gen initiated");
+      }
+      return true;
+    }
+  }
   return false;
 }
 
@@ -1472,32 +1508,36 @@ void CMSCollector::clear_expansion_cause() {
   _permGen->clear_expansion_cause();
 }
 
-bool ConcurrentMarkSweepGeneration::shouldConcurrentCollect(
-  double initiatingOccupancy) {
-  // We should be conservative in starting a collection cycle.  To
-  // start too eagerly runs the risk of collecting too often in the
-  // extreme.  To collect too rarely falls back on full collections,
-  // which works, even if not optimum in terms of concurrent work.
-  // As a work around for too eagerly collecting, use the flag
-  // UseCMSInitiatingOccupancyOnly.  This also has the advantage of
-  // giving the user an easily understandable way of controlling the
-  // collections.
-  // We want to start a new collection cycle if any of the following
-  // conditions hold:
-  // . our current occupancy exceeds the initiating occupancy, or
-  // . we recently needed to expand and have not since that expansion,
-  //   collected, or
-  // . we are not using adaptive free lists and linear allocation is
-  //   going to fail, or
-  // . (for old gen) incremental collection has already failed or
-  //   may soon fail in the near future as we may not be able to absorb
-  //   promotions.
-  assert_lock_strong(freelistLock());
+// We should be conservative in starting a collection cycle.  To
+// start too eagerly runs the risk of collecting too often in the
+// extreme.  To collect too rarely falls back on full collections,
+// which works, even if not optimum in terms of concurrent work.
+// As a work around for too eagerly collecting, use the flag
+// UseCMSInitiatingOccupancyOnly.  This also has the advantage of
+// giving the user an easily understandable way of controlling the
+// collections.
+// We want to start a new collection cycle if any of the following
+// conditions hold:
+// . our current occupancy exceeds the configured initiating occupancy
+//   for this generation, or
+// . we recently needed to expand this space and have not, since that
+//   expansion, done a collection of this generation, or
+// . the underlying space believes that it may be a good idea to initiate
+//   a concurrent collection (this may be based on criteria such as the
+//   following: the space uses linear allocation and linear allocation is
+//   going to fail, or there is believed to be excessive fragmentation in
+//   the generation, etc... or ...
+// [.(currently done by CMSCollector::shouldConcurrentCollect() only for
+//   the case of the old generation, not the perm generation; see CR 6543076):
+//   we may be approaching a point at which allocation requests may fail because
+//   we will be out of sufficient free space given allocation rate estimates.]
+bool ConcurrentMarkSweepGeneration::should_concurrent_collect() const {
 
-  if (occupancy() > initiatingOccupancy) {
+  assert_lock_strong(freelistLock());
+  if (occupancy() > initiating_occupancy()) {
     if (PrintGCDetails && Verbose) {
       gclog_or_tty->print(" %s: collect because of occupancy %f / %f  ",
-	short_name(), occupancy(), initiatingOccupancy);
+        short_name(), occupancy(), initiating_occupancy());
     }
     return true;
   }
@@ -1507,25 +1547,14 @@ bool ConcurrentMarkSweepGeneration::shouldConcurrentCollect(
   if (expansion_cause() == CMSExpansionCause::_satisfy_allocation) {
     if (PrintGCDetails && Verbose) {
       gclog_or_tty->print(" %s: collect because expanded for allocation ",
-	short_name());
+        short_name());
     }
     return true;
   }
-  GenCollectedHeap* gch = GenCollectedHeap::heap();
-  assert(gch->collector_policy()->is_two_generation_policy(),
-         "You may want to check the correctness of the following");
-  if (gch->incremental_collection_will_fail()) {
+  if (_cmsSpace->should_concurrent_collect()) {
     if (PrintGCDetails && Verbose) {
-      gclog_or_tty->print(" %s: collect because incremental collection will fail ",
-	short_name());
-    }
-    return true;
-  }
-  if (!_cmsSpace->adaptive_freelists() && 
-      _cmsSpace->linearAllocationWouldFail()) {
-    if (PrintGCDetails && Verbose) {
-      gclog_or_tty->print(" %s: collect because of linAB ",
-	short_name());
+      gclog_or_tty->print(" %s: collect because cmsSpace says so ",
+        short_name());
     }
     return true;
   }
@@ -1549,8 +1578,8 @@ void CMSCollector::collect(bool   full,
     // For debugging purposes skip the collection if the state
     // is not currently idle
     if (TraceCMSState) {
-      gclog_or_tty->print_cr("Thread " INTPTR_FORMAT " skipped full:%d CMS state %d", 
-	Thread::current(), full, _collectorState);
+      gclog_or_tty->print_cr("Thread " INTPTR_FORMAT " skipped full:%d CMS state %d",
+        Thread::current(), full, _collectorState);
     }
     return;
   }
@@ -1583,13 +1612,13 @@ void CMSCollector::request_full_gc(unsigned int full_gc_count) {
     CGC_lock->notify();   // nudge CMS thread
   }
 }
-  
+
 
 // The foreground and background collectors need to coordinate in order
 // to make sure that they do not mutually interfere with CMS collections.
 // When a background collection is active,
 // the foreground collector may need to take over (preempt) and
-// synchronously complete an ongoing collection. Depending on the 
+// synchronously complete an ongoing collection. Depending on the
 // frequency of the background collections and the heap usage
 // of the application, this preemption can be seldom or frequent.
 // There are only certain
@@ -1617,16 +1646,16 @@ void CMSCollector::request_full_gc(unsigned int full_gc_count) {
 //
 // Variable used in baton passing.
 //   _foregroundGCIsActive - Set to true by the foreground collector when
-//	it wants the baton.  The foreground clears it when it has finished
-//	the collection.
+//      it wants the baton.  The foreground clears it when it has finished
+//      the collection.
 //   _foregroundGCShouldWait - Set to true by the background collector
 //        when it is running.  The foreground collector waits while
-//	_foregroundGCShouldWait is true.
+//      _foregroundGCShouldWait is true.
 //  CGC_lock - monitor used to protect access to the above variables
-//	and to notify the foreground and background collectors.
+//      and to notify the foreground and background collectors.
 //  _collectorState - current state of the CMS collection.
-// 
-// The foreground collector 
+//
+// The foreground collector
 //   acquires the CGC_lock
 //   sets _foregroundGCIsActive
 //   waits on the CGC_lock for _foregroundGCShouldWait to be false
@@ -1638,7 +1667,7 @@ void CMSCollector::request_full_gc(unsigned int full_gc_count) {
 //   returns
 //
 // The background collector in a loop iterating on the phases of the
-//	collection
+//      collection
 //   acquires the CGC_lock
 //   sets _foregroundGCShouldWait
 //   if _foregroundGCIsActive is set
@@ -1648,13 +1677,13 @@ void CMSCollector::request_full_gc(unsigned int full_gc_count) {
 //   otherwise
 //     proceed with that phase of the collection
 //     if the phase is a stop-the-world phase,
-//	 yield the baton once more just before enqueueing
-//	 the stop-world CMS operation (executed by the VM thread).
+//       yield the baton once more just before enqueueing
+//       the stop-world CMS operation (executed by the VM thread).
 //   returns after all phases of the collection are done
-//   
+//
 
 void CMSCollector::acquire_control_and_collect(bool full,
-	bool clear_all_soft_refs) {
+        bool clear_all_soft_refs) {
   assert(SafepointSynchronize::is_at_safepoint(), "should be at safepoint");
   assert(!Thread::current()->is_ConcurrentGC_thread(),
          "shouldn't try to acquire control from self!");
@@ -1719,7 +1748,7 @@ void CMSCollector::acquire_control_and_collect(bool full,
   if (TraceCMSState) {
     gclog_or_tty->print_cr("CMS foreground collector has asked for control "
       INTPTR_FORMAT " with first state %d", Thread::current(), first_state);
-    gclog_or_tty->print_cr("	gets control with state %d", _collectorState);
+    gclog_or_tty->print_cr("    gets control with state %d", _collectorState);
   }
 
   // Check if we need to do a compaction, or if not, whether
@@ -1731,11 +1760,11 @@ void CMSCollector::acquire_control_and_collect(bool full,
 
 NOT_PRODUCT(
   if (RotateCMSCollectionTypes) {
-    if (_cmsGen->debug_collection_type() == 
-	ConcurrentMarkSweepGeneration::MSC_foreground_collection_type) {
+    if (_cmsGen->debug_collection_type() ==
+        ConcurrentMarkSweepGeneration::MSC_foreground_collection_type) {
       should_compact = true;
-    } else if (_cmsGen->debug_collection_type() == 
-	       ConcurrentMarkSweepGeneration::MS_foreground_collection_type) {
+    } else if (_cmsGen->debug_collection_type() ==
+               ConcurrentMarkSweepGeneration::MS_foreground_collection_type) {
       should_compact = false;
     }
   }
@@ -1744,7 +1773,7 @@ NOT_PRODUCT(
   if (PrintGCDetails && first_state > Idling) {
     GCCause::Cause cause = GenCollectedHeap::heap()->gc_cause();
     if (GCCause::is_user_requested_gc(cause) ||
-	GCCause::is_serviceability_requested_gc(cause)) {
+        GCCause::is_serviceability_requested_gc(cause)) {
       gclog_or_tty->print(" (concurrent mode interrupted)");
     } else {
       gclog_or_tty->print(" (concurrent mode failure)");
@@ -1791,7 +1820,7 @@ void CMSCollector::check_gc_time_limit() {
   }
 
   // Calculate the fraction of the CMS generation was freed during
-  // the last collection. 
+  // the last collection.
   // Only consider the STW compacting cost for now.
   //
   // Note that the gc time limit test only works for the collections
@@ -1800,15 +1829,15 @@ void CMSCollector::check_gc_time_limit() {
   // freed by the collection is the free space in the young gen +
   // tenured gen.
 
-  double fraction_free = 
+  double fraction_free =
     ((double)_cmsGen->free())/((double)_cmsGen->max_capacity());
-  if ((100.0 * size_policy()->compacting_gc_cost()) > 
-	 ((double) GCTimeLimit) &&
-	((fraction_free * 100) < GCHeapFreeLimit)) {
+  if ((100.0 * size_policy()->compacting_gc_cost()) >
+         ((double) GCTimeLimit) &&
+        ((fraction_free * 100) < GCHeapFreeLimit)) {
     size_policy()->inc_gc_time_limit_count();
-    if (UseGCOverheadLimit && 
-	(size_policy()->gc_time_limit_count() > 
-	 AdaptiveSizePolicyGCTimeLimitThreshold)) {
+    if (UseGCOverheadLimit &&
+        (size_policy()->gc_time_limit_count() >
+         AdaptiveSizePolicyGCTimeLimitThreshold)) {
       size_policy()->set_gc_time_limit_exceeded(true);
       // Avoid consecutive OOM due to the gc time limit by resetting
       // the counter.
@@ -1932,6 +1961,7 @@ void CMSCollector::do_compaction_work(bool clear_all_soft_refs) {
 
   ref_processor()->set_enqueuing_is_done(false);
   ref_processor()->enable_discovery();
+  ref_processor()->setup_policy(clear_all_soft_refs);
   // If an asynchronous collection finishes, the _modUnionTable is
   // all clear.  If we are assuming the collection from an asynchronous
   // collection, clear the _modUnionTable.
@@ -1947,7 +1977,7 @@ void CMSCollector::do_compaction_work(bool clear_all_soft_refs) {
   // Note that we do not use this sample to update the _sweep_estimate.
   _cmsGen->cmsSpace()->beginSweepFLCensus((float)(_sweep_timer.seconds()),
                                           _sweep_estimate.padded_average());
-  
+
   GenMarkSweep::invoke_at_safepoint(_cmsGen->level(),
     ref_processor(), clear_all_soft_refs);
   #ifdef ASSERT
@@ -1971,8 +2001,9 @@ void CMSCollector::do_compaction_work(bool clear_all_soft_refs) {
          "Should have been NULL'd before baton was passed");
   reset(false /* == !asynch */);
   _cmsGen->reset_after_compaction();
+  _concurrent_cycles_since_last_unload = 0;
 
-  if (verifying() && !cms_should_unload_classes()) {
+  if (verifying() && !should_unload_classes()) {
     perm_gen_verify_bit_map()->clear_all();
   }
 
@@ -1986,7 +2017,7 @@ void CMSCollector::do_compaction_work(bool clear_all_soft_refs) {
   // Restart the "sweep timer" for next epoch.
   _sweep_timer.reset();
   _sweep_timer.start();
-  
+
   // Sample collection pause time and reset for collection interval.
   if (UseAdaptiveSizePolicy) {
     size_policy()->msc_collection_end(gch->gc_cause());
@@ -2094,11 +2125,12 @@ class ReleaseForegroundGC: public StackObj {
 void CMSCollector::collect_in_background(bool clear_all_soft_refs) {
   assert(Thread::current()->is_ConcurrentGC_thread(),
     "A CMS asynchronous collection is only allowed on a CMS thread.");
-    
-  GenCollectedHeap* gch = GenCollectedHeap::heap(); 
+
+  GenCollectedHeap* gch = GenCollectedHeap::heap();
   {
     bool safepoint_check = Mutex::_no_safepoint_check_flag;
     MutexLockerEx hl(Heap_lock, safepoint_check);
+    FreelistLocker fll(this);
     MutexLockerEx x(CGC_lock, safepoint_check);
     if (_foregroundGCIsActive || !UseAsyncConcMarkSweepGC) {
       // The foreground collector is active or we're
@@ -2113,13 +2145,9 @@ void CMSCollector::collect_in_background(bool clear_all_soft_refs) {
       // a new cycle.
       clear_expansion_cause();
     }
-    _unloaded_classes_last_cycle = cms_should_unload_classes(); // ... from last cycle
-    // This controls class unloading in response to an explicit gc request.
-    // If ExplicitGCInvokesConcurrentAndUnloadsClasses is set, then
-    // we will unload classes even if CMSClassUnloadingEnabled is not set.
-    // See CR 6541037 and related CRs.
-    _unload_classes = _full_gc_requested                      // ... for this cycle
-                      && ExplicitGCInvokesConcurrentAndUnloadsClasses;
+    // Decide if we want to enable class unloading as part of the
+    // ensuing concurrent GC cycle.
+    update_should_unload_classes();
     _full_gc_requested = false;           // acks all outstanding full gc requests
     // Signal that we are about to start a collection
     gch->increment_total_full_collections();  // ... starting a collection cycle
@@ -2135,19 +2163,19 @@ void CMSCollector::collect_in_background(bool clear_all_soft_refs) {
   // The change of the collection state is normally done at this level;
   // the exceptions are phases that are executed while the world is
   // stopped.  For those phases the change of state is done while the
-  // world is stopped.  For baton passing purposes this allows the 
+  // world is stopped.  For baton passing purposes this allows the
   // background collector to finish the phase and change state atomically.
   // The foreground collector cannot wait on a phase that is done
   // while the world is stopped because the foreground collector already
   // has the world stopped and would deadlock.
   while (_collectorState != Idling) {
     if (TraceCMSState) {
-      gclog_or_tty->print_cr("Thread " INTPTR_FORMAT " in CMS state %d", 
-	Thread::current(), _collectorState);
+      gclog_or_tty->print_cr("Thread " INTPTR_FORMAT " in CMS state %d",
+        Thread::current(), _collectorState);
     }
-    // The foreground collector 
+    // The foreground collector
     //   holds the Heap_lock throughout its collection.
-    //	 holds the CMS token (but not the lock)
+    //   holds the CMS token (but not the lock)
     //     except while it is waiting for the background collector to yield.
     //
     // The foreground collector should be blocked (not for long)
@@ -2175,8 +2203,8 @@ void CMSCollector::collect_in_background(bool clear_all_soft_refs) {
         assert(_foregroundGCShouldWait == false, "We set it to false in "
                "waitForForegroundGC()");
         if (TraceCMSState) {
-          gclog_or_tty->print_cr("CMS Thread " INTPTR_FORMAT 
-            " exiting collection CMS state %d", 
+          gclog_or_tty->print_cr("CMS Thread " INTPTR_FORMAT
+            " exiting collection CMS state %d",
             Thread::current(), _collectorState);
         }
         return;
@@ -2199,45 +2227,45 @@ void CMSCollector::collect_in_background(bool clear_all_soft_refs) {
       case InitialMarking:
         {
           ReleaseForegroundGC x(this);
-	  stats().record_cms_begin();
+          stats().record_cms_begin();
 
           VM_CMS_Initial_Mark initial_mark_op(this);
-	  VMThread::execute(&initial_mark_op);
+          VMThread::execute(&initial_mark_op);
         }
-	// The collector state may be any legal state at this point
-	// since the background collector may have yielded to the
-	// foreground collector.
-	break;
+        // The collector state may be any legal state at this point
+        // since the background collector may have yielded to the
+        // foreground collector.
+        break;
       case Marking:
-	// initial marking in checkpointRootsInitialWork has been completed
+        // initial marking in checkpointRootsInitialWork has been completed
         if (markFromRoots(true)) { // we were successful
-	  assert(_collectorState == Precleaning, "Collector state should "
-	    "have changed");
+          assert(_collectorState == Precleaning, "Collector state should "
+            "have changed");
         } else {
           assert(_foregroundGCIsActive, "Internal state inconsistency");
         }
-	break;
+        break;
       case Precleaning:
-	if (UseAdaptiveSizePolicy) {
+        if (UseAdaptiveSizePolicy) {
           size_policy()->concurrent_precleaning_begin();
-	}
-	// marking from roots in markFromRoots has been completed
-	preclean();
-	if (UseAdaptiveSizePolicy) {
+        }
+        // marking from roots in markFromRoots has been completed
+        preclean();
+        if (UseAdaptiveSizePolicy) {
           size_policy()->concurrent_precleaning_end();
-	}
-	assert(_collectorState == AbortablePreclean ||
+        }
+        assert(_collectorState == AbortablePreclean ||
                _collectorState == FinalMarking,
                "Collector state should have changed");
-	break;
+        break;
       case AbortablePreclean:
-	if (UseAdaptiveSizePolicy) {
+        if (UseAdaptiveSizePolicy) {
         size_policy()->concurrent_phases_resume();
-	}
+        }
         abortable_preclean();
-	if (UseAdaptiveSizePolicy) {
+        if (UseAdaptiveSizePolicy) {
           size_policy()->concurrent_precleaning_end();
-	}
+        }
         assert(_collectorState == FinalMarking, "Collector state should "
           "have changed");
         break;
@@ -2247,26 +2275,26 @@ void CMSCollector::collect_in_background(bool clear_all_soft_refs) {
 
           VM_CMS_Final_Remark final_remark_op(this);
           VMThread::execute(&final_remark_op);
-	  }
+          }
         assert(_foregroundGCShouldWait, "block post-condition");
-	break;
+        break;
       case Sweeping:
-	if (UseAdaptiveSizePolicy) {
+        if (UseAdaptiveSizePolicy) {
           size_policy()->concurrent_sweeping_begin();
-	}
-	// final marking in checkpointRootsFinal has been completed
+        }
+        // final marking in checkpointRootsFinal has been completed
         sweep(true);
-	assert(_collectorState == Resizing, "Collector state change "
-	  "to Resizing must be done under the free_list_lock");
+        assert(_collectorState == Resizing, "Collector state change "
+          "to Resizing must be done under the free_list_lock");
         _full_gcs_since_conc_gc = 0;
 
         // Stop the timers for adaptive size policy for the concurrent phases
         if (UseAdaptiveSizePolicy) {
           size_policy()->concurrent_sweeping_end();
           size_policy()->concurrent_phases_end(gch->gc_cause(),
-					     gch->prev_gen(_cmsGen)->capacity(),
+                                             gch->prev_gen(_cmsGen)->capacity(),
                                              _cmsGen->free());
-	}
+        }
 
       case Resizing: {
         // Sweeping has been completed...
@@ -2289,28 +2317,28 @@ void CMSCollector::collect_in_background(bool clear_all_soft_refs) {
         break;
       }
       case Resetting:
-	// CMS heap resizing has been completed
+        // CMS heap resizing has been completed
         reset(true);
-	assert(_collectorState == Idling, "Collector state should "
-	  "have changed");
-	stats().record_cms_end();
-	// Don't move the concurrent_phases_end() and compute_new_size()
-	// calls to here because a preempted background collection
-	// has it's state set to "Resetting".
-	break;
+        assert(_collectorState == Idling, "Collector state should "
+          "have changed");
+        stats().record_cms_end();
+        // Don't move the concurrent_phases_end() and compute_new_size()
+        // calls to here because a preempted background collection
+        // has it's state set to "Resetting".
+        break;
       case Idling:
       default:
-	ShouldNotReachHere();
-	break;
+        ShouldNotReachHere();
+        break;
     }
     if (TraceCMSState) {
-      gclog_or_tty->print_cr("	Thread " INTPTR_FORMAT " done - next CMS state %d", 
-	Thread::current(), _collectorState);
+      gclog_or_tty->print_cr("  Thread " INTPTR_FORMAT " done - next CMS state %d",
+        Thread::current(), _collectorState);
     }
     assert(_foregroundGCShouldWait, "block post-condition");
   }
 
-  // Should this be in gc_epilogue? 
+  // Should this be in gc_epilogue?
   collector_policy()->counters()->update_counters();
 
   {
@@ -2326,8 +2354,8 @@ void CMSCollector::collect_in_background(bool clear_all_soft_refs) {
            "Possible deadlock");
   }
   if (TraceCMSState) {
-    gclog_or_tty->print_cr("CMS Thread " INTPTR_FORMAT 
-      " exiting collection CMS state %d", 
+    gclog_or_tty->print_cr("CMS Thread " INTPTR_FORMAT
+      " exiting collection CMS state %d",
       Thread::current(), _collectorState);
   }
   if (PrintGC && Verbose) {
@@ -2338,12 +2366,12 @@ void CMSCollector::collect_in_background(bool clear_all_soft_refs) {
 void CMSCollector::collect_in_foreground(bool clear_all_soft_refs) {
   assert(_foregroundGCIsActive && !_foregroundGCShouldWait,
          "Foreground collector should be waiting, not executing");
-  assert(Thread::current()->is_VM_thread(), "A foreground collection" 
+  assert(Thread::current()->is_VM_thread(), "A foreground collection"
     "may only be done by the VM Thread with the world stopped");
   assert(ConcurrentMarkSweepThread::vm_thread_has_cms_token(),
          "VM thread should have CMS token");
 
-  NOT_PRODUCT(TraceTime t("CMS:MS (foreground) ", PrintGCDetails && Verbose, 
+  NOT_PRODUCT(TraceTime t("CMS:MS (foreground) ", PrintGCDetails && Verbose,
     true, gclog_or_tty);)
   if (UseAdaptiveSizePolicy) {
     size_policy()->ms_collection_begin();
@@ -2357,31 +2385,34 @@ void CMSCollector::collect_in_foreground(bool clear_all_soft_refs) {
     Universe::verify(true);
   }
 
+  // Snapshot the soft reference policy to be used in this collection cycle.
+  ref_processor()->setup_policy(clear_all_soft_refs);
+
   bool init_mark_was_synchronous = false; // until proven otherwise
   while (_collectorState != Idling) {
     if (TraceCMSState) {
-      gclog_or_tty->print_cr("Thread " INTPTR_FORMAT " in CMS state %d", 
-	Thread::current(), _collectorState);
+      gclog_or_tty->print_cr("Thread " INTPTR_FORMAT " in CMS state %d",
+        Thread::current(), _collectorState);
     }
     switch (_collectorState) {
       case InitialMarking:
         init_mark_was_synchronous = true;  // fact to be exploited in re-mark
         checkpointRootsInitial(false);
-	assert(_collectorState == Marking, "Collector state should have changed"
-	  " within checkpointRootsInitial()");
-	break;
+        assert(_collectorState == Marking, "Collector state should have changed"
+          " within checkpointRootsInitial()");
+        break;
       case Marking:
-	// initial marking in checkpointRootsInitialWork has been completed
+        // initial marking in checkpointRootsInitialWork has been completed
         if (VerifyDuringGC &&
             GenCollectedHeap::heap()->total_collections() >= VerifyGCStartAt) {
           gclog_or_tty->print("Verify before initial mark: ");
           Universe::verify(true);
         }
-        { 
+        {
           bool res = markFromRoots(false);
-	  assert(res && _collectorState == FinalMarking, "Collector state should "
-	    "have changed");
-	  break;
+          assert(res && _collectorState == FinalMarking, "Collector state should "
+            "have changed");
+          break;
         }
       case FinalMarking:
         if (VerifyDuringGC &&
@@ -2391,19 +2422,19 @@ void CMSCollector::collect_in_foreground(bool clear_all_soft_refs) {
         }
         checkpointRootsFinal(false, clear_all_soft_refs,
                              init_mark_was_synchronous);
-	assert(_collectorState == Sweeping, "Collector state should not "
-	  "have changed within checkpointRootsFinal()");
-	break;
+        assert(_collectorState == Sweeping, "Collector state should not "
+          "have changed within checkpointRootsFinal()");
+        break;
       case Sweeping:
-	// final marking in checkpointRootsFinal has been completed
+        // final marking in checkpointRootsFinal has been completed
         if (VerifyDuringGC &&
             GenCollectedHeap::heap()->total_collections() >= VerifyGCStartAt) {
           gclog_or_tty->print("Verify before sweep: ");
           Universe::verify(true);
         }
         sweep(false);
-	assert(_collectorState == Resizing, "Incorrect state");
-	break;
+        assert(_collectorState == Resizing, "Incorrect state");
+        break;
       case Resizing: {
         // Sweeping has been completed; the actual resize in this case
         // is done separately; nothing to be done in this state.
@@ -2411,27 +2442,27 @@ void CMSCollector::collect_in_foreground(bool clear_all_soft_refs) {
         break;
       }
       case Resetting:
-	// The heap has been resized.
+        // The heap has been resized.
         if (VerifyDuringGC &&
             GenCollectedHeap::heap()->total_collections() >= VerifyGCStartAt) {
           gclog_or_tty->print("Verify before reset: ");
           Universe::verify(true);
         }
         reset(false);
-	assert(_collectorState == Idling, "Collector state should "
-	  "have changed");
-	break;
+        assert(_collectorState == Idling, "Collector state should "
+          "have changed");
+        break;
       case Precleaning:
       case AbortablePreclean:
         // Elide the preclean phase
         _collectorState = FinalMarking;
         break;
       default:
-	ShouldNotReachHere();
+        ShouldNotReachHere();
     }
     if (TraceCMSState) {
-      gclog_or_tty->print_cr("	Thread " INTPTR_FORMAT " done - next CMS state %d", 
-	Thread::current(), _collectorState);
+      gclog_or_tty->print_cr("  Thread " INTPTR_FORMAT " done - next CMS state %d",
+        Thread::current(), _collectorState);
     }
   }
 
@@ -2445,8 +2476,8 @@ void CMSCollector::collect_in_foreground(bool clear_all_soft_refs) {
     Universe::verify(true);
   }
   if (TraceCMSState) {
-    gclog_or_tty->print_cr("CMS Thread " INTPTR_FORMAT 
-      " exiting collection CMS state %d", 
+    gclog_or_tty->print_cr("CMS Thread " INTPTR_FORMAT
+      " exiting collection CMS state %d",
       Thread::current(), _collectorState);
   }
 }
@@ -2528,7 +2559,7 @@ void CMSCollector::gc_prologue(bool full) {
     // ignore it since all relevant work has already been done.
     return;
   }
-  
+
   // set a bit saying prologue has been called; cleared in epilogue
   _between_prologue_and_epilogue = true;
   // Claim locks for common data structures, then call gc_prologue_work()
@@ -2597,7 +2628,7 @@ void CMSCollector::gc_epilogue(bool full) {
          || (   CMSScavengeBeforeRemark
              && Thread::current()->is_ConcurrentGC_thread()),
          "Incorrect thread type for epilogue execution");
-  
+
   if (!_between_prologue_and_epilogue) {
     // We have already been invoked; this is a gc_epilogue delegation
     // from yet another CMS generation that we are responsible for, just
@@ -2735,13 +2766,14 @@ class VerifyMarkedClosure: public BitMapClosure {
  public:
   VerifyMarkedClosure(CMSBitMap* bm): _marks(bm), _failed(false) {}
 
-  void do_bit(size_t offset) {
+  bool do_bit(size_t offset) {
     HeapWord* addr = _marks->offsetToHeapWord(offset);
     if (!_marks->isMarked(addr)) {
       oop(addr)->print();
       gclog_or_tty->print_cr(" ("INTPTR_FORMAT" should have been marked)", addr);
       _failed = true;
     }
+    return true;
   }
 
   bool failed() { return _failed; }
@@ -2792,7 +2824,7 @@ bool CMSCollector::verify_after_remark() {
   gch->ensure_parsability(false);  // fill TLABs, but no need to retire them
   // Update the saved marks which may affect the root scans.
   gch->save_marks();
-  
+
   if (CMSRemarkVerifyVariant == 1) {
     // In this first variant of verification, we complete
     // all marking, then check if the new marks-verctor is
@@ -2821,7 +2853,7 @@ void CMSCollector::verify_after_remark_work_1() {
   // Mark from roots one level into CMS
   MarkRefsIntoClosure notOlder(_span, verification_mark_bm(), true /* nmethods */);
   gch->rem_set()->prepare_for_younger_refs_iterate(false); // Not parallel.
-  
+
   gch->gen_process_strong_roots(_cmsGen->level(),
                                 true,   // younger gens are roots
                                 true,   // collecting perm gen
@@ -2871,10 +2903,10 @@ void CMSCollector::verify_after_remark_work_2() {
                                      markBitMap(), true /* nmethods */);
   gch->rem_set()->prepare_for_younger_refs_iterate(false); // Not parallel.
   gch->gen_process_strong_roots(_cmsGen->level(),
-				true,   // younger gens are roots
-				true,   // collecting perm gen
+                                true,   // younger gens are roots
+                                true,   // collecting perm gen
                                 SharedHeap::ScanningOption(roots_scanning_options()),
-				NULL, &notOlder);
+                                NULL, &notOlder);
 
   // Now mark from the roots
   assert(_revisitStack.isEmpty(), "Should be empty");
@@ -3048,21 +3080,62 @@ void CMSCollector::verify_overflow_empty() const {
 }
 #endif // PRODUCT
 
+// Decide if we want to enable class unloading as part of the
+// ensuing concurrent GC cycle. We will collect the perm gen and
+// unload classes if it's the case that:
+// (1) an explicit gc request has been made and the flag
+//     ExplicitGCInvokesConcurrentAndUnloadsClasses is set, OR
+// (2) (a) class unloading is enabled at the command line, and
+//     (b) (i)   perm gen threshold has been crossed, or
+//         (ii)  old gen is getting really full, or
+//         (iii) the previous N CMS collections did not collect the
+//               perm gen
+// NOTE: Provided there is no change in the state of the heap between
+// calls to this method, it should have idempotent results. Moreover,
+// its results should be monotonically increasing (i.e. going from 0 to 1,
+// but not 1 to 0) between successive calls between which the heap was
+// not collected. For the implementation below, it must thus rely on
+// the property that concurrent_cycles_since_last_unload()
+// will not decrease unless a collection cycle happened and that
+// _permGen->should_concurrent_collect() and _cmsGen->is_too_full() are
+// themselves also monotonic in that sense. See check_monotonicity()
+// below.
+bool CMSCollector::update_should_unload_classes() {
+  _should_unload_classes = false;
+  // Condition 1 above
+  if (_full_gc_requested && ExplicitGCInvokesConcurrentAndUnloadsClasses) {
+    _should_unload_classes = true;
+  } else if (CMSClassUnloadingEnabled) { // Condition 2.a above
+    // Disjuncts 2.b.(i,ii,iii) above
+    _should_unload_classes = (concurrent_cycles_since_last_unload() >=
+                              CMSClassUnloadingMaxInterval)
+                           || _permGen->should_concurrent_collect()
+                           || _cmsGen->is_too_full();
+  }
+  return _should_unload_classes;
+}
+
+bool ConcurrentMarkSweepGeneration::is_too_full() const {
+  bool res = should_concurrent_collect();
+  res = res && (occupancy() > (double)CMSIsTooFullPercentage/100.0);
+  return res;
+}
+
 void CMSCollector::setup_cms_unloading_and_verification_state() {
   const  bool should_verify =    VerifyBeforeGC || VerifyAfterGC || VerifyDuringGC
                              || VerifyBeforeExit;
   const  int  rso           =    SharedHeap::SO_Symbols | SharedHeap::SO_Strings
                              |   SharedHeap::SO_CodeCache;
 
-  if (cms_should_unload_classes()) {   // Should unload classes this cycle
+  if (should_unload_classes()) {   // Should unload classes this cycle
     remove_root_scanning_option(rso);  // Shrink the root set appropriately
     set_verifying(should_verify);    // Set verification state for this cycle
     return;                            // Nothing else needs to be done at this time
   }
 
   // Not unloading classes this cycle
-  assert(!cms_should_unload_classes(), "Inconsitency!");
-  if ((!verifying() || cms_unloaded_classes_last_cycle()) && should_verify) {
+  assert(!should_unload_classes(), "Inconsitency!");
+  if ((!verifying() || unloaded_classes_last_cycle()) && should_verify) {
     // We were not verifying, or we _were_ unloading classes in the last cycle,
     // AND some verification options are enabled this cycle; in this case,
     // we must make sure that the deadness map is allocated if not already so,
@@ -3103,7 +3176,7 @@ HeapWord* CMSCollector::block_start(const void* p) const {
       return _cmsGen->cmsSpace()->block_start(p);
     } else {
       assert(_permGen->cmsSpace()->is_in_reserved(addr),
-	     "Inconsistent _span?");
+             "Inconsistent _span?");
       return _permGen->cmsSpace()->block_start(p);
     }
   }
@@ -3114,7 +3187,7 @@ HeapWord* CMSCollector::block_start(const void* p) const {
 HeapWord*
 ConcurrentMarkSweepGeneration::expand_and_allocate(size_t word_size,
                                                    bool   tlab,
-						   bool   parallel) {
+                                                   bool   parallel) {
   assert(!tlab, "Can't deal with TLAB allocation");
   MutexLockerEx x(freelistLock(), Mutex::_no_safepoint_check_flag);
   expand(word_size*HeapWordSize, MinHeapDeltaBytes,
@@ -3128,39 +3201,24 @@ ConcurrentMarkSweepGeneration::expand_and_allocate(size_t word_size,
 // YSR: All of this generation expansion/shrinking stuff is an exact copy of
 // OneContigSpaceCardGeneration, which makes me wonder if we should move this
 // to CardGeneration and share it...
+bool ConcurrentMarkSweepGeneration::expand(size_t bytes, size_t expand_bytes) {
+  return CardGeneration::expand(bytes, expand_bytes);
+}
+
 void ConcurrentMarkSweepGeneration::expand(size_t bytes, size_t expand_bytes,
   CMSExpansionCause::Cause cause)
 {
-  assert_locked_or_safepoint(Heap_lock);
 
-  size_t aligned_bytes  = ReservedSpace::page_align_size_up(bytes);
-  size_t aligned_expand_bytes = ReservedSpace::page_align_size_up(expand_bytes);
-  bool success = false;
-  if (aligned_expand_bytes > aligned_bytes) {
-    success = grow_by(aligned_expand_bytes);
-  }
-  if (!success) {
-    success = grow_by(aligned_bytes);
-  }
-  if (!success) {
-    size_t remaining_bytes = _virtual_space.uncommitted_size();
-    if (remaining_bytes > 0) {
-      success = grow_by(remaining_bytes);
-    }
-  }
-  if (GC_locker::is_active()) {
-    if (PrintGC && Verbose) {
-      gclog_or_tty->print_cr("Garbage collection disabled, expanded heap instead");
-    }
-  }
+  bool success = expand(bytes, expand_bytes);
+
   // remember why we expanded; this information is used
   // by shouldConcurrentCollect() when making decisions on whether to start
   // a new CMS cycle.
   if (success) {
     set_expansion_cause(cause);
     if (PrintGCDetails && Verbose) {
-      gclog_or_tty->print_cr("Expanded CMS gen for %s", 
-	CMSExpansionCause::to_string(cause));
+      gclog_or_tty->print_cr("Expanded CMS gen for %s",
+        CMSExpansionCause::to_string(cause));
     }
   }
 }
@@ -3231,7 +3289,7 @@ bool ConcurrentMarkSweepGeneration::grow_by(size_t bytes) {
   bool result = _virtual_space.expand_by(bytes);
   if (result) {
     HeapWord* old_end = _cmsSpace->end();
-    size_t new_word_size = 
+    size_t new_word_size =
       heap_word_size(_virtual_space.committed_size());
     MemRegion mr(_cmsSpace->bottom(), new_word_size);
     _bts->resize(new_word_size);  // resize the block offset shared array
@@ -3281,9 +3339,9 @@ void ConcurrentMarkSweepGeneration::shrink_by(size_t bytes) {
 // phases.
 class CMSPhaseAccounting: public StackObj {
  public:
-  CMSPhaseAccounting(CMSCollector *collector, 
-		     const char *phase, 
-		     bool print_cr = true);
+  CMSPhaseAccounting(CMSCollector *collector,
+                     const char *phase,
+                     bool print_cr = true);
   ~CMSPhaseAccounting();
 
  private:
@@ -3305,8 +3363,8 @@ class CMSPhaseAccounting: public StackObj {
 };
 
 CMSPhaseAccounting::CMSPhaseAccounting(CMSCollector *collector,
-				       const char *phase,
-				       bool print_cr) :
+                                       const char *phase,
+                                       bool print_cr) :
   _collector(collector), _phase(phase), _print_cr(print_cr) {
 
   if (PrintCMSStatistics != 0) {
@@ -3315,7 +3373,7 @@ CMSPhaseAccounting::CMSPhaseAccounting(CMSCollector *collector,
   if (PrintGCDetails && PrintGCTimeStamps) {
     gclog_or_tty->date_stamp(PrintGCDateStamps);
     gclog_or_tty->stamp();
-    gclog_or_tty->print_cr(": [%s-concurrent-%s-start]", 
+    gclog_or_tty->print_cr(": [%s-concurrent-%s-start]",
       _collector->cmsGen()->short_name(), _phase);
   }
   _collector->resetTimer();
@@ -3333,15 +3391,15 @@ CMSPhaseAccounting::~CMSPhaseAccounting() {
       gclog_or_tty->stamp();
       gclog_or_tty->print(": ");
     }
-    gclog_or_tty->print("[%s-concurrent-%s: %3.3f/%3.3f secs]", 
-		 _collector->cmsGen()->short_name(),
-		 _phase, _collector->timerValue(), _wallclock.seconds());
+    gclog_or_tty->print("[%s-concurrent-%s: %3.3f/%3.3f secs]",
+                 _collector->cmsGen()->short_name(),
+                 _phase, _collector->timerValue(), _wallclock.seconds());
     if (_print_cr) {
       gclog_or_tty->print_cr("");
     }
     if (PrintCMSStatistics != 0) {
       gclog_or_tty->print_cr(" (CMS-concurrent-%s yielded %d times)", _phase,
-		    _collector->yields());
+                    _collector->yields());
     }
   }
 }
@@ -3398,7 +3456,7 @@ void CMSCollector::checkpointRootsInitialWork(bool asynch) {
   // CMS collection cycle.
   setup_cms_unloading_and_verification_state();
 
-  NOT_PRODUCT(TraceTime t("\ncheckpointRootsInitialWork", 
+  NOT_PRODUCT(TraceTime t("\ncheckpointRootsInitialWork",
     PrintGCDetails && Verbose, true, gclog_or_tty);)
   if (UseAdaptiveSizePolicy) {
     size_policy()->checkpoint_roots_initial_begin();
@@ -3433,10 +3491,10 @@ void CMSCollector::checkpointRootsInitialWork(bool asynch) {
     COMPILER2_PRESENT(DerivedPointerTableDeactivate dpt_deact;)
     gch->rem_set()->prepare_for_younger_refs_iterate(false); // Not parallel.
     gch->gen_process_strong_roots(_cmsGen->level(),
-				  true,   // younger gens are roots
-				  true,   // collecting perm gen
+                                  true,   // younger gens are roots
+                                  true,   // collecting perm gen
                                   SharedHeap::ScanningOption(roots_scanning_options()),
-				  NULL, &notOlder);
+                                  NULL, &notOlder);
   }
 
   // Clear mod-union table; it will be dirtied in the prologue of
@@ -3452,7 +3510,7 @@ void CMSCollector::checkpointRootsInitialWork(bool asynch) {
   #if 0
   {
     MemRegion mr = MemRegion((HeapWord*)_virtual_space.low(),
-			     (HeapWord*)_virtual_space.high());
+                             (HeapWord*)_virtual_space.high());
     _ct->ct_bs()->preclean_dirty_cards(mr);
   }
   #endif
@@ -3582,7 +3640,7 @@ class CMSConcMarkingTerminator: public ParallelTaskTerminator {
     ParallelTaskTerminator(n_threads, queue_set),
     _collector(collector),
     _yield(yield) { }
- 
+
   void set_task(CMSConcMarkingTask* task) {
     _task = task;
   }
@@ -3608,7 +3666,7 @@ class CMSConcMarkingTask: public YieldingFlexibleGangTask {
   CMSConcMarkingTerminator _term;
 
  public:
-  CMSConcMarkingTask(CMSCollector* collector, 
+  CMSConcMarkingTask(CMSCollector* collector,
                  CompactibleFreeListSpace* cms_space,
                  CompactibleFreeListSpace* perm_space,
                  bool asynch, int n_workers,
@@ -3642,14 +3700,14 @@ class CMSConcMarkingTask: public YieldingFlexibleGangTask {
   CMSConcMarkingTerminator* terminator() { return &_term; }
 
   void work(int i);
-    
+
   virtual void coordinator_yield();  // stuff done by coordinator
   bool result() { return _result; }
 
   void reset(HeapWord* ra) {
-    assert(_global_finger >= _cms_space->end(), "Postcondition of ::work(i)");
+    assert(_global_finger >= _cms_space->end(),  "Postcondition of ::work(i)");
     assert(_global_finger >= _perm_space->end(), "Postcondition of ::work(i)");
-    assert(ra < _perm_space->end(), "ra too large");
+    assert(ra             <  _perm_space->end(), "ra too large");
     _restart_addr = _global_finger = ra;
     _term.reset_for_reuse();
   }
@@ -3695,7 +3753,7 @@ void CMSConcMarkingTerminator::yield() {
 //    . then get a batch of oops from global work queue if any
 //    . then do work stealing
 // -- When all tasks claimed (both spaces)
-//    and local work queue empty, 
+//    and local work queue empty,
 //    then in a loop do:
 //    . check global overflow stack; steal a batch of oops and trace
 //    . try to steal from other threads oif GOS is empty
@@ -3779,7 +3837,7 @@ bool CMSConcMarkingTask::get_work_from_overflow_stack(CMSMarkStack* ovflw_stk,
   MutexLockerEx ml(ovflw_stk->par_lock(),
                    Mutex::_no_safepoint_check_flag);
   // Grab up to 1/4 the size of the work queue
-  size_t num = MIN2((size_t)work_q->max_elems()/4,
+  size_t num = MIN2((size_t)(work_q->max_elems() - work_q->size())/4,
                     (size_t)ParGCDesiredObjsFromOverflowList);
   num = MIN2(num, ovflw_stk->length());
   for (int i = (int) num; i > 0; i--) {
@@ -3803,10 +3861,10 @@ void CMSConcMarkingTask::do_scan_and_mark(int i, CompactibleFreeListSpace* sp) {
     // Align down to a card boundary for the start of 0th task
     // for this space.
     aligned_start =
-       (HeapWord*)align_size_down((uintptr_t)_restart_addr,
-                                     CardTableModRefBS::card_size);
+      (HeapWord*)align_size_down((uintptr_t)_restart_addr,
+                                 CardTableModRefBS::card_size);
   }
-  
+
   size_t chunk_size = sp->marking_task_size();
   while (!pst->is_task_claimed(/* reference */ nth_task)) {
     // Having claimed the nth task in this space,
@@ -3829,13 +3887,13 @@ void CMSConcMarkingTask::do_scan_and_mark(int i, CompactibleFreeListSpace* sp) {
     if (!span.is_empty()) {  // Non-null task
       HeapWord* prev_obj;
       assert(!span.contains(_restart_addr) || nth_task == 0,
-              "Inconsistency");
+             "Inconsistency");
       if (nth_task == 0) {
         // For the 0th task, we'll not need to compute a block_start.
         if (span.contains(_restart_addr)) {
           // In the case of a restart because of stack overflow,
           // we might additionally skip a chunk prefix.
-          prev_obj = _restart_addr; 
+          prev_obj = _restart_addr;
         } else {
           prev_obj = span.start();
         }
@@ -3860,7 +3918,7 @@ void CMSConcMarkingTask::do_scan_and_mark(int i, CompactibleFreeListSpace* sp) {
             // scanning, but that appears unavoidable, short of
             // locking the free list locks; see bug 6324141.
             break;
-          } 
+          }
         }
       }
       if (prev_obj < span.end()) {
@@ -3890,13 +3948,15 @@ void CMSConcMarkingTask::do_scan_and_mark(int i, CompactibleFreeListSpace* sp) {
 }
 
 class Par_ConcMarkingClosure: public OopClosure {
+ private:
   CMSCollector* _collector;
   MemRegion     _span;
   CMSBitMap*    _bit_map;
   CMSMarkStack* _overflow_stack;
   CMSMarkStack* _revisit_stack;     // XXXXXX Check proper use
   OopTaskQueue* _work_queue;
-
+ protected:
+  DO_OOP_WORK_DEFN
  public:
   Par_ConcMarkingClosure(CMSCollector* collector, OopTaskQueue* work_queue,
                          CMSBitMap* bit_map, CMSMarkStack* overflow_stack):
@@ -3905,8 +3965,8 @@ class Par_ConcMarkingClosure: public OopClosure {
     _work_queue(work_queue),
     _bit_map(bit_map),
     _overflow_stack(overflow_stack) { }   // need to initialize revisit stack etc.
-
-  void do_oop(oop* p);
+  virtual void do_oop(oop* p);
+  virtual void do_oop(narrowOop* p);
   void trim_queue(size_t max);
   void handle_stack_overflow(HeapWord* lost);
 };
@@ -3916,12 +3976,10 @@ class Par_ConcMarkingClosure: public OopClosure {
 // that are in these stolen objects being scanned must
 // already have been initialized (else they would not have
 // been published), so we do not need to check for
-// uninitialized objects before pushing here. 
-void Par_ConcMarkingClosure::do_oop(oop* p) {
-  oop    this_oop = *p;
-  assert(this_oop->is_oop_or_null(true),
-         "expected an oop or NULL");
-  HeapWord* addr = (HeapWord*)this_oop;
+// uninitialized objects before pushing here.
+void Par_ConcMarkingClosure::do_oop(oop obj) {
+  assert(obj->is_oop_or_null(true), "expected an oop or NULL");
+  HeapWord* addr = (HeapWord*)obj;
   // Check if oop points into the CMS generation
   // and is not marked
   if (_span.contains(addr) && !_bit_map->isMarked(addr)) {
@@ -3940,7 +3998,7 @@ void Par_ConcMarkingClosure::do_oop(oop* p) {
         }
       )
       if (simulate_overflow ||
-          !(_work_queue->push(this_oop) || _overflow_stack->par_push(this_oop))) {
+          !(_work_queue->push(obj) || _overflow_stack->par_push(obj))) {
         // stack overflow
         if (PrintCMSStatistics != 0) {
           gclog_or_tty->print_cr("CMS marking stack overflow (benign) at "
@@ -3956,6 +4014,9 @@ void Par_ConcMarkingClosure::do_oop(oop* p) {
     } // Else, some other thread got there first
   }
 }
+
+void Par_ConcMarkingClosure::do_oop(oop* p)       { Par_ConcMarkingClosure::do_oop_work(p); }
+void Par_ConcMarkingClosure::do_oop(narrowOop* p) { Par_ConcMarkingClosure::do_oop_work(p); }
 
 void Par_ConcMarkingClosure::trim_queue(size_t max) {
   while (_work_queue->size() > max) {
@@ -4016,7 +4077,7 @@ void CMSConcMarkingTask::do_work_steal(int i) {
 void CMSConcMarkingTask::coordinator_yield() {
   assert(ConcurrentMarkSweepThread::cms_thread_has_cms_token(),
          "CMS thread should hold CMS token");
-  
+
   // First give up the locks, then yield, then re-lock
   // We should probably use a constructor/destructor idiom to
   // do this unlock/lock or modify the MutexUnlocker class to
@@ -4056,8 +4117,8 @@ void CMSConcMarkingTask::coordinator_yield() {
   //
   // Tony 2006.06.29
   for (unsigned i = 0; i < CMSCoordinatorYieldSleepCount &&
-	               ConcurrentMarkSweepThread::should_yield() &&
-	               !CMSCollector::foregroundGCIsActive(); ++i) {
+                   ConcurrentMarkSweepThread::should_yield() &&
+                   !CMSCollector::foregroundGCIsActive(); ++i) {
     os::sleep(Thread::current(), 1, false);
     ConcurrentMarkSweepThread::acknowledge_yield_request();
   }
@@ -4075,7 +4136,7 @@ bool CMSCollector::do_marking_mt(bool asynch) {
 
   CompactibleFreeListSpace* cms_space  = _cmsGen->cmsSpace();
   CompactibleFreeListSpace* perm_space = _permGen->cmsSpace();
-  
+
   CMSConcMarkingTask tsk(this, cms_space, perm_space,
                          asynch, num_workers /* number requested XXX */,
                          conc_workers(), task_queues());
@@ -4086,13 +4147,13 @@ bool CMSCollector::do_marking_mt(bool asynch) {
   // class?? XXX
   cms_space ->initialize_sequential_subtasks_for_marking(num_workers);
   perm_space->initialize_sequential_subtasks_for_marking(num_workers);
-  
+
   // Refs discovery is already non-atomic.
   assert(!ref_processor()->discovery_is_atomic(), "Should be non-atomic");
   // Mutate the Refs discovery so it is MT during the
   // multi-threaded marking phase.
   ReferenceProcessorMTMutator mt(ref_processor(), num_workers > 1);
-  
+
   conc_workers()->start_task(&tsk);
   while (tsk.yielded()) {
     tsk.coordinator_yield();
@@ -4238,7 +4299,7 @@ void CMSCollector::abortable_preclean() {
     size_t loops = 0, workdone = 0, cumworkdone = 0, waited = 0;
     while (!(should_abort_preclean() ||
              ConcurrentMarkSweepThread::should_terminate())) {
-      workdone = preclean_work(CMSPrecleanRefLists2, CMSPrecleanSurvivors2); 
+      workdone = preclean_work(CMSPrecleanRefLists2, CMSPrecleanSurvivors2);
       cumworkdone += workdone;
       loops++;
       // Voluntarily terminate abortable preclean phase if we have
@@ -4332,10 +4393,10 @@ size_t CMSCollector::preclean_work(bool clean_refs, bool clean_survivor) {
     CMSPrecleanRefsYieldClosure yield_cl(this);
     assert(rp->span().equals(_span), "Spans should be equal");
     CMSKeepAliveClosure keep_alive(this, _span, &_markBitMap,
-                                   &_markStack);
+                                   &_markStack, true /* preclean */);
     CMSDrainMarkingStackClosure complete_trace(this,
-                                  _span, &_markBitMap, &_markStack,
-                                  &keep_alive);
+                                   _span, &_markBitMap, &_markStack,
+                                   &keep_alive, true /* preclean */);
 
     // We don't want this step to interfere with a young
     // collection because we don't want to take CPU
@@ -4437,7 +4498,7 @@ size_t CMSCollector::preclean_work(bool clean_refs, bool clean_survivor) {
   cumNumCards += curNumCards;
   if (PrintGCDetails && PrintCMSStatistics != 0) {
     gclog_or_tty->print_cr(" (cardTable: %d cards, re-scanned %d cards, %d iterations)",
-		  curNumCards, cumNumCards, numIter);
+                  curNumCards, cumNumCards, numIter);
   }
   return cumNumCards;   // as a measure of useful work done
 }
@@ -4515,7 +4576,7 @@ size_t CMSCollector::preclean_mod_union_table(
       sample_eden();
       // Get dirty region starting at nextOffset (inclusive),
       // simultaneously clearing it.
-      dirtyRegion = 
+      dirtyRegion =
         _modUnionTable.getAndClearMarkedRegion(nextAddr, endAddr);
       assert(dirtyRegion.start() >= nextAddr,
              "returned region inconsistent?");
@@ -4534,11 +4595,11 @@ size_t CMSCollector::preclean_mod_union_table(
     if (!dirtyRegion.is_empty()) {
       assert(numDirtyCards > 0, "consistency check");
       HeapWord* stop_point = NULL;
+      stopTimer();
+      CMSTokenSyncWithLocks ts(true, gen->freelistLock(),
+                               bitMapLock());
+      startTimer();
       {
-        stopTimer();
-        CMSTokenSyncWithLocks ts(true, gen->freelistLock(),
-                                 bitMapLock());
-        startTimer();
         verify_work_stacks_empty();
         verify_overflow_empty();
         sample_eden();
@@ -4555,10 +4616,6 @@ size_t CMSCollector::preclean_mod_union_table(
         assert((CMSPermGenPrecleaningEnabled && (gen == _permGen)) ||
                (_collectorState == AbortablePreclean && should_abort_preclean()),
                "Unparsable objects should only be in perm gen.");
-
-        stopTimer();
-        CMSTokenSyncWithLocks ts(true, bitMapLock());
-        startTimer();
         _modUnionTable.mark_range(MemRegion(stop_point, dirtyRegion.end()));
         if (should_abort_preclean()) {
           break; // out of preclean loop
@@ -4614,8 +4671,11 @@ size_t CMSCollector::preclean_card_table(ConcurrentMarkSweepGeneration* gen,
       startTimer();
       sample_eden();
       // Get and clear dirty region from card table
-      dirtyRegion = _ct->ct_bs()->dirty_card_range_after_preclean(
-                                    MemRegion(nextAddr, endAddr));
+      dirtyRegion = _ct->ct_bs()->dirty_card_range_after_reset(
+                                    MemRegion(nextAddr, endAddr),
+                                    true,
+                                    CardTableModRefBS::precleaned_card_val());
+
       assert(dirtyRegion.start() >= nextAddr,
              "returned region inconsistent?");
     }
@@ -4679,8 +4739,8 @@ void CMSCollector::checkpointRootsFinal(bool asynch,
       // Temporarily set flag to false, GCH->do_collection will
       // expect it to be false and set to true
       FlagSetting fl(gch->_is_gc_active, false);
-      NOT_PRODUCT(TraceTime t("Scavenge-Before-Remark", 
-	PrintGCDetails && Verbose, true, gclog_or_tty);)
+      NOT_PRODUCT(TraceTime t("Scavenge-Before-Remark",
+        PrintGCDetails && Verbose, true, gclog_or_tty);)
       int level = _cmsGen->level() - 1;
       if (level >= 0) {
         gch->do_collection(true,        // full (i.e. force, see below)
@@ -4723,7 +4783,7 @@ void CMSCollector::checkpointRootsFinalWork(bool asynch,
 
   GenCollectedHeap* gch = GenCollectedHeap::heap();
 
-  if (cms_should_unload_classes()) {
+  if (should_unload_classes()) {
     CodeCache::gc_prologue();
   }
   assert(haveFreelistLocks(), "must have free list locks");
@@ -4745,10 +4805,10 @@ void CMSCollector::checkpointRootsFinalWork(bool asynch,
     gch->ensure_parsability(false);  // fill TLAB's, but no need to retire them
     // Update the saved marks which may affect the root scans.
     gch->save_marks();
-  
+
     {
       COMPILER2_PRESENT(DerivedPointerTableDeactivate dpt_deact;)
-  
+
       // Note on the role of the mod union table:
       // Since the marker in "markFromRoots" marks concurrently with
       // mutators, it is possible for some reachable objects not to have been
@@ -4783,7 +4843,7 @@ void CMSCollector::checkpointRootsFinalWork(bool asynch,
   verify_work_stacks_empty();
   verify_overflow_empty();
 
-  if (cms_should_unload_classes()) {
+  if (should_unload_classes()) {
     CodeCache::gc_epilogue();
   }
 
@@ -4793,17 +4853,19 @@ void CMSCollector::checkpointRootsFinalWork(bool asynch,
   // recurrence of that condition.
   assert(_markStack.isEmpty(), "No grey objects");
   size_t ser_ovflw = _ser_pmc_remark_ovflw + _ser_pmc_preclean_ovflw +
-                     _ser_kac_ovflw;
+                     _ser_kac_ovflw        + _ser_kac_preclean_ovflw;
   if (ser_ovflw > 0) {
     if (PrintCMSStatistics != 0) {
       gclog_or_tty->print_cr("Marking stack overflow (benign) "
-        "(pmc_pc="SIZE_FORMAT", pmc_rm="SIZE_FORMAT", kac="SIZE_FORMAT")",
+        "(pmc_pc="SIZE_FORMAT", pmc_rm="SIZE_FORMAT", kac="SIZE_FORMAT
+        ", kac_preclean="SIZE_FORMAT")",
         _ser_pmc_preclean_ovflw, _ser_pmc_remark_ovflw,
-        _ser_kac_ovflw);
+        _ser_kac_ovflw, _ser_kac_preclean_ovflw);
     }
     _markStack.expand();
     _ser_pmc_remark_ovflw = 0;
     _ser_pmc_preclean_ovflw = 0;
+    _ser_kac_preclean_ovflw = 0;
     _ser_kac_ovflw = 0;
   }
   if (_par_pmc_remark_ovflw > 0 || _par_kac_ovflw > 0) {
@@ -4941,10 +5003,10 @@ void CMSParRemarkTask::work(int i) {
   _timer.reset();
   _timer.start();
   gch->gen_process_strong_roots(_collector->_cmsGen->level(),
-				false,     // yg was scanned above
-				true,      // collecting perm gen
+                                false,     // yg was scanned above
+                                true,      // collecting perm gen
                                 SharedHeap::ScanningOption(_collector->CMSCollector::roots_scanning_options()),
-				NULL, &par_mrias_cl);
+                                NULL, &par_mrias_cl);
   _timer.stop();
   if (PrintCMSStatistics != 0) {
     gclog_or_tty->print_cr(
@@ -5065,7 +5127,7 @@ CMSParRemarkTask::do_dirty_card_rescan_tasks(
   // assumptions made here and necessary for correctness and
   // efficiency. Note also that this code might yield inefficient
   // behaviour in the case of very large objects that span one or
-  // more work chunks. Such objects would potentially be scanned 
+  // more work chunks. Such objects would potentially be scanned
   // several times redundantly. Work on 4756801 should try and
   // address that performance anomaly if at all possible. XXX
   MemRegion  full_span  = _collector->_span;
@@ -5132,13 +5194,12 @@ CMSParRemarkTask::do_work_steal(int i, Par_MarkRefsIntoAndScanClosure* cl,
   NOT_PRODUCT(int num_steals = 0;)
   oop obj_to_scan;
   CMSBitMap* bm = &(_collector->_markBitMap);
-  size_t num_from_overflow_list =
-           MIN2((size_t)work_q->max_elems()/4,
-                (size_t)ParGCDesiredObjsFromOverflowList);
 
   while (true) {
     // Completely finish any left over work from (an) earlier round(s)
     cl->trim_queue(0);
+    size_t num_from_overflow_list = MIN2((size_t)(work_q->max_elems() - work_q->size())/4,
+                                         (size_t)ParGCDesiredObjsFromOverflowList);
     // Now check if there's any work in the overflow list
     if (_collector->par_take_from_overflow_list(num_from_overflow_list,
                                                 work_q)) {
@@ -5349,7 +5410,7 @@ void CMSCollector::do_remark_parallel() {
   // claimed by the parallel threads.
   cms_space->initialize_sequential_subtasks_for_rescan(n_workers);
   perm_space->initialize_sequential_subtasks_for_rescan(n_workers);
-  
+
   // It turns out that even when we're using 1 thread, doing the work in a
   // separate thread causes wide variance in run times.  We can't help this
   // in the multi-threaded case, but we special-case n=1 here to get
@@ -5383,8 +5444,8 @@ void CMSCollector::do_remark_non_parallel() {
                               &mrias_cl);
   {
     TraceTime t("grey object rescan", PrintGCDetails, false, gclog_or_tty);
-    // Iterate over the dirty cards, marking them precleaned, and
-    // setting the corresponding bits in the mod union table.
+    // Iterate over the dirty cards, setting the corresponding bits in the
+    // mod union table.
     {
       ModUnionClosure modUnionClosure(&_modUnionTable);
       _ct->ct_bs()->dirty_card_iterate(
@@ -5400,7 +5461,7 @@ void CMSCollector::do_remark_non_parallel() {
     // collection so there may be dirty bits in the mod-union table.
     const int alignment =
       CardTableModRefBS::card_size * BitsPerWord;
-    { 
+    {
       // ... First handle dirty cards in CMS gen
       markFromDirtyCardsClosure.set_space(_cmsGen->cmsSpace());
       MemRegion ur = _cmsGen->used_region();
@@ -5414,7 +5475,7 @@ void CMSCollector::do_remark_non_parallel() {
         gclog_or_tty->print(" (re-scanned "SIZE_FORMAT" dirty cards in cms gen) ",
           markFromDirtyCardsClosure.num_dirty_cards());
       }
-    } 
+    }
     {
       // .. and then repeat for dirty cards in perm gen
       markFromDirtyCardsClosure.set_space(_permGen->cmsSpace());
@@ -5440,13 +5501,13 @@ void CMSCollector::do_remark_non_parallel() {
     TraceTime t("root rescan", PrintGCDetails, false, gclog_or_tty);
 
     verify_work_stacks_empty();
-  
+
     gch->rem_set()->prepare_for_younger_refs_iterate(false); // Not parallel.
     gch->gen_process_strong_roots(_cmsGen->level(),
-				  true,  // younger gens as roots
-				  true,  // collecting perm gen
+                                  true,  // younger gens as roots
+                                  true,  // collecting perm gen
                                   SharedHeap::ScanningOption(roots_scanning_options()),
-				  NULL, &mrias_cl);
+                                  NULL, &mrias_cl);
   }
   verify_work_stacks_empty();
   // Restore evacuated mark words, if any, used for overflow list links
@@ -5482,14 +5543,15 @@ public:
     _term(total_workers, task_queues)
     {
       assert(_collector->_span.equals(_span) && !_span.is_empty(),
-             "Inconsistency in _span"); 
+             "Inconsistency in _span");
     }
+
   OopTaskQueueSet* task_queues() { return _task_queues; }
 
   OopTaskQueue* work_queue(int i) { return task_queues()->queue(i); }
 
   ParallelTaskTerminator* terminator() { return &_term; }
-  
+
   void do_work_steal(int i,
                      CMSParDrainMarkingStackClosure* drain,
                      CMSParKeepAliveClosure* keep_alive,
@@ -5549,13 +5611,12 @@ void CMSRefProcTaskProxy::do_work_steal(int i,
   OopTaskQueue* work_q = work_queue(i);
   NOT_PRODUCT(int num_steals = 0;)
   oop obj_to_scan;
-  size_t num_from_overflow_list =
-           MIN2((size_t)work_q->max_elems()/4,
-                (size_t)ParGCDesiredObjsFromOverflowList);
 
   while (true) {
     // Completely finish any left over work from (an) earlier round(s)
     drain->trim_queue(0);
+    size_t num_from_overflow_list = MIN2((size_t)(work_q->max_elems() - work_q->size())/4,
+                                         (size_t)ParGCDesiredObjsFromOverflowList);
     // Now check if there's any work in the overflow list
     if (_collector->par_take_from_overflow_list(num_from_overflow_list,
                                                 work_q)) {
@@ -5594,9 +5655,9 @@ void CMSRefProcTaskExecutor::execute(ProcessTask& task)
   WorkGang* workers = gch->workers();
   assert(workers != NULL, "Need parallel worker threads.");
   int n_workers = workers->total_workers();
-  CMSRefProcTaskProxy rp_task(task, &_collector, 
-                              _collector.ref_processor()->span(), 
-                              _collector.markBitMap(), 
+  CMSRefProcTaskProxy rp_task(task, &_collector,
+                              _collector.ref_processor()->span(),
+                              _collector.markBitMap(),
                               n_workers, _collector.task_queues());
   workers->run_task(&rp_task);
 }
@@ -5615,40 +5676,29 @@ void CMSCollector::refProcessingWork(bool asynch, bool clear_all_soft_refs) {
 
   ResourceMark rm;
   HandleMark   hm;
-  ReferencePolicy* soft_ref_policy;
-
-  assert(!ref_processor()->enqueuing_is_done(), "Enqueuing should not be complete");
-  // Process weak references.
-  if (clear_all_soft_refs) {
-    soft_ref_policy = new AlwaysClearPolicy();
-  } else {
-#ifdef COMPILER2
-    soft_ref_policy = new LRUMaxHeapPolicy();
-#else
-    soft_ref_policy = new LRUCurrentHeapPolicy();
-#endif // COMPILER2
-  }
-  verify_work_stacks_empty();
 
   ReferenceProcessor* rp = ref_processor();
   assert(rp->span().equals(_span), "Spans should be equal");
+  assert(!rp->enqueuing_is_done(), "Enqueuing should not be complete");
+  // Process weak references.
+  rp->setup_policy(clear_all_soft_refs);
+  verify_work_stacks_empty();
+
   CMSKeepAliveClosure cmsKeepAliveClosure(this, _span, &_markBitMap,
-                                          &_markStack);
+                                          &_markStack, false /* !preclean */);
   CMSDrainMarkingStackClosure cmsDrainMarkingStackClosure(this,
                                 _span, &_markBitMap, &_markStack,
-                                &cmsKeepAliveClosure);
+                                &cmsKeepAliveClosure, false /* !preclean */);
   {
     TraceTime t("weak refs processing", PrintGCDetails, false, gclog_or_tty);
     if (rp->processing_is_mt()) {
       CMSRefProcTaskExecutor task_executor(*this);
-      rp->process_discovered_references(soft_ref_policy, 
-                                        &_is_alive_closure,
+      rp->process_discovered_references(&_is_alive_closure,
                                         &cmsKeepAliveClosure,
                                         &cmsDrainMarkingStackClosure,
                                         &task_executor);
     } else {
-      rp->process_discovered_references(soft_ref_policy,
-                                        &_is_alive_closure,
+      rp->process_discovered_references(&_is_alive_closure,
                                         &cmsKeepAliveClosure,
                                         &cmsDrainMarkingStackClosure,
                                         NULL);
@@ -5656,7 +5706,7 @@ void CMSCollector::refProcessingWork(bool asynch, bool clear_all_soft_refs) {
     verify_work_stacks_empty();
   }
 
-  if (cms_should_unload_classes()) {
+  if (should_unload_classes()) {
     {
       TraceTime t("class unloading", PrintGCDetails, false, gclog_or_tty);
 
@@ -5686,7 +5736,7 @@ void CMSCollector::refProcessingWork(bool asynch, bool clear_all_soft_refs) {
       cmsDrainMarkingStackClosure.do_void();
       verify_work_stacks_empty();
     }
-     
+
     {
       TraceTime t("scrub symbol & string tables", PrintGCDetails, false, gclog_or_tty);
       // Now clean up stale oops in SymbolTable and StringTable
@@ -5722,8 +5772,8 @@ void CMSCollector::check_correct_thread_executing() {
   // Only the VM thread or the CMS thread should be here.
   assert(t->is_ConcurrentGC_thread() || t->is_VM_thread(),
          "Unexpected thread type");
-  // If this is the vm thread, the foreground process 
-  // should not be waiting.  Note that _foregroundGCIsActive is 
+  // If this is the vm thread, the foreground process
+  // should not be waiting.  Note that _foregroundGCIsActive is
   // true while the foreground collector is waiting.
   if (_foregroundGCShouldWait) {
     // We cannot be the VM thread
@@ -5734,7 +5784,7 @@ void CMSCollector::check_correct_thread_executing() {
     // phase of CMS collection.
     if (t->is_ConcurrentGC_thread()) {
       assert(_collectorState == InitialMarking ||
-             _collectorState == FinalMarking, 
+             _collectorState == FinalMarking,
              "Should be a stop-world phase");
       // The CMS thread should be holding the CMS_token.
       assert(ConcurrentMarkSweepThread::cms_thread_has_cms_token(),
@@ -5759,14 +5809,20 @@ void CMSCollector::sweep(bool asynch) {
   // this cycle, we preserve the perm gen object "deadness" information
   // in the perm_gen_verify_bit_map. In order to do that we traverse
   // all blocks in perm gen and mark all dead objects.
-  if (verifying() && !cms_should_unload_classes()) {
-    CMSTokenSyncWithLocks ts(true, _permGen->freelistLock(),
-                             bitMapLock());
+  if (verifying() && !should_unload_classes()) {
     assert(perm_gen_verify_bit_map()->sizeInBits() != 0,
            "Should have already been allocated");
     MarkDeadObjectsClosure mdo(this, _permGen->cmsSpace(),
                                markBitMap(), perm_gen_verify_bit_map());
-    _permGen->cmsSpace()->blk_iterate(&mdo);
+    if (asynch) {
+      CMSTokenSyncWithLocks ts(true, _permGen->freelistLock(),
+                               bitMapLock());
+      _permGen->cmsSpace()->blk_iterate(&mdo);
+    } else {
+      // In the case of synchronous sweep, we already have
+      // the requisite locks/tokens.
+      _permGen->cmsSpace()->blk_iterate(&mdo);
+    }
   }
 
   if (asynch) {
@@ -5780,7 +5836,7 @@ void CMSCollector::sweep(bool asynch) {
     }
 
     // Now repeat for perm gen
-    if (cms_should_unload_classes()) {
+    if (should_unload_classes()) {
       CMSTokenSyncWithLocks ts(true, _permGen->freelistLock(),
                              bitMapLock());
       sweepWork(_permGen, asynch);
@@ -5802,7 +5858,7 @@ void CMSCollector::sweep(bool asynch) {
     // already have needed locks
     sweepWork(_cmsGen,  asynch);
 
-    if (cms_should_unload_classes()) {
+    if (should_unload_classes()) {
       sweepWork(_permGen, asynch);
     }
     // Update heap occupancy information which is used as
@@ -5823,13 +5879,13 @@ void CMSCollector::sweep(bool asynch) {
   // based on the state of the collection.  The former is done in
   // the interval [Marking, Sweeping] and the latter in the interval
   // [Marking, Sweeping).  Thus the transitions into the Marking state
-  // and out of the Sweeping state must be synchronously visible 
+  // and out of the Sweeping state must be synchronously visible
   // globally to the mutators.
   // The transition into the Marking state happens with the world
   // stopped so the mutators will globally see it.  Sweeping is
   // done asynchronously by the background collector so the transition
   // from the Sweeping state to the Resizing state must be done
-  // under the freelistLock (as is the check for whether to 
+  // under the freelistLock (as is the check for whether to
   // allocate-live and whether to dirty the mod-union table).
   assert(_collectorState == Resizing, "Change of collector state to"
     " Resizing must be done under the freelistLocks (plural)");
@@ -5859,10 +5915,10 @@ void CMSCollector::sweep(bool asynch) {
 void ConcurrentMarkSweepGeneration::setNearLargestChunk() {
   double nearLargestPercent = 0.999;
   HeapWord*  minAddr        = _cmsSpace->bottom();
-  HeapWord*  largestAddr    = 
+  HeapWord*  largestAddr    =
     (HeapWord*) _cmsSpace->dictionary()->findLargestDict();
   if (largestAddr == 0) {
-    // The dictionary appears to be empty.  In this case 
+    // The dictionary appears to be empty.  In this case
     // try to coalesce at the end of the heap.
     largestAddr = _cmsSpace->end();
   }
@@ -5881,7 +5937,7 @@ FreeChunk* ConcurrentMarkSweepGeneration::find_chunk_at_end() {
 }
 
 void ConcurrentMarkSweepGeneration::update_gc_stats(int current_level,
-						    bool full) {
+                                                    bool full) {
   // The next lower level has been collected.  Gather any statistics
   // that are of interest at this point.
   if (!full && (current_level + 1) == level()) {
@@ -5898,7 +5954,7 @@ CMSAdaptiveSizePolicy* ConcurrentMarkSweepGeneration::size_policy() {
     gch->gen_policy()->size_policy();
   assert(sp->is_gc_cms_adaptive_size_policy(),
     "Wrong type of size policy");
-  return sp; 
+  return sp;
 }
 
 void ConcurrentMarkSweepGeneration::rotate_debug_collection_type() {
@@ -5906,7 +5962,7 @@ void ConcurrentMarkSweepGeneration::rotate_debug_collection_type() {
     gclog_or_tty->print("Rotate from %d ", _debug_collection_type);
   }
   _debug_collection_type = (CollectionTypes) (_debug_collection_type + 1);
-  _debug_collection_type = 
+  _debug_collection_type =
     (CollectionTypes) (_debug_collection_type % Unknown_collection_type);
   if (PrintGCDetails && Verbose) {
     gclog_or_tty->print_cr("to %d ", _debug_collection_type);
@@ -5929,7 +5985,7 @@ void CMSCollector::sweepWork(ConcurrentMarkSweepGeneration* gen,
   //                 generation by another thread
   // . bitMapLock: if this is held, no other thread can access or update
   //
-    
+
   // Note that we need to hold the freelistLock if we use
   // block iterate below; else the iterator might go awry if
   // a mutator (or promotion) causes block contents to change
@@ -5939,7 +5995,7 @@ void CMSCollector::sweepWork(ConcurrentMarkSweepGeneration* gen,
   // promote), so we might as well prevent all young generation
   // GC's while we do a sweeping step. For the same reason, we might
   // as well take the bit map lock for the entire duration
-  
+
   // check that we hold the requisite locks
   assert(have_cms_token(), "Should hold cms token");
   assert(   (asynch && ConcurrentMarkSweepThread::cms_thread_has_cms_token())
@@ -5947,7 +6003,7 @@ void CMSCollector::sweepWork(ConcurrentMarkSweepGeneration* gen,
         "Should possess CMS token to sweep");
   assert_lock_strong(gen->freelistLock());
   assert_lock_strong(bitMapLock());
-  
+
   assert(!_sweep_timer.is_active(), "Was switched off in an outer context");
   gen->cmsSpace()->beginSweepFLCensus((float)(_sweep_timer.seconds()),
                                       _sweep_estimate.padded_average());
@@ -5964,6 +6020,11 @@ void CMSCollector::sweepWork(ConcurrentMarkSweepGeneration* gen,
   }
   gen->cmsSpace()->sweep_completed();
   gen->cmsSpace()->endSweepFLCensus(sweepCount());
+  if (should_unload_classes()) {                // unloaded classes this cycle,
+    _concurrent_cycles_since_last_unload = 0;   // ... reset count
+  } else {                                      // did not unload classes,
+    _concurrent_cycles_since_last_unload++;     // ... increment count
+  }
 }
 
 // Reset CMS data structures (for now just the marking bit map)
@@ -5979,7 +6040,7 @@ void CMSCollector::reset(bool asynch) {
     // has done a collection and the resetting.
     if (_collectorState != Resetting) {
       assert(_collectorState == Idling, "The state should only change"
-	" because the foreground collector has finished the collection");
+        " because the foreground collector has finished the collection");
       return;
     }
 
@@ -5990,7 +6051,7 @@ void CMSCollector::reset(bool asynch) {
 
     HeapWord* curAddr = _markBitMap.startWord();
     while (curAddr < _markBitMap.endWord()) {
-      size_t remaining  = pointer_delta(_markBitMap.endWord(), curAddr); 
+      size_t remaining  = pointer_delta(_markBitMap.endWord(), curAddr);
       MemRegion chunk(curAddr, MIN2(CMSBitMapYieldQuantum, remaining));
       _markBitMap.clear_large_range(chunk);
       if (ConcurrentMarkSweepThread::should_yield() &&
@@ -6008,13 +6069,13 @@ void CMSCollector::reset(bool asynch) {
         }
         icms_wait();
 
-	// See the comment in coordinator_yield()
-	for (unsigned i = 0; i < CMSYieldSleepCount &&
-	                ConcurrentMarkSweepThread::should_yield() &&
-	                !CMSCollector::foregroundGCIsActive(); ++i) {
-	  os::sleep(Thread::current(), 1, false);    
-	  ConcurrentMarkSweepThread::acknowledge_yield_request();
-	}
+        // See the comment in coordinator_yield()
+        for (unsigned i = 0; i < CMSYieldSleepCount &&
+                         ConcurrentMarkSweepThread::should_yield() &&
+                         !CMSCollector::foregroundGCIsActive(); ++i) {
+          os::sleep(Thread::current(), 1, false);
+          ConcurrentMarkSweepThread::acknowledge_yield_request();
+        }
 
         ConcurrentMarkSweepThread::synchronize(true);
         bitMapLock()->lock_without_safepoint_check();
@@ -6081,7 +6142,7 @@ size_t const CMSCollector::skip_header_HeapWords() {
 // the CMS thread and yet continue to run the VM for a while
 // after that.
 void CMSCollector::verify_ok_to_terminate() const {
-  assert(Thread::current()->is_ConcurrentGC_thread(), 
+  assert(Thread::current()->is_ConcurrentGC_thread(),
          "should be called by CMS thread");
   assert(!_foregroundGCShouldWait, "should be false");
   // We could check here that all the various low-level locks
@@ -6092,8 +6153,8 @@ void CMSCollector::verify_ok_to_terminate() const {
 #endif
 
 size_t CMSCollector::block_size_using_printezis_bits(HeapWord* addr) const {
-  assert(_markBitMap.isMarked(addr) && _markBitMap.isMarked(addr + 1),
-         "missing Printezis mark?");
+   assert(_markBitMap.isMarked(addr) && _markBitMap.isMarked(addr + 1),
+          "missing Printezis mark?");
   HeapWord* nextOneAddr = _markBitMap.getNextMarkedWordAddress(addr + 2);
   size_t size = pointer_delta(nextOneAddr + 1, addr);
   assert(size == CompactibleFreeListSpace::adjustObjectSize(size),
@@ -6122,7 +6183,7 @@ size_t CMSCollector::block_size_if_printezis_bits(HeapWord* addr) const {
 HeapWord* CMSCollector::next_card_start_after_block(HeapWord* addr) const {
   size_t sz = 0;
   oop p = (oop)addr;
-  if (p->klass() != NULL && p->is_parsable()) {
+  if (p->klass_or_null() != NULL && p->is_parsable()) {
     sz = CompactibleFreeListSpace::adjustObjectSize(p->size());
   } else {
     sz = block_size_using_printezis_bits(addr);
@@ -6140,11 +6201,11 @@ HeapWord* CMSCollector::next_card_start_after_block(HeapWord* addr) const {
 
 // CMS Bit Map Wrapper /////////////////////////////////////////
 
-// Construct a CMS bit map infrastructure, but don't create the 
+// Construct a CMS bit map infrastructure, but don't create the
 // bit vector itself. That is done by a separate call CMSBitMap::allocate()
 // further below.
 CMSBitMap::CMSBitMap(int shifter, int mutex_rank, const char* mutex_name):
-  _bm(NULL,0),
+  _bm(),
   _shifter(shifter),
   _lock(mutex_rank >= 0 ? new Mutex(mutex_rank, mutex_name, true) : NULL)
 {
@@ -6169,7 +6230,7 @@ bool CMSBitMap::allocate(MemRegion mr) {
   }
   assert(_virtual_space.committed_size() == brs.size(),
          "didn't reserve backing store for all of CMS bit map?");
-  _bm.set_map((uintptr_t*)_virtual_space.low());
+  _bm.set_map((BitMap::bm_word_t*)_virtual_space.low());
   assert(_virtual_space.committed_size() << (_shifter + LogBitsPerByte) >=
          _bmWordSize, "inconsistency in bit map sizing");
   _bm.set_size(_bmWordSize >> _shifter);
@@ -6324,18 +6385,18 @@ MarkRefsIntoClosure::MarkRefsIntoClosure(
     assert(_bitMap->covers(_span), "_bitMap/_span mismatch");
 }
 
-void MarkRefsIntoClosure::do_oop(oop* p) {
+void MarkRefsIntoClosure::do_oop(oop obj) {
   // if p points into _span, then mark corresponding bit in _markBitMap
-  oop thisOop = *p;
-  if (thisOop != NULL) {
-    assert(thisOop->is_oop(), "expected an oop");
-    HeapWord* addr = (HeapWord*)thisOop;
-    if (_span.contains(addr)) {
-      // this should be made more efficient
-      _bitMap->mark(addr);
-    }
+  assert(obj->is_oop(), "expected an oop");
+  HeapWord* addr = (HeapWord*)obj;
+  if (_span.contains(addr)) {
+    // this should be made more efficient
+    _bitMap->mark(addr);
   }
 }
+
+void MarkRefsIntoClosure::do_oop(oop* p)       { MarkRefsIntoClosure::do_oop_work(p); }
+void MarkRefsIntoClosure::do_oop(narrowOop* p) { MarkRefsIntoClosure::do_oop_work(p); }
 
 // A variant of the above, used for CMS marking verification.
 MarkRefsIntoVerifyClosure::MarkRefsIntoVerifyClosure(
@@ -6349,22 +6410,22 @@ MarkRefsIntoVerifyClosure::MarkRefsIntoVerifyClosure(
     assert(_verification_bm->covers(_span), "_verification_bm/_span mismatch");
 }
 
-void MarkRefsIntoVerifyClosure::do_oop(oop* p) {
+void MarkRefsIntoVerifyClosure::do_oop(oop obj) {
   // if p points into _span, then mark corresponding bit in _markBitMap
-  oop this_oop = *p;
-  if (this_oop != NULL) {
-    assert(this_oop->is_oop(), "expected an oop");
-    HeapWord* addr = (HeapWord*)this_oop;
-    if (_span.contains(addr)) {
-      _verification_bm->mark(addr);
-      if (!_cms_bm->isMarked(addr)) {
-        oop(addr)->print();
-        gclog_or_tty->print_cr(" ("INTPTR_FORMAT" should have been marked)", addr);
-        fatal("... aborting");
-      }
+  assert(obj->is_oop(), "expected an oop");
+  HeapWord* addr = (HeapWord*)obj;
+  if (_span.contains(addr)) {
+    _verification_bm->mark(addr);
+    if (!_cms_bm->isMarked(addr)) {
+      oop(addr)->print();
+      gclog_or_tty->print_cr(" (" INTPTR_FORMAT " should have been marked)", addr);
+      fatal("... aborting");
     }
   }
 }
+
+void MarkRefsIntoVerifyClosure::do_oop(oop* p)       { MarkRefsIntoVerifyClosure::do_oop_work(p); }
+void MarkRefsIntoVerifyClosure::do_oop(narrowOop* p) { MarkRefsIntoVerifyClosure::do_oop_work(p); }
 
 //////////////////////////////////////////////////
 // MarkRefsIntoAndScanClosure
@@ -6400,13 +6461,13 @@ MarkRefsIntoAndScanClosure::MarkRefsIntoAndScanClosure(MemRegion span,
 // The marks are made in the marking bit map and the marking stack is
 // used for keeping the (newly) grey objects during the scan.
 // The parallel version (Par_...) appears further below.
-void MarkRefsIntoAndScanClosure::do_oop(oop* p) {
-  oop this_oop = *p;
-  if (this_oop != NULL) {
-    assert(this_oop->is_oop(), "expected an oop");
-    HeapWord* addr = (HeapWord*)this_oop;
-    assert(_mark_stack->isEmpty(), "post-condition (eager drainage)");
-    assert(_collector->overflow_list_is_empty(), "should be empty");
+void MarkRefsIntoAndScanClosure::do_oop(oop obj) {
+  if (obj != NULL) {
+    assert(obj->is_oop(), "expected an oop");
+    HeapWord* addr = (HeapWord*)obj;
+    assert(_mark_stack->isEmpty(), "pre-condition (eager drainage)");
+    assert(_collector->overflow_list_is_empty(),
+           "overflow list should be empty");
     if (_span.contains(addr) &&
         !_bit_map->isMarked(addr)) {
       // mark bit map (object is now grey)
@@ -6414,7 +6475,7 @@ void MarkRefsIntoAndScanClosure::do_oop(oop* p) {
       // push on marking stack (stack should be empty), and drain the
       // stack by applying this closure to the oops in the oops popped
       // from the stack (i.e. blacken the grey objects)
-      bool res = _mark_stack->push(this_oop);
+      bool res = _mark_stack->push(obj);
       assert(res, "Should have space to push on empty stack");
       do {
         oop new_oop = _mark_stack->pop();
@@ -6450,6 +6511,9 @@ void MarkRefsIntoAndScanClosure::do_oop(oop* p) {
   }
 }
 
+void MarkRefsIntoAndScanClosure::do_oop(oop* p)       { MarkRefsIntoAndScanClosure::do_oop_work(p); }
+void MarkRefsIntoAndScanClosure::do_oop(narrowOop* p) { MarkRefsIntoAndScanClosure::do_oop_work(p); }
+
 void MarkRefsIntoAndScanClosure::do_yield_work() {
   assert(ConcurrentMarkSweepThread::cms_thread_has_cms_token(),
          "CMS thread should hold CMS token");
@@ -6468,10 +6532,12 @@ void MarkRefsIntoAndScanClosure::do_yield_work() {
   _collector->icms_wait();
 
   // See the comment in coordinator_yield()
-  for (unsigned i = 0; i < CMSYieldSleepCount &&
-	               ConcurrentMarkSweepThread::should_yield() &&
-	               !CMSCollector::foregroundGCIsActive(); ++i) {
-    os::sleep(Thread::current(), 1, false);    
+  for (unsigned i = 0;
+       i < CMSYieldSleepCount &&
+       ConcurrentMarkSweepThread::should_yield() &&
+       !CMSCollector::foregroundGCIsActive();
+       ++i) {
+    os::sleep(Thread::current(), 1, false);
     ConcurrentMarkSweepThread::acknowledge_yield_request();
   }
 
@@ -6507,13 +6573,12 @@ Par_MarkRefsIntoAndScanClosure::Par_MarkRefsIntoAndScanClosure(
 // the scan phase whence they are also available for stealing by parallel
 // threads. Since the marking bit map is shared, updates are
 // synchronized (via CAS).
-void Par_MarkRefsIntoAndScanClosure::do_oop(oop* p) {
-  oop this_oop = *p;
-  if (this_oop != NULL) {
+void Par_MarkRefsIntoAndScanClosure::do_oop(oop obj) {
+  if (obj != NULL) {
     // Ignore mark word because this could be an already marked oop
     // that may be chained at the end of the overflow list.
-    assert(this_oop->is_oop(true /* ignore mark word */), "expected an oop");
-    HeapWord* addr = (HeapWord*)this_oop;
+    assert(obj->is_oop(true), "expected an oop");
+    HeapWord* addr = (HeapWord*)obj;
     if (_span.contains(addr) &&
         !_bit_map->isMarked(addr)) {
       // mark bit map (object will become grey):
@@ -6527,13 +6592,16 @@ void Par_MarkRefsIntoAndScanClosure::do_oop(oop* p) {
         // queue to an appropriate length by applying this closure to
         // the oops in the oops popped from the stack (i.e. blacken the
         // grey objects)
-        bool res = _work_queue->push(this_oop);
+        bool res = _work_queue->push(obj);
         assert(res, "Low water mark should be less than capacity?");
         trim_queue(_low_water_mark);
       } // Else, another thread claimed the object
     }
   }
 }
+
+void Par_MarkRefsIntoAndScanClosure::do_oop(oop* p)       { Par_MarkRefsIntoAndScanClosure::do_oop_work(p); }
+void Par_MarkRefsIntoAndScanClosure::do_oop(narrowOop* p) { Par_MarkRefsIntoAndScanClosure::do_oop_work(p); }
 
 // This closure is used to rescan the marked objects on the dirty cards
 // in the mod union table and the card table proper.
@@ -6552,7 +6620,7 @@ size_t ScanMarkedObjectsAgainCarefullyClosure::do_object_careful_m(
   }
   if (_bitMap->isMarked(addr)) {
     // it's marked; is it potentially uninitialized?
-    if (p->klass() != NULL) {
+    if (p->klass_or_null() != NULL) {
       if (CMSPermGenPrecleaningEnabled && !p->is_parsable()) {
         // Signal precleaning to redirty the card since
         // the klass pointer is already installed.
@@ -6565,11 +6633,8 @@ size_t ScanMarkedObjectsAgainCarefullyClosure::do_object_careful_m(
         if (p->is_objArray()) {
           // objArrays are precisely marked; restrict scanning
           // to dirty cards only.
-          size = p->oop_iterate(_scanningClosure, mr);
-          assert(size == CompactibleFreeListSpace::adjustObjectSize(size),
-                 "adjustObjectSize should be the identity for array sizes, "
-                 "which are necessarily larger than minimum object size of "
-                 "two heap words");
+          size = CompactibleFreeListSpace::adjustObjectSize(
+                   p->oop_iterate(_scanningClosure, mr));
         } else {
           // A non-array may have been imprecisely marked; we need
           // to scan object in its entirety.
@@ -6603,14 +6668,14 @@ size_t ScanMarkedObjectsAgainCarefullyClosure::do_object_careful_m(
     }
   } else {
     // Either a not yet marked object or an uninitialized object
-    if (p->klass() == NULL || !p->is_parsable()) {
+    if (p->klass_or_null() == NULL || !p->is_parsable()) {
       // An uninitialized object, skip to the next card, since
       // we may not be able to read its P-bits yet.
       assert(size == 0, "Initial value");
     } else {
       // An object not (yet) reached by marking: we merely need to
       // compute its size so as to go look at the next block.
-      assert(p->is_oop(true), "should be an oop"); 
+      assert(p->is_oop(true), "should be an oop");
       size = CompactibleFreeListSpace::adjustObjectSize(p->size());
     }
   }
@@ -6637,9 +6702,9 @@ void ScanMarkedObjectsAgainCarefullyClosure::do_yield_work() {
 
   // See the comment in coordinator_yield()
   for (unsigned i = 0; i < CMSYieldSleepCount &&
-	               ConcurrentMarkSweepThread::should_yield() &&
-	               !CMSCollector::foregroundGCIsActive(); ++i) {
-    os::sleep(Thread::current(), 1, false);    
+                   ConcurrentMarkSweepThread::should_yield() &&
+                   !CMSCollector::foregroundGCIsActive(); ++i) {
+    os::sleep(Thread::current(), 1, false);
     ConcurrentMarkSweepThread::acknowledge_yield_request();
   }
 
@@ -6660,7 +6725,7 @@ size_t SurvivorSpacePrecleanClosure::do_object_careful(oop p) {
   HeapWord* addr = (HeapWord*)p;
   DEBUG_ONLY(_collector->verify_work_stacks_empty();)
   assert(!_span.contains(addr), "we are scanning the survivor spaces");
-  assert(p->klass() != NULL, "object should be initializd");
+  assert(p->klass_or_null() != NULL, "object should be initializd");
   assert(p->is_parsable(), "must be parsable.");
   // an initialized object; ignore mark word in verification below
   // since we are running concurrent with mutators
@@ -6712,9 +6777,9 @@ void SurvivorSpacePrecleanClosure::do_yield_work() {
 
   // See the comment in coordinator_yield()
   for (unsigned i = 0; i < CMSYieldSleepCount &&
-	               ConcurrentMarkSweepThread::should_yield() &&
-	               !CMSCollector::foregroundGCIsActive(); ++i) {
-    os::sleep(Thread::current(), 1, false);    
+                       ConcurrentMarkSweepThread::should_yield() &&
+                       !CMSCollector::foregroundGCIsActive(); ++i) {
+    os::sleep(Thread::current(), 1, false);
     ConcurrentMarkSweepThread::acknowledge_yield_request();
   }
 
@@ -6803,10 +6868,10 @@ void MarkFromRootsClosure::reset(HeapWord* addr) {
 
 // Should revisit to see if this should be restructured for
 // greater efficiency.
-void MarkFromRootsClosure::do_bit(size_t offset) {
+bool MarkFromRootsClosure::do_bit(size_t offset) {
   if (_skipBits > 0) {
     _skipBits--;
-    return;
+    return true;
   }
   // convert offset into a HeapWord*
   HeapWord* addr = _bitMap->startWord() + offset;
@@ -6818,7 +6883,7 @@ void MarkFromRootsClosure::do_bit(size_t offset) {
     assert(_skipBits == 0, "tautology");
     _skipBits = 2;  // skip next two marked bits ("Printezis-marks")
     oop p = oop(addr);
-    if (p->klass() == NULL || !p->is_parsable()) {
+    if (p->klass_or_null() == NULL || !p->is_parsable()) {
       DEBUG_ONLY(if (!_verifying) {)
         // We re-dirty the cards on which this object lies and increase
         // the _threshold so that we'll come back to scan this object
@@ -6838,16 +6903,17 @@ void MarkFromRootsClosure::do_bit(size_t offset) {
           if (_threshold < end_card_addr) {
             _threshold = end_card_addr;
           }
-          if (p->klass() != NULL) {
+          if (p->klass_or_null() != NULL) {
             // Redirty the range of cards...
             _mut->mark_range(redirty_range);
           } // ...else the setting of klass will dirty the card anyway.
         }
       DEBUG_ONLY(})
-      return;
+      return true;
     }
   }
   scanOopsInOop(addr);
+  return true;
 }
 
 // We take a break if we've been at this for a while,
@@ -6872,9 +6938,9 @@ void MarkFromRootsClosure::do_yield_work() {
 
   // See the comment in coordinator_yield()
   for (unsigned i = 0; i < CMSYieldSleepCount &&
-	               ConcurrentMarkSweepThread::should_yield() &&
-	               !CMSCollector::foregroundGCIsActive(); ++i) {
-    os::sleep(Thread::current(), 1, false);    
+                       ConcurrentMarkSweepThread::should_yield() &&
+                       !CMSCollector::foregroundGCIsActive(); ++i) {
+    os::sleep(Thread::current(), 1, false);
     ConcurrentMarkSweepThread::acknowledge_yield_request();
   }
 
@@ -6888,13 +6954,13 @@ void MarkFromRootsClosure::scanOopsInOop(HeapWord* ptr) {
   assert(_markStack->isEmpty(),
          "should drain stack to limit stack usage");
   // convert ptr to an oop preparatory to scanning
-  oop this_oop = oop(ptr);
+  oop obj = oop(ptr);
   // Ignore mark word in verification below, since we
   // may be running concurrent with mutators.
-  assert(this_oop->is_oop(true), "should be an oop");
+  assert(obj->is_oop(true), "should be an oop");
   assert(_finger <= ptr, "_finger runneth ahead");
   // advance the finger to right end of this object
-  _finger = ptr + this_oop->size();
+  _finger = ptr + obj->size();
   assert(_finger > ptr, "we just incremented it above");
   // On large heaps, it may take us some time to get through
   // the marking phase (especially if running iCMS). During
@@ -6940,7 +7006,7 @@ void MarkFromRootsClosure::scanOopsInOop(HeapWord* ptr) {
                                       _span, _bitMap, _markStack,
                                       _revisitStack,
                                       _finger, this);
-  bool res = _markStack->push(this_oop);
+  bool res = _markStack->push(obj);
   assert(res, "Empty non-zero size stack should have space for single push");
   while (!_markStack->isEmpty()) {
     oop new_oop = _markStack->pop();
@@ -6981,10 +7047,10 @@ Par_MarkFromRootsClosure::Par_MarkFromRootsClosure(CMSConcMarkingTask* task,
 
 // Should revisit to see if this should be restructured for
 // greater efficiency.
-void Par_MarkFromRootsClosure::do_bit(size_t offset) {
+bool Par_MarkFromRootsClosure::do_bit(size_t offset) {
   if (_skip_bits > 0) {
     _skip_bits--;
-    return;
+    return true;
   }
   // convert offset into a HeapWord*
   HeapWord* addr = _bit_map->startWord() + offset;
@@ -6996,13 +7062,14 @@ void Par_MarkFromRootsClosure::do_bit(size_t offset) {
     assert(_skip_bits == 0, "tautology");
     _skip_bits = 2;  // skip next two marked bits ("Printezis-marks")
     oop p = oop(addr);
-    if (p->klass() == NULL || !p->is_parsable()) {
+    if (p->klass_or_null() == NULL || !p->is_parsable()) {
       // in the case of Clean-on-Enter optimization, redirty card
       // and avoid clearing card by increasing  the threshold.
-      return;
+      return true;
     }
   }
   scan_oops_in_oop(addr);
+  return true;
 }
 
 void Par_MarkFromRootsClosure::scan_oops_in_oop(HeapWord* ptr) {
@@ -7012,13 +7079,13 @@ void Par_MarkFromRootsClosure::scan_oops_in_oop(HeapWord* ptr) {
   assert(_work_queue->size() == 0,
          "should drain stack to limit stack usage");
   // convert ptr to an oop preparatory to scanning
-  oop this_oop = oop(ptr);
+  oop obj = oop(ptr);
   // Ignore mark word in verification below, since we
   // may be running concurrent with mutators.
-  assert(this_oop->is_oop(true), "should be an oop");
+  assert(obj->is_oop(true), "should be an oop");
   assert(_finger <= ptr, "_finger runneth ahead");
   // advance the finger to right end of this object
-  _finger = ptr + this_oop->size();
+  _finger = ptr + obj->size();
   assert(_finger > ptr, "we just incremented it above");
   // On large heaps, it may take us some time to get through
   // the marking phase (especially if running iCMS). During
@@ -7066,7 +7133,7 @@ void Par_MarkFromRootsClosure::scan_oops_in_oop(HeapWord* ptr) {
                                       _revisit_stack,
                                       _finger,
                                       gfa, this);
-  bool res = _work_queue->push(this_oop);   // overflow could occur here
+  bool res = _work_queue->push(obj);   // overflow could occur here
   assert(res, "Will hold once we use workqueues");
   while (true) {
     oop new_oop;
@@ -7125,7 +7192,7 @@ void MarkFromRootsVerifyClosure::reset(HeapWord* addr) {
 
 // Should revisit to see if this should be restructured for
 // greater efficiency.
-void MarkFromRootsVerifyClosure::do_bit(size_t offset) {
+bool MarkFromRootsVerifyClosure::do_bit(size_t offset) {
   // convert offset into a HeapWord*
   HeapWord* addr = _verification_bm->startWord() + offset;
   assert(_verification_bm->endWord() && addr < _verification_bm->endWord(),
@@ -7136,15 +7203,15 @@ void MarkFromRootsVerifyClosure::do_bit(size_t offset) {
   assert(_mark_stack->isEmpty(),
          "should drain stack to limit stack usage");
   // convert addr to an oop preparatory to scanning
-  oop this_oop = oop(addr);
-  assert(this_oop->is_oop(), "should be an oop");
+  oop obj = oop(addr);
+  assert(obj->is_oop(), "should be an oop");
   assert(_finger <= addr, "_finger runneth ahead");
   // advance the finger to right end of this object
-  _finger = addr + this_oop->size();
+  _finger = addr + obj->size();
   assert(_finger > addr, "we just incremented it above");
   // Note: the finger doesn't advance while we drain
   // the stack below.
-  bool res = _mark_stack->push(this_oop);
+  bool res = _mark_stack->push(obj);
   assert(res, "Empty non-zero size stack should have space for single push");
   while (!_mark_stack->isEmpty()) {
     oop new_oop = _mark_stack->pop();
@@ -7153,6 +7220,7 @@ void MarkFromRootsVerifyClosure::do_bit(size_t offset) {
     new_oop->oop_iterate(&_pam_verify_closure);
   }
   assert(_mark_stack->isEmpty(), "tautology, emphasizing post-condition");
+  return true;
 }
 
 PushAndMarkVerifyClosure::PushAndMarkVerifyClosure(
@@ -7167,6 +7235,8 @@ PushAndMarkVerifyClosure::PushAndMarkVerifyClosure(
   _mark_stack(mark_stack)
 { }
 
+void PushAndMarkVerifyClosure::do_oop(oop* p)       { PushAndMarkVerifyClosure::do_oop_work(p); }
+void PushAndMarkVerifyClosure::do_oop(narrowOop* p) { PushAndMarkVerifyClosure::do_oop_work(p); }
 
 // Upon stack overflow, we discard (part of) the stack,
 // remembering the least address amongst those discarded
@@ -7179,20 +7249,20 @@ void PushAndMarkVerifyClosure::handle_stack_overflow(HeapWord* lost) {
   _mark_stack->expand(); // expand the stack if possible
 }
 
-void PushAndMarkVerifyClosure::do_oop(oop* p) {
-  oop    this_oop = *p;
-  assert(this_oop->is_oop_or_null(), "expected an oop or NULL");
-  HeapWord* addr = (HeapWord*)this_oop;
+void PushAndMarkVerifyClosure::do_oop(oop obj) {
+  assert(obj->is_oop_or_null(), "expected an oop or NULL");
+  HeapWord* addr = (HeapWord*)obj;
   if (_span.contains(addr) && !_verification_bm->isMarked(addr)) {
     // Oop lies in _span and isn't yet grey or black
     _verification_bm->mark(addr);            // now grey
     if (!_cms_bm->isMarked(addr)) {
       oop(addr)->print();
-      gclog_or_tty->print_cr(" ("INTPTR_FORMAT" should have been marked)", addr);
+      gclog_or_tty->print_cr(" (" INTPTR_FORMAT " should have been marked)",
+                             addr);
       fatal("... aborting");
     }
 
-    if (!_mark_stack->push(this_oop)) { // stack overflow
+    if (!_mark_stack->push(obj)) { // stack overflow
       if (PrintCMSStatistics != 0) {
         gclog_or_tty->print_cr("CMS marking stack overflow (benign) at "
                                SIZE_FORMAT, _mark_stack->capacity());
@@ -7219,7 +7289,7 @@ PushOrMarkClosure::PushOrMarkClosure(CMSCollector* collector,
   _revisitStack(revisitStack),
   _finger(finger),
   _parent(parent),
-  _should_remember_klasses(collector->cms_should_unload_classes())
+  _should_remember_klasses(collector->should_unload_classes())
 { }
 
 Par_PushOrMarkClosure::Par_PushOrMarkClosure(CMSCollector* collector,
@@ -7242,11 +7312,11 @@ Par_PushOrMarkClosure::Par_PushOrMarkClosure(CMSCollector* collector,
   _finger(finger),
   _global_finger_addr(global_finger_addr),
   _parent(parent),
-  _should_remember_klasses(collector->cms_should_unload_classes())
+  _should_remember_klasses(collector->should_unload_classes())
 { }
 
 // Assumes thread-safe access by callers, who are
-// responsible for mutual exclusion. 
+// responsible for mutual exclusion.
 void CMSCollector::lower_restart_addr(HeapWord* low) {
   assert(_span.contains(low), "Out of bounds addr");
   if (_restart_addr == NULL) {
@@ -7282,12 +7352,10 @@ void Par_PushOrMarkClosure::handle_stack_overflow(HeapWord* lost) {
   _overflow_stack->expand(); // expand the stack if possible
 }
 
-
-void PushOrMarkClosure::do_oop(oop* p) {
-  oop    thisOop = *p;
+void PushOrMarkClosure::do_oop(oop obj) {
   // Ignore mark word because we are running concurrent with mutators.
-  assert(thisOop->is_oop_or_null(true), "expected an oop or NULL");
-  HeapWord* addr = (HeapWord*)thisOop;
+  assert(obj->is_oop_or_null(true), "expected an oop or NULL");
+  HeapWord* addr = (HeapWord*)obj;
   if (_span.contains(addr) && !_bitMap->isMarked(addr)) {
     // Oop lies in _span and isn't yet grey or black
     _bitMap->mark(addr);            // now grey
@@ -7303,7 +7371,7 @@ void PushOrMarkClosure::do_oop(oop* p) {
           simulate_overflow = true;
         }
       )
-      if (simulate_overflow || !_markStack->push(thisOop)) { // stack overflow
+      if (simulate_overflow || !_markStack->push(obj)) { // stack overflow
         if (PrintCMSStatistics != 0) {
           gclog_or_tty->print_cr("CMS marking stack overflow (benign) at "
                                  SIZE_FORMAT, _markStack->capacity());
@@ -7319,11 +7387,13 @@ void PushOrMarkClosure::do_oop(oop* p) {
   }
 }
 
-void Par_PushOrMarkClosure::do_oop(oop* p) {
-  oop    this_oop = *p;
+void PushOrMarkClosure::do_oop(oop* p)       { PushOrMarkClosure::do_oop_work(p); }
+void PushOrMarkClosure::do_oop(narrowOop* p) { PushOrMarkClosure::do_oop_work(p); }
+
+void Par_PushOrMarkClosure::do_oop(oop obj) {
   // Ignore mark word because we are running concurrent with mutators.
-  assert(this_oop->is_oop_or_null(true), "expected an oop or NULL");
-  HeapWord* addr = (HeapWord*)this_oop;
+  assert(obj->is_oop_or_null(true), "expected an oop or NULL");
+  HeapWord* addr = (HeapWord*)obj;
   if (_whole_span.contains(addr) && !_bit_map->isMarked(addr)) {
     // Oop lies in _span and isn't yet grey or black
     // We read the global_finger (volatile read) strictly after marking oop
@@ -7352,7 +7422,7 @@ void Par_PushOrMarkClosure::do_oop(oop* p) {
       }
     )
     if (simulate_overflow ||
-        !(_work_queue->push(this_oop) || _overflow_stack->par_push(this_oop))) {
+        !(_work_queue->push(obj) || _overflow_stack->par_push(obj))) {
       // stack overflow
       if (PrintCMSStatistics != 0) {
         gclog_or_tty->print_cr("CMS marking stack overflow (benign) at "
@@ -7369,6 +7439,8 @@ void Par_PushOrMarkClosure::do_oop(oop* p) {
   }
 }
 
+void Par_PushOrMarkClosure::do_oop(oop* p)       { Par_PushOrMarkClosure::do_oop_work(p); }
+void Par_PushOrMarkClosure::do_oop(narrowOop* p) { Par_PushOrMarkClosure::do_oop_work(p); }
 
 PushAndMarkClosure::PushAndMarkClosure(CMSCollector* collector,
                                        MemRegion span,
@@ -7386,23 +7458,22 @@ PushAndMarkClosure::PushAndMarkClosure(CMSCollector* collector,
   _mark_stack(mark_stack),
   _revisit_stack(revisit_stack),
   _concurrent_precleaning(concurrent_precleaning),
-  _should_remember_klasses(collector->cms_should_unload_classes())
+  _should_remember_klasses(collector->should_unload_classes())
 {
   assert(_ref_processor != NULL, "_ref_processor shouldn't be NULL");
 }
 
 // Grey object rescan during pre-cleaning and second checkpoint phases --
 // the non-parallel version (the parallel version appears further below.)
-void PushAndMarkClosure::do_oop(oop* p) {
-  oop    this_oop = *p;
-  // Ignore mark word verification. If during concurrent precleaning
+void PushAndMarkClosure::do_oop(oop obj) {
+  // Ignore mark word verification. If during concurrent precleaning,
   // the object monitor may be locked. If during the checkpoint
   // phases, the object may already have been reached by a  different
   // path and may be at the end of the global overflow list (so
   // the mark word may be NULL).
-  assert(this_oop->is_oop_or_null(true/* ignore mark word */),
+  assert(obj->is_oop_or_null(true /* ignore mark word */),
          "expected an oop or NULL");
-  HeapWord* addr = (HeapWord*)this_oop;
+  HeapWord* addr = (HeapWord*)obj;
   // Check if oop points into the CMS generation
   // and is not marked
   if (_span.contains(addr) && !_bit_map->isMarked(addr)) {
@@ -7417,32 +7488,32 @@ void PushAndMarkClosure::do_oop(oop* p) {
         simulate_overflow = true;
       }
     )
-    if (simulate_overflow || !_mark_stack->push(this_oop)) {
+    if (simulate_overflow || !_mark_stack->push(obj)) {
       if (_concurrent_precleaning) {
          // During precleaning we can just dirty the appropriate card(s)
          // in the mod union table, thus ensuring that the object remains
-         // in the grey set and continue. In the case of object arrays
+         // in the grey set  and continue. In the case of object arrays
          // we need to dirty all of the cards that the object spans,
          // since the rescan of object arrays will be limited to the
          // dirty cards.
          // Note that no one can be intefering with us in this action
          // of dirtying the mod union table, so no locking or atomics
          // are required.
-         if (this_oop->is_objArray()) {
-           size_t sz = this_oop->size();
+         if (obj->is_objArray()) {
+           size_t sz = obj->size();
            HeapWord* end_card_addr = (HeapWord*)round_to(
-                                         (intptr_t)(addr+sz), CardTableModRefBS::card_size);
+                                        (intptr_t)(addr+sz), CardTableModRefBS::card_size);
            MemRegion redirty_range = MemRegion(addr, end_card_addr);
            assert(!redirty_range.is_empty(), "Arithmetical tautology");
            _mod_union_table->mark_range(redirty_range);
          } else {
            _mod_union_table->mark(addr);
-         } 
+         }
          _collector->_ser_pmc_preclean_ovflw++;
       } else {
          // During the remark phase, we need to remember this oop
          // in the overflow list.
-         _collector->push_on_overflow_list(this_oop);
+         _collector->push_on_overflow_list(obj);
          _collector->_ser_pmc_remark_ovflw++;
       }
     }
@@ -7461,15 +7532,17 @@ Par_PushAndMarkClosure::Par_PushAndMarkClosure(CMSCollector* collector,
   _bit_map(bit_map),
   _work_queue(work_queue),
   _revisit_stack(revisit_stack),
-  _should_remember_klasses(collector->cms_should_unload_classes())
+  _should_remember_klasses(collector->should_unload_classes())
 {
   assert(_ref_processor != NULL, "_ref_processor shouldn't be NULL");
 }
 
+void PushAndMarkClosure::do_oop(oop* p)       { PushAndMarkClosure::do_oop_work(p); }
+void PushAndMarkClosure::do_oop(narrowOop* p) { PushAndMarkClosure::do_oop_work(p); }
+
 // Grey object rescan during second checkpoint phase --
 // the parallel version.
-void Par_PushAndMarkClosure::do_oop(oop* p) {
-  oop    this_oop = *p;
+void Par_PushAndMarkClosure::do_oop(oop obj) {
   // In the assert below, we ignore the mark word because
   // this oop may point to an already visited object that is
   // on the overflow stack (in which case the mark word has
@@ -7481,10 +7554,10 @@ void Par_PushAndMarkClosure::do_oop(oop* p) {
   // value, by the time we get to examined this failing assert in
   // the debugger, is_oop_or_null(false) may subsequently start
   // to hold.
-  assert(this_oop->is_oop_or_null(true),
+  assert(obj->is_oop_or_null(true),
          "expected an oop or NULL");
-  HeapWord* addr = (HeapWord*)this_oop;
-  // Check if oop points into the CMS generation 
+  HeapWord* addr = (HeapWord*)obj;
+  // Check if oop points into the CMS generation
   // and is not marked
   if (_span.contains(addr) && !_bit_map->isMarked(addr)) {
     // a white object ...
@@ -7501,13 +7574,16 @@ void Par_PushAndMarkClosure::do_oop(oop* p) {
           simulate_overflow = true;
         }
       )
-      if (simulate_overflow || !_work_queue->push(this_oop)) {
-        _collector->par_push_on_overflow_list(this_oop);
+      if (simulate_overflow || !_work_queue->push(obj)) {
+        _collector->par_push_on_overflow_list(obj);
         _collector->_par_pmc_remark_ovflw++; //  imprecise OK: no need to CAS
       }
     } // Else, some other thread got there first
   }
 }
+
+void Par_PushAndMarkClosure::do_oop(oop* p)       { Par_PushAndMarkClosure::do_oop_work(p); }
+void Par_PushAndMarkClosure::do_oop(narrowOop* p) { Par_PushAndMarkClosure::do_oop_work(p); }
 
 void PushAndMarkClosure::remember_klass(Klass* k) {
   if (!_revisit_stack->push(oop(k))) {
@@ -7541,9 +7617,9 @@ void CMSPrecleanRefsYieldClosure::do_yield_work() {
 
   // See the comment in coordinator_yield()
   for (unsigned i = 0; i < CMSYieldSleepCount &&
-	               ConcurrentMarkSweepThread::should_yield() &&
-	               !CMSCollector::foregroundGCIsActive(); ++i) {
-    os::sleep(Thread::current(), 1, false);    
+                       ConcurrentMarkSweepThread::should_yield() &&
+                       !CMSCollector::foregroundGCIsActive(); ++i) {
+    os::sleep(Thread::current(), 1, false);
     ConcurrentMarkSweepThread::acknowledge_yield_request();
   }
 
@@ -7619,7 +7695,7 @@ SweepClosure::~SweepClosure() {
   // The current free range should be returned to the free lists
   // as one coalesced chunk.
   if (inFreeRange()) {
-    flushCurFreeChunk(freeFinger(), 
+    flushCurFreeChunk(freeFinger(),
       pointer_delta(_limit, freeFinger()));
     assert(freeFinger() < _limit, "the finger pointeth off base");
     if (CMSTraceSweeper) {
@@ -7637,11 +7713,11 @@ SweepClosure::~SweepClosure() {
                  _numObjectsFreed, _numWordsFreed*sizeof(HeapWord));
       gclog_or_tty->print_cr("\nLive "SIZE_FORMAT" objects,  "
                              SIZE_FORMAT" bytes  "
-	"Already free "SIZE_FORMAT" objects, "SIZE_FORMAT" bytes",
-	_numObjectsLive, _numWordsLive*sizeof(HeapWord), 
-	_numObjectsAlreadyFree, _numWordsAlreadyFree*sizeof(HeapWord));
+        "Already free "SIZE_FORMAT" objects, "SIZE_FORMAT" bytes",
+        _numObjectsLive, _numWordsLive*sizeof(HeapWord),
+        _numObjectsAlreadyFree, _numWordsAlreadyFree*sizeof(HeapWord));
       size_t totalBytes = (_numWordsFreed + _numWordsLive + _numWordsAlreadyFree) *
-	sizeof(HeapWord);
+        sizeof(HeapWord);
       gclog_or_tty->print_cr("Total sweep: "SIZE_FORMAT" bytes", totalBytes);
 
       if (PrintCMSStatistics && CMSVerifyReturnedBytes) {
@@ -7649,10 +7725,10 @@ SweepClosure::~SweepClosure() {
         size_t dictReturnedBytes = _sp->dictionary()->sumDictReturnedBytes();
         size_t returnedBytes = indexListReturnedBytes + dictReturnedBytes;
         gclog_or_tty->print("Returned "SIZE_FORMAT" bytes", returnedBytes);
-        gclog_or_tty->print("	Indexed List Returned "SIZE_FORMAT" bytes", 
-  	  indexListReturnedBytes);
-        gclog_or_tty->print_cr("	Dictionary Returned "SIZE_FORMAT" bytes",
-  	  dictReturnedBytes);
+        gclog_or_tty->print("   Indexed List Returned "SIZE_FORMAT" bytes",
+          indexListReturnedBytes);
+        gclog_or_tty->print_cr("        Dictionary Returned "SIZE_FORMAT" bytes",
+          dictReturnedBytes);
       }
     }
   )
@@ -7663,12 +7739,12 @@ SweepClosure::~SweepClosure() {
   }
 }
 
-void SweepClosure::initialize_free_range(HeapWord* freeFinger, 
+void SweepClosure::initialize_free_range(HeapWord* freeFinger,
     bool freeRangeInFreeLists) {
   if (CMSTraceSweeper) {
     gclog_or_tty->print("---- Start free range 0x%x with free block [%d] (%d)\n",
                freeFinger, _sp->block_size(freeFinger),
-	       freeRangeInFreeLists);
+               freeRangeInFreeLists);
   }
   assert(!inFreeRange(), "Trampling existing free range");
   set_inFreeRange(true);
@@ -7677,7 +7753,7 @@ void SweepClosure::initialize_free_range(HeapWord* freeFinger,
   set_freeFinger(freeFinger);
   set_freeRangeInFreeLists(freeRangeInFreeLists);
   if (CMSTestInFreeList) {
-    if (freeRangeInFreeLists) { 
+    if (freeRangeInFreeLists) {
       FreeChunk* fc = (FreeChunk*) freeFinger;
       assert(fc->isFree(), "A chunk on the free list should be free.");
       assert(fc->size() > 0, "Free range should have a size");
@@ -7752,8 +7828,8 @@ size_t SweepClosure::do_blk_careful(HeapWord* addr) {
     res = doLiveChunk(fc);
     debug_only(_sp->verifyFreeLists());
     NOT_PRODUCT(
-	_numObjectsLive++;
-	_numWordsLive += res;
+        _numObjectsLive++;
+        _numWordsLive += res;
     )
   }
   return res;
@@ -7761,23 +7837,23 @@ size_t SweepClosure::do_blk_careful(HeapWord* addr) {
 
 // For the smart allocation, record following
 //  split deaths - a free chunk is removed from its free list because
-//	it is being split into two or more chunks.
+//      it is being split into two or more chunks.
 //  split birth - a free chunk is being added to its free list because
-//	a larger free chunk has been split and resulted in this free chunk.
+//      a larger free chunk has been split and resulted in this free chunk.
 //  coal death - a free chunk is being removed from its free list because
-//	it is being coalesced into a large free chunk.
+//      it is being coalesced into a large free chunk.
 //  coal birth - a free chunk is being added to its free list because
-//	it was created when two or more free chunks where coalesced into
-//	this free chunk.
+//      it was created when two or more free chunks where coalesced into
+//      this free chunk.
 //
 // These statistics are used to determine the desired number of free
 // chunks of a given size.  The desired number is chosen to be relative
 // to the end of a CMS sweep.  The desired number at the end of a sweep
-// is the 
-// 	count-at-end-of-previous-sweep (an amount that was enough)
-//		- count-at-beginning-of-current-sweep  (the excess)
-//		+ split-births  (gains in this size during interval)
-//		- split-deaths  (demands on this size during interval)
+// is the
+//      count-at-end-of-previous-sweep (an amount that was enough)
+//              - count-at-beginning-of-current-sweep  (the excess)
+//              + split-births  (gains in this size during interval)
+//              - split-deaths  (demands on this size during interval)
 // where the interval is from the end of one sweep to the end of the
 // next.
 //
@@ -7790,16 +7866,16 @@ size_t SweepClosure::do_blk_careful(HeapWord* addr) {
 // When making a decision on whether to coalesce a right-hand chunk with
 // the current left-hand chunk, the current count vs. the desired count
 // of the left-hand chunk is considered.  Also if the right-hand chunk
-// is near the large chunk at the end of the heap (see 
-// ConcurrentMarkSweepGeneration::isNearLargestChunk()), then the 
+// is near the large chunk at the end of the heap (see
+// ConcurrentMarkSweepGeneration::isNearLargestChunk()), then the
 // left-hand chunk is coalesced.
 //
 // When making a decision about whether to split a chunk, the desired count
 // vs. the current count of the candidate to be split is also considered.
 // If the candidate is underpopulated (currently fewer chunks than desired)
-// a chunk of an overpopulated (currently more chunks than desired) size may 
+// a chunk of an overpopulated (currently more chunks than desired) size may
 // be chosen.  The "hint" associated with a free list, if non-null, points
-// to a free list which may be overpopulated.  
+// to a free list which may be overpopulated.
 //
 
 void SweepClosure::doAlreadyFreeChunk(FreeChunk* fc) {
@@ -7807,7 +7883,7 @@ void SweepClosure::doAlreadyFreeChunk(FreeChunk* fc) {
   // Chunks that cannot be coalesced are not in the
   // free lists.
   if (CMSTestInFreeList && !fc->cantCoalesce()) {
-    assert(_sp->verifyChunkInFreeLists(fc), 
+    assert(_sp->verifyChunkInFreeLists(fc),
       "free chunk should be in free lists");
   }
   // a chunk that is already free, should not have been
@@ -7818,12 +7894,12 @@ void SweepClosure::doAlreadyFreeChunk(FreeChunk* fc) {
   // addr and purported end of this block.
   _bitMap->verifyNoOneBitsInRange(addr + 1, addr + size);
 
-  // Some chunks cannot be coalesced in under any circumstances.  
+  // Some chunks cannot be coalesced in under any circumstances.
   // See the definition of cantCoalesce().
   if (!fc->cantCoalesce()) {
     // This chunk can potentially be coalesced.
     if (_sp->adaptive_freelists()) {
-      // All the work is done in 
+      // All the work is done in
       doPostIsFreeOrGarbageChunk(fc, size);
     } else {  // Not adaptive free lists
       // this is a free chunk that can potentially be coalesced by the sweeper;
@@ -7838,11 +7914,11 @@ void SweepClosure::doAlreadyFreeChunk(FreeChunk* fc) {
           // nothing to do
         } else {
           // Potentially the start of a new free range:
-	  // Don't eagerly remove it from the free lists.  
-	  // No need to remove it if it will just be put
-	  // back again.  (Also from a pragmatic point of view
-	  // if it is a free block in a region that is beyond
-	  // any allocated blocks, an assertion will fail)
+          // Don't eagerly remove it from the free lists.
+          // No need to remove it if it will just be put
+          // back again.  (Also from a pragmatic point of view
+          // if it is a free block in a region that is beyond
+          // any allocated blocks, an assertion will fail)
           // Remember the start of a free run.
           initialize_free_range(addr, true);
           // end - can coalesce with next chunk
@@ -7850,7 +7926,7 @@ void SweepClosure::doAlreadyFreeChunk(FreeChunk* fc) {
       } else {
         // the midst of a free range, we are coalescing
         debug_only(record_free_block_coalesced(fc);)
-        if (CMSTraceSweeper) { 
+        if (CMSTraceSweeper) {
           gclog_or_tty->print("  -- pick up free block 0x%x (%d)\n", fc, size);
         }
         // remove it from the free lists
@@ -7861,15 +7937,15 @@ void SweepClosure::doAlreadyFreeChunk(FreeChunk* fc) {
         // will be returned to the free lists in its entirety - all
         // the coalesced pieces included.
         if (freeRangeInFreeLists()) {
-	  FreeChunk* ffc = (FreeChunk*) freeFinger();
-	  assert(ffc->size() == pointer_delta(addr, freeFinger()),
-	    "Size of free range is inconsistent with chunk size.");
-	  if (CMSTestInFreeList) {
+          FreeChunk* ffc = (FreeChunk*) freeFinger();
+          assert(ffc->size() == pointer_delta(addr, freeFinger()),
+            "Size of free range is inconsistent with chunk size.");
+          if (CMSTestInFreeList) {
             assert(_sp->verifyChunkInFreeLists(ffc),
-	      "free range is not in free lists");
-	  }
+              "free range is not in free lists");
+          }
           _sp->removeFreeChunkFromFreeLists(ffc);
-	  set_freeRangeInFreeLists(false);
+          set_freeRangeInFreeLists(false);
         }
       }
     }
@@ -7917,15 +7993,15 @@ size_t SweepClosure::doGarbageChunk(FreeChunk* fc) {
       // will be returned to the free lists in its entirety - all
       // the coalesced pieces included.
       if (freeRangeInFreeLists()) {
-	FreeChunk* ffc = (FreeChunk*)freeFinger();
-	assert(ffc->size() == pointer_delta(addr, freeFinger()),
-	  "Size of free range is inconsistent with chunk size.");
-	if (CMSTestInFreeList) {
+        FreeChunk* ffc = (FreeChunk*)freeFinger();
+        assert(ffc->size() == pointer_delta(addr, freeFinger()),
+          "Size of free range is inconsistent with chunk size.");
+        if (CMSTestInFreeList) {
           assert(_sp->verifyChunkInFreeLists(ffc),
-	    "free range is not in free lists");
-	}
+            "free range is not in free lists");
+        }
         _sp->removeFreeChunkFromFreeLists(ffc);
-	set_freeRangeInFreeLists(false);
+        set_freeRangeInFreeLists(false);
       }
       set_lastFreeRangeCoalesced(true);
     }
@@ -7982,8 +8058,8 @@ size_t SweepClosure::doLiveChunk(FreeChunk* fc) {
            "alignment problem");
 
     #ifdef DEBUG
-      if (oop(addr)->klass() != NULL &&
-          (   !_collector->cms_should_unload_classes()
+      if (oop(addr)->klass_or_null() != NULL &&
+          (   !_collector->should_unload_classes()
            || oop(addr)->is_parsable())) {
         // Ignore mark word because we are running concurrent with mutators
         assert(oop(addr)->is_oop(true), "live block should be an oop");
@@ -7995,8 +8071,8 @@ size_t SweepClosure::doLiveChunk(FreeChunk* fc) {
 
   } else {
     // This should be an initialized object that's alive.
-    assert(oop(addr)->klass() != NULL &&
-           (!_collector->cms_should_unload_classes()
+    assert(oop(addr)->klass_or_null() != NULL &&
+           (!_collector->should_unload_classes()
             || oop(addr)->is_parsable()),
            "Should be an initialized object");
     // Ignore mark word because we are running concurrent with mutators
@@ -8011,19 +8087,19 @@ size_t SweepClosure::doLiveChunk(FreeChunk* fc) {
   return size;
 }
 
-void SweepClosure::doPostIsFreeOrGarbageChunk(FreeChunk* fc, 
-					    size_t chunkSize) { 
+void SweepClosure::doPostIsFreeOrGarbageChunk(FreeChunk* fc,
+                                            size_t chunkSize) {
   // doPostIsFreeOrGarbageChunk() should only be called in the smart allocation
   // scheme.
   bool fcInFreeLists = fc->isFree();
   assert(_sp->adaptive_freelists(), "Should only be used in this case.");
   assert((HeapWord*)fc <= _limit, "sweep invariant");
   if (CMSTestInFreeList && fcInFreeLists) {
-    assert(_sp->verifyChunkInFreeLists(fc), 
+    assert(_sp->verifyChunkInFreeLists(fc),
       "free chunk is not in free lists");
   }
-  
- 
+
+
   if (CMSTraceSweeper) {
     gclog_or_tty->print_cr("  -- pick up another chunk at 0x%x (%d)", fc, chunkSize);
   }
@@ -8038,7 +8114,7 @@ void SweepClosure::doPostIsFreeOrGarbageChunk(FreeChunk* fc,
     case 0:  { // never coalesce
       coalesce = false;
       break;
-    } 
+    }
     case 1: { // coalesce if left & right chunks on overpopulated lists
       coalesce = _sp->coalOverPopulated(left) &&
                  _sp->coalOverPopulated(right);
@@ -8049,7 +8125,7 @@ void SweepClosure::doPostIsFreeOrGarbageChunk(FreeChunk* fc,
       break;
     }
     case 3: { // coalesce if left OR right chunk on overpopulated list
-      coalesce = _sp->coalOverPopulated(left) || 
+      coalesce = _sp->coalOverPopulated(left) ||
                  _sp->coalOverPopulated(right);
       break;
     }
@@ -8077,7 +8153,7 @@ void SweepClosure::doPostIsFreeOrGarbageChunk(FreeChunk* fc,
         "Size of free range is inconsistent with chunk size.");
       if (CMSTestInFreeList) {
         assert(_sp->verifyChunkInFreeLists(ffc),
-	  "Chunk is not in free lists");
+          "Chunk is not in free lists");
       }
       _sp->coalDeath(ffc->size());
       _sp->removeFreeChunkFromFreeLists(ffc);
@@ -8085,8 +8161,8 @@ void SweepClosure::doPostIsFreeOrGarbageChunk(FreeChunk* fc,
     }
     if (fcInFreeLists) {
       _sp->coalDeath(chunkSize);
-      assert(fc->size() == chunkSize, 
-	"The chunk has the wrong size or is not in the free lists");
+      assert(fc->size() == chunkSize,
+        "The chunk has the wrong size or is not in the free lists");
       _sp->removeFreeChunkFromFreeLists(fc);
     }
     set_lastFreeRangeCoalesced(true);
@@ -8095,8 +8171,8 @@ void SweepClosure::doPostIsFreeOrGarbageChunk(FreeChunk* fc,
     if (inFreeRange()) {
       // In a free range but cannot coalesce with the right hand chunk.
       // Put the current free range into the free lists.
-      flushCurFreeChunk(freeFinger(), 
-	pointer_delta(addr, freeFinger()));
+      flushCurFreeChunk(freeFinger(),
+        pointer_delta(addr, freeFinger()));
     }
     // Set up for new free range.  Pass along whether the right hand
     // chunk is in the free lists.
@@ -8105,14 +8181,14 @@ void SweepClosure::doPostIsFreeOrGarbageChunk(FreeChunk* fc,
 }
 void SweepClosure::flushCurFreeChunk(HeapWord* chunk, size_t size) {
   assert(inFreeRange(), "Should only be called if currently in a free range.");
-  assert(size > 0, 
+  assert(size > 0,
     "A zero sized chunk cannot be added to the free lists.");
   if (!freeRangeInFreeLists()) {
     if(CMSTestInFreeList) {
       FreeChunk* fc = (FreeChunk*) chunk;
       fc->setSize(size);
       assert(!_sp->verifyChunkInFreeLists(fc),
-	"chunk should not be in free lists yet");
+        "chunk should not be in free lists yet");
     }
     if (CMSTraceSweeper) {
       gclog_or_tty->print_cr(" -- add free block 0x%x (%d) to free lists",
@@ -8127,7 +8203,7 @@ void SweepClosure::flushCurFreeChunk(HeapWord* chunk, size_t size) {
       _sp->coalBirth(size);
     }
     _sp->addChunkAndRepairOffsetTable(chunk, size,
-	    lastFreeRangeCoalesced());
+            lastFreeRangeCoalesced());
   }
   set_inFreeRange(false);
   set_freeRangeInFreeLists(false);
@@ -8167,9 +8243,9 @@ void SweepClosure::do_yield_work(HeapWord* addr) {
 
   // See the comment in coordinator_yield()
   for (unsigned i = 0; i < CMSYieldSleepCount &&
-	               ConcurrentMarkSweepThread::should_yield() &&
-	               !CMSCollector::foregroundGCIsActive(); ++i) {
-    os::sleep(Thread::current(), 1, false);    
+                       ConcurrentMarkSweepThread::should_yield() &&
+                       !CMSCollector::foregroundGCIsActive(); ++i) {
+    os::sleep(Thread::current(), 1, false);
     ConcurrentMarkSweepThread::acknowledge_yield_request();
   }
 
@@ -8199,12 +8275,11 @@ bool CMSIsAliveClosure::do_object_b(oop obj) {
   HeapWord* addr = (HeapWord*)obj;
   return addr != NULL &&
          (!_span.contains(addr) || _bit_map->isMarked(addr));
-} 
+}
 
 // CMSKeepAliveClosure: the serial version
-void CMSKeepAliveClosure::do_oop(oop* p) {
-  oop this_oop = *p;
-  HeapWord* addr = (HeapWord*)this_oop;
+void CMSKeepAliveClosure::do_oop(oop obj) {
+  HeapWord* addr = (HeapWord*)obj;
   if (_span.contains(addr) &&
       !_bit_map->isMarked(addr)) {
     _bit_map->mark(addr);
@@ -8216,26 +8291,49 @@ void CMSKeepAliveClosure::do_oop(oop* p) {
         simulate_overflow = true;
       }
     )
-    if (simulate_overflow || !_mark_stack->push(this_oop)) {
-      _collector->push_on_overflow_list(this_oop);
-      _collector->_ser_kac_ovflw++;
+    if (simulate_overflow || !_mark_stack->push(obj)) {
+      if (_concurrent_precleaning) {
+        // We dirty the overflown object and let the remark
+        // phase deal with it.
+        assert(_collector->overflow_list_is_empty(), "Error");
+        // In the case of object arrays, we need to dirty all of
+        // the cards that the object spans. No locking or atomics
+        // are needed since no one else can be mutating the mod union
+        // table.
+        if (obj->is_objArray()) {
+          size_t sz = obj->size();
+          HeapWord* end_card_addr =
+            (HeapWord*)round_to((intptr_t)(addr+sz), CardTableModRefBS::card_size);
+          MemRegion redirty_range = MemRegion(addr, end_card_addr);
+          assert(!redirty_range.is_empty(), "Arithmetical tautology");
+          _collector->_modUnionTable.mark_range(redirty_range);
+        } else {
+          _collector->_modUnionTable.mark(addr);
+        }
+        _collector->_ser_kac_preclean_ovflw++;
+      } else {
+        _collector->push_on_overflow_list(obj);
+        _collector->_ser_kac_ovflw++;
+      }
     }
   }
 }
 
+void CMSKeepAliveClosure::do_oop(oop* p)       { CMSKeepAliveClosure::do_oop_work(p); }
+void CMSKeepAliveClosure::do_oop(narrowOop* p) { CMSKeepAliveClosure::do_oop_work(p); }
+
 // CMSParKeepAliveClosure: a parallel version of the above.
 // The work queues are private to each closure (thread),
 // but (may be) available for stealing by other threads.
-void CMSParKeepAliveClosure::do_oop(oop* p) {
-  oop this_oop = *p;
-  HeapWord* addr = (HeapWord*)this_oop;
+void CMSParKeepAliveClosure::do_oop(oop obj) {
+  HeapWord* addr = (HeapWord*)obj;
   if (_span.contains(addr) &&
       !_bit_map->isMarked(addr)) {
     // In general, during recursive tracing, several threads
     // may be concurrently getting here; the first one to
     // "tag" it, claims it.
-    if (_bit_map->par_mark(addr)) { 
-      bool res = _work_queue->push(this_oop);
+    if (_bit_map->par_mark(addr)) {
+      bool res = _work_queue->push(obj);
       assert(res, "Low water mark should be much less than capacity");
       // Do a recursive trim in the hope that this will keep
       // stack usage lower, but leave some oops for potential stealers
@@ -8243,6 +8341,9 @@ void CMSParKeepAliveClosure::do_oop(oop* p) {
     } // Else, another thread got there first
   }
 }
+
+void CMSParKeepAliveClosure::do_oop(oop* p)       { CMSParKeepAliveClosure::do_oop_work(p); }
+void CMSParKeepAliveClosure::do_oop(narrowOop* p) { CMSParKeepAliveClosure::do_oop_work(p); }
 
 void CMSParKeepAliveClosure::trim_queue(uint max) {
   while (_work_queue->size() > max) {
@@ -8259,9 +8360,8 @@ void CMSParKeepAliveClosure::trim_queue(uint max) {
   }
 }
 
-void CMSInnerParMarkAndPushClosure::do_oop(oop* p) {
-  oop this_oop = *p;
-  HeapWord* addr = (HeapWord*)this_oop;
+void CMSInnerParMarkAndPushClosure::do_oop(oop obj) {
+  HeapWord* addr = (HeapWord*)obj;
   if (_span.contains(addr) &&
       !_bit_map->isMarked(addr)) {
     if (_bit_map->par_mark(addr)) {
@@ -8273,16 +8373,19 @@ void CMSInnerParMarkAndPushClosure::do_oop(oop* p) {
           simulate_overflow = true;
         }
       )
-      if (simulate_overflow || !_work_queue->push(this_oop)) {
-        _collector->par_push_on_overflow_list(this_oop);
+      if (simulate_overflow || !_work_queue->push(obj)) {
+        _collector->par_push_on_overflow_list(obj);
         _collector->_par_kac_ovflw++;
       }
     } // Else another thread got there already
   }
 }
 
+void CMSInnerParMarkAndPushClosure::do_oop(oop* p)       { CMSInnerParMarkAndPushClosure::do_oop_work(p); }
+void CMSInnerParMarkAndPushClosure::do_oop(narrowOop* p) { CMSInnerParMarkAndPushClosure::do_oop_work(p); }
+
 //////////////////////////////////////////////////////////////////
-//  CMSExpansionCause		     /////////////////////////////
+//  CMSExpansionCause                /////////////////////////////
 //////////////////////////////////////////////////////////////////
 const char* CMSExpansionCause::to_string(CMSExpansionCause::Cause cause) {
   switch (cause) {
@@ -8308,15 +8411,17 @@ const char* CMSExpansionCause::to_string(CMSExpansionCause::Cause cause) {
 void CMSDrainMarkingStackClosure::do_void() {
   // the max number to take from overflow list at a time
   const size_t num = _mark_stack->capacity()/4;
+  assert(!_concurrent_precleaning || _collector->overflow_list_is_empty(),
+         "Overflow list should be NULL during concurrent phases");
   while (!_mark_stack->isEmpty() ||
          // if stack is empty, check the overflow list
          _collector->take_from_overflow_list(num, _mark_stack)) {
-    oop this_oop = _mark_stack->pop();
-    HeapWord* addr = (HeapWord*)this_oop;
+    oop obj = _mark_stack->pop();
+    HeapWord* addr = (HeapWord*)obj;
     assert(_span.contains(addr), "Should be within span");
     assert(_bit_map->isMarked(addr), "Should be marked");
-    assert(this_oop->is_oop(), "Should be an oop");
-    this_oop->oop_iterate(_keep_alive);
+    assert(obj->is_oop(), "Should be an oop");
+    obj->oop_iterate(_keep_alive);
   }
 }
 
@@ -8493,9 +8598,9 @@ void CMSCollector::preserve_mark_work(oop p, markOop m) {
     assert(_preserved_mark_stack == NULL,
            "bijection with preserved_oop_stack");
     // Allocate the stacks
-    _preserved_oop_stack  = new (ResourceObj::C_HEAP) 
+    _preserved_oop_stack  = new (ResourceObj::C_HEAP)
       GrowableArray<oop>(PreserveMarkStackSize, true);
-    _preserved_mark_stack = new (ResourceObj::C_HEAP) 
+    _preserved_mark_stack = new (ResourceObj::C_HEAP)
       GrowableArray<markOop>(PreserveMarkStackSize, true);
     if (_preserved_oop_stack == NULL || _preserved_mark_stack == NULL) {
       vm_exit_out_of_memory(2* PreserveMarkStackSize * sizeof(oop) /* punt */,
@@ -8602,8 +8707,8 @@ void ASConcurrentMarkSweepGeneration::resize(size_t cur_promo_size,
     size_t expand_bytes = desired_promo_size - cur_promo_size;
     if (PrintAdaptiveSizePolicy && Verbose) {
       gclog_or_tty->print_cr(" ASConcurrentMarkSweepGeneration::resize "
-	"Expanding tenured generation by " SIZE_FORMAT " (bytes)",
-	expand_bytes);
+        "Expanding tenured generation by " SIZE_FORMAT " (bytes)",
+        expand_bytes);
     }
     expand(expand_bytes,
            MinHeapDeltaBytes,
@@ -8612,8 +8717,8 @@ void ASConcurrentMarkSweepGeneration::resize(size_t cur_promo_size,
     size_t shrink_bytes = cur_promo_size - desired_promo_size;
     if (PrintAdaptiveSizePolicy && Verbose) {
       gclog_or_tty->print_cr(" ASConcurrentMarkSweepGeneration::resize "
-	"Shrinking tenured generation by " SIZE_FORMAT " (bytes)",
-	shrink_bytes);
+        "Shrinking tenured generation by " SIZE_FORMAT " (bytes)",
+        shrink_bytes);
     }
     shrink(shrink_bytes);
   }
@@ -8685,9 +8790,9 @@ void ASConcurrentMarkSweepGeneration::compute_new_size() {
   size_t cur_eden = younger_gen->eden()->capacity();
   CMSAdaptiveSizePolicy* size_policy = cms_size_policy();
   size_t cur_promo = free();
-  size_policy->compute_tenured_generation_free_space(cur_promo, 
-						       max_available(),
-						       cur_eden);
+  size_policy->compute_tenured_generation_free_space(cur_promo,
+                                                       max_available(),
+                                                       cur_eden);
   resize(cur_promo, size_policy->promo_size());
 
   // Record the new size of the space in the cms generation
@@ -8713,8 +8818,8 @@ void ASConcurrentMarkSweepGeneration::shrink_by(size_t desired_bytes) {
     // No room to shrink
     if (PrintGCDetails && Verbose) {
       gclog_or_tty->print_cr("No room to shrink: old_end  "
-	PTR_FORMAT "  unallocated_start  " PTR_FORMAT 
-	" chunk_at_end  " PTR_FORMAT,
+        PTR_FORMAT "  unallocated_start  " PTR_FORMAT
+        " chunk_at_end  " PTR_FORMAT,
         old_end, unallocated_start, chunk_at_end);
     }
     return;
@@ -8723,34 +8828,34 @@ void ASConcurrentMarkSweepGeneration::shrink_by(size_t desired_bytes) {
     // Find the chunk at the end of the space and determine
     // how much it can be shrunk.
     size_t shrinkable_size_in_bytes = chunk_at_end->size();
-    size_t aligned_shrinkable_size_in_bytes = 
+    size_t aligned_shrinkable_size_in_bytes =
       align_size_down(shrinkable_size_in_bytes, os::vm_page_size());
     assert(unallocated_start <= chunk_at_end->end(),
       "Inconsistent chunk at end of space");
     size_t bytes = MIN2(desired_bytes, aligned_shrinkable_size_in_bytes);
     size_t word_size_before = heap_word_size(_virtual_space.committed_size());
-  
+
     // Shrink the underlying space
     _virtual_space.shrink_by(bytes);
     if (PrintGCDetails && Verbose) {
       gclog_or_tty->print_cr("ConcurrentMarkSweepGeneration::shrink_by:"
-        " desired_bytes " SIZE_FORMAT 
+        " desired_bytes " SIZE_FORMAT
         " shrinkable_size_in_bytes " SIZE_FORMAT
-        " aligned_shrinkable_size_in_bytes " SIZE_FORMAT 
-        "  bytes  " SIZE_FORMAT, 
-        desired_bytes, shrinkable_size_in_bytes, 
+        " aligned_shrinkable_size_in_bytes " SIZE_FORMAT
+        "  bytes  " SIZE_FORMAT,
+        desired_bytes, shrinkable_size_in_bytes,
         aligned_shrinkable_size_in_bytes, bytes);
-      gclog_or_tty->print_cr("		old_end  " SIZE_FORMAT 
-        "  unallocated_start  " SIZE_FORMAT, 
+      gclog_or_tty->print_cr("          old_end  " SIZE_FORMAT
+        "  unallocated_start  " SIZE_FORMAT,
         old_end, unallocated_start);
     }
-  
+
     // If the space did shrink (shrinking is not guaranteed),
     // shrink the chunk at the end by the appropriate amount.
     if (((HeapWord*)_virtual_space.high()) < old_end) {
-      size_t new_word_size = 
+      size_t new_word_size =
         heap_word_size(_virtual_space.committed_size());
-  
+
       // Have to remove the chunk from the dictionary because it is changing
       // size and might be someplace elsewhere in the dictionary.
 
@@ -8761,27 +8866,27 @@ void ASConcurrentMarkSweepGeneration::shrink_by(size_t desired_bytes) {
       size_t chunk_at_end_old_size = chunk_at_end->size();
       assert(chunk_at_end_old_size >= word_size_change,
         "Shrink is too large");
-      chunk_at_end->setSize(chunk_at_end_old_size - 
-  			  word_size_change);
-      _cmsSpace->freed((HeapWord*) chunk_at_end->end(), 
+      chunk_at_end->setSize(chunk_at_end_old_size -
+                          word_size_change);
+      _cmsSpace->freed((HeapWord*) chunk_at_end->end(),
         word_size_change);
-      
+
       _cmsSpace->returnChunkToDictionary(chunk_at_end);
-  
+
       MemRegion mr(_cmsSpace->bottom(), new_word_size);
       _bts->resize(new_word_size);  // resize the block offset shared array
       Universe::heap()->barrier_set()->resize_covered_region(mr);
       _cmsSpace->assert_locked();
       _cmsSpace->set_end((HeapWord*)_virtual_space.high());
-  
+
       NOT_PRODUCT(_cmsSpace->dictionary()->verify());
-  
+
       // update the space and generation capacity counters
       if (UsePerfData) {
         _space_counters->update_capacity();
         _gen_counters->update_all();
       }
-  
+
       if (Verbose && PrintGCDetails) {
         size_t new_mem_size = _virtual_space.committed_size();
         size_t old_mem_size = new_mem_size + bytes;
@@ -8789,10 +8894,10 @@ void ASConcurrentMarkSweepGeneration::shrink_by(size_t desired_bytes) {
                       name(), old_mem_size/K, bytes/K, new_mem_size/K);
       }
     }
-  
-    assert(_cmsSpace->unallocated_block() <= _cmsSpace->end(), 
+
+    assert(_cmsSpace->unallocated_block() <= _cmsSpace->end(),
       "Inconsistency at end of space");
-    assert(chunk_at_end->end() == _cmsSpace->end(), 
+    assert(chunk_at_end->end() == _cmsSpace->end(),
       "Shrinking is inconsistent");
     return;
   }
@@ -8801,9 +8906,9 @@ void ASConcurrentMarkSweepGeneration::shrink_by(size_t desired_bytes) {
 // Transfer some number of overflown objects to usual marking
 // stack. Return true if some objects were transferred.
 bool MarkRefsIntoAndScanClosure::take_from_overflow_list() {
-  size_t num = MIN2((size_t)_mark_stack->capacity()/4,
+  size_t num = MIN2((size_t)(_mark_stack->capacity() - _mark_stack->length())/4,
                     (size_t)ParGCDesiredObjsFromOverflowList);
-  
+
   bool res = _collector->take_from_overflow_list(num, _mark_stack);
   assert(_collector->overflow_list_is_empty() || res,
          "If list is not empty, we should have taken something");

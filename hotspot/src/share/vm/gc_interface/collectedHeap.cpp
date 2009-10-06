@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)collectedHeap.cpp	1.24 07/07/19 19:08:26 JVM"
-#endif
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -33,13 +30,21 @@
 int CollectedHeap::_fire_out_of_memory_count = 0;
 #endif
 
+size_t CollectedHeap::_filler_array_max_size = 0;
+
 // Memory state functions.
 
-CollectedHeap::CollectedHeap() :
-  _reserved(), _barrier_set(NULL), _is_gc_active(false),
-  _total_collections(0), _total_full_collections(0),
-  _max_heap_capacity(0),
-  _gc_cause(GCCause::_no_gc), _gc_lastcause(GCCause::_no_gc) {
+CollectedHeap::CollectedHeap()
+{
+  const size_t max_len = size_t(arrayOopDesc::max_array_length(T_INT));
+  const size_t elements_per_word = HeapWordSize / sizeof(jint);
+  _filler_array_max_size = align_object_size(filler_array_hdr_size() +
+                                             max_len * elements_per_word);
+
+  _barrier_set = NULL;
+  _is_gc_active = false;
+  _total_collections = _total_full_collections = 0;
+  _gc_cause = _gc_lastcause = GCCause::_no_gc;
   NOT_PRODUCT(_promotion_failure_alot_count = 0;)
   NOT_PRODUCT(_promotion_failure_alot_gc_number = 0;)
 
@@ -121,15 +126,103 @@ HeapWord* CollectedHeap::allocate_from_tlab_slow(Thread* thread, size_t size) {
   if (obj == NULL) {
     return NULL;
   }
-  if (ZeroTLAB) {		
+  if (ZeroTLAB) {
     // ..and clear it.
     Copy::zero_to_words(obj, new_tlab_size);
-  } else {			
+  } else {
     // ...and clear just the allocated object.
     Copy::zero_to_words(obj, size);
   }
   thread->tlab().fill(obj, obj + size, new_tlab_size);
   return obj;
+}
+
+size_t CollectedHeap::filler_array_hdr_size() {
+  return size_t(arrayOopDesc::header_size(T_INT));
+}
+
+size_t CollectedHeap::filler_array_min_size() {
+  return align_object_size(filler_array_hdr_size());
+}
+
+size_t CollectedHeap::filler_array_max_size() {
+  return _filler_array_max_size;
+}
+
+#ifdef ASSERT
+void CollectedHeap::fill_args_check(HeapWord* start, size_t words)
+{
+  assert(words >= min_fill_size(), "too small to fill");
+  assert(words % MinObjAlignment == 0, "unaligned size");
+  assert(Universe::heap()->is_in_reserved(start), "not in heap");
+  assert(Universe::heap()->is_in_reserved(start + words - 1), "not in heap");
+}
+
+void CollectedHeap::zap_filler_array(HeapWord* start, size_t words)
+{
+  if (ZapFillerObjects) {
+    Copy::fill_to_words(start + filler_array_hdr_size(),
+                        words - filler_array_hdr_size(), 0XDEAFBABE);
+  }
+}
+#endif // ASSERT
+
+void
+CollectedHeap::fill_with_array(HeapWord* start, size_t words)
+{
+  assert(words >= filler_array_min_size(), "too small for an array");
+  assert(words <= filler_array_max_size(), "too big for a single object");
+
+  const size_t payload_size = words - filler_array_hdr_size();
+  const size_t len = payload_size * HeapWordSize / sizeof(jint);
+
+  // Set the length first for concurrent GC.
+  ((arrayOop)start)->set_length((int)len);
+  post_allocation_setup_common(Universe::intArrayKlassObj(), start, words);
+  DEBUG_ONLY(zap_filler_array(start, words);)
+}
+
+void
+CollectedHeap::fill_with_object_impl(HeapWord* start, size_t words)
+{
+  assert(words <= filler_array_max_size(), "too big for a single object");
+
+  if (words >= filler_array_min_size()) {
+    fill_with_array(start, words);
+  } else if (words > 0) {
+    assert(words == min_fill_size(), "unaligned size");
+    post_allocation_setup_common(SystemDictionary::object_klass(), start,
+                                 words);
+  }
+}
+
+void CollectedHeap::fill_with_object(HeapWord* start, size_t words)
+{
+  DEBUG_ONLY(fill_args_check(start, words);)
+  HandleMark hm;  // Free handles before leaving.
+  fill_with_object_impl(start, words);
+}
+
+void CollectedHeap::fill_with_objects(HeapWord* start, size_t words)
+{
+  DEBUG_ONLY(fill_args_check(start, words);)
+  HandleMark hm;  // Free handles before leaving.
+
+#ifdef LP64
+  // A single array can fill ~8G, so multiple objects are needed only in 64-bit.
+  // First fill with arrays, ensuring that any remaining space is big enough to
+  // fill.  The remainder is filled with a single object.
+  const size_t min = min_fill_size();
+  const size_t max = filler_array_max_size();
+  while (words > max) {
+    const size_t cur = words - max >= min ? max : max - min;
+    fill_with_array(start, cur);
+    start += cur;
+    words -= cur;
+  }
+#endif
+
+  fill_with_object_impl(start, words);
 }
 
 oop CollectedHeap::new_store_barrier(oop new_obj) {
@@ -142,13 +235,6 @@ oop CollectedHeap::new_store_barrier(oop new_obj) {
   return new_obj;
 }
 
-bool CollectedHeap::can_elide_permanent_oop_store_barriers() const {
-  // %%% This needs refactoring.  (It was gating logic from the server compiler.)
-  guarantee(kind() < CollectedHeap::G1CollectedHeap, "");
-  return !UseConcMarkSweepGC;
-}
-
-
 HeapWord* CollectedHeap::allocate_new_tlab(size_t size) {
   guarantee(false, "thread-local allocation buffers not supported");
   return NULL;
@@ -159,7 +245,7 @@ void CollectedHeap::fill_all_tlabs(bool retire) {
   // See note in ensure_parsability() below.
   assert(SafepointSynchronize::is_at_safepoint() ||
          !is_init_completed(),
-	 "should only fill tlabs at safepoint");
+         "should only fill tlabs at safepoint");
   // The main thread starts allocating via a TLAB even before it
   // has added itself to the threads list at vm boot-up.
   assert(Threads::first() != NULL,
@@ -180,7 +266,7 @@ void CollectedHeap::ensure_parsability(bool retire_tlabs) {
   // started allocating but are now a full-fledged JavaThread
   // (and have thus made our TLAB's) available for filling.
   assert(SafepointSynchronize::is_at_safepoint() ||
-         !is_init_completed(), 
+         !is_init_completed(),
          "Should only be called at a safepoint or at start-up"
          " otherwise concurrent mutator activity may make heap "
          " unparsable again");
@@ -193,7 +279,7 @@ void CollectedHeap::accumulate_statistics_all_tlabs() {
   if (UseTLAB) {
     assert(SafepointSynchronize::is_at_safepoint() ||
          !is_init_completed(),
-	 "should only accumulate statistics on tlabs at safepoint");
+         "should only accumulate statistics on tlabs at safepoint");
 
     ThreadLocalAllocBuffer::accumulate_statistics_before_gc();
   }
@@ -203,7 +289,7 @@ void CollectedHeap::resize_all_tlabs() {
   if (UseTLAB) {
     assert(SafepointSynchronize::is_at_safepoint() ||
          !is_init_completed(),
-	 "should only resize tlabs at safepoint");
+         "should only resize tlabs at safepoint");
 
     ThreadLocalAllocBuffer::resize_all_tlabs();
   }

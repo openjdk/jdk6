@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)ciField.hpp	1.23 07/09/28 10:23:24 JVM"
-#endif
 /*
- * Copyright 1999-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // ciField
@@ -85,7 +82,7 @@ public:
   //
   //   A java compiler is permitted to compile the access to
   //   field f as:
-  //   
+  //
   //     getfield B.f
   //
   //   In that case the declared holder of f would be B and
@@ -105,7 +102,7 @@ public:
   BasicType layout_type() { return type2field[(_type == NULL) ? T_OBJECT : _type->basic_type()]; }
 
   // How big is this field in memory?
-  int size_in_bytes() { return type2aelembytes[layout_type()]; }
+  int size_in_bytes() { return type2aelembytes(layout_type()); }
 
   // What is the offset of this field?
   int offset() {

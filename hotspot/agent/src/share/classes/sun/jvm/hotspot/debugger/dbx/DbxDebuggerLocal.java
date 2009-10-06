@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2004 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.debugger.dbx;
@@ -151,7 +151,7 @@ public class DbxDebuggerLocal extends DebuggerBase implements DbxDebugger {
       importDbxModule();
 
       dbxOstr.println("svc_agent_run");
-      
+
       connectToImportModule();
 
       // Set "fail fast" mode on process memory reads
@@ -191,7 +191,7 @@ public class DbxDebuggerLocal extends DebuggerBase implements DbxDebugger {
       List retVals = dbxErrStreamMonitor.getTriggersSeen();
       if (retVals.size() > 0) {
         detach();
-        
+
         if (retVals.contains(new Integer(1))) {
           throw new DebuggerException("Can not find executable \"" + executableName + "\"");
         } else if (retVals.contains(new Integer(2))) {
@@ -211,7 +211,7 @@ public class DbxDebuggerLocal extends DebuggerBase implements DbxDebugger {
       importDbxModule();
 
       dbxOstr.println("svc_agent_run");
-      
+
       connectToImportModule();
 
       // Set "fail fast" mode on process memory reads
@@ -229,7 +229,7 @@ public class DbxDebuggerLocal extends DebuggerBase implements DbxDebugger {
       if (dbxProcess == null) {
         return false;
       }
-    
+
       if (out != null && dbxOstr != null) {
         printlnToOutput("exit");
         dbxOstr.println("exit");
@@ -242,7 +242,7 @@ public class DbxDebuggerLocal extends DebuggerBase implements DbxDebugger {
         catch (InterruptedException e) {
         }
       }
-    
+
       shutdown();
 
       return true;
@@ -290,7 +290,7 @@ public class DbxDebuggerLocal extends DebuggerBase implements DbxDebugger {
       dbxOstr.println("kprint \\(ready\\)");
       dbxOstr.flush();
       dbxOutStreamMonitor.waitFor("(ready)", LONG_TIMEOUT);
-    
+
       dbxOutStreamMonitor.startCapture();
       dbxErrStreamMonitor.startCapture();
       dbxOstr.println(cmd);
@@ -421,7 +421,7 @@ public class DbxDebuggerLocal extends DebuggerBase implements DbxDebugger {
     }
     byte[] data = readBytes(address, jlongSize);
     return utils.dataToJLong(data, jlongSize);
-  }  
+  }
 
   //--------------------------------------------------------------------------------
   // Internal routines (for implementation of DbxAddress).
@@ -460,10 +460,21 @@ public class DbxDebuggerLocal extends DebuggerBase implements DbxDebugger {
     return (value == 0 ? null : new DbxAddress(this, value));
   }
 
+  public DbxAddress readCompOopAddress(long address)
+    throws UnmappedAddressException, UnalignedAddressException {
+    long value = readCompOopAddressValue(address);
+    return (value == 0 ? null : new DbxAddress(this, value));
+  }
+
   /** From the DbxDebugger interface */
   public DbxOopHandle readOopHandle(long address)
     throws UnmappedAddressException, UnalignedAddressException, NotInHeapException {
     long value = readAddressValue(address);
+    return (value == 0 ? null : new DbxOopHandle(this, value));
+  }
+  public DbxOopHandle readCompOopHandle(long address)
+    throws UnmappedAddressException, UnalignedAddressException, NotInHeapException {
+    long value = readCompOopAddressValue(address);
     return (value == 0 ? null : new DbxOopHandle(this, value));
   }
 
@@ -544,12 +555,12 @@ public class DbxDebuggerLocal extends DebuggerBase implements DbxDebugger {
         detach();
         throw new DebuggerException("Unable to find the Serviceability Agent's dbx import module at pathname \"" +
                                     dbxSvcAgentDSOPathNames[i] + "\"");
-      } else {  
-	retVals = dbxOutStreamMonitor.getTriggersSeen();
-	if (retVals.contains(new Integer(DBX_MODULE_LOADED))) {
-	  System.out.println("importDbxModule: imported " +  dbxSvcAgentDSOPathNames[i]);
-	  return;
-	}
+      } else {
+        retVals = dbxOutStreamMonitor.getTriggersSeen();
+        if (retVals.contains(new Integer(DBX_MODULE_LOADED))) {
+          System.out.println("importDbxModule: imported " +  dbxSvcAgentDSOPathNames[i]);
+          return;
+        }
       }
     }
 
@@ -679,7 +690,7 @@ public class DbxDebuggerLocal extends DebuggerBase implements DbxDebugger {
   ReadResult readBytesFromProcessInternal(long address, long numBytes)
     throws DebuggerException {
     return readBytesFromProcess(address, numBytes);
-  }  
+  }
 
   /** Convenience routine */
   private void printlnToOutput(String s) throws IOException {

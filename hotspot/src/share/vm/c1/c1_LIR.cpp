@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)c1_LIR.cpp	1.119 07/06/18 14:25:24 JVM"
-#endif
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +19,25 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
 # include "incls/_c1_LIR.cpp.incl"
 
-Register LIR_OprDesc::as_register() const { 
-  return FrameMap::cpu_rnr2reg(cpu_regnr()); 
+Register LIR_OprDesc::as_register() const {
+  return FrameMap::cpu_rnr2reg(cpu_regnr());
 }
 
-Register LIR_OprDesc::as_register_lo() const { 
-  return FrameMap::cpu_rnr2reg(cpu_regnrLo()); 
+Register LIR_OprDesc::as_register_lo() const {
+  return FrameMap::cpu_rnr2reg(cpu_regnrLo());
 }
 
-Register LIR_OprDesc::as_register_hi() const { 
-  return FrameMap::cpu_rnr2reg(cpu_regnrHi()); 
+Register LIR_OprDesc::as_register_hi() const {
+  return FrameMap::cpu_rnr2reg(cpu_regnrHi());
 }
 
-#ifdef IA32
+#if defined(X86)
 
 XMMRegister LIR_OprDesc::as_xmm_float_reg() const {
   return FrameMap::nr2xmmreg(xmm_regnr());
@@ -51,7 +48,7 @@ XMMRegister LIR_OprDesc::as_xmm_double_reg() const {
   return FrameMap::nr2xmmreg(xmm_regnrLo());
 }
 
-#endif
+#endif // X86
 
 
 #ifdef SPARC
@@ -84,7 +81,7 @@ LIR_Opr LIR_OprFact::value_type(ValueType* type) {
   case floatTag  : return LIR_OprFact::floatConst(type->as_FloatConstant()->value());
   case longTag   : return LIR_OprFact::longConst(type->as_LongConstant()->value());
   case doubleTag : return LIR_OprFact::doubleConst(type->as_DoubleConstant()->value());
-  default: ShouldNotReachHere();
+  default: ShouldNotReachHere(); return LIR_OprFact::intConst(-1);
   }
 }
 
@@ -97,7 +94,7 @@ LIR_Opr LIR_OprFact::dummy_value_type(ValueType* type) {
     case floatTag:  return LIR_OprFact::floatConst(0.0);
     case longTag:   return LIR_OprFact::longConst(0);
     case doubleTag: return LIR_OprFact::doubleConst(0.0);
-    default:        ShouldNotReachHere();
+    default:        ShouldNotReachHere(); return LIR_OprFact::intConst(-1);
   }
   return illegalOpr;
 }
@@ -108,7 +105,7 @@ LIR_Opr LIR_OprFact::dummy_value_type(ValueType* type) {
 
 
 LIR_Address::Scale LIR_Address::scale(BasicType type) {
-  int elem_size = type2aelembytes[type];
+  int elem_size = type2aelembytes(type);
   switch (elem_size) {
   case 1: return LIR_Address::times_1;
   case 2: return LIR_Address::times_2;
@@ -165,11 +162,12 @@ char LIR_OprDesc::type_char(BasicType t) {
 
     default:
       ShouldNotReachHere();
+      return '?';
   }
 }
 
 #ifndef PRODUCT
-void LIR_OprDesc::validate_type() const { 
+void LIR_OprDesc::validate_type() const {
 
 #ifdef ASSERT
   if (!is_pointer() && !is_illegal()) {
@@ -293,16 +291,16 @@ LIR_OpBranch::LIR_OpBranch(LIR_Condition cond, BasicType type, BlockBegin* block
 }
 
 void LIR_OpBranch::change_block(BlockBegin* b) {
-  assert(_block != NULL, "must have old block"); 
+  assert(_block != NULL, "must have old block");
   assert(_block->label() == label(), "must be equal");
-  
-  _block = b; 
+
+  _block = b;
   _label = b->label();
 }
 
 void LIR_OpBranch::change_ublock(BlockBegin* b) {
-  assert(_ublock != NULL, "must have old block"); 
-  _ublock = b; 
+  assert(_ublock != NULL, "must have old block");
+  _ublock = b;
 }
 
 void LIR_OpBranch::negate_cond() {
@@ -430,7 +428,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
     case lir_membar:                   // result and info always invalid
     case lir_membar_acquire:           // result and info always invalid
     case lir_membar_release:           // result and info always invalid
-    { 
+    {
       assert(op->as_Op0() != NULL, "must be");
       assert(op->_info == NULL, "info not used by this instruction");
       assert(op->_result->is_illegal(), "not used");
@@ -439,7 +437,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
 
     case lir_nop:                      // may have info, result always invalid
     case lir_std_entry:                // may have result, info always invalid
-    case lir_osr_entry:                // may have result, info always invalid 
+    case lir_osr_entry:                // may have result, info always invalid
     case lir_get_thread:               // may have result, info always invalid
     {
       assert(op->as_Op0() != NULL, "must be");
@@ -451,7 +449,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
 
 // LIR_OpLabel
     case lir_label:                    // result and info always invalid
-    { 
+    {
       assert(op->as_OpLabel() != NULL, "must be");
       assert(op->_info == NULL, "info not used by this instruction");
       assert(op->_result->is_illegal(), "not used");
@@ -513,7 +511,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
 // LIR_OpBranch;
     case lir_branch:                   // may have info, input and result register always invalid
     case lir_cond_float_branch:        // may have info, input and result register always invalid
-    { 
+    {
       assert(op->as_OpBranch() != NULL, "must be");
       LIR_OpBranch* opBranch = (LIR_OpBranch*)op;
 
@@ -526,7 +524,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
 
 
 // LIR_OpAllocObj
-    case lir_alloc_object: 
+    case lir_alloc_object:
     {
       assert(op->as_OpAllocObj() != NULL, "must be");
       LIR_OpAllocObj* opAllocObj = (LIR_OpAllocObj*)op;
@@ -590,7 +588,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
       break;
     }
 
-    // special handling for cmove: right input operand must not be equal 
+    // special handling for cmove: right input operand must not be equal
     // to the result operand, otherwise the backend fails
     case lir_cmove:
     {
@@ -636,7 +634,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
       LIR_Op2* op2 = (LIR_Op2*)op;
 
       if (op2->_info)                     do_info(op2->_info);
-      if (op2->_opr1->is_valid())         do_temp(op2->_opr1); 
+      if (op2->_opr1->is_valid())         do_temp(op2->_opr1);
       if (op2->_opr2->is_valid())         do_input(op2->_opr2); // exception object is input parameter
       assert(op2->_result->is_illegal(), "no result");
 
@@ -739,11 +737,11 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
       LIR_OpArrayCopy* opArrayCopy = (LIR_OpArrayCopy*)op;
 
       assert(opArrayCopy->_result->is_illegal(), "unused");
-      assert(opArrayCopy->_src->is_valid(), "used");          do_input(opArrayCopy->_src);     do_temp(opArrayCopy->_src);    
+      assert(opArrayCopy->_src->is_valid(), "used");          do_input(opArrayCopy->_src);     do_temp(opArrayCopy->_src);
       assert(opArrayCopy->_src_pos->is_valid(), "used");      do_input(opArrayCopy->_src_pos); do_temp(opArrayCopy->_src_pos);
-      assert(opArrayCopy->_dst->is_valid(), "used");          do_input(opArrayCopy->_dst);     do_temp(opArrayCopy->_dst);    
+      assert(opArrayCopy->_dst->is_valid(), "used");          do_input(opArrayCopy->_dst);     do_temp(opArrayCopy->_dst);
       assert(opArrayCopy->_dst_pos->is_valid(), "used");      do_input(opArrayCopy->_dst_pos); do_temp(opArrayCopy->_dst_pos);
-      assert(opArrayCopy->_length->is_valid(), "used");       do_input(opArrayCopy->_length);  do_temp(opArrayCopy->_length); 
+      assert(opArrayCopy->_length->is_valid(), "used");       do_input(opArrayCopy->_length);  do_temp(opArrayCopy->_length);
       assert(opArrayCopy->_tmp->is_valid(), "used");          do_temp(opArrayCopy->_tmp);
       if (opArrayCopy->_info)                     do_info(opArrayCopy->_info);
 
@@ -762,7 +760,7 @@ void LIR_OpVisitState::visit(LIR_Op* op) {
 
       if (opLock->_info)                          do_info(opLock->_info);
 
-      // TODO: check if these operands really have to be temp 
+      // TODO: check if these operands really have to be temp
       // (or if input is sufficient). This may have influence on the oop map!
       assert(opLock->_lock->is_valid(), "used");  do_temp(opLock->_lock);
       assert(opLock->_hdr->is_valid(),  "used");  do_temp(opLock->_hdr);
@@ -897,11 +895,11 @@ XHandlers* LIR_OpVisitState::all_xhandler() {
 bool LIR_OpVisitState::no_operands(LIR_Op* op) {
   visit(op);
 
-  return opr_count(inputMode) == 0 && 
-         opr_count(outputMode) == 0 && 
-         opr_count(tempMode) == 0 && 
-         info_count() == 0 && 
-         !has_call() && 
+  return opr_count(inputMode) == 0 &&
+         opr_count(outputMode) == 0 &&
+         opr_count(tempMode) == 0 &&
+         info_count() == 0 &&
+         !has_call() &&
          !has_slow_case();
 }
 #endif
@@ -918,7 +916,7 @@ void LIR_OpRTCall::emit_code(LIR_Assembler* masm) {
 }
 
 void LIR_OpLabel::emit_code(LIR_Assembler* masm) {
-  masm->emit_opLabel(this); 
+  masm->emit_opLabel(this);
 }
 
 void LIR_OpArrayCopy::emit_code(LIR_Assembler* masm) {
@@ -927,43 +925,43 @@ void LIR_OpArrayCopy::emit_code(LIR_Assembler* masm) {
 }
 
 void LIR_Op0::emit_code(LIR_Assembler* masm) {
-  masm->emit_op0(this); 
+  masm->emit_op0(this);
 }
 
 void LIR_Op1::emit_code(LIR_Assembler* masm) {
-  masm->emit_op1(this); 
+  masm->emit_op1(this);
 }
 
 void LIR_OpAllocObj::emit_code(LIR_Assembler* masm) {
-  masm->emit_alloc_obj(this); 
+  masm->emit_alloc_obj(this);
   masm->emit_code_stub(stub());
 }
 
 void LIR_OpBranch::emit_code(LIR_Assembler* masm) {
-  masm->emit_opBranch(this); 
+  masm->emit_opBranch(this);
   if (stub()) {
     masm->emit_code_stub(stub());
   }
 }
 
 void LIR_OpConvert::emit_code(LIR_Assembler* masm) {
-  masm->emit_opConvert(this); 
+  masm->emit_opConvert(this);
   if (stub() != NULL) {
     masm->emit_code_stub(stub());
   }
 }
 
 void LIR_Op2::emit_code(LIR_Assembler* masm) {
-  masm->emit_op2(this); 
+  masm->emit_op2(this);
 }
 
 void LIR_OpAllocArray::emit_code(LIR_Assembler* masm) {
-  masm->emit_alloc_array(this); 
+  masm->emit_alloc_array(this);
   masm->emit_code_stub(stub());
 }
 
 void LIR_OpTypeCheck::emit_code(LIR_Assembler* masm) {
-  masm->emit_opTypeCheck(this); 
+  masm->emit_opTypeCheck(this);
   if (stub()) {
     masm->emit_code_stub(stub());
   }
@@ -974,7 +972,7 @@ void LIR_OpCompareAndSwap::emit_code(LIR_Assembler* masm) {
 }
 
 void LIR_Op3::emit_code(LIR_Assembler* masm) {
-  masm->emit_op3(this); 
+  masm->emit_op3(this);
 }
 
 void LIR_OpLock::emit_code(LIR_Assembler* masm) {
@@ -996,7 +994,7 @@ void LIR_OpProfileCall::emit_code(LIR_Assembler* masm) {
 
 
 // LIR_List
-LIR_List::LIR_List(Compilation* compilation, BlockBegin* block) 
+LIR_List::LIR_List(Compilation* compilation, BlockBegin* block)
   : _operations(8)
   , _compilation(compilation)
 #ifndef PRODUCT
@@ -1027,7 +1025,7 @@ void LIR_List::set_file_and_line(const char * file, int line) {
 void LIR_List::append(LIR_InsertionBuffer* buffer) {
   assert(this == buffer->lir_list(), "wrong lir list");
   const int n = _operations.length();
-  
+
   if (buffer->number_of_ops() > 0) {
     // increase size of instructions list
     _operations.at_grow(n + buffer->number_of_ops() - 1, NULL);
@@ -1060,32 +1058,32 @@ void LIR_List::oop2reg_patch(jobject o, LIR_Opr reg, CodeEmitInfo* info) {
 
 void LIR_List::load(LIR_Address* addr, LIR_Opr src, CodeEmitInfo* info, LIR_PatchCode patch_code) {
   append(new LIR_Op1(
-            lir_move, 
+            lir_move,
             LIR_OprFact::address(addr),
             src,
             addr->type(),
-            patch_code, 
+            patch_code,
             info));
 }
 
 
 void LIR_List::volatile_load_mem_reg(LIR_Address* address, LIR_Opr dst, CodeEmitInfo* info, LIR_PatchCode patch_code) {
   append(new LIR_Op1(
-            lir_move, 
+            lir_move,
             LIR_OprFact::address(address),
             dst,
             address->type(),
-            patch_code, 
+            patch_code,
             info, lir_move_volatile));
 }
 
 void LIR_List::volatile_load_unsafe_reg(LIR_Opr base, LIR_Opr offset, LIR_Opr dst, BasicType type, CodeEmitInfo* info, LIR_PatchCode patch_code) {
   append(new LIR_Op1(
-            lir_move, 
-            LIR_OprFact::address(new LIR_Address(base, offset, type)), 
+            lir_move,
+            LIR_OprFact::address(new LIR_Address(base, offset, type)),
             dst,
             type,
-            patch_code, 
+            patch_code,
             info, lir_move_volatile));
 }
 
@@ -1099,33 +1097,33 @@ void LIR_List::prefetch(LIR_Address* addr, bool is_store) {
 
 void LIR_List::store_mem_int(jint v, LIR_Opr base, int offset_in_bytes, BasicType type, CodeEmitInfo* info, LIR_PatchCode patch_code) {
   append(new LIR_Op1(
-            lir_move, 
+            lir_move,
             LIR_OprFact::intConst(v),
             LIR_OprFact::address(new LIR_Address(base, offset_in_bytes, type)),
             type,
-            patch_code, 
+            patch_code,
             info));
 }
 
 
 void LIR_List::store_mem_oop(jobject o, LIR_Opr base, int offset_in_bytes, BasicType type, CodeEmitInfo* info, LIR_PatchCode patch_code) {
   append(new LIR_Op1(
-            lir_move, 
+            lir_move,
             LIR_OprFact::oopConst(o),
             LIR_OprFact::address(new LIR_Address(base, offset_in_bytes, type)),
             type,
-            patch_code, 
+            patch_code,
             info));
 }
 
 
 void LIR_List::store(LIR_Opr src, LIR_Address* addr, CodeEmitInfo* info, LIR_PatchCode patch_code) {
   append(new LIR_Op1(
-            lir_move, 
+            lir_move,
             src,
             LIR_OprFact::address(addr),
             addr->type(),
-            patch_code, 
+            patch_code,
             info));
 }
 
@@ -1196,19 +1194,19 @@ void LIR_List::irem(LIR_Opr left, int right, LIR_Opr res, LIR_Opr tmp, CodeEmitI
 }
 
 
-void LIR_List::cmp_mem_int(LIR_Condition condition, LIR_Opr base, int disp, int c, CodeEmitInfo* info) { 
+void LIR_List::cmp_mem_int(LIR_Condition condition, LIR_Opr base, int disp, int c, CodeEmitInfo* info) {
   append(new LIR_Op2(
                     lir_cmp,
                     condition,
-                    LIR_OprFact::address(new LIR_Address(base, disp, T_INT)), 
-                    LIR_OprFact::intConst(c), 
-                    info)); 
+                    LIR_OprFact::address(new LIR_Address(base, disp, T_INT)),
+                    LIR_OprFact::intConst(c),
+                    info));
 }
 
 
-void LIR_List::cmp_reg_mem(LIR_Condition condition, LIR_Opr reg, LIR_Address* addr, CodeEmitInfo* info) { 
+void LIR_List::cmp_reg_mem(LIR_Condition condition, LIR_Opr reg, LIR_Address* addr, CodeEmitInfo* info) {
   append(new LIR_Op2(
-                    lir_cmp, 
+                    lir_cmp,
                     condition,
                     reg,
                     LIR_OprFact::address(addr),
@@ -1245,18 +1243,18 @@ void LIR_List::allocate_array(LIR_Opr dst, LIR_Opr len, LIR_Opr t1,LIR_Opr t2, L
 
 void LIR_List::shift_left(LIR_Opr value, LIR_Opr count, LIR_Opr dst, LIR_Opr tmp) {
  append(new LIR_Op2(
-                    lir_shl, 
-                    value, 
-                    count, 
+                    lir_shl,
+                    value,
+                    count,
                     dst,
                     tmp));
 }
 
 void LIR_List::shift_right(LIR_Opr value, LIR_Opr count, LIR_Opr dst, LIR_Opr tmp) {
  append(new LIR_Op2(
-                    lir_shr, 
-                    value, 
-                    count, 
+                    lir_shr,
+                    value,
+                    count,
                     dst,
                     tmp));
 }
@@ -1264,15 +1262,15 @@ void LIR_List::shift_right(LIR_Opr value, LIR_Opr count, LIR_Opr dst, LIR_Opr tm
 
 void LIR_List::unsigned_shift_right(LIR_Opr value, LIR_Opr count, LIR_Opr dst, LIR_Opr tmp) {
  append(new LIR_Op2(
-                    lir_ushr, 
-                    value, 
-                    count, 
+                    lir_ushr,
+                    value,
+                    count,
                     dst,
                     tmp));
 }
 
 void LIR_List::fcmp2int(LIR_Opr left, LIR_Opr right, LIR_Opr dst, bool is_unordered_less) {
-  append(new LIR_Op2(is_unordered_less ? lir_ucmp_fd2i : lir_cmp_fd2i,  
+  append(new LIR_Op2(is_unordered_less ? lir_ucmp_fd2i : lir_cmp_fd2i,
                      left,
                      right,
                      dst));
@@ -1280,7 +1278,7 @@ void LIR_List::fcmp2int(LIR_Opr left, LIR_Opr right, LIR_Opr dst, bool is_unorde
 
 void LIR_List::lock_object(LIR_Opr hdr, LIR_Opr obj, LIR_Opr lock, LIR_Opr scratch, CodeStub* stub, CodeEmitInfo* info) {
   append(new LIR_OpLock(
-                    lir_lock, 
+                    lir_lock,
                     hdr,
                     obj,
                     lock,
@@ -1291,7 +1289,7 @@ void LIR_List::lock_object(LIR_Opr hdr, LIR_Opr obj, LIR_Opr lock, LIR_Opr scrat
 
 void LIR_List::unlock_object(LIR_Opr hdr, LIR_Opr obj, LIR_Opr lock, CodeStub* stub) {
   append(new LIR_OpLock(
-                    lir_unlock, 
+                    lir_unlock,
                     hdr,
                     obj,
                     lock,
@@ -1377,7 +1375,7 @@ void LIR_OprDesc::print(outputStream* out) const {
   } else if (is_double_cpu()) {
     out->print(as_register_hi()->name());
     out->print(as_register_lo()->name());
-#ifdef IA32
+#if defined(X86)
   } else if (is_single_xmm()) {
     out->print(as_xmm_float_reg()->name());
   } else if (is_double_xmm()) {
@@ -1432,7 +1430,7 @@ void LIR_Address::print_value_on(outputStream* out) const {
     case times_8: out->print(" * 8"); break;
     }
   }
-  out->print(" Disp: %d", _disp); 
+  out->print(" Disp: %d", _disp);
 }
 
 // debug output of block header without InstructionPrinter
@@ -1447,7 +1445,7 @@ static void print_block(BlockBegin* x) {
   if (x->is_set(BlockBegin::osr_entry_flag))               tty->print("osr ");
   if (x->is_set(BlockBegin::exception_entry_flag))         tty->print("ex ");
   if (x->is_set(BlockBegin::subroutine_entry_flag))        tty->print("jsr ");
-  if (x->is_set(BlockBegin::backward_branch_target_flag))  tty->print("bb "); 
+  if (x->is_set(BlockBegin::backward_branch_target_flag))  tty->print("bb ");
   if (x->is_set(BlockBegin::linear_scan_loop_header_flag)) tty->print("lh ");
   if (x->is_set(BlockBegin::linear_scan_loop_end_flag))    tty->print("le ");
 
@@ -1654,7 +1652,7 @@ void LIR_OpCompareAndSwap::print_instr(outputStream* out) const {
 
 // LIR_Op0
 void LIR_Op0::print_instr(outputStream* out) const {
-  result_opr()->print(out); 
+  result_opr()->print(out);
 }
 
 // LIR_Op1
@@ -1722,14 +1720,14 @@ void LIR_OpBranch::print_instr(outputStream* out) const {
 
 void LIR_Op::print_condition(outputStream* out, LIR_Condition cond) {
   switch(cond) {
-    case lir_cond_equal:           out->print("[EQ]");      break; 
+    case lir_cond_equal:           out->print("[EQ]");      break;
     case lir_cond_notEqual:        out->print("[NE]");      break;
-    case lir_cond_less:            out->print("[LT]");      break; 
-    case lir_cond_lessEqual:       out->print("[LE]");      break; 
-    case lir_cond_greaterEqual:    out->print("[GE]");      break; 
-    case lir_cond_greater:         out->print("[GT]");      break; 
-    case lir_cond_belowEqual:      out->print("[BE]");      break; 
-    case lir_cond_aboveEqual:      out->print("[AE]");      break; 
+    case lir_cond_less:            out->print("[LT]");      break;
+    case lir_cond_lessEqual:       out->print("[LE]");      break;
+    case lir_cond_greaterEqual:    out->print("[GE]");      break;
+    case lir_cond_greater:         out->print("[GT]");      break;
+    case lir_cond_belowEqual:      out->print("[BE]");      break;
+    case lir_cond_aboveEqual:      out->print("[AE]");      break;
     case lir_cond_always:          out->print("[AL]");      break;
     default:                       out->print("[%d]",cond); break;
   }
@@ -1744,21 +1742,21 @@ void LIR_OpConvert::print_instr(outputStream* out) const {
 
 void LIR_OpConvert::print_bytecode(outputStream* out, Bytecodes::Code code) {
   switch(code) {
-    case Bytecodes::_d2f: out->print("[d2f] "); break; 
-    case Bytecodes::_d2i: out->print("[d2i] "); break; 
+    case Bytecodes::_d2f: out->print("[d2f] "); break;
+    case Bytecodes::_d2i: out->print("[d2i] "); break;
     case Bytecodes::_d2l: out->print("[d2l] "); break;
-    case Bytecodes::_f2d: out->print("[f2d] "); break; 
-    case Bytecodes::_f2i: out->print("[f2i] "); break; 
+    case Bytecodes::_f2d: out->print("[f2d] "); break;
+    case Bytecodes::_f2i: out->print("[f2i] "); break;
     case Bytecodes::_f2l: out->print("[f2l] "); break;
     case Bytecodes::_i2b: out->print("[i2b] "); break;
     case Bytecodes::_i2c: out->print("[i2c] "); break;
     case Bytecodes::_i2d: out->print("[i2d] "); break;
-    case Bytecodes::_i2f: out->print("[i2f] "); break; 
-    case Bytecodes::_i2l: out->print("[i2l] "); break; 
-    case Bytecodes::_i2s: out->print("[i2s] "); break; 
-    case Bytecodes::_l2i: out->print("[l2i] "); break; 
-    case Bytecodes::_l2f: out->print("[l2f] "); break; 
-    case Bytecodes::_l2d: out->print("[l2d] "); break; 
+    case Bytecodes::_i2f: out->print("[i2f] "); break;
+    case Bytecodes::_i2l: out->print("[i2l] "); break;
+    case Bytecodes::_i2s: out->print("[i2s] "); break;
+    case Bytecodes::_l2i: out->print("[l2i] "); break;
+    case Bytecodes::_l2f: out->print("[l2f] "); break;
+    case Bytecodes::_l2d: out->print("[l2d] "); break;
     default:
       out->print("[?%d]",code);
     break;
@@ -1791,7 +1789,7 @@ void LIR_Op2::print_instr(outputStream* out) const {
   in_opr1()->print(out);    out->print(" ");
   in_opr2()->print(out);    out->print(" ");
   if (tmp_opr()->is_valid()) { tmp_opr()->print(out);    out->print(" "); }
-  result_opr()->print(out); 
+  result_opr()->print(out);
 }
 
 void LIR_OpAllocArray::print_instr(outputStream* out) const {
@@ -1867,7 +1865,7 @@ void LIR_OpProfileCall::print_instr(outputStream* out) const {
 
 void LIR_InsertionBuffer::append(int index, LIR_Op* op) {
   assert(_index_and_count.length() % 2 == 0, "must have a count for each index");
-  
+
   int i = number_of_insertion_points() - 1;
   if (i < 0 || index_at(i) < index) {
     append_new(index, 1);

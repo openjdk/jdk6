@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)c1_ValueStack.hpp	1.51 07/05/05 17:05:10 JVM"
-#endif
 /*
  * Copyright 1999-2006 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,13 +19,13 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class ValueStack: public CompilationResourceObj {
  private:
   IRScope* _scope;                               // the enclosing scope
-  bool     _lock_stack;                          // indicates that this ValueStack is for an exception site    
+  bool     _lock_stack;                          // indicates that this ValueStack is for an exception site
   Values   _locals;                              // the locals
   Values   _stack;                               // the expression stack
   Values   _locks;                               // the monitor stack (holding the locked values)
@@ -224,7 +221,7 @@ class ValueStack: public CompilationResourceObj {
   // SSA form IR support
   void setup_phi_for_stack(BlockBegin* b, int index);
   void setup_phi_for_local(BlockBegin* b, int index);
-  
+
   // debugging
   void print()  PRODUCT_RETURN;
   void verify() PRODUCT_RETURN;
@@ -269,15 +266,15 @@ class ValueStack: public CompilationResourceObj {
   for (index = 0;                                                                              \
        index < temp_var && (value = state->local_at(index), true);                             \
        index += (value == NULL || value->type()->is_illegal() ? 1 : value->type()->size()))    \
-    if (value != NULL)                
+    if (value != NULL)
 
 
 #define for_each_stack_value(state, index, value)                                              \
   int temp_var = state->stack_size();                                                          \
   for (index = 0;                                                                              \
        index < temp_var && (value = state->stack_at(index), true);                             \
-       index += value->type()->size())                                   
-        
+       index += value->type()->size())
+
 
 #define for_each_lock_value(state, index, value)                                               \
   int temp_var = state->locks_size();                                                          \
@@ -312,10 +309,10 @@ class ValueStack: public CompilationResourceObj {
       v_code;                                                                                  \
     }                                                                                          \
   }                                                                                            \
-}            
+}
 
 
-// Macro definition for simple iteration of all phif functions of a block, i.e all 
+// Macro definition for simple iteration of all phif functions of a block, i.e all
 // phi functions of the ValueStack where the block matches.
 // Use the following code pattern to iterate all phi functions of a block:
 //
@@ -345,4 +342,4 @@ class ValueStack: public CompilationResourceObj {
       }                                                                                        \
     }                                                                                          \
   }                                                                                            \
-}            
+}

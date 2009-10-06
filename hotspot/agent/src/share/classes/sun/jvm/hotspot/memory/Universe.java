@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.memory;
@@ -53,6 +53,8 @@ public class Universe {
   // system obj array klass object
   private static sun.jvm.hotspot.types.OopField systemObjArrayKlassObjField;
 
+  private static AddressField heapBaseField;
+
   static {
     VM.registerVMInitializedObserver(new Observer() {
         public void update(Observable o, Object data) {
@@ -63,13 +65,13 @@ public class Universe {
 
   private static synchronized void initialize(TypeDataBase db) {
     Type type = db.lookupType("Universe");
-    
+
     collectedHeapField = type.getAddressField("_collectedHeap");
 
     heapConstructor = new VirtualConstructor(db);
     heapConstructor.addMapping("GenCollectedHeap", GenCollectedHeap.class);
     heapConstructor.addMapping("ParallelScavengeHeap", ParallelScavengeHeap.class);
-    
+
     mainThreadGroupField   = type.getOopField("_main_thread_group");
     systemThreadGroupField = type.getOopField("_system_thread_group");
 
@@ -83,6 +85,8 @@ public class Universe {
     doubleArrayKlassObjField = type.getOopField("_doubleArrayKlassObj");
 
     systemObjArrayKlassObjField = type.getOopField("_systemObjArrayKlassObj");
+
+    heapBaseField = type.getAddressField("_heap_base");
   }
 
   public Universe() {
@@ -93,6 +97,14 @@ public class Universe {
       return (CollectedHeap) heapConstructor.instantiateWrapperFor(collectedHeapField.getValue());
     } catch (WrongTypeException e) {
       return new CollectedHeap(collectedHeapField.getValue());
+    }
+  }
+
+  public static long getHeapBase() {
+    if (heapBaseField.getValue() == null) {
+      return 0;
+    } else {
+      return heapBaseField.getValue().minus(null);
     }
   }
 
@@ -121,7 +133,7 @@ public class Universe {
   public Oop systemObjArrayKlassObj() {
     return newOop(systemObjArrayKlassObjField.getValue());
   }
-  
+
   // iterate through the single dimensional primitive array klasses
   // refer to basic_type_classes_do(void f(klassOop)) in universe.cpp
   public void basicTypeClassesDo(SystemDictionary.ClassVisitor visitor) {
@@ -147,7 +159,7 @@ public class Universe {
     return type == BasicType.T_DOUBLE || type == BasicType.T_LONG;
   }
 
-  // Check whether an object field (static/non-static) of the given type must be 
+  // Check whether an object field (static/non-static) of the given type must be
   // aligned 0 mod 8.
   public static boolean fieldTypeShouldBeAligned(BasicType type) {
     return type == BasicType.T_DOUBLE || type == BasicType.T_LONG;

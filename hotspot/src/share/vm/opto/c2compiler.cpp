@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)c2compiler.cpp	1.29 07/05/05 17:06:11 JVM"
-#endif
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -37,6 +34,9 @@ extern const int  register_save_type[];
 
 const char* C2Compiler::retry_no_subsuming_loads() {
   return "retry without subsuming loads";
+}
+const char* C2Compiler::retry_no_escape_analysis() {
+  return "retry without escape analysis";
 }
 void C2Compiler::initialize_runtime() {
 
@@ -59,7 +59,7 @@ void C2Compiler::initialize_runtime() {
   bool callee_saved_floats = false;
   for( OptoReg::Name i=OptoReg::Name(0); i<OptoReg::Name(_last_Mach_Reg); i = OptoReg::add(i,1) ) {
     // Is there a callee-saved float or double?
-    if( register_save_policy[i] == 'E' /* callee-saved */ && 
+    if( register_save_policy[i] == 'E' /* callee-saved */ &&
        (register_save_type[i] == Op_RegF || register_save_type[i] == Op_RegD) ) {
       callee_saved_floats = true;
     }
@@ -88,7 +88,7 @@ void C2Compiler::initialize() {
 
   // Note that this is being called from a compiler thread not the
   // main startup thread.
-  
+
   if (_runtimes != initialized) {
     initialize_runtimes( initialize_runtime, &_runtimes);
   }
@@ -104,15 +104,21 @@ void C2Compiler::compile_method(ciEnv* env,
     initialize();
   }
   bool subsume_loads = true;
+  bool do_escape_analysis = DoEscapeAnalysis;
   while (!env->failing()) {
     // Attempt to compile while subsuming loads into machine instructions.
-    Compile C(env, this, target, entry_bci, subsume_loads);
+    Compile C(env, this, target, entry_bci, subsume_loads, do_escape_analysis);
 
     // Check result and retry if appropriate.
     if (C.failure_reason() != NULL) {
-        if (C.failure_reason_is(retry_no_subsuming_loads())) {
+      if (C.failure_reason_is(retry_no_subsuming_loads())) {
         assert(subsume_loads, "must make progress");
         subsume_loads = false;
+        continue;  // retry
+      }
+      if (C.failure_reason_is(retry_no_escape_analysis())) {
+        assert(do_escape_analysis, "must make progress");
+        do_escape_analysis = false;
         continue;  // retry
       }
       // Pass any other failure reason up to the ciEnv.

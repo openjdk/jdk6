@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)yieldingWorkgroup.hpp	1.10 07/05/05 17:07:12 JVM"
-#endif
 /*
  * Copyright 2005 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 
@@ -88,7 +85,7 @@ protected:
     _requested_size(0) { }
 
   virtual ~YieldingFlexibleGangTask() { }
-  
+
   friend class YieldingFlexibleWorkGang;
   friend class YieldingFlexibleGangWorker;
   NOT_PRODUCT(virtual bool is_YieldingFlexibleGang_task() const {
@@ -146,7 +143,8 @@ class YieldingFlexibleWorkGang: public AbstractWorkGang {
   // Here's the public interface to this class.
 public:
   // Constructor and destructor.
-  YieldingFlexibleWorkGang(const char* name, int workers, bool are_GC_threads);
+  YieldingFlexibleWorkGang(const char* name, int workers,
+                           bool are_GC_task_threads);
 
   YieldingFlexibleGangTask* yielding_task() const {
     assert(task() == NULL || task()->is_YieldingFlexibleGang_task(),
@@ -166,7 +164,7 @@ public:
   }
   void start_task(YieldingFlexibleGangTask* new_task);
   void continue_task(YieldingFlexibleGangTask* gang_task);
-  
+
   // Abort a currently running task, if any; returns when all the workers
   // have stopped working on the current task and have returned to their
   // waiting stations.
@@ -189,7 +187,7 @@ private:
   int _active_workers;
   int _yielded_workers;
   void wait_for_gang();
-  
+
 public:
   // Accessors for fields
   int active_workers() const {

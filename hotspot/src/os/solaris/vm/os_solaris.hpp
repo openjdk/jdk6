@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)os_solaris.hpp	1.121 07/06/29 04:05:00 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Solaris_OS defines the interface to Solaris operating systems
@@ -31,7 +28,7 @@ class Solaris {
   friend class os;
 
  private:
-  
+
   // Support for "new" libthread APIs for getting & setting thread context (2.8)
   #define TRS_VALID       0
   #define TRS_NONVOLATILE 1
@@ -69,6 +66,7 @@ class Solaris {
 
   typedef uintptr_t       lgrp_cookie_t;
   typedef id_t            lgrp_id_t;
+  typedef int             lgrp_rsrc_t;
   typedef enum lgrp_view {
         LGRP_VIEW_CALLER,       /* what's available to the caller */
         LGRP_VIEW_OS            /* what's available to operating system */
@@ -80,6 +78,9 @@ class Solaris {
   typedef lgrp_id_t (*lgrp_root_func_t)(lgrp_cookie_t cookie);
   typedef int (*lgrp_children_func_t)(lgrp_cookie_t  cookie,  lgrp_id_t  parent,
                                       lgrp_id_t *lgrp_array, uint_t lgrp_array_size);
+  typedef int (*lgrp_resources_func_t)(lgrp_cookie_t  cookie,  lgrp_id_t  lgrp,
+                                      lgrp_id_t *lgrp_array, uint_t lgrp_array_size,
+                                      lgrp_rsrc_t type);
   typedef int (*lgrp_nlgrps_func_t)(lgrp_cookie_t cookie);
   typedef int (*lgrp_cookie_stale_func_t)(lgrp_cookie_t cookie);
   typedef int (*meminfo_func_t)(const uint64_t inaddr[],   int addr_count,
@@ -91,6 +92,7 @@ class Solaris {
   static lgrp_fini_func_t _lgrp_fini;
   static lgrp_root_func_t _lgrp_root;
   static lgrp_children_func_t _lgrp_children;
+  static lgrp_resources_func_t _lgrp_resources;
   static lgrp_nlgrps_func_t _lgrp_nlgrps;
   static lgrp_cookie_stale_func_t _lgrp_cookie_stale;
   static lgrp_cookie_t _lgrp_cookie;
@@ -112,7 +114,6 @@ class Solaris {
   static int (*get_libjsig_version)();
   static void save_preinstalled_handler(int, struct sigaction&);
   static void check_signal_handler(int sig);
-
   // For overridable signals
   static int _SIGinterrupt;                  // user-overridable INTERRUPT_SIGNAL
   static int _SIGasync;                      // user-overridable ASYNC_SIGNAL
@@ -122,7 +123,7 @@ class Solaris {
 
  public:
   // Large Page Support--ISM.
-  static bool largepage_range(char* addr, size_t size); 
+  static bool largepage_range(char* addr, size_t size);
 
   static int SIGinterrupt() { return _SIGinterrupt; }
   static int SIGasync() { return _SIGasync; }
@@ -159,22 +160,23 @@ class Solaris {
   static int get_dev_zero_fd() { return _dev_zero_fd; }
   static void set_dev_zero_fd(int fd) { _dev_zero_fd = fd; }
   static char* mmap_chunk(char *addr, size_t size, int flags, int prot);
+  static char* anon_mmap(char* requested_addr, size_t bytes, size_t alignment_hint, bool fixed);
   static bool mpss_sanity_check(bool warn, size_t * page_size);
   static bool ism_sanity_check (bool warn, size_t * page_size);
 
   // Workaround for 4352906. thr_stksegment sometimes returns
   // a bad value for the primordial thread's stack base when
-  // it is called more than one time. 
-  // Workaround is to cache the initial value to avoid further 
-  // calls to thr_stksegment. 
+  // it is called more than one time.
+  // Workaround is to cache the initial value to avoid further
+  // calls to thr_stksegment.
   // It appears that someone (Hotspot?) is trashing the user's
   // proc_t structure (note that this is a system struct).
   static address _main_stack_base;
 
  public:
-  static void libthread_init();        
-  static void synchronization_init();  
-  static void liblgrp_init();  
+  static void libthread_init();
+  static void synchronization_init();
+  static bool liblgrp_init();
   // Load miscellaneous symbols.
   static void misc_sym_init();
   // This boolean allows users to forward their own non-matching signals
@@ -208,7 +210,7 @@ class Solaris {
 
   static int thr_setstate(thread_t tid, int flag, gregset_t rs)   { return _thr_setstate(tid, flag, rs); }
   static void set_thr_setstate(int_fnP_thread_t_i_gregset_t func) { _thr_setstate = func; }
-  
+
   static int thr_setmutator(thread_t tid, int enabled)    { return _thr_setmutator(tid, enabled); }
   static void set_thr_setmutator(int_fnP_thread_t_i func) { _thr_setmutator = func; }
 
@@ -255,8 +257,9 @@ class Solaris {
   static void set_lgrp_init(lgrp_init_func_t func) { _lgrp_init = func; }
   static void set_lgrp_fini(lgrp_fini_func_t func) { _lgrp_fini = func; }
   static void set_lgrp_root(lgrp_root_func_t func) { _lgrp_root = func; }
-  static void set_lgrp_children(lgrp_children_func_t func) { _lgrp_children = func; }
-  static void set_lgrp_nlgrps(lgrp_nlgrps_func_t func)     { _lgrp_nlgrps = func; }
+  static void set_lgrp_children(lgrp_children_func_t func)   { _lgrp_children = func; }
+  static void set_lgrp_resources(lgrp_resources_func_t func) { _lgrp_resources = func; }
+  static void set_lgrp_nlgrps(lgrp_nlgrps_func_t func)       { _lgrp_nlgrps = func; }
   static void set_lgrp_cookie_stale(lgrp_cookie_stale_func_t func) { _lgrp_cookie_stale = func; }
   static void set_lgrp_cookie(lgrp_cookie_t cookie)  { _lgrp_cookie = cookie; }
 
@@ -268,9 +271,15 @@ class Solaris {
                     lgrp_id_t *lgrp_array, uint_t lgrp_array_size) {
     return _lgrp_children != NULL ? _lgrp_children(cookie, parent, lgrp_array, lgrp_array_size) : -1;
   }
+  static int lgrp_resources(lgrp_cookie_t  cookie,  lgrp_id_t  lgrp,
+                            lgrp_id_t *lgrp_array, uint_t lgrp_array_size,
+                            lgrp_rsrc_t type) {
+    return _lgrp_resources != NULL ? _lgrp_resources(cookie, lgrp, lgrp_array, lgrp_array_size, type) : -1;
+  }
+
   static int lgrp_nlgrps(lgrp_cookie_t cookie)       { return _lgrp_nlgrps != NULL ? _lgrp_nlgrps(cookie) : -1; }
   static int lgrp_cookie_stale(lgrp_cookie_t cookie) {
-    return _lgrp_cookie_stale != NULL ? _lgrp_cookie_stale(cookie) : -1; 
+    return _lgrp_cookie_stale != NULL ? _lgrp_cookie_stale(cookie) : -1;
   }
   static lgrp_cookie_t lgrp_cookie()                 { return _lgrp_cookie; }
 
@@ -290,7 +299,7 @@ class Solaris {
   static JavaThread* setup_interruptible();
   static void cleanup_interruptible(JavaThread* thread);
 
-  // perf counter incrementers used by _INTERRUPTIBLE 
+  // perf counter incrementers used by _INTERRUPTIBLE
 
   static void bump_interrupted_before_count();
   static void bump_interrupted_during_count();
@@ -320,7 +329,7 @@ class Solaris {
 
   // Stack repair handling
 
-  // none present 
+  // none present
 
 };
 
@@ -329,15 +338,15 @@ class PlatformEvent : public CHeapObj {
     double CachePad [4] ;   // increase odds that _mutex is sole occupant of cache line
     volatile int _Event ;
     int _nParked ;
-    int _pipev [2] ; 
+    int _pipev [2] ;
     mutex_t _mutex  [1] ;
     cond_t  _cond   [1] ;
-    double PostPad  [2] ;  
+    double PostPad  [2] ;
 
   protected:
     // Defining a protected ctor effectively gives us an abstract base class.
     // That is, a PlatformEvent can never be instantiated "naked" but only
-    // as a part of a ParkEvent (recall that ParkEvent extends PlatformEvent).  
+    // as a part of a ParkEvent (recall that ParkEvent extends PlatformEvent).
     // TODO-FIXME: make dtor private
     ~PlatformEvent() { guarantee (0, "invariant") ; }
     PlatformEvent() {
@@ -346,25 +355,25 @@ class PlatformEvent : public CHeapObj {
       assert_status(status == 0, status, "cond_init");
       status = os::Solaris::mutex_init(_mutex);
       assert_status(status == 0, status, "mutex_init");
-      _Event   = 0 ;  
+      _Event   = 0 ;
       _nParked = 0 ;
-      _pipev[0] = _pipev[1] = -1 ; 
+      _pipev[0] = _pipev[1] = -1 ;
     }
 
   public:
     // Exercise caution using reset() and fired() -- they may require MEMBARs
-    void reset() { _Event = 0 ; } 
-    int  fired() { return _Event; } 
-    void park () ; 
-    int  park (jlong millis) ; 
-    int  TryPark () ; 
-    void unpark () ; 
-} ; 
+    void reset() { _Event = 0 ; }
+    int  fired() { return _Event; }
+    void park () ;
+    int  park (jlong millis) ;
+    int  TryPark () ;
+    void unpark () ;
+} ;
 
-class PlatformParker : public CHeapObj { 
+class PlatformParker : public CHeapObj {
   protected:
-    mutex_t _mutex [1] ; 
-    cond_t  _cond  [1] ; 
+    mutex_t _mutex [1] ;
+    cond_t  _cond  [1] ;
 
   public:       // TODO-FIXME: make dtor private
     ~PlatformParker() { guarantee (0, "invariant") ; }
@@ -377,10 +386,4 @@ class PlatformParker : public CHeapObj {
       status = os::Solaris::mutex_init(_mutex);
       assert_status(status == 0, status, "mutex_init");
     }
-} ; 
-
-
-
-    
-
-
+} ;

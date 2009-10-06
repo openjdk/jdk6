@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)jvmtiUtil.cpp	1.1 07/07/16 15:03:50 JVM"
-#endif
 /*
  * Copyright 2003-2007 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -41,4 +38,3 @@ ResourceArea* JvmtiUtil::single_threaded_resource_area() {
   }
   return _single_threaded_resource_area;
 }
-

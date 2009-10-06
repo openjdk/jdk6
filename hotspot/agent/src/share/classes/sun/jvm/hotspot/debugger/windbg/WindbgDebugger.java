@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2002-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.debugger.windbg;
@@ -45,7 +45,9 @@ public interface WindbgDebugger extends JVMDebugger {
   public long         readCInteger(long address, long numBytes, boolean isUnsigned)
     throws DebuggerException;
   public WindbgAddress readAddress(long address) throws DebuggerException;
+  public WindbgAddress readCompOopAddress(long address) throws DebuggerException;
   public WindbgOopHandle readOopHandle(long address) throws DebuggerException;
+  public WindbgOopHandle readCompOopHandle(long address) throws DebuggerException;
 
   // The returned array of register contents is guaranteed to be in
   // the same order as in the DbxDebugger for Solaris/x86 or amd64; that is,
@@ -87,5 +89,5 @@ public interface WindbgDebugger extends JVMDebugger {
   // From the ThreadAccess interface via Debugger and JVMDebugger
   //   public ThreadProxy getThreadForIdentifierAddress(Address addr);
 
-  public int getAddressSize(); 
+  public int getAddressSize();
 }

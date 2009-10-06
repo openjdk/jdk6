@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)concurrentMarkSweepGeneration.hpp	1.163 08/09/25 13:47:54 JVM"
-#endif
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // ConcurrentMarkSweepGeneration is in support of a concurrent
@@ -60,7 +57,7 @@ class CMSBitMap VALUE_OBJ_CLASS_SPEC {
 
   HeapWord* _bmStartWord;   // base address of range covered by map
   size_t    _bmWordSize;    // map size (in #HeapWords covered)
-  const int _shifter;	    // shifts to convert HeapWord to bit position
+  const int _shifter;       // shifts to convert HeapWord to bit position
   VirtualSpace _virtual_space; // underlying the bit map
   BitMap    _bm;            // the bit map itself
  public:
@@ -112,7 +109,7 @@ class CMSBitMap VALUE_OBJ_CLASS_SPEC {
     // checks the memory region for validity
     void region_invariant(MemRegion mr);
   )
-  
+
   // iteration
   void iterate(BitMapClosure* cl) {
     _bm.iterate(cl);
@@ -120,7 +117,7 @@ class CMSBitMap VALUE_OBJ_CLASS_SPEC {
   void iterate(BitMapClosure* cl, HeapWord* left, HeapWord* right);
   void dirty_range_iterate_clear(MemRegionClosure* cl);
   void dirty_range_iterate_clear(MemRegion mr, MemRegionClosure* cl);
- 
+
   // auxiliary support for iteration
   HeapWord* getNextMarkedWordAddress(HeapWord* addr) const;
   HeapWord* getNextMarkedWordAddress(HeapWord* start_addr,
@@ -129,14 +126,14 @@ class CMSBitMap VALUE_OBJ_CLASS_SPEC {
   HeapWord* getNextUnmarkedWordAddress(HeapWord* start_addr,
                                               HeapWord* end_addr) const;
   MemRegion getAndClearMarkedRegion(HeapWord* addr);
-  MemRegion getAndClearMarkedRegion(HeapWord* start_addr, 
+  MemRegion getAndClearMarkedRegion(HeapWord* start_addr,
                                            HeapWord* end_addr);
 
   // conversion utilities
   HeapWord* offsetToHeapWord(size_t offset) const;
   size_t    heapWordToOffset(HeapWord* addr) const;
   size_t    heapWordDiffToOffsetDiff(size_t diff) const;
-  
+
   // debugging
   // is this address range covered by the bit-map?
   NOT_PRODUCT(
@@ -149,7 +146,7 @@ class CMSBitMap VALUE_OBJ_CLASS_SPEC {
 // Represents a marking stack used by the CMS collector.
 // Ideally this should be GrowableArray<> just like MSC's marking stack(s).
 class CMSMarkStack: public CHeapObj  {
-  // 
+  //
   friend class CMSCollector;   // to get at expasion stats further below
   //
 
@@ -277,7 +274,7 @@ class ChunkArray: public CHeapObj {
     assert(n < end(), "Out of bounds access");
     return _array[n];
   }
-  
+
   void reset() {
     _index = 0;
   }
@@ -290,17 +287,17 @@ class ChunkArray: public CHeapObj {
   }
 };
 
-// 
+//
 // Timing, allocation and promotion statistics for gc scheduling and incremental
 // mode pacing.  Most statistics are exponential averages.
-// 
+//
 class CMSStats VALUE_OBJ_CLASS_SPEC {
  private:
   ConcurrentMarkSweepGeneration* const _cms_gen;   // The cms (old) gen.
 
   // The following are exponential averages with factor alpha:
   //   avg = (100 - alpha) * avg + alpha * cur_sample
-  // 
+  //
   //   The durations measure:  end_time[n] - start_time[n]
   //   The periods measure:    start_time[n] - start_time[n-1]
   //
@@ -317,12 +314,12 @@ class CMSStats VALUE_OBJ_CLASS_SPEC {
 
   double _gc0_duration;
   double _gc0_period;
-  size_t _gc0_promoted;		// bytes promoted per gc0
+  size_t _gc0_promoted;         // bytes promoted per gc0
   double _cms_duration;
   double _cms_duration_pre_sweep; // time from initiation to start of sweep
   double _cms_duration_per_mb;
   double _cms_period;
-  size_t _cms_allocated;	// bytes of direct allocation per gc0 period
+  size_t _cms_allocated;        // bytes of direct allocation per gc0 period
 
   // Timers.
   elapsedTimer _cms_timer;
@@ -347,7 +344,7 @@ class CMSStats VALUE_OBJ_CLASS_SPEC {
 
   unsigned int _valid_bits;
 
-  unsigned int _icms_duty_cycle;	// icms duty cycle (0-100).
+  unsigned int _icms_duty_cycle;        // icms duty cycle (0-100).
 
  protected:
 
@@ -355,12 +352,12 @@ class CMSStats VALUE_OBJ_CLASS_SPEC {
   // of change between old_duty_cycle and new_duty_cycle (the latter is treated
   // as a recommended value).
   static unsigned int icms_damped_duty_cycle(unsigned int old_duty_cycle,
-					     unsigned int new_duty_cycle);
+                                             unsigned int new_duty_cycle);
   unsigned int icms_update_duty_cycle_impl();
 
  public:
   CMSStats(ConcurrentMarkSweepGeneration* cms_gen,
-	   unsigned int alpha = CMSExpAvgFactor);
+           unsigned int alpha = CMSExpAvgFactor);
 
   // Whether or not the statistics contain valid data; higher level statistics
   // cannot be called until this returns true (they require at least one young
@@ -447,12 +444,13 @@ class CMSIsAliveClosure: public BoolObjectClosure {
                     CMSBitMap* bit_map):
     _span(span),
     _bit_map(bit_map) {
-      assert(!span.is_empty(), "Empty span could spell trouble");
-    }
+    assert(!span.is_empty(), "Empty span could spell trouble");
+  }
 
   void do_object(oop obj) {
     assert(false, "not to be invoked");
   }
+
   bool do_object_b(oop obj);
 };
 
@@ -464,8 +462,8 @@ public:
   CMSRefProcTaskExecutor(CMSCollector& collector)
     : _collector(collector)
   { }
-  
-  // Executes a task using worker threads.  
+
+  // Executes a task using worker threads.
   virtual void execute(ProcessTask& task);
   virtual void execute(EnqueueTask& task);
 private:
@@ -510,7 +508,7 @@ class CMSCollector: public CHeapObj {
   void update_time_of_last_gc(jlong now) {
     _time_of_last_gc = now;
   }
-  
+
   OopTaskQueueSet* _task_queues;
 
   // Overflow list of grey objects, threaded through mark-word
@@ -519,8 +517,8 @@ class CMSCollector: public CHeapObj {
   // The following array-pair keeps track of mark words
   // displaced for accomodating overflow list above.
   // This code will likely be revisited under RFE#4922830.
-  GrowableArray<oop>*     _preserved_oop_stack; 
-  GrowableArray<markOop>* _preserved_mark_stack; 
+  GrowableArray<oop>*     _preserved_oop_stack;
+  GrowableArray<markOop>* _preserved_mark_stack;
 
   int*             _hash_seed;
 
@@ -536,13 +534,16 @@ class CMSCollector: public CHeapObj {
   // In support of ExplicitGCInvokesConcurrent
   static   bool _full_gc_requested;
   unsigned int  _collection_count_start;
+
   // Should we unload classes this concurrent cycle?
-  // Set in response to a concurrent full gc request.
-  bool _unload_classes;
-  bool _unloaded_classes_last_cycle;
+  bool _should_unload_classes;
+  unsigned int  _concurrent_cycles_since_last_unload;
+  unsigned int concurrent_cycles_since_last_unload() const {
+    return _concurrent_cycles_since_last_unload;
+  }
   // Did we (allow) unload classes in the previous concurrent cycle?
-  bool cms_unloaded_classes_last_cycle() const {
-    return _unloaded_classes_last_cycle || CMSClassUnloadingEnabled;
+  bool unloaded_classes_last_cycle() const {
+    return concurrent_cycles_since_last_unload() == 0;
   }
 
   // Verification support
@@ -559,7 +560,7 @@ class CMSCollector: public CHeapObj {
   ConcurrentMarkSweepPolicy* _collector_policy;
   ConcurrentMarkSweepPolicy* collector_policy() { return _collector_policy; }
 
-  // Check whether the gc time limit has been 
+  // Check whether the gc time limit has been
   // exceeded and set the size policy flag
   // appropriately.
   void check_gc_time_limit();
@@ -591,6 +592,7 @@ class CMSCollector: public CHeapObj {
   size_t        _ser_pmc_preclean_ovflw;
   size_t        _ser_pmc_remark_ovflw;
   size_t        _par_pmc_remark_ovflw;
+  size_t        _ser_kac_preclean_ovflw;
   size_t        _ser_kac_ovflw;
   size_t        _par_kac_ovflw;
   NOT_PRODUCT(size_t _num_par_pushes;)
@@ -627,7 +629,7 @@ class CMSCollector: public CHeapObj {
     Precleaning         = 5,
     AbortablePreclean   = 6,
     FinalMarking        = 7,
-    Sweeping            = 8 
+    Sweeping            = 8
   };
   static CollectorState _collectorState;
 
@@ -650,10 +652,8 @@ class CMSCollector: public CHeapObj {
   size_t _numDirtyCards;
   uint   _sweepCount;
   // number of full gc's since the last concurrent gc.
-  uint	 _full_gcs_since_conc_gc;
+  uint   _full_gcs_since_conc_gc;
 
-  // if occupancy exceeds this, start a new gc cycle
-  double _initiatingOccupancy;
   // occupancy used for bootstrapping stats
   double _bootstrap_occupancy;
 
@@ -667,8 +667,8 @@ class CMSCollector: public CHeapObj {
   // CMSIncrementalMode.  When an allocation in the young gen would cross one of
   // these limits, the cms generation is notified and the cms thread is started
   // or stopped, respectively.
-  HeapWord*	_icms_start_limit;
-  HeapWord*	_icms_stop_limit;
+  HeapWord*     _icms_start_limit;
+  HeapWord*     _icms_stop_limit;
 
   enum CMS_op_type {
     CMS_op_checkpointRootsInitial,
@@ -694,7 +694,7 @@ class CMSCollector: public CHeapObj {
   size_t     _eden_chunk_index; // ... top (exclusive) of array
   size_t     _eden_chunk_capacity;  // ... max entries in array
 
-  // Support for parallelizing survivor space rescan 
+  // Support for parallelizing survivor space rescan
   HeapWord** _survivor_chunk_array;
   size_t     _survivor_chunk_index;
   size_t     _survivor_chunk_capacity;
@@ -708,7 +708,7 @@ class CMSCollector: public CHeapObj {
   void par_push_on_overflow_list(oop p);
   // the following is, obviously, not, in general, "MT-stable"
   bool overflow_list_is_empty() const;
-  
+
   void preserve_mark_if_necessary(oop p);
   void par_preserve_mark_if_necessary(oop p);
   void preserve_mark_work(oop p, markOop m);
@@ -818,7 +818,7 @@ class CMSCollector: public CHeapObj {
   CMSCollector(ConcurrentMarkSweepGeneration* cmsGen,
                ConcurrentMarkSweepGeneration* permGen,
                CardTableRS*                   ct,
-	       ConcurrentMarkSweepPolicy*     cp);
+               ConcurrentMarkSweepPolicy*     cp);
   ConcurrentMarkSweepThread* cmsThread() { return _cmsThread; }
 
   ReferenceProcessor* ref_processor() { return _ref_processor; }
@@ -826,7 +826,6 @@ class CMSCollector: public CHeapObj {
 
   Mutex* bitMapLock()        const { return _markBitMap.lock();    }
   static CollectorState abstract_state() { return _collectorState;  }
-  double initiatingOccupancy() const { return _initiatingOccupancy; }
 
   bool should_abort_preclean() const; // Whether preclean should be aborted.
   size_t get_eden_used() const;
@@ -850,11 +849,10 @@ class CMSCollector: public CHeapObj {
   // In support of ExplicitGCInvokesConcurrent
   static void request_full_gc(unsigned int full_gc_count);
   // Should we unload classes in a particular concurrent cycle?
-  bool cms_should_unload_classes() const {
-    assert(!_unload_classes ||  ExplicitGCInvokesConcurrentAndUnloadsClasses,
-           "Inconsistency; see CR 6541037");
-    return _unload_classes || CMSClassUnloadingEnabled;
+  bool should_unload_classes() const {
+    return _should_unload_classes;
   }
+  bool update_should_unload_classes();
 
   void direct_allocated(HeapWord* start, size_t size);
 
@@ -870,7 +868,7 @@ class CMSCollector: public CHeapObj {
                 bool is_obj_array, size_t obj_size);
 
   HeapWord* allocation_limit_reached(Space* space, HeapWord* top,
-				     size_t word_size);
+                                     size_t word_size);
 
   void getFreelistLocks() const;
   void releaseFreelistLocks() const;
@@ -944,7 +942,7 @@ class CMSCollector: public CHeapObj {
   static void stop_icms();    // Called at the end of the cms cycle.
   static void disable_icms(); // Called before a foreground collection.
   static void enable_icms();  // Called after a foreground collection.
-  void icms_wait();	     // Called at yield points.
+  void icms_wait();          // Called at yield points.
 
   // Adaptive size policy
   CMSAdaptiveSizePolicy* size_policy();
@@ -1023,6 +1021,10 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
     _incremental_collection_failed = false;
   }
 
+  // accessors
+  void set_expansion_cause(CMSExpansionCause::Cause v) { _expansion_cause = v;}
+  CMSExpansionCause::Cause expansion_cause() const { return _expansion_cause; }
+
  private:
   // For parallel young-gen GC support.
   CMSParGCThreadState** _par_gc_thread_states;
@@ -1030,27 +1032,23 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
   // Reason generation was expanded
   CMSExpansionCause::Cause _expansion_cause;
 
-  // accessors
-  void set_expansion_cause(CMSExpansionCause::Cause v) { _expansion_cause = v;}
-  CMSExpansionCause::Cause expansion_cause() { return _expansion_cause; }
-
   // In support of MinChunkSize being larger than min object size
   const double _dilatation_factor;
 
   enum CollectionTypes {
-    Concurrent_collection_type		= 0,
-    MS_foreground_collection_type	= 1,
-    MSC_foreground_collection_type	= 2,
-    Unknown_collection_type		= 3
+    Concurrent_collection_type          = 0,
+    MS_foreground_collection_type       = 1,
+    MSC_foreground_collection_type      = 2,
+    Unknown_collection_type             = 3
   };
 
   CollectionTypes _debug_collection_type;
 
+  // Fraction of current occupancy at which to start a CMS collection which
+  // will collect this generation (at least).
+  double _initiating_occupancy;
+
  protected:
-  // Grow generation by specified size (returns false if unable to grow)
-  bool grow_by(size_t bytes);
-  // Grow generation to reserved size.
-  bool grow_to_reserved();
   // Shrink generation by specified size (returns false if unable to shrink)
   virtual void shrink_by(size_t bytes);
 
@@ -1061,10 +1059,14 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
   // space.
   size_t max_available() const;
 
+  // getter and initializer for _initiating_occupancy field.
+  double initiating_occupancy() const { return _initiating_occupancy; }
+  void   init_initiating_occupancy(intx io, intx tr);
+
  public:
   ConcurrentMarkSweepGeneration(ReservedSpace rs, size_t initial_byte_size,
                                 int level, CardTableRS* ct,
-				bool use_adaptive_freelists,
+                                bool use_adaptive_freelists,
                                 FreeBlockDictionary::DictionaryChoice);
 
   // Accessors
@@ -1074,7 +1076,7 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
     _collector = collector;
   }
   CompactibleFreeListSpace*  cmsSpace() const { return _cmsSpace;  }
-  
+
   Mutex* freelistLock() const;
 
   virtual Generation::Name kind() { return Generation::ConcurrentMarkSweep; }
@@ -1098,13 +1100,18 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
   // Override
   virtual void ref_processor_init();
 
+  // Grow generation by specified size (returns false if unable to grow)
+  bool grow_by(size_t bytes);
+  // Grow generation to reserved size.
+  bool grow_to_reserved();
+
   void clear_expansion_cause() { _expansion_cause = CMSExpansionCause::_no_expansion; }
 
   // Space enquiries
   size_t capacity() const;
   size_t used() const;
   size_t free() const;
-  double occupancy()      { return ((double)used())/((double)capacity()); }
+  double occupancy() const { return ((double)used())/((double)capacity()); }
   size_t contiguous_available() const;
   size_t unsafe_max_alloc_nogc() const;
 
@@ -1132,14 +1139,14 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
   // Allocation support
   HeapWord* allocate(size_t size, bool tlab);
   HeapWord* have_lock_and_allocate(size_t size, bool tlab);
-  oop       promote(oop obj, size_t obj_size, oop* ref);
+  oop       promote(oop obj, size_t obj_size);
   HeapWord* par_allocate(size_t size, bool tlab) {
     return allocate(size, tlab);
   }
 
   // Incremental mode triggering.
   HeapWord* allocation_limit_reached(Space* space, HeapWord* top,
-				     size_t word_size);
+                                     size_t word_size);
 
   // Used by CMSStats to track direct allocation.  The value is sampled and
   // reset after each young gen collection.
@@ -1148,10 +1155,10 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
 
   // Overrides for parallel promotion.
   virtual oop par_promote(int thread_num,
-			  oop obj, markOop m, size_t word_sz);
+                          oop obj, markOop m, size_t word_sz);
   // This one should not be called for CMS.
   virtual void par_promote_alloc_undo(int thread_num,
-				      HeapWord* obj, size_t word_sz);
+                                      HeapWord* obj, size_t word_sz);
   virtual void par_promote_alloc_done(int thread_num);
   virtual void par_oop_since_save_marks_iterate_done(int thread_num);
 
@@ -1159,16 +1166,16 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
     bool younger_handles_promotion_failure) const;
 
   bool should_collect(bool full, size_t size, bool tlab);
-    // XXXPERM
-  bool shouldConcurrentCollect(double initiatingOccupancy); // XXXPERM
+  virtual bool should_concurrent_collect() const;
+  virtual bool is_too_full() const;
   void collect(bool   full,
                bool   clear_all_soft_refs,
                size_t size,
                bool   tlab);
 
   HeapWord* expand_and_allocate(size_t word_size,
-				bool tlab,
-				bool parallel = false);
+                                bool tlab,
+                                bool parallel = false);
 
   // GC prologue and epilogue
   void gc_prologue(bool full);
@@ -1186,8 +1193,9 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
   }
 
   // Allocation failure
-  void expand(size_t bytes, size_t expand_bytes, 
+  void expand(size_t bytes, size_t expand_bytes,
     CMSExpansionCause::Cause cause);
+  virtual bool expand(size_t bytes, size_t expand_bytes);
   void shrink(size_t bytes);
   HeapWord* expand_and_par_lab_allocate(CMSParGCThreadState* ps, size_t word_sz);
   bool expand_and_ensure_spooling_space(PromotionInfo* promo);
@@ -1219,7 +1227,7 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
 
   // Get the chunk at the end of the space.  Delagates to
   // the space.
-  FreeChunk* find_chunk_at_end(); 
+  FreeChunk* find_chunk_at_end();
 
   // Overriding of unused functionality (sharing not yet supported with CMS)
   void pre_adjust_pointers();
@@ -1275,9 +1283,9 @@ class ASConcurrentMarkSweepGeneration : public ConcurrentMarkSweepGeneration {
   virtual void compute_new_size();
   ASConcurrentMarkSweepGeneration(ReservedSpace rs, size_t initial_byte_size,
                                   int level, CardTableRS* ct,
-				  bool use_adaptive_freelists,
-                                  FreeBlockDictionary::DictionaryChoice 
-				    dictionaryChoice) :
+                                  bool use_adaptive_freelists,
+                                  FreeBlockDictionary::DictionaryChoice
+                                    dictionaryChoice) :
     ConcurrentMarkSweepGeneration(rs, initial_byte_size, level, ct,
       use_adaptive_freelists, dictionaryChoice) {}
 
@@ -1295,13 +1303,12 @@ class ASConcurrentMarkSweepGeneration : public ConcurrentMarkSweepGeneration {
 // This closure is used to check that a certain set of oops is empty.
 class FalseClosure: public OopClosure {
  public:
-  void do_oop(oop* p) {
-    guarantee(false, "Should be an empty set");
-  }
+  void do_oop(oop* p)       { guarantee(false, "Should be an empty set"); }
+  void do_oop(narrowOop* p) { guarantee(false, "Should be an empty set"); }
 };
 
 // This closure is used to do concurrent marking from the roots
-// following the first checkpoint. 
+// following the first checkpoint.
 class MarkFromRootsClosure: public BitMapClosure {
   CMSCollector*  _collector;
   MemRegion      _span;
@@ -1321,7 +1328,7 @@ class MarkFromRootsClosure: public BitMapClosure {
                        CMSMarkStack*  markStack,
                        CMSMarkStack*  revisitStack,
                        bool should_yield, bool verifying = false);
-  void do_bit(size_t offset);
+  bool do_bit(size_t offset);
   void reset(HeapWord* addr);
   inline void do_yield_check();
 
@@ -1331,7 +1338,7 @@ class MarkFromRootsClosure: public BitMapClosure {
 };
 
 // This closure is used to do concurrent multi-threaded
-// marking from the roots following the first checkpoint. 
+// marking from the roots following the first checkpoint.
 // XXX This should really be a subclass of The serial version
 // above, but i have not had the time to refactor things cleanly.
 // That willbe done for Dolphin.
@@ -1357,7 +1364,7 @@ class Par_MarkFromRootsClosure: public BitMapClosure {
                        CMSMarkStack*  overflow_stack,
                        CMSMarkStack*  revisit_stack,
                        bool should_yield);
-  void do_bit(size_t offset);
+  bool do_bit(size_t offset);
   inline void do_yield_check();
 
  private:
@@ -1374,6 +1381,12 @@ class PushAndMarkVerifyClosure: public OopClosure {
   CMSBitMap*       _verification_bm;
   CMSBitMap*       _cms_bm;
   CMSMarkStack*    _mark_stack;
+ protected:
+  void do_oop(oop p);
+  template <class T> inline void do_oop_work(T *p) {
+    oop obj = oopDesc::load_decode_heap_oop_not_null(p);
+    do_oop(obj);
+  }
  public:
   PushAndMarkVerifyClosure(CMSCollector* cms_collector,
                            MemRegion span,
@@ -1381,6 +1394,7 @@ class PushAndMarkVerifyClosure: public OopClosure {
                            CMSBitMap* cms_bm,
                            CMSMarkStack*  mark_stack);
   void do_oop(oop* p);
+  void do_oop(narrowOop* p);
   // Deal with a stack overflow condition
   void handle_stack_overflow(HeapWord* lost);
 };
@@ -1398,7 +1412,7 @@ class MarkFromRootsVerifyClosure: public BitMapClosure {
                              CMSBitMap* verification_bm,
                              CMSBitMap* cms_bm,
                              CMSMarkStack*  mark_stack);
-  void do_bit(size_t offset);
+  bool do_bit(size_t offset);
   void reset(HeapWord* addr);
 };
 
@@ -1407,8 +1421,9 @@ class MarkFromRootsVerifyClosure: public BitMapClosure {
 // "empty" (i.e. the bit vector doesn't have any 1-bits).
 class FalseBitMapClosure: public BitMapClosure {
  public:
-  void do_bit(size_t offset) {
-    guarantee(false, "Should not have a 1 bit"); 
+  bool do_bit(size_t offset) {
+    guarantee(false, "Should not have a 1 bit");
+    return true;
   }
 };
 
@@ -1471,7 +1486,7 @@ class ScanMarkedObjectsAgainClosure: public UpwardsObjectClosure {
     _parallel(true),
     _bit_map(bit_map),
     _par_scan_closure(cl) { }
-                                
+
   void do_object(oop obj) {
     guarantee(false, "Call do_object_b(oop, MemRegion) instead");
   }
@@ -1560,7 +1575,7 @@ class ScanMarkedObjectsAgainCarefullyClosure: public ObjectClosureCareful {
     _markStack(markStack),
     _scanningClosure(cl) {
   }
-  
+
   void do_object(oop p) {
     guarantee(false, "call do_object_careful instead");
   }
@@ -1628,7 +1643,7 @@ class SurvivorSpacePrecleanClosure: public ObjectClosureCareful {
 // This closure is used to accomplish the sweeping work
 // after the second checkpoint but before the concurrent reset
 // phase.
-// 
+//
 // Terminology
 //   left hand chunk (LHC) - block of one or more chunks currently being
 //     coalesced.  The LHC is available for coalescing with a new chunk.
@@ -1640,54 +1655,54 @@ class SurvivorSpacePrecleanClosure: public ObjectClosureCareful {
 // _freeFinger is the address of the current LHC
 class SweepClosure: public BlkClosureCareful {
   CMSCollector*                  _collector;  // collector doing the work
-  ConcurrentMarkSweepGeneration* _g;	// Generation being swept
-  CompactibleFreeListSpace*      _sp;	// Space being swept
+  ConcurrentMarkSweepGeneration* _g;    // Generation being swept
+  CompactibleFreeListSpace*      _sp;   // Space being swept
   HeapWord*                      _limit;
-  Mutex*                         _freelistLock;	// Free list lock (in space)
-  CMSBitMap*                     _bitMap;	// Marking bit map (in 
-						// generation)
-  bool                           _inFreeRange;	// Indicates if we are in the
-						// midst of a free run
-  bool				 _freeRangeInFreeLists;	
-					// Often, we have just found
-					// a free chunk and started
-					// a new free range; we do not
-					// eagerly remove this chunk from
-					// the free lists unless there is
-					// a possibility of coalescing.
-					// When true, this flag indicates
-					// that the _freeFinger below
-					// points to a potentially free chunk
-					// that may still be in the free lists
-  bool				 _lastFreeRangeCoalesced;
-					// free range contains chunks
-					// coalesced
-  bool                           _yield;	
-					// Whether sweeping should be 
-					// done with yields. For instance 
-					// when done by the foreground 
-					// collector we shouldn't yield.
-  HeapWord*                      _freeFinger;	// When _inFreeRange is set, the
-						// pointer to the "left hand 
-						// chunk"
-  size_t			 _freeRangeSize; 
-					// When _inFreeRange is set, this 
-					// indicates the accumulated size 
-					// of the "left hand chunk"
+  Mutex*                         _freelistLock; // Free list lock (in space)
+  CMSBitMap*                     _bitMap;       // Marking bit map (in
+                                                // generation)
+  bool                           _inFreeRange;  // Indicates if we are in the
+                                                // midst of a free run
+  bool                           _freeRangeInFreeLists;
+                                        // Often, we have just found
+                                        // a free chunk and started
+                                        // a new free range; we do not
+                                        // eagerly remove this chunk from
+                                        // the free lists unless there is
+                                        // a possibility of coalescing.
+                                        // When true, this flag indicates
+                                        // that the _freeFinger below
+                                        // points to a potentially free chunk
+                                        // that may still be in the free lists
+  bool                           _lastFreeRangeCoalesced;
+                                        // free range contains chunks
+                                        // coalesced
+  bool                           _yield;
+                                        // Whether sweeping should be
+                                        // done with yields. For instance
+                                        // when done by the foreground
+                                        // collector we shouldn't yield.
+  HeapWord*                      _freeFinger;   // When _inFreeRange is set, the
+                                                // pointer to the "left hand
+                                                // chunk"
+  size_t                         _freeRangeSize;
+                                        // When _inFreeRange is set, this
+                                        // indicates the accumulated size
+                                        // of the "left hand chunk"
   NOT_PRODUCT(
-    size_t		         _numObjectsFreed;
-    size_t		         _numWordsFreed;
-    size_t			 _numObjectsLive;
-    size_t			 _numWordsLive;
-    size_t			 _numObjectsAlreadyFree;
-    size_t			 _numWordsAlreadyFree;
-    FreeChunk*			 _last_fc;
+    size_t                       _numObjectsFreed;
+    size_t                       _numWordsFreed;
+    size_t                       _numObjectsLive;
+    size_t                       _numWordsLive;
+    size_t                       _numObjectsAlreadyFree;
+    size_t                       _numWordsAlreadyFree;
+    FreeChunk*                   _last_fc;
   )
  private:
   // Code that is common to a free chunk or garbage when
   // encountered during sweeping.
-  void doPostIsFreeOrGarbageChunk(FreeChunk *fc, 
-				  size_t chunkSize);
+  void doPostIsFreeOrGarbageChunk(FreeChunk *fc,
+                                  size_t chunkSize);
   // Process a free chunk during sweeping.
   void doAlreadyFreeChunk(FreeChunk *fc);
   // Process a garbage chunk during sweeping.
@@ -1696,15 +1711,15 @@ class SweepClosure: public BlkClosureCareful {
   size_t doLiveChunk(FreeChunk* fc);
 
   // Accessors.
-  HeapWord* freeFinger() const	 	{ return _freeFinger; }
-  void set_freeFinger(HeapWord* v)  	{ _freeFinger = v; }
-  size_t freeRangeSize() const	 	{ return _freeRangeSize; }
-  void set_freeRangeSize(size_t v)  	{ _freeRangeSize = v; }
-  bool inFreeRange() 	const	 	{ return _inFreeRange; }
-  void set_inFreeRange(bool v)  	{ _inFreeRange = v; }
-  bool lastFreeRangeCoalesced()	const	 { return _lastFreeRangeCoalesced; }
+  HeapWord* freeFinger() const          { return _freeFinger; }
+  void set_freeFinger(HeapWord* v)      { _freeFinger = v; }
+  size_t freeRangeSize() const          { return _freeRangeSize; }
+  void set_freeRangeSize(size_t v)      { _freeRangeSize = v; }
+  bool inFreeRange()    const           { return _inFreeRange; }
+  void set_inFreeRange(bool v)          { _inFreeRange = v; }
+  bool lastFreeRangeCoalesced() const    { return _lastFreeRangeCoalesced; }
   void set_lastFreeRangeCoalesced(bool v) { _lastFreeRangeCoalesced = v; }
-  bool freeRangeInFreeLists() const	{ return _freeRangeInFreeLists; }
+  bool freeRangeInFreeLists() const     { return _freeRangeInFreeLists; }
   void set_freeRangeInFreeLists(bool v) { _freeRangeInFreeLists = v; }
 
   // Initialize a free range.
@@ -1735,21 +1750,30 @@ class SweepClosure: public BlkClosureCareful {
 // work-routine/closure used to complete transitive
 // marking of objects as live after a certain point
 // in which an initial set has been completely accumulated.
+// This closure is currently used both during the final
+// remark stop-world phase, as well as during the concurrent
+// precleaning of the discovered reference lists.
 class CMSDrainMarkingStackClosure: public VoidClosure {
   CMSCollector*        _collector;
   MemRegion            _span;
   CMSMarkStack*        _mark_stack;
   CMSBitMap*           _bit_map;
   CMSKeepAliveClosure* _keep_alive;
+  bool                 _concurrent_precleaning;
  public:
   CMSDrainMarkingStackClosure(CMSCollector* collector, MemRegion span,
                       CMSBitMap* bit_map, CMSMarkStack* mark_stack,
-                      CMSKeepAliveClosure* keep_alive):
+                      CMSKeepAliveClosure* keep_alive,
+                      bool cpc):
     _collector(collector),
     _span(span),
     _bit_map(bit_map),
     _mark_stack(mark_stack),
-    _keep_alive(keep_alive) { }
+    _keep_alive(keep_alive),
+    _concurrent_precleaning(cpc) {
+    assert(_concurrent_precleaning == _keep_alive->concurrent_precleaning(),
+           "Mismatch");
+  }
 
   void do_void();
 };
@@ -1812,7 +1836,7 @@ class MarkDeadObjectsClosure: public BlkClosure {
   CMSBitMap*                      _dead_bit_map;
 public:
   MarkDeadObjectsClosure(const CMSCollector* collector,
-                         const CompactibleFreeListSpace* sp, 
+                         const CompactibleFreeListSpace* sp,
                          CMSBitMap *live_bit_map,
                          CMSBitMap *dead_bit_map) :
     _collector(collector),

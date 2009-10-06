@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)atomic.hpp	1.22 07/05/05 17:06:42 JVM"
-#endif
 /*
- * Copyright 1999-2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class Atomic : AllStatic {
@@ -58,7 +55,10 @@ class Atomic : AllStatic {
   static void dec_ptr(volatile void*     dest);
 
   // Performs atomic exchange of *dest with exchange_value.  Returns old prior value of *dest.
-  static jint     xchg    (jint     exchange_value, volatile jint*     dest);
+  static jint         xchg(jint     exchange_value, volatile jint*     dest);
+  static unsigned int xchg(unsigned int exchange_value,
+                           volatile unsigned int* dest);
+
   static intptr_t xchg_ptr(intptr_t exchange_value, volatile intptr_t* dest);
   static void*    xchg_ptr(void*    exchange_value, volatile void*   dest);
 
@@ -68,6 +68,11 @@ class Atomic : AllStatic {
   static jbyte    cmpxchg    (jbyte    exchange_value, volatile jbyte*    dest, jbyte    compare_value);
   static jint     cmpxchg    (jint     exchange_value, volatile jint*     dest, jint     compare_value);
   static jlong    cmpxchg    (jlong    exchange_value, volatile jlong*    dest, jlong    compare_value);
+
+  static unsigned int cmpxchg(unsigned int exchange_value,
+                              volatile unsigned int* dest,
+                              unsigned int compare_value);
+
   static intptr_t cmpxchg_ptr(intptr_t exchange_value, volatile intptr_t* dest, intptr_t compare_value);
   static void*    cmpxchg_ptr(void*    exchange_value, volatile void*     dest, void*    compare_value);
 };

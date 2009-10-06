@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2004 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2002-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.debugger.remote;
@@ -44,7 +44,7 @@ public class RemoteDebuggerClient extends DebuggerBase implements JVMDebugger {
   private RemoteThreadFactory threadFactory;
   private boolean unalignedAccessesOkay = false;
   private static final int cacheSize = 16 * 1024 * 1024; // 16 MB
-  
+
   public RemoteDebuggerClient(RemoteDebugger remoteDebugger) throws DebuggerException {
     super();
     try {
@@ -65,8 +65,8 @@ public class RemoteDebuggerClient extends DebuggerBase implements JVMDebugger {
         cacheNumPages = parseCacheNumPagesProperty(cacheSize / cachePageSize);
         unalignedAccessesOkay = true;
       } else if (cpu.equals("amd64")) {
-	threadFactory = new RemoteAMD64ThreadFactory(this);
-	cachePageSize = 4096;
+        threadFactory = new RemoteAMD64ThreadFactory(this);
+        cachePageSize = 4096;
         cacheNumPages = parseCacheNumPagesProperty(cacheSize / cachePageSize);
         unalignedAccessesOkay = true;
       } else {
@@ -85,6 +85,9 @@ public class RemoteDebuggerClient extends DebuggerBase implements JVMDebugger {
       jlongSize    = remoteDebugger.getJLongSize();
       jshortSize   = remoteDebugger.getJShortSize();
       javaPrimitiveTypesConfigured = true;
+      heapBase     = remoteDebugger.getHeapBase();
+      heapOopSize  = remoteDebugger.getHeapOopSize();
+      logMinObjAlignmentInBytes  = remoteDebugger.getLogMinObjAlignmentInBytes();
     }
     catch (RemoteException e) {
       throw new DebuggerException(e);
@@ -273,7 +276,7 @@ public class RemoteDebuggerClient extends DebuggerBase implements JVMDebugger {
   public void setMachineDescription(MachineDescription machDesc) {
     throw new DebuggerException("Should not be called on RemoteDebuggerClient");
   }
-  
+
   public int getRemoteProcessAddressSize() {
     throw new DebuggerException("Should not be called on RemoteDebuggerClient");
   }
@@ -298,9 +301,21 @@ public class RemoteDebuggerClient extends DebuggerBase implements JVMDebugger {
     return (value == 0 ? null : new RemoteAddress(this, value));
   }
 
+  RemoteAddress readCompOopAddress(long address)
+    throws UnmappedAddressException, UnalignedAddressException {
+    long value = readCompOopAddressValue(address);
+    return (value == 0 ? null : new RemoteAddress(this, value));
+  }
+
   RemoteOopHandle readOopHandle(long address)
     throws UnmappedAddressException, UnalignedAddressException, NotInHeapException {
     long value = readAddressValue(address);
+    return (value == 0 ? null : new RemoteOopHandle(this, value));
+  }
+
+  RemoteOopHandle readCompOopHandle(long address)
+    throws UnmappedAddressException, UnalignedAddressException, NotInHeapException {
+    long value = readCompOopAddressValue(address);
     return (value == 0 ? null : new RemoteOopHandle(this, value));
   }
 

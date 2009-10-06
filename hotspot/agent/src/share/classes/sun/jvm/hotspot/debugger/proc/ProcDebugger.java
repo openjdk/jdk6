@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2002-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.debugger.proc;
@@ -46,7 +46,9 @@ public interface ProcDebugger extends JVMDebugger {
   public long         readCInteger(long address, long numBytes, boolean isUnsigned)
     throws DebuggerException;
   public ProcAddress   readAddress(long address) throws DebuggerException;
+  public ProcAddress   readCompOopAddress(long address) throws DebuggerException;
   public ProcOopHandle readOopHandle(long address) throws DebuggerException;
+  public ProcOopHandle readCompOopHandle(long address) throws DebuggerException;
   public long[]       getThreadIntegerRegisterSet(int tid) throws DebuggerException;
   public long         getAddressValue(Address addr) throws DebuggerException;
   public Address      newAddress(long value) throws DebuggerException;

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)mutableSpace.cpp	1.22 07/05/05 17:05:35 JVM"
-#endif
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +19,23 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
 # include "incls/_mutableSpace.cpp.incl"
 
-void MutableSpace::initialize(MemRegion mr, bool clear_space) {
+MutableSpace::MutableSpace(): ImmutableSpace(), _top(NULL) {
+  _mangler = new MutableSpaceMangler(this);
+}
+
+MutableSpace::~MutableSpace() {
+  delete _mangler;
+}
+
+void MutableSpace::initialize(MemRegion mr,
+                              bool clear_space,
+                              bool mangle_space) {
   HeapWord* bottom = mr.start();
   HeapWord* end    = mr.end();
 
@@ -37,13 +44,50 @@ void MutableSpace::initialize(MemRegion mr, bool clear_space) {
   set_bottom(bottom);
   set_end(end);
 
-  if (clear_space) clear();
+  if (clear_space) {
+    clear(mangle_space);
+  }
 }
 
-void MutableSpace::clear() {
+void MutableSpace::clear(bool mangle_space) {
   set_top(bottom());
-  if (ZapUnusedHeapArea) mangle_unused_area();
+  if (ZapUnusedHeapArea && mangle_space) {
+    mangle_unused_area();
+  }
 }
+
+#ifndef PRODUCT
+void MutableSpace::check_mangled_unused_area(HeapWord* limit) {
+  mangler()->check_mangled_unused_area(limit);
+}
+
+void MutableSpace::check_mangled_unused_area_complete() {
+  mangler()->check_mangled_unused_area_complete();
+}
+
+// Mangle only the unused space that has not previously
+// been mangled and that has not been allocated since being
+// mangled.
+void MutableSpace::mangle_unused_area() {
+  mangler()->mangle_unused_area();
+}
+
+void MutableSpace::mangle_unused_area_complete() {
+  mangler()->mangle_unused_area_complete();
+}
+
+void MutableSpace::mangle_region(MemRegion mr) {
+  SpaceMangler::mangle_region(mr);
+}
+
+void MutableSpace::set_top_for_allocations(HeapWord* v) {
+  mangler()->set_top_for_allocations(v);
+}
+
+void MutableSpace::set_top_for_allocations() {
+  mangler()->set_top_for_allocations(top());
+}
+#endif
 
 // This version requires locking. */
 HeapWord* MutableSpace::allocate(size_t size) {
@@ -56,7 +100,7 @@ HeapWord* MutableSpace::allocate(size_t size) {
     HeapWord* new_top = obj + size;
     set_top(new_top);
     assert(is_object_aligned((intptr_t)obj) && is_object_aligned((intptr_t)new_top),
-	   "checking alignment");
+           "checking alignment");
     return obj;
   } else {
     return NULL;
@@ -73,8 +117,8 @@ HeapWord* MutableSpace::cas_allocate(size_t size) {
       // result can be one of two:
       //  the old top value: the exchange succeeded
       //  otherwise: the new value of the top is returned.
-      if (result != obj) {          
-	continue; // another thread beat us to the allocation, try again
+      if (result != obj) {
+        continue; // another thread beat us to the allocation, try again
       }
       assert(is_object_aligned((intptr_t)obj) && is_object_aligned((intptr_t)new_top),
              "checking alignment");
@@ -110,18 +154,18 @@ void MutableSpace::object_iterate(ObjectClosure* cl) {
 
 void MutableSpace::print_short() const { print_short_on(tty); }
 void MutableSpace::print_short_on( outputStream* st) const {
-  st->print(" space " SIZE_FORMAT "K, %d%% used", capacity_in_bytes() / K, 
+  st->print(" space " SIZE_FORMAT "K, %d%% used", capacity_in_bytes() / K,
             (int) ((double) used_in_bytes() * 100 / capacity_in_bytes()));
 }
 
 void MutableSpace::print() const { print_on(tty); }
 void MutableSpace::print_on(outputStream* st) const {
   MutableSpace::print_short_on(st);
-  st->print_cr(" [" INTPTR_FORMAT "," INTPTR_FORMAT "," INTPTR_FORMAT ")", 
+  st->print_cr(" [" INTPTR_FORMAT "," INTPTR_FORMAT "," INTPTR_FORMAT ")",
                  bottom(), top(), end());
 }
 
-void MutableSpace::verify(bool allow_dirty) const {
+void MutableSpace::verify(bool allow_dirty) {
   HeapWord* p = bottom();
   HeapWord* t = top();
   HeapWord* prev_p = NULL;

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)node.cpp	1.228 07/09/28 10:23:04 JVM"
-#endif
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -454,7 +451,7 @@ Node::Node(Node *n0, Node *n1, Node *n2, Node *n3,
 
 
 //------------------------------clone------------------------------------------
-// Clone a Node.  
+// Clone a Node.
 Node *Node::clone() const {
   Compile *compile = Compile::current();
   uint s = size_of();           // Size of inherited Node
@@ -473,7 +470,7 @@ Node *Node::clone() const {
   uint i;
   for( i = 0; i < len(); i++ ) {
     Node *x = in(i);
-    n->_in[i] = x; 
+    n->_in[i] = x;
     if (x != NULL) x->add_out(n);
   }
   if (is_macro())
@@ -493,11 +490,11 @@ Node *Node::clone() const {
   if (this->is_Mach() && (nopnds = this->as_Mach()->num_opnds()) > 0) {
     MachNode *mach  = n->as_Mach();
     MachNode *mthis = this->as_Mach();
-    // Get address of _opnd_array. 
+    // Get address of _opnd_array.
     // It should be the same offset since it is the clone of this node.
     MachOper **from = mthis->_opnds;
-    MachOper **to = (MachOper **)((size_t)(&mach->_opnds) + 
-                    pointer_delta((const void*)from, 
+    MachOper **to = (MachOper **)((size_t)(&mach->_opnds) +
+                    pointer_delta((const void*)from,
                                   (const void*)(&mthis->_opnds), 1));
     mach->_opnds = to;
     for ( uint i = 0; i < nopnds; ++i ) {
@@ -533,7 +530,7 @@ void Node::setup_is_top() {
 extern int reclaim_idx ;
 extern int reclaim_in  ;
 extern int reclaim_node;
-void Node::destruct() { 
+void Node::destruct() {
   // Eagerly reclaim unique Node numberings
   Compile* compile = Compile::current();
   if ((uint)_idx+1 == compile->unique()) {
@@ -561,7 +558,7 @@ void Node::destruct() {
   char *out_edge_end = out_array + out_edge_size;
   int node_size = size_of();
 
-  // Free the output edge array 
+  // Free the output edge array
   if (out_edge_size > 0) {
 #ifdef ASSERT
     if( out_edge_end == compile->node_arena()->hwm() )
@@ -580,23 +577,23 @@ void Node::destruct() {
 #else
     // It was; free the input array and object all in one hit
     compile->node_arena()->Afree(_in,edge_size+node_size);
-#endif 
+#endif
   } else {
 
     // Free just the input array
 #ifdef ASSERT
-    if( edge_end == compile->node_arena()->hwm() ) 
+    if( edge_end == compile->node_arena()->hwm() )
       reclaim_in  += edge_size;
-#endif 
+#endif
     compile->node_arena()->Afree(_in,edge_size);
 
     // Free just the object
 #ifdef ASSERT
-    if( ((char*)this) + node_size == compile->node_arena()->hwm() ) 
+    if( ((char*)this) + node_size == compile->node_arena()->hwm() )
       reclaim_node+= node_size;
 #else
     compile->node_arena()->Afree(this,node_size);
-#endif 
+#endif
   }
   if (is_macro()) {
     compile->remove_macro_node(this);
@@ -663,7 +660,7 @@ void Node::out_grow( uint len ) {
 #ifdef ASSERT
 //------------------------------is_dead----------------------------------------
 bool Node::is_dead() const {
-  // Mach and pinch point nodes may look like dead. 
+  // Mach and pinch point nodes may look like dead.
   if( is_top() || is_Mach() || (Opcode() == Op_Node && _outcnt > 0) )
     return false;
   for( uint i = 0; i < _max; i++ )
@@ -672,7 +669,7 @@ bool Node::is_dead() const {
   dump();
   return true;
 }
-#endif 
+#endif
 
 //------------------------------add_req----------------------------------------
 // Add a new required input at the end
@@ -680,13 +677,13 @@ void Node::add_req( Node *n ) {
   assert( is_not_dead(n), "can not use dead node");
 
   // Look to see if I can move precedence down one without reallocating
-  if( (_cnt >= _max) || (in(_max-1) != NULL) ) 
+  if( (_cnt >= _max) || (in(_max-1) != NULL) )
     grow( _max+1 );
 
   // Find a precedence edge to move
   if( in(_cnt) != NULL ) {       // Next precedence edge is busy?
     uint i;
-    for( i=_cnt; i<_max; i++ ) 
+    for( i=_cnt; i<_max; i++ )
       if( in(i) == NULL )       // Find the NULL at end of prec edge list
         break;                  // There must be one, since we grew the array
     _in[i] = in(_cnt);          // Move prec over, making space for req edge
@@ -707,13 +704,13 @@ void Node::add_req_batch( Node *n, uint m ) {
   }
 
   // Look to see if I can move precedence down one without reallocating
-  if( (_cnt+m) > _max || _in[_max-m] ) 
+  if( (_cnt+m) > _max || _in[_max-m] )
     grow( _max+m );
 
   // Find a precedence edge to move
   if( _in[_cnt] != NULL ) {     // Next precedence edge is busy?
     uint i;
-    for( i=_cnt; i<_max; i++ ) 
+    for( i=_cnt; i<_max; i++ )
       if( _in[i] == NULL )      // Find the NULL at end of prec edge list
         break;                  // There must be one, since we grew the array
     // Slide all the precs over by m positions (assume #prec << m).
@@ -815,8 +812,7 @@ int Node::disconnect_inputs(Node *n) {
 Node* Node::uncast() const {
   // Should be inline:
   //return is_ConstraintCast() ? uncast_helper(this) : (Node*) this;
-  if (is_ConstraintCast() ||
-      (is_Type() && req() == 2 && Opcode() == Op_CheckCastPP))
+  if (is_ConstraintCast() || is_CheckCastPP())
     return uncast_helper(this);
   else
     return (Node*) this;
@@ -830,7 +826,7 @@ Node* Node::uncast_helper(const Node* p) {
       break;
     } else if (p->is_ConstraintCast()) {
       p = p->in(1);
-    } else if (p->is_Type() && p->Opcode() == Op_CheckCastPP) {
+    } else if (p->is_CheckCastPP()) {
       p = p->in(1);
     } else {
       break;
@@ -840,13 +836,13 @@ Node* Node::uncast_helper(const Node* p) {
 }
 
 //------------------------------add_prec---------------------------------------
-// Add a new precedence input.  Precedence inputs are unordered, with 
+// Add a new precedence input.  Precedence inputs are unordered, with
 // duplicates removed and NULLs packed down at the end.
 void Node::add_prec( Node *n ) {
   assert( is_not_dead(n), "can not use dead node");
 
   // Check for NULL at end
-  if( _cnt >= _max || in(_max-1) ) 
+  if( _cnt >= _max || in(_max-1) )
     grow( _max+1 );
 
   // Find a precedence edge to move
@@ -857,13 +853,13 @@ void Node::add_prec( Node *n ) {
 }
 
 //------------------------------rm_prec----------------------------------------
-// Remove a precedence input.  Precedence inputs are unordered, with 
+// Remove a precedence input.  Precedence inputs are unordered, with
 // duplicates removed and NULLs packed down at the end.
 void Node::rm_prec( uint j ) {
 
   // Find end of precedence list to pack NULLs
   uint i;
-  for( i=j; i<_max; i++ ) 
+  for( i=j; i<_max; i++ )
     if( !_in[i] )               // Find the NULL at end of prec edge list
       break;
   if (_in[j] != NULL) _in[j]->del_out((Node *)this);
@@ -900,15 +896,15 @@ void Node::init_NodeProperty() {
 // Print as assembly
 void Node::format( PhaseRegAlloc *, outputStream *st ) const {}
 //------------------------------emit-------------------------------------------
-// Emit bytes starting at parameter 'ptr'.  
-void Node::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {} 
+// Emit bytes starting at parameter 'ptr'.
+void Node::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {}
 //------------------------------size-------------------------------------------
 // Size of instruction in bytes
 uint Node::size(PhaseRegAlloc *ra_) const { return 0; }
 
 //------------------------------CFG Construction-------------------------------
 // Nodes that end basic blocks, e.g. IfTrue/IfFalse, JumpProjNode, Root,
-// Goto and Return.  
+// Goto and Return.
 const Node *Node::is_block_proj() const { return 0; }
 
 // Minimum guaranteed type
@@ -961,7 +957,7 @@ const Type *Node::Value( PhaseTransform * ) const {
 // return the 'this' pointer instead of NULL.
 //
 // You cannot return an OLD Node, except for the 'this' pointer.  Use the
-// Identity call to return an old Node; basically if Identity can find 
+// Identity call to return an old Node; basically if Identity can find
 // another Node have the Ideal call make no change and return NULL.
 // Example: AddINode::Ideal must check for add of zero; in this case it
 // returns NULL instead of doing any graph reshaping.
@@ -976,14 +972,14 @@ const Type *Node::Value( PhaseTransform * ) const {
 // def-use info.  If you are making a new Node (either as the new root or
 // some new internal piece) you must NOT use set_req with def-use info.
 // You can make a new Node with either 'new' or 'clone'.  In either case,
-// def-use info is (correctly) not generated.  
+// def-use info is (correctly) not generated.
 // Example: reshape "(X+3)+4" into "X+7":
 //    set_req(1,in(1)->in(1) /* grab X */, du /* must use DU on 'this' */);
 //    set_req(2,phase->intcon(7),du);
 //    return this;
 // Example: reshape "X*4" into "X<<1"
 //    return new (C,3) LShiftINode( in(1), phase->intcon(1) );
-// 
+//
 // You must call 'phase->transform(X)' on any new Nodes X you make, except
 // for the returned root node.  Example: reshape "X*31" with "(X<<5)-1".
 //    Node *shift=phase->transform(new(C,3)LShiftINode(in(1),phase->intcon(5)));
@@ -994,7 +990,7 @@ const Type *Node::Value( PhaseTransform * ) const {
 // The Right Thing with def-use info.
 //
 // You cannot bury the 'this' Node inside of a graph reshape.  If the reshaped
-// graph uses the 'this' Node it must be the root.  If you want a Node with 
+// graph uses the 'this' Node it must be the root.  If you want a Node with
 // the same Opcode as the 'this' pointer use 'clone'.
 //
 Node *Node::Ideal(PhaseGVN *phase, bool can_reshape) {
@@ -1021,21 +1017,164 @@ bool Node::has_special_unique_user() const {
   return false;
 };
 
+//--------------------------find_exact_control---------------------------------
+// Skip Proj and CatchProj nodes chains. Check for Null and Top.
+Node* Node::find_exact_control(Node* ctrl) {
+  if (ctrl == NULL && this->is_Region())
+    ctrl = this->as_Region()->is_copy();
+
+  if (ctrl != NULL && ctrl->is_CatchProj()) {
+    if (ctrl->as_CatchProj()->_con == CatchProjNode::fall_through_index)
+      ctrl = ctrl->in(0);
+    if (ctrl != NULL && !ctrl->is_top())
+      ctrl = ctrl->in(0);
+  }
+
+  if (ctrl != NULL && ctrl->is_Proj())
+    ctrl = ctrl->in(0);
+
+  return ctrl;
+}
+
+//--------------------------dominates------------------------------------------
+// Helper function for MemNode::all_controls_dominate().
+// Check if 'this' control node dominates or equal to 'sub' control node.
+// We already know that if any path back to Root or Start reaches 'this',
+// then all paths so, so this is a simple search for one example,
+// not an exhaustive search for a counterexample.
+bool Node::dominates(Node* sub, Node_List &nlist) {
+  assert(this->is_CFG(), "expecting control");
+  assert(sub != NULL && sub->is_CFG(), "expecting control");
+
+  // detect dead cycle without regions
+  int iterations_without_region_limit = DominatorSearchLimit;
+
+  Node* orig_sub = sub;
+  Node* dom      = this;
+  bool  met_dom  = false;
+  nlist.clear();
+
+  // Walk 'sub' backward up the chain to 'dom', watching for regions.
+  // After seeing 'dom', continue up to Root or Start.
+  // If we hit a region (backward split point), it may be a loop head.
+  // Keep going through one of the region's inputs.  If we reach the
+  // same region again, go through a different input.  Eventually we
+  // will either exit through the loop head, or give up.
+  // (If we get confused, break out and return a conservative 'false'.)
+  while (sub != NULL) {
+    if (sub->is_top())  break; // Conservative answer for dead code.
+    if (sub == dom) {
+      if (nlist.size() == 0) {
+        // No Region nodes except loops were visited before and the EntryControl
+        // path was taken for loops: it did not walk in a cycle.
+        return true;
+      } else if (met_dom) {
+        break;          // already met before: walk in a cycle
+      } else {
+        // Region nodes were visited. Continue walk up to Start or Root
+        // to make sure that it did not walk in a cycle.
+        met_dom = true; // first time meet
+        iterations_without_region_limit = DominatorSearchLimit; // Reset
+     }
+    }
+    if (sub->is_Start() || sub->is_Root()) {
+      // Success if we met 'dom' along a path to Start or Root.
+      // We assume there are no alternative paths that avoid 'dom'.
+      // (This assumption is up to the caller to ensure!)
+      return met_dom;
+    }
+    Node* up = sub->in(0);
+    // Normalize simple pass-through regions and projections:
+    up = sub->find_exact_control(up);
+    // If sub == up, we found a self-loop.  Try to push past it.
+    if (sub == up && sub->is_Loop()) {
+      // Take loop entry path on the way up to 'dom'.
+      up = sub->in(1); // in(LoopNode::EntryControl);
+    } else if (sub == up && sub->is_Region() && sub->req() != 3) {
+      // Always take in(1) path on the way up to 'dom' for clone regions
+      // (with only one input) or regions which merge > 2 paths
+      // (usually used to merge fast/slow paths).
+      up = sub->in(1);
+    } else if (sub == up && sub->is_Region()) {
+      // Try both paths for Regions with 2 input paths (it may be a loop head).
+      // It could give conservative 'false' answer without information
+      // which region's input is the entry path.
+      iterations_without_region_limit = DominatorSearchLimit; // Reset
+
+      bool region_was_visited_before = false;
+      // Was this Region node visited before?
+      // If so, we have reached it because we accidentally took a
+      // loop-back edge from 'sub' back into the body of the loop,
+      // and worked our way up again to the loop header 'sub'.
+      // So, take the first unexplored path on the way up to 'dom'.
+      for (int j = nlist.size() - 1; j >= 0; j--) {
+        intptr_t ni = (intptr_t)nlist.at(j);
+        Node* visited = (Node*)(ni & ~1);
+        bool  visited_twice_already = ((ni & 1) != 0);
+        if (visited == sub) {
+          if (visited_twice_already) {
+            // Visited 2 paths, but still stuck in loop body.  Give up.
+            return false;
+          }
+          // The Region node was visited before only once.
+          // (We will repush with the low bit set, below.)
+          nlist.remove(j);
+          // We will find a new edge and re-insert.
+          region_was_visited_before = true;
+          break;
+        }
+      }
+
+      // Find an incoming edge which has not been seen yet; walk through it.
+      assert(up == sub, "");
+      uint skip = region_was_visited_before ? 1 : 0;
+      for (uint i = 1; i < sub->req(); i++) {
+        Node* in = sub->in(i);
+        if (in != NULL && !in->is_top() && in != sub) {
+          if (skip == 0) {
+            up = in;
+            break;
+          }
+          --skip;               // skip this nontrivial input
+        }
+      }
+
+      // Set 0 bit to indicate that both paths were taken.
+      nlist.push((Node*)((intptr_t)sub + (region_was_visited_before ? 1 : 0)));
+    }
+
+    if (up == sub) {
+      break;    // some kind of tight cycle
+    }
+    if (up == orig_sub && met_dom) {
+      // returned back after visiting 'dom'
+      break;    // some kind of cycle
+    }
+    if (--iterations_without_region_limit < 0) {
+      break;    // dead cycle
+    }
+    sub = up;
+  }
+
+  // Did not meet Root or Start node in pred. chain.
+  // Conservative answer for dead code.
+  return false;
+}
+
 //------------------------------remove_dead_region-----------------------------
 // This control node is dead.  Follow the subgraph below it making everything
 // using it dead as well.  This will happen normally via the usual IterGVN
 // worklist but this call is more efficient.  Do not update use-def info
 // inside the dead region, just at the borders.
-static bool kill_dead_code( Node *dead, PhaseIterGVN *igvn ) {
+static void kill_dead_code( Node *dead, PhaseIterGVN *igvn ) {
   // Con's are a popular node to re-hit in the hash table again.
-  if( dead->is_Con() ) return false;
+  if( dead->is_Con() ) return;
 
   // Can't put ResourceMark here since igvn->_worklist uses the same arena
   // for verify pass with +VerifyOpto and we add/remove elements in it here.
   Node_List  nstack(Thread::current()->resource_area());
 
   Node *top = igvn->C->top();
-  bool progress = false;
   nstack.push(dead);
 
   while (nstack.size() > 0) {
@@ -1074,16 +1213,15 @@ static bool kill_dead_code( Node *dead, PhaseIterGVN *igvn ) {
       for (uint i=0; i < dead->req(); i++) {
         Node *n = dead->in(i);      // Get input to dead guy
         if (n != NULL && !n->is_top()) { // Input is valid?
-          progress = true;
           dead->set_req(i, top);    // Smash input away
           if (n->outcnt() == 0) {   // Input also goes dead?
             if (!n->is_Con())
               nstack.push(n);       // Clear it out as well
-          } else if (n->outcnt() == 1 && 
+          } else if (n->outcnt() == 1 &&
                      n->has_special_unique_user()) {
             igvn->add_users_to_worklist( n );
           } else if (n->outcnt() <= 2 && n->is_Store()) {
-            // Push store's uses on worklist to enable folding optimization for 
+            // Push store's uses on worklist to enable folding optimization for
             // store/store and store/load to the same address.
             // The restriction (outcnt() <= 2) is the same as in set_req_X()
             // and remove_globally_dead_node().
@@ -1093,7 +1231,7 @@ static bool kill_dead_code( Node *dead, PhaseIterGVN *igvn ) {
       }
     } // (dead->outcnt() == 0)
   }   // while (nstack.size() > 0) for outputs
-  return progress;
+  return;
 }
 
 //------------------------------remove_dead_region-----------------------------
@@ -1103,7 +1241,8 @@ bool Node::remove_dead_region(PhaseGVN *phase, bool can_reshape) {
   // Lost control into this guy?  I.e., it became unreachable?
   // Aggressively kill all unreachable code.
   if (can_reshape && n->is_top()) {
-    return kill_dead_code(this, phase->is_IterGVN());
+    kill_dead_code(this, phase->is_IterGVN());
+    return false; // Node is dead.
   }
 
   if( n->is_Region() && n->as_Region()->is_copy() ) {
@@ -1137,7 +1276,7 @@ uint Node::cmp( const Node &n ) const {
 
 //------------------------------rematerialize-----------------------------------
 // Should we clone rather than spill this instruction?
-bool Node::rematerialize() const { 
+bool Node::rematerialize() const {
   if ( is_Mach() )
     return this->as_Mach()->rematerialize();
   else
@@ -1147,7 +1286,7 @@ bool Node::rematerialize() const {
 //------------------------------needs_anti_dependence_check---------------------
 // Nodes which use memory without consuming it, hence need antidependences.
 bool Node::needs_anti_dependence_check() const {
-  if( req() < 2 || (_flags & Flag_needs_anti_dependence_check) == 0 ) 
+  if( req() < 2 || (_flags & Flag_needs_anti_dependence_check) == 0 )
     return false;
   else
     return in(1)->bottom_type()->has_memory();
@@ -1173,6 +1312,12 @@ intptr_t Node::get_ptr() const {
   return ((ConPNode*)this)->type()->is_ptr()->get_con();
 }
 
+// Get a narrow oop constant from a ConNNode.
+intptr_t Node::get_narrowcon() const {
+  assert( Opcode() == Op_ConN, "" );
+  return ((ConNNode*)this)->type()->is_narrowoop()->get_con();
+}
+
 // Get a long constant from a ConNode.
 // Return a default value if there is no apparent constant here.
 const TypeLong* Node::find_long_type() const {
@@ -1187,16 +1332,16 @@ const TypeLong* Node::find_long_type() const {
 
 // Get a double constant from a ConstNode.
 // Returns the constant if it is a double ConstNode
-jdouble Node::getd() const { 
-  assert( Opcode() == Op_ConD, "" ); 
-  return ((ConDNode*)this)->type()->is_double_constant()->getd(); 
+jdouble Node::getd() const {
+  assert( Opcode() == Op_ConD, "" );
+  return ((ConDNode*)this)->type()->is_double_constant()->getd();
 }
 
 // Get a float constant from a ConstNode.
 // Returns the constant if it is a float ConstNode
-jfloat Node::getf() const { 
-  assert( Opcode() == Op_ConF, "" ); 
-  return ((ConFNode*)this)->type()->is_float_constant()->getf(); 
+jfloat Node::getf() const {
+  assert( Opcode() == Op_ConF, "" );
+  return ((ConFNode*)this)->type()->is_float_constant()->getf();
 }
 
 #ifndef PRODUCT
@@ -1214,7 +1359,7 @@ static inline bool NotANode(const Node* n) {
 //------------------------------find------------------------------------------
 // Find a neighbor of this Node with the given _idx
 // If idx is negative, find its absolute value, following both _in and _out.
-static void find_recur( Node* &result, Node *n, int idx, bool only_ctrl, 
+static void find_recur( Node* &result, Node *n, int idx, bool only_ctrl,
                         VectorSet &old_space, VectorSet &new_space ) {
   int node_idx = (idx >= 0) ? idx : -idx;
   if (NotANode(n))  return;  // Gracefully handle NULL, -1, 0xabababab, etc.
@@ -1241,7 +1386,7 @@ static void find_recur( Node* &result, Node *n, int idx, bool only_ctrl,
   }
 #ifdef ASSERT
   // Search along debug_orig edges last:
-  for (Node* orig = n->debug_orig(); orig != NULL; orig = orig->debug_orig()) {
+  for (Node* orig = n->debug_orig(); orig != NULL && n != orig; orig = orig->debug_orig()) {
     if (NotANode(orig))  break;
     find_recur( result, orig, idx, only_ctrl, old_space, new_space );
   }
@@ -1465,96 +1610,47 @@ void Node::dump_out() const {
 }
 
 //------------------------------dump_nodes-------------------------------------
-
-// Helper class  for dump_nodes. Wraps an old and new VectorSet.
-class OldNewVectorSet : public StackObj {
-   Arena*    _node_arena;
-   VectorSet _old_vset, _new_vset;
-   VectorSet* select(Node* n) {
-     return _node_arena->contains(n) ? &_new_vset : &_old_vset;
-   }
-  public:
-  OldNewVectorSet(Arena* node_arena, ResourceArea* area) :
-     _node_arena(node_arena),
-     _old_vset(area), _new_vset(area) {}
-
-  void set(Node* n)      { select(n)->set(n->_idx); }
-  bool test_set(Node* n) { return select(n)->test_set(n->_idx) != 0; }
-  bool test(Node* n)     { return select(n)->test(n->_idx) != 0; }
-  void del(Node* n)      { (*select(n)) >>= n->_idx; }
-};
-
-
 static void dump_nodes(const Node* start, int d, bool only_ctrl) {
   Node* s = (Node*)start; // remove const
   if (NotANode(s)) return;
 
+  uint depth = (uint)ABS(d);
+  int direction = d;
   Compile* C = Compile::current();
-  ResourceArea *area = Thread::current()->resource_area();
-  Node_Stack      stack(area, MIN2((uint)ABS(d), C->unique() >> 1));
-  OldNewVectorSet visited(C->node_arena(), area);
-  OldNewVectorSet on_stack(C->node_arena(), area);
+  GrowableArray <Node *> nstack(C->unique());
 
-  visited.set(s);
-  on_stack.set(s);
-  stack.push(s, 0);
-  if (d < 0) s->dump();
+  nstack.append(s);
+  int begin = 0;
+  int end = 0;
+  for(uint i = 0; i < depth; i++) {
+    end = nstack.length();
+    for(int j = begin; j < end; j++) {
+      Node* tp  = nstack.at(j);
+      uint limit = direction > 0 ? tp->len() : tp->outcnt();
+      for(uint k = 0; k < limit; k++) {
+        Node* n = direction > 0 ? tp->in(k) : tp->raw_out(k);
 
-  // Do a depth first walk over edges
-  while (stack.is_nonempty()) {
-    Node* tp  = stack.node();
-    uint  idx = stack.index();
-    uint  limit = d > 0 ? tp->len() : tp->outcnt();
-    if (idx >= limit) {
-      // no more arcs to visit
-      if (d > 0) tp->dump();
-      on_stack.del(tp);
-      stack.pop();
-    } else {
-      // process the "idx"th arc
-      stack.set_index(idx + 1);
-      Node* n = d > 0 ? tp->in(idx) : tp->raw_out(idx);
+        if (NotANode(n))  continue;
+        // do not recurse through top or the root (would reach unrelated stuff)
+        if (n->is_Root() || n->is_top())  continue;
+        if (only_ctrl && !n->is_CFG()) continue;
 
-      if (NotANode(n))  continue;
-      // do not recurse through top or the root (would reach unrelated stuff)
-      if (n->is_Root() || n->is_top())  continue;
-      if (only_ctrl && !n->is_CFG()) continue;
-
-      if (!visited.test_set(n)) {  // forward arc
-        // Limit depth
-        if (stack.size() < (uint)ABS(d)) {
-          if (d < 0) n->dump();
-          stack.push(n, 0);
-          on_stack.set(n);
-        }
-      } else {  // back or cross arc
-        if (on_stack.test(n)) {  // back arc
-          // print loop if there are no phis or regions in the mix
-          bool found_loop_breaker = false;
-          int k;
-          for (k = stack.size() - 1; k >= 0; k--) {
-            Node* m = stack.node_at(k);
-            if (m->is_Phi() || m->is_Region() || m->is_Root() || m->is_Start()) {
-              found_loop_breaker = true;
-              break;
-            }
-            if (m == n) // Found loop head
-              break;
-          }
-          assert(k >= 0, "n must be on stack");
-
-          if (!found_loop_breaker) {
-            tty->print("# %s LOOP FOUND:", only_ctrl ? "CONTROL" : "DATA");
-            for (int i = stack.size() - 1; i >= k; i--) {
-              Node* m = stack.node_at(i);
-              bool mnew = C->node_arena()->contains(m);
-              tty->print(" %s%d:%s", (mnew? "": "o"), m->_idx, m->Name());
-              if (i != 0) tty->print(d > 0? " <-": " ->");
-            }
-            tty->cr();
-          }
+        bool on_stack = nstack.contains(n);
+        if (!on_stack) {
+          nstack.append(n);
         }
       }
+    }
+    begin = end;
+  }
+  end = nstack.length();
+  if (direction > 0) {
+    for(int j = end-1; j >= 0; j--) {
+      nstack.at(j)->dump();
+    }
+  } else {
+    for(int j = 0; j < end; j++) {
+      nstack.at(j)->dump();
     }
   }
 }
@@ -1644,7 +1740,7 @@ void Node::verify_recur(const Node *n, int verify_depth,
     if (true /*VerifyDefUse*/) {
       // Count use-def edges from n to x
       int cnt = 0;
-      for( uint j = 0; j < n->len(); j++ ) 
+      for( uint j = 0; j < n->len(); j++ )
         if( n->in(j) == x )
           cnt++;
       // Count def-use edges from x to n
@@ -1678,7 +1774,7 @@ void Node::verify() const {
 // Graph walk, with both pre-order and post-order functions
 void Node::walk(NFunc pre, NFunc post, void *env) {
   VectorSet visited(Thread::current()->resource_area()); // Setup for local walk
-  walk_(pre, post, env, visited); 
+  walk_(pre, post, env, visited);
 }
 
 void Node::walk_(NFunc pre, NFunc post, void *env, VectorSet &visited) {
@@ -1700,12 +1796,12 @@ uint Node::match_edge(uint idx) const {
 }
 
 // Register classes are defined for specific machines
-const RegMask &Node::out_RegMask() const { 
+const RegMask &Node::out_RegMask() const {
   ShouldNotCallThis();
   return *(new RegMask());
 }
 
-const RegMask &Node::in_RegMask(uint) const { 
+const RegMask &Node::in_RegMask(uint) const {
   ShouldNotCallThis();
   return *(new RegMask());
 }
@@ -1727,7 +1823,7 @@ void Node_Array::clear() {
 
 //-----------------------------------------------------------------------------
 void Node_Array::grow( uint i ) {
-  if( !_max ) { 
+  if( !_max ) {
     _max = 1;
     _nodes = (Node**)_a->Amalloc( _max * sizeof(Node*) );
     _nodes[0] = NULL;
@@ -1848,7 +1944,7 @@ void Node_List::dump() const {
 #ifndef PRODUCT
   for( uint i = 0; i < _cnt; i++ )
     if( _nodes[i] ) {
-      tty->print("%5d--> ",i); 
+      tty->print("%5d--> ",i);
       _nodes[i]->dump();
     }
 #endif
@@ -1901,14 +1997,14 @@ void Node_Stack::grow() {
 //=============================================================================
 uint TypeNode::size_of() const { return sizeof(*this); }
 #ifndef PRODUCT
-void TypeNode::dump_spec(outputStream *st) const { 
+void TypeNode::dump_spec(outputStream *st) const {
   if( !Verbose && !WizardMode ) {
     // standard dump does this in Verbose and WizardMode
     st->print(" #"); _type->dump_on(st);
   }
 }
 #endif
-uint TypeNode::hash() const { 
+uint TypeNode::hash() const {
   return Node::hash() + _type->hash();
 }
 uint TypeNode::cmp( const Node &n ) const
@@ -1917,8 +2013,6 @@ const Type *TypeNode::bottom_type() const { return _type; }
 const Type *TypeNode::Value( PhaseTransform * ) const { return _type; }
 
 //------------------------------ideal_reg--------------------------------------
-uint TypeNode::ideal_reg() const { 
+uint TypeNode::ideal_reg() const {
   return Matcher::base2reg[_type->base()];
 }
-
-

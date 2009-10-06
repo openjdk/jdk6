@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)generation.cpp	1.245 07/05/05 17:05:51 JVM"
-#endif
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -33,10 +30,16 @@ Generation::Generation(ReservedSpace rs, size_t initial_size, int level) :
   _ref_processor(NULL) {
   if (!_virtual_space.initialize(rs, initial_size)) {
     vm_exit_during_initialization("Could not reserve enough space for "
-		    "object heap");
+                    "object heap");
+  }
+  // Mangle all of the the initial generation.
+  if (ZapUnusedHeapArea) {
+    MemRegion mangle_region((HeapWord*)_virtual_space.low(),
+      (HeapWord*)_virtual_space.high());
+    SpaceMangler::mangle_region(mangle_region);
   }
   _reserved = MemRegion((HeapWord*)_virtual_space.low_boundary(),
-	  (HeapWord*)_virtual_space.high_boundary());
+          (HeapWord*)_virtual_space.high_boundary());
 }
 
 GenerationSpec* Generation::spec() {
@@ -81,7 +84,7 @@ void Generation::print() const { print_on(tty); }
 
 void Generation::print_on(outputStream* st)  const {
   st->print(" %-20s", name());
-  st->print(" total " SIZE_FORMAT "K, used " SIZE_FORMAT "K", 
+  st->print(" total " SIZE_FORMAT "K, used " SIZE_FORMAT "K",
              capacity()/K, used()/K);
   st->print_cr(" [" INTPTR_FORMAT ", " INTPTR_FORMAT ", " INTPTR_FORMAT ")",
               _virtual_space.low_boundary(),
@@ -95,9 +98,9 @@ void Generation::print_summary_info_on(outputStream* st) {
   StatRecord* sr = stat_record();
   double time = sr->accumulated_time.seconds();
   st->print_cr("[Accumulated GC generation %d time %3.7f secs, "
-	       "%d GC's, avg GC time %3.7f]", 
-	       level(), time, sr->invocations,
-	       sr->invocations > 0 ? time / sr->invocations : 0.0);
+               "%d GC's, avg GC time %3.7f]",
+               level(), time, sr->invocations,
+               sr->invocations > 0 ? time / sr->invocations : 0.0);
 }
 
 // Utility iterator classes
@@ -136,7 +139,7 @@ DefNewGeneration* Generation::as_DefNewGeneration() {
   assert((kind() == Generation::DefNew) ||
          (kind() == Generation::ParNew) ||
          (kind() == Generation::ASParNew),
-    "Wrong youngest generation type"); 
+    "Wrong youngest generation type");
   return (DefNewGeneration*) this;
 }
 
@@ -163,7 +166,7 @@ size_t Generation::max_contiguous_available() const {
 }
 
 bool Generation::promotion_attempt_is_safe(size_t promotion_in_bytes,
-				           bool not_used) const {
+                                           bool not_used) const {
   if (PrintGC && Verbose) {
     gclog_or_tty->print_cr("Generation::promotion_attempt_is_safe"
                 " contiguous_available: " SIZE_FORMAT
@@ -174,14 +177,14 @@ bool Generation::promotion_attempt_is_safe(size_t promotion_in_bytes,
 }
 
 // Ignores "ref" and calls allocate().
-oop Generation::promote(oop obj, size_t obj_size, oop* ref) {
+oop Generation::promote(oop obj, size_t obj_size) {
   assert(obj_size == (size_t)obj->size(), "bad obj_size passed in");
 
-#ifndef	PRODUCT
+#ifndef PRODUCT
   if (Universe::heap()->promotion_should_fail()) {
     return NULL;
   }
-#endif	// #ifndef PRODUCT
+#endif  // #ifndef PRODUCT
 
   HeapWord* result = allocate(obj_size, false);
   if (result != NULL) {
@@ -189,19 +192,19 @@ oop Generation::promote(oop obj, size_t obj_size, oop* ref) {
     return oop(result);
   } else {
     GenCollectedHeap* gch = GenCollectedHeap::heap();
-    return gch->handle_failed_promotion(this, obj, obj_size, ref);
+    return gch->handle_failed_promotion(this, obj, obj_size);
   }
 }
 
 oop Generation::par_promote(int thread_num,
-			    oop obj, markOop m, size_t word_sz) {
+                            oop obj, markOop m, size_t word_sz) {
   // Could do a bad general impl here that gets a lock.  But no.
   ShouldNotCallThis();
   return NULL;
 }
 
 void Generation::par_promote_alloc_undo(int thread_num,
-					HeapWord* obj, size_t word_sz) {
+                                        HeapWord* obj, size_t word_sz) {
   // Could do a bad general impl here that gets a lock.  But no.
   guarantee(false, "No good general implementation.");
 }
@@ -296,7 +299,7 @@ void Generation::oop_iterate(MemRegion mr, OopClosure* cl) {
 }
 
 void Generation::younger_refs_in_space_iterate(Space* sp,
-					       OopsInGenClosure* cl) {
+                                               OopsInGenClosure* cl) {
   GenRemSet* rs = SharedHeap::heap()->rem_set();
   rs->younger_refs_in_space_iterate(sp, cl);
 }
@@ -327,8 +330,8 @@ void Generation::prepare_for_compaction(CompactPoint* cp) {
 
 class AdjustPointersClosure: public SpaceClosure {
  public:
-  void do_space(Space* sp) { 
-    sp->adjust_pointers(); 
+  void do_space(Space* sp) {
+    sp->adjust_pointers();
   }
 };
 
@@ -348,8 +351,8 @@ void Generation::compact() {
 }
 
 CardGeneration::CardGeneration(ReservedSpace rs, size_t initial_byte_size,
-			       int level,
-			       GenRemSet* remset) :
+                               int level,
+                               GenRemSet* remset) :
   Generation(rs, initial_byte_size, level), _rs(remset)
 {
   HeapWord* start = (HeapWord*)rs.base();
@@ -376,6 +379,41 @@ CardGeneration::CardGeneration(ReservedSpace rs, size_t initial_byte_size,
   }
 }
 
+bool CardGeneration::expand(size_t bytes, size_t expand_bytes) {
+  assert_locked_or_safepoint(Heap_lock);
+  if (bytes == 0) {
+    return true;  // That's what grow_by(0) would return
+  }
+  size_t aligned_bytes  = ReservedSpace::page_align_size_up(bytes);
+  if (aligned_bytes == 0){
+    // The alignment caused the number of bytes to wrap.  An expand_by(0) will
+    // return true with the implication that an expansion was done when it
+    // was not.  A call to expand implies a best effort to expand by "bytes"
+    // but not a guarantee.  Align down to give a best effort.  This is likely
+    // the most that the generation can expand since it has some capacity to
+    // start with.
+    aligned_bytes = ReservedSpace::page_align_size_down(bytes);
+  }
+  size_t aligned_expand_bytes = ReservedSpace::page_align_size_up(expand_bytes);
+  bool success = false;
+  if (aligned_expand_bytes > aligned_bytes) {
+    success = grow_by(aligned_expand_bytes);
+  }
+  if (!success) {
+    success = grow_by(aligned_bytes);
+  }
+  if (!success) {
+    success = grow_to_reserved();
+  }
+  if (PrintGC && Verbose) {
+    if (success && GC_locker::is_active()) {
+      gclog_or_tty->print_cr("Garbage collection disabled, expanded heap instead");
+    }
+  }
+
+  return success;
+}
+
 
 // No young generation references, clear this generation's cards.
 void CardGeneration::clear_remembered_set() {
@@ -396,11 +434,11 @@ void CardGeneration::prepare_for_verify() {}
 
 void OneContigSpaceCardGeneration::collect(bool   full,
                                            bool   clear_all_soft_refs,
-					   size_t size,
+                                           size_t size,
                                            bool   is_tlab) {
   SpecializationStats::clear();
   // Temporarily expand the span of our ref processor, so
-  // refs discovery is over the entire heap, not just this generation 
+  // refs discovery is over the entire heap, not just this generation
   ReferenceProcessorSpanMutator
     x(ref_processor(), GenCollectedHeap::heap()->reserved_region());
   GenMarkSweep::invoke_at_safepoint(_level, ref_processor(), clear_all_soft_refs);
@@ -410,7 +448,7 @@ void OneContigSpaceCardGeneration::collect(bool   full,
 HeapWord*
 OneContigSpaceCardGeneration::expand_and_allocate(size_t word_size,
                                                   bool is_tlab,
-						  bool parallel) {
+                                                  bool parallel) {
   assert(!is_tlab, "OneContigSpaceCardGeneration does not support TLAB allocation");
   if (parallel) {
     MutexLocker x(ParGCRareEvent_lock);
@@ -419,7 +457,7 @@ OneContigSpaceCardGeneration::expand_and_allocate(size_t word_size,
     while (true) {
       expand(byte_size, _min_heap_delta_bytes);
       if (GCExpandToAllocateDelayMillis > 0) {
-	os::sleep(Thread::current(), GCExpandToAllocateDelayMillis, false);
+        os::sleep(Thread::current(), GCExpandToAllocateDelayMillis, false);
       }
       result = _the_space->par_allocate(word_size);
       if ( result != NULL) {
@@ -438,25 +476,9 @@ OneContigSpaceCardGeneration::expand_and_allocate(size_t word_size,
   }
 }
 
-void OneContigSpaceCardGeneration::expand(size_t bytes, size_t expand_bytes) {
+bool OneContigSpaceCardGeneration::expand(size_t bytes, size_t expand_bytes) {
   GCMutexLocker x(ExpandHeap_lock);
-  size_t aligned_bytes  = ReservedSpace::page_align_size_up(bytes);
-  size_t aligned_expand_bytes = ReservedSpace::page_align_size_up(expand_bytes);
-  bool success = false;
-  if (aligned_expand_bytes > aligned_bytes) {
-    success = grow_by(aligned_expand_bytes);
-  }
-  if (!success) {
-    success = grow_by(aligned_bytes);
-  }
-  if (!success) {
-    grow_to_reserved();
-  }
-  if (GC_locker::is_active()) {
-    if (PrintGC && Verbose) {
-      gclog_or_tty->print_cr("Garbage collection disabled, expanded heap instead");
-    }
-  }
+  return CardGeneration::expand(bytes, expand_bytes);
 }
 
 
@@ -508,8 +530,11 @@ bool OneContigSpaceCardGeneration::grow_by(size_t bytes) {
     _bts->resize(new_word_size);
 
     // Fix for bug #4668531
-    MemRegion mangle_region(_the_space->end(), (HeapWord*)_virtual_space.high());
-    _the_space->mangle_region(mangle_region);
+    if (ZapUnusedHeapArea) {
+      MemRegion mangle_region(_the_space->end(),
+      (HeapWord*)_virtual_space.high());
+      SpaceMangler::mangle_region(mangle_region);
+    }
 
     // Expand space -- also expands space's BOT
     // (which uses (part of) shared array above)
@@ -522,7 +547,7 @@ bool OneContigSpaceCardGeneration::grow_by(size_t bytes) {
       size_t new_mem_size = _virtual_space.committed_size();
       size_t old_mem_size = new_mem_size - bytes;
       gclog_or_tty->print_cr("Expanding %s from " SIZE_FORMAT "K by "
-                      SIZE_FORMAT "K to " SIZE_FORMAT "K", 
+                      SIZE_FORMAT "K to " SIZE_FORMAT "K",
                       name(), old_mem_size/K, bytes/K, new_mem_size/K);
     }
   }
@@ -558,7 +583,7 @@ void OneContigSpaceCardGeneration::shrink_by(size_t bytes) {
     size_t new_mem_size = _virtual_space.committed_size();
     size_t old_mem_size = new_mem_size + bytes;
     gclog_or_tty->print_cr("Shrinking %s from " SIZE_FORMAT "K to " SIZE_FORMAT "K",
-	     	  name(), old_mem_size/K, new_mem_size/K);
+                  name(), old_mem_size/K, new_mem_size/K);
   }
 }
 
@@ -571,7 +596,7 @@ void OneContigSpaceCardGeneration::object_iterate(ObjectClosure* blk) {
 }
 
 void OneContigSpaceCardGeneration::space_iterate(SpaceClosure* blk,
-						 bool usedOnly) {
+                                                 bool usedOnly) {
   blk->do_space(_the_space);
 }
 
@@ -591,12 +616,12 @@ void OneContigSpaceCardGeneration::younger_refs_iterate(OopsInGenClosure* blk) {
   blk->reset_generation();
 }
 
-void OneContigSpaceCardGeneration::save_marks() { 
+void OneContigSpaceCardGeneration::save_marks() {
   _the_space->set_saved_mark();
 }
 
 
-void OneContigSpaceCardGeneration::reset_saved_marks() { 
+void OneContigSpaceCardGeneration::reset_saved_marks() {
   _the_space->reset_saved_mark();
 }
 
@@ -605,14 +630,14 @@ bool OneContigSpaceCardGeneration::no_allocs_since_save_marks() {
   return _the_space->saved_mark_at_top();
 }
 
-#define OneContig_SINCE_SAVE_MARKS_ITERATE_DEFN(OopClosureType, nv_suffix)	\
-										\
-void OneContigSpaceCardGeneration::						\
-oop_since_save_marks_iterate##nv_suffix(OopClosureType* blk) {			\
-  blk->set_generation(this);							\
-  _the_space->oop_since_save_marks_iterate##nv_suffix(blk);			\
-  blk->reset_generation();							\
-  save_marks();									\
+#define OneContig_SINCE_SAVE_MARKS_ITERATE_DEFN(OopClosureType, nv_suffix)      \
+                                                                                \
+void OneContigSpaceCardGeneration::                                             \
+oop_since_save_marks_iterate##nv_suffix(OopClosureType* blk) {                  \
+  blk->set_generation(this);                                                    \
+  _the_space->oop_since_save_marks_iterate##nv_suffix(blk);                     \
+  blk->reset_generation();                                                      \
+  save_marks();                                                                 \
 }
 
 ALL_SINCE_SAVE_MARKS_CLOSURES(OneContig_SINCE_SAVE_MARKS_ITERATE_DEFN)
@@ -625,6 +650,14 @@ void OneContigSpaceCardGeneration::gc_epilogue(bool full) {
 
   // update the generation and space performance counters
   update_counters();
+  if (ZapUnusedHeapArea) {
+    the_space()->check_mangled_unused_area_complete();
+  }
+}
+
+void OneContigSpaceCardGeneration::record_spaces_top() {
+  assert(ZapUnusedHeapArea, "Not mangling unused space");
+  the_space()->set_top_for_allocations();
 }
 
 void OneContigSpaceCardGeneration::verify(bool allow_dirty) {

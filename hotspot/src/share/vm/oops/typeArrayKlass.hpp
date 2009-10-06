@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)typeArrayKlass.hpp	1.69 07/05/29 09:44:25 JVM"
-#endif
 /*
  * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // A typeArrayKlass is the klass of a typeArray
@@ -42,7 +39,11 @@ class typeArrayKlass : public arrayKlass {
 
   // klass allocation
   DEFINE_ALLOCATE_PERMANENT(typeArrayKlass);
-  static klassOop create_klass(BasicType type, int scale, TRAPS);
+  static klassOop create_klass(BasicType type, int scale, const char* name_str,
+                               TRAPS);
+  static inline klassOop create_klass(BasicType type, int scale, TRAPS) {
+    return create_klass(type, scale, external_name(type), CHECK_NULL);
+  }
 
   int oop_size(oop obj) const;
   int klass_oop_size() const  { return object_size(); }
@@ -79,7 +80,7 @@ class typeArrayKlass : public arrayKlass {
   // Casting from klassOop
   static typeArrayKlass* cast(klassOop k) {
     assert(k->klass_part()->oop_is_typeArray_slow(), "cast to typeArrayKlass");
-    return (typeArrayKlass*) k->klass_part(); 
+    return (typeArrayKlass*) k->klass_part();
   }
 
   // Naming

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)os_linux.hpp	1.72 08/11/24 12:20:24 JVM"
-#endif
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Linux_OS defines the interface to Linux operating systems
@@ -62,6 +59,8 @@ class Linux {
   static bool _is_NPTL;
   static bool _supports_fast_thread_cpu_time;
 
+  static GrowableArray<int>* _cpu_to_node;
+
  protected:
 
   static julong _physical_memory;
@@ -82,8 +81,9 @@ class Linux {
   static void set_is_LinuxThreads()           { _is_NPTL = false; }
   static void set_is_floating_stack()         { _is_floating_stack = true; }
 
+  static void rebuild_cpu_to_node_map();
+  static GrowableArray<int>* cpu_to_node()    { return _cpu_to_node; }
  public:
-
   static void init_thread_fpu_state();
   static int  get_fpu_control_word();
   static void set_fpu_control_word(int fpu_control);
@@ -146,6 +146,7 @@ class Linux {
   static bool is_floating_stack()             { return _is_floating_stack; }
 
   static void libpthread_init();
+  static bool libnuma_init();
 
   // Minimum stack size a thread can be created with (allowing
   // the VM to completely create the thread and enter user code)
@@ -187,7 +188,7 @@ class Linux {
 
   // Stack repair handling
 
-  // none present 
+  // none present
 
   // LinuxThreads work-around for 6292965
   static int safe_cond_timedwait(pthread_cond_t *_cond, pthread_mutex_t *_mutex, const struct timespec *_abstime);
@@ -214,27 +215,67 @@ class Linux {
     void set_suspend_action(int x) { _suspend_action = x;    }
 
     // atomic updates for _state
-    void set_suspended()           { 
+    void set_suspended()           {
       jint temp, temp2;
       do {
-	temp = _state;
-	temp2 = Atomic::cmpxchg(temp | SR_SUSPENDED, &_state, temp);
+        temp = _state;
+        temp2 = Atomic::cmpxchg(temp | SR_SUSPENDED, &_state, temp);
       } while (temp2 != temp);
     }
-    void clear_suspended()        { 
+    void clear_suspended()        {
       jint temp, temp2;
       do {
-	temp = _state;
-	temp2 = Atomic::cmpxchg(temp & ~SR_SUSPENDED, &_state, temp);
+        temp = _state;
+        temp2 = Atomic::cmpxchg(temp & ~SR_SUSPENDED, &_state, temp);
       } while (temp2 != temp);
     }
     bool is_suspended()            { return _state & SR_SUSPENDED;       }
 
     #undef SR_SUSPENDED
   };
+
+private:
+  typedef int (*sched_getcpu_func_t)(void);
+  typedef int (*numa_node_to_cpus_func_t)(int node, unsigned long *buffer, int bufferlen);
+  typedef int (*numa_max_node_func_t)(void);
+  typedef int (*numa_available_func_t)(void);
+  typedef int (*numa_tonode_memory_func_t)(void *start, size_t size, int node);
+  typedef void (*numa_interleave_memory_func_t)(void *start, size_t size, unsigned long *nodemask);
+
+  static sched_getcpu_func_t _sched_getcpu;
+  static numa_node_to_cpus_func_t _numa_node_to_cpus;
+  static numa_max_node_func_t _numa_max_node;
+  static numa_available_func_t _numa_available;
+  static numa_tonode_memory_func_t _numa_tonode_memory;
+  static numa_interleave_memory_func_t _numa_interleave_memory;
+  static unsigned long* _numa_all_nodes;
+
+  static void set_sched_getcpu(sched_getcpu_func_t func) { _sched_getcpu = func; }
+  static void set_numa_node_to_cpus(numa_node_to_cpus_func_t func) { _numa_node_to_cpus = func; }
+  static void set_numa_max_node(numa_max_node_func_t func) { _numa_max_node = func; }
+  static void set_numa_available(numa_available_func_t func) { _numa_available = func; }
+  static void set_numa_tonode_memory(numa_tonode_memory_func_t func) { _numa_tonode_memory = func; }
+  static void set_numa_interleave_memory(numa_interleave_memory_func_t func) { _numa_interleave_memory = func; }
+  static void set_numa_all_nodes(unsigned long* ptr) { _numa_all_nodes = ptr; }
+public:
+  static int sched_getcpu()  { return _sched_getcpu != NULL ? _sched_getcpu() : -1; }
+  static int numa_node_to_cpus(int node, unsigned long *buffer, int bufferlen) {
+    return _numa_node_to_cpus != NULL ? _numa_node_to_cpus(node, buffer, bufferlen) : -1;
+  }
+  static int numa_max_node() { return _numa_max_node != NULL ? _numa_max_node() : -1; }
+  static int numa_available() { return _numa_available != NULL ? _numa_available() : -1; }
+  static int numa_tonode_memory(void *start, size_t size, int node) {
+    return _numa_tonode_memory != NULL ? _numa_tonode_memory(start, size, node) : -1;
+  }
+  static void numa_interleave_memory(void *start, size_t size) {
+    if (_numa_interleave_memory != NULL && _numa_all_nodes != NULL) {
+      _numa_interleave_memory(start, size, _numa_all_nodes);
+    }
+  }
+  static int get_node_by_cpu(int cpu_id);
 };
 
-  
+
 class PlatformEvent : public CHeapObj {
   private:
     double CachePad [4] ;   // increase odds that _mutex is sole occupant of cache line
@@ -242,9 +283,9 @@ class PlatformEvent : public CHeapObj {
     volatile int _nParked ;
     pthread_mutex_t _mutex  [1] ;
     pthread_cond_t  _cond   [1] ;
-    double PostPad  [2] ;  
-    Thread * _Assoc ; 
-    
+    double PostPad  [2] ;
+    Thread * _Assoc ;
+
   public:       // TODO-FIXME: make dtor private
     ~PlatformEvent() { guarantee (0, "invariant") ; }
 
@@ -257,17 +298,17 @@ class PlatformEvent : public CHeapObj {
       assert_status(status == 0, status, "mutex_init");
       _Event   = 0 ;
       _nParked = 0 ;
-      _Assoc   = NULL ; 
+      _Assoc   = NULL ;
     }
-  
+
     // Use caution with reset() and fired() -- they may require MEMBARs
-    void reset() { _Event = 0 ; } 
-    int  fired() { return _Event; } 
-    void park () ; 
+    void reset() { _Event = 0 ; }
+    int  fired() { return _Event; }
+    void park () ;
     void unpark () ;
-    int  TryPark () ; 
+    int  TryPark () ;
     int  park (jlong millis) ;
-    void SetAssociation (Thread * a) { _Assoc = a ; } 
+    void SetAssociation (Thread * a) { _Assoc = a ; }
 } ;
 
 class PlatformParker : public CHeapObj {

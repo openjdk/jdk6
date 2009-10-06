@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)permGen.hpp	1.38 07/05/29 09:44:16 JVM"
-#endif
 /*
- * Copyright 2000-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // All heaps contains a "permanent generation," containing permanent
@@ -33,20 +30,22 @@ class Generation;
 class GenRemSet;
 class CSpaceCounters;
 
-// PermGen models the part of the heap 
+// PermGen models the part of the heap
 
 class PermGen : public CHeapObj {
   friend class VMStructs;
  protected:
   size_t _capacity_expansion_limit;  // maximum expansion allowed without a
-				     // full gc occuring
+                                     // full gc occuring
+
+  HeapWord* mem_allocate_in_gen(size_t size, Generation* gen);
 
  public:
   enum Name {
     MarkSweepCompact, MarkSweep, ConcurrentMarkSweep
   };
 
-  // Permanent allocation (initialized)  
+  // Permanent allocation (initialized)
   virtual HeapWord* mem_allocate(size_t size) = 0;
 
   // Mark sweep support
@@ -74,4 +73,3 @@ class PermGen : public CHeapObj {
     g->update_counters();
   }
 };
-

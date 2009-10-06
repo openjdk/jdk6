@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)c1_IR.hpp	1.100 07/05/05 17:05:04 JVM"
-#endif
 /*
  * Copyright 1999-2006 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // An XHandler is a C1 internal description for an exception handler
@@ -43,7 +40,7 @@ class XHandler: public CompilationResourceObj {
 
  public:
   // creation
-  XHandler(ciExceptionHandler* desc) 
+  XHandler(ciExceptionHandler* desc)
     : _desc(desc)
     , _entry_block(NULL)
     , _entry_code(NULL)
@@ -55,7 +52,7 @@ class XHandler: public CompilationResourceObj {
 #endif
   { }
 
-  XHandler(XHandler* other) 
+  XHandler(XHandler* other)
     : _desc(other->_desc)
     , _entry_block(other->_entry_block)
     , _entry_code(other->_entry_code)

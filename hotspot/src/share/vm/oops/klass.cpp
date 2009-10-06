@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)klass.cpp	1.119 07/05/05 17:06:00 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -32,11 +29,11 @@
 bool Klass::is_subclass_of(klassOop k) const {
   // Run up the super chain and check
   klassOop t = as_klassOop();
-    
+
   if (t == k) return true;
   t = Klass::cast(t)->super();
 
-  while (t != NULL) {  
+  while (t != NULL) {
     if (t == k) return true;
     t = Klass::cast(t)->super();
   }
@@ -89,7 +86,7 @@ Klass *Klass::LCA( Klass *k2 ) {
 void Klass::check_valid_for_instantiation(bool throwError, TRAPS) {
   ResourceMark rm(THREAD);
   THROW_MSG(throwError ? vmSymbols::java_lang_InstantiationError()
-	    : vmSymbols::java_lang_InstantiationException(), external_name());
+            : vmSymbols::java_lang_InstantiationException(), external_name());
 }
 
 
@@ -118,7 +115,7 @@ methodOop Klass::uncached_lookup_method(symbolOop name, symbolOop signature) con
   return NULL;
 }
 
-klassOop Klass::base_create_klass_oop(KlassHandle& klass, int size, 
+klassOop Klass::base_create_klass_oop(KlassHandle& klass, int size,
                                       const Klass_vtbl& vtbl, TRAPS) {
   size = align_object_size(size);
   // allocate and initialize vtable
@@ -161,21 +158,21 @@ KlassHandle Klass::base_create_klass(KlassHandle& klass, int size,
   return KlassHandle(THREAD, ek);
 }
 
-void Klass_vtbl::post_new_init_klass(KlassHandle& klass, 
-				     klassOop new_klass,
-				     int size) const {
+void Klass_vtbl::post_new_init_klass(KlassHandle& klass,
+                                     klassOop new_klass,
+                                     int size) const {
   assert(!new_klass->klass_part()->null_vtbl(), "Not a complete klass");
   CollectedHeap::post_allocation_install_obj_klass(klass, new_klass, size);
 }
 
 void* Klass_vtbl::operator new(size_t ignored, KlassHandle& klass,
                                int size, TRAPS) {
-  // The vtable pointer is installed during the execution of 
+  // The vtable pointer is installed during the execution of
   // constructors in the call to permanent_obj_allocate().  Delay
   // the installation of the klass pointer into the new klass "k"
   // until after the vtable pointer has been installed (i.e., until
   // after the return of permanent_obj_allocate().
-  klassOop k = 
+  klassOop k =
     (klassOop) CollectedHeap::permanent_obj_allocate_no_klass_install(klass,
       size, CHECK_NULL);
   return k->klass_part();
@@ -185,7 +182,7 @@ jint Klass::array_layout_helper(BasicType etype) {
   assert(etype >= T_BOOLEAN && etype <= T_OBJECT, "valid etype");
   // Note that T_ARRAY is not allowed here.
   int  hsize = arrayOopDesc::base_offset_in_bytes(etype);
-  int  esize = type2aelembytes[etype];
+  int  esize = type2aelembytes(etype);
   bool isobj = (etype == T_OBJECT);
   int  tag   =  isobj ? _lh_array_tag_obj_value : _lh_array_tag_type_value;
   int lh = array_layout_helper(tag, hsize, etype, exact_log2(esize));
@@ -222,7 +219,7 @@ void Klass::initialize_supers(klassOop k, TRAPS) {
     assert(super_depth() == 0, "Object must already be initialized properly");
   } else if (k != super() || k == SystemDictionary::object_klass()) {
     assert(super() == NULL || super() == SystemDictionary::object_klass(),
-	   "initialize this only once to a non-trivial value");
+           "initialize this only once to a non-trivial value");
     set_super(k);
     Klass* sup = k->klass_part();
     int sup_depth = sup->super_depth();
@@ -248,16 +245,16 @@ void Klass::initialize_supers(klassOop k, TRAPS) {
       assert(j == my_depth, "computed accessor gets right answer");
       klassOop t = as_klassOop();
       while (!Klass::cast(t)->can_be_primary_super()) {
-	t = Klass::cast(t)->super();
-	j = Klass::cast(t)->super_depth();
+        t = Klass::cast(t)->super();
+        j = Klass::cast(t)->super_depth();
       }
       for (juint j1 = j+1; j1 < primary_super_limit(); j1++) {
-	assert(primary_super_of_depth(j1) == NULL, "super list padding");
+        assert(primary_super_of_depth(j1) == NULL, "super list padding");
       }
       while (t != NULL) {
-	assert(primary_super_of_depth(j) == t, "super list initialization");
-	t = Klass::cast(t)->super();
-	--j;
+        assert(primary_super_of_depth(j) == t, "super list initialization");
+        t = Klass::cast(t)->super();
+        --j;
       }
       assert(j == (juint)-1, "correct depth count");
     }
@@ -313,7 +310,7 @@ void Klass::initialize_supers(klassOop k, TRAPS) {
     if (secondaries() != Universe::the_array_interfaces_array()) {
       // We must not copy any NULL placeholders left over from bootstrap.
       for (int j = 0; j < secondaries->length(); j++) {
-	assert(secondaries->obj_at(j) != NULL, "correct bootstrapping order");
+        assert(secondaries->obj_at(j) != NULL, "correct bootstrapping order");
       }
     }
   #endif
@@ -379,7 +376,7 @@ void Klass::remove_from_sibling_list() {
     // first subklass
     super->set_subklass(_next_sibling);
   } else {
-    Klass* sib = super->subklass(); 
+    Klass* sib = super->subklass();
     while (sib->next_sibling() != this) {
       sib = sib->next_sibling();
     };
@@ -389,8 +386,8 @@ void Klass::remove_from_sibling_list() {
 
 void Klass::follow_weak_klass_links( BoolObjectClosure* is_alive, OopClosure* keep_alive) {
   // This klass is alive but the subklass and siblings are not followed/updated.
-  // We update the subklass link and the subklass' sibling links here. 
-  // Our own sibling link will be updated by our superclass (which must be alive 
+  // We update the subklass link and the subklass' sibling links here.
+  // Our own sibling link will be updated by our superclass (which must be alive
   // since we are).
   assert(is_alive->do_object_b(as_klassOop()), "just checking, this should be live");
   if (ClassUnloading) {
@@ -427,7 +424,7 @@ void Klass::follow_weak_klass_links( BoolObjectClosure* is_alive, OopClosure* ke
       sub = next;
     }
   } else {
-    // Always follow subklass and sibling link. This will prevent any klasses from 
+    // Always follow subklass and sibling link. This will prevent any klasses from
     // being unloaded (all classes are transitively linked from java.lang.Object).
     keep_alive->do_oop(adr_subklass());
     keep_alive->do_oop(adr_next_sibling());
@@ -449,7 +446,7 @@ void Klass::remove_unshareable_info() {
 
 klassOop Klass::array_klass_or_null(int rank) {
   EXCEPTION_MARK;
-  // No exception can be thrown by array_klass_impl when called with or_null == true. 
+  // No exception can be thrown by array_klass_impl when called with or_null == true.
   // (In anycase, the execption mark will fail if it do so)
   return array_klass_impl(true, rank, THREAD);
 }
@@ -457,9 +454,9 @@ klassOop Klass::array_klass_or_null(int rank) {
 
 klassOop Klass::array_klass_or_null() {
   EXCEPTION_MARK;
-  // No exception can be thrown by array_klass_impl when called with or_null == true. 
+  // No exception can be thrown by array_klass_impl when called with or_null == true.
   // (In anycase, the execption mark will fail if it do so)
-  return array_klass_impl(true, THREAD); 
+  return array_klass_impl(true, THREAD);
 }
 
 
@@ -481,6 +478,24 @@ void Klass::with_array_klasses_do(void f(klassOop k)) {
 
 
 const char* Klass::external_name() const {
+  if (oop_is_instance()) {
+    instanceKlass* ik = (instanceKlass*) this;
+    if (ik->is_anonymous()) {
+      assert(AnonymousClasses, "");
+      intptr_t hash = ik->java_mirror()->identity_hash();
+      char     hash_buf[40];
+      sprintf(hash_buf, "/" UINTX_FORMAT, (uintx)hash);
+      size_t   hash_len = strlen(hash_buf);
+
+      size_t result_len = name()->utf8_length();
+      char*  result     = NEW_RESOURCE_ARRAY(char, result_len + hash_len + 1);
+      name()->as_klass_external_name(result, (int) result_len + 1);
+      assert(strlen(result) == result_len, "");
+      strcpy(result + result_len, hash_buf);
+      assert(strlen(result) == result_len + hash_len, "");
+      return result;
+    }
+  }
   return name()->as_klass_external_name();
 }
 
@@ -512,7 +527,7 @@ void Klass::oop_print_on(oop obj, outputStream* st) {
   // print title
   st->print_cr("%s ", internal_name());
   obj->print_address_on(st);
-  
+
   if (WizardMode) {
      // print header
      obj->mark()->print_on(st);
@@ -527,7 +542,7 @@ void Klass::oop_print_on(oop obj, outputStream* st) {
 
 void Klass::oop_print_value_on(oop obj, outputStream* st) {
   // print title
-  ResourceMark rm;		// Cannot print in debug mode without this
+  ResourceMark rm;              // Cannot print in debug mode without this
   st->print("%s", internal_name());
   obj->print_address_on(st);
 }
@@ -537,7 +552,7 @@ void Klass::oop_print_value_on(oop obj, outputStream* st) {
 // Verification
 
 void Klass::oop_verify_on(oop obj, outputStream* st) {
-  guarantee(obj->is_oop(),  "should be oop");  
+  guarantee(obj->is_oop(),  "should be oop");
   guarantee(obj->klass()->is_perm(),  "should be in permspace");
   guarantee(obj->klass()->is_klass(), "klass field is not a klass");
 }
@@ -545,11 +560,10 @@ void Klass::oop_verify_on(oop obj, outputStream* st) {
 
 void Klass::oop_verify_old_oop(oop obj, oop* p, bool allow_dirty) {
   /* $$$ I think this functionality should be handled by verification of
-
   RememberedSet::verify_old_oop(obj, p, allow_dirty, false);
-
   the card table. */
 }
+void Klass::oop_verify_old_oop(oop obj, narrowOop* p, bool allow_dirty) { }
 
 #ifndef PRODUCT
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.types.basic;
@@ -82,11 +82,11 @@ public class BasicType implements Type {
     }
 
     BasicType arg = (BasicType) obj;
-    
+
     if (!name.equals(arg.name)) {
       return false;
     }
-    
+
     return true;
   }
 
@@ -121,7 +121,7 @@ public class BasicType implements Type {
   public long getSize() {
     return size;
   }
-  
+
   /** Overridden by BasicCIntegerType */
   public boolean isCIntegerType() {
     return false;
@@ -129,8 +129,8 @@ public class BasicType implements Type {
 
   public boolean isCStringType() {
     if (isPointerType()) {
-      Type target = ((PointerType)this).getTargetType(); 
-      return target.isCIntegerType() && 
+      Type target = ((PointerType)this).getTargetType();
+      return target.isCIntegerType() &&
              target.getName().equals("const char");
     } else {
       return false;
@@ -172,7 +172,7 @@ public class BasicType implements Type {
         return field;
       }
     }
-    
+
     if (searchSuperclassFields) {
       if (superclass != null) {
         field = superclass.getField(fieldName, searchSuperclassFields, false);
@@ -273,6 +273,10 @@ public class BasicType implements Type {
     return (OopField) field;
   }
 
+  public NarrowOopField getNarrowOopField(String fieldName) throws WrongTypeException {
+    return (NarrowOopField) new BasicNarrowOopField(getOopField(fieldName));
+  }
+
   public AddressField getAddressField(String fieldName) {
     // This type can not be inferred (for now), so provide a wrapper
     Field field = getField(fieldName);
@@ -287,7 +291,7 @@ public class BasicType implements Type {
       name was already present in this class. */
   public void addField(Field field) {
     if (nameToFieldMap.get(field.getName()) != null) {
-      throw new RuntimeException("field of name \"" + field.getName() + "\" already present");
+      throw new RuntimeException("field of name \"" + field.getName() + "\" already present in type " + this);
     }
 
     nameToFieldMap.put(field.getName(), field);

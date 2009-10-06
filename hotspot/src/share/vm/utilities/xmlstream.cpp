@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)xmlstream.cpp	1.17 07/05/05 17:07:12 JVM"
-#endif
 /*
  * Copyright 2002-2007 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -62,6 +59,7 @@ void xmlStream::write(const char* s, size_t len) {
   if (!is_open())  return;
 
   out()->write(s, len);
+  update_position(s, len);
 }
 
 

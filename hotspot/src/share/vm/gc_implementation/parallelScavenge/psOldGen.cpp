@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)psOldGen.cpp	1.54 07/05/05 17:05:28 JVM"
-#endif
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -33,7 +30,7 @@ inline const char* PSOldGen::select_name() {
 }
 
 PSOldGen::PSOldGen(ReservedSpace rs, size_t alignment,
-		   size_t initial_size, size_t min_size, size_t max_size,
+                   size_t initial_size, size_t min_size, size_t max_size,
                    const char* perf_data_name, int level):
   _name(select_name()), _init_gen_size(initial_size), _min_gen_size(min_size),
   _max_gen_size(max_size)
@@ -49,7 +46,7 @@ PSOldGen::PSOldGen(size_t initial_size,
 {}
 
 void PSOldGen::initialize(ReservedSpace rs, size_t alignment,
-			  const char* perf_data_name, int level) {
+                          const char* perf_data_name, int level) {
   initialize_virtual_space(rs, alignment);
   initialize_work(perf_data_name, level);
   // The old gen can grow to gen_size_limit().  _reserve reflects only
@@ -73,7 +70,7 @@ void PSOldGen::initialize_work(const char* perf_data_name, int level) {
 
   MemRegion limit_reserved((HeapWord*)virtual_space()->low_boundary(),
     heap_word_size(_max_gen_size));
-  assert(limit_reserved.byte_size() == _max_gen_size, 
+  assert(limit_reserved.byte_size() == _max_gen_size,
     "word vs bytes confusion");
   //
   // Object start stuff
@@ -89,7 +86,16 @@ void PSOldGen::initialize_work(const char* perf_data_name, int level) {
   //
 
   MemRegion cmr((HeapWord*)virtual_space()->low(),
-		(HeapWord*)virtual_space()->high());
+                (HeapWord*)virtual_space()->high());
+  if (ZapUnusedHeapArea) {
+    // Mangle newly committed space immediately rather than
+    // waiting for the initialization of the space even though
+    // mangling is related to spaces.  Doing it here eliminates
+    // the need to carry along information that a complete mangling
+    // (bottom to end) needs to be done.
+    SpaceMangler::mangle_region(cmr);
+  }
+
   Universe::heap()->barrier_set()->resize_covered_region(cmr);
 
   CardTableModRefBS* _ct = (CardTableModRefBS*)Universe::heap()->barrier_set();
@@ -111,11 +117,13 @@ void PSOldGen::initialize_work(const char* perf_data_name, int level) {
   //
 
   _object_space = new MutableSpace();
-  
+
   if (_object_space == NULL)
     vm_exit_during_initialization("Could not allocate an old gen space");
 
-  object_space()->initialize(cmr, true);
+  object_space()->initialize(cmr,
+                             SpaceDecorator::Clear,
+                             SpaceDecorator::Mangle);
 
   _object_mark_sweep = new PSMarkSweepDecorator(_object_space, start_array(), MarkSweepDeadRatio);
 
@@ -127,7 +135,7 @@ void PSOldGen::initialize_work(const char* perf_data_name, int level) {
 
   // Generation Counters, generation 'level', 1 subspace
   _gen_counters = new PSGenerationCounters(perf_data_name, level, 1,
-					   virtual_space());
+                                           virtual_space());
   _space_counters = new SpaceCounters(perf_data_name, 0,
                                       virtual_space()->reserved_size(),
                                       _object_space, _gen_counters);
@@ -144,9 +152,7 @@ void PSOldGen::precompact() {
   assert(heap->kind() == CollectedHeap::ParallelScavengeHeap, "Sanity");
 
   // Reset start array first.
-  debug_only(if (!UseParallelOldGC || !VerifyParallelOldWithMarkSweep) {)
   start_array()->reset();
-  debug_only(})
 
   object_mark_sweep()->precompact();
 
@@ -207,10 +213,22 @@ HeapWord* PSOldGen::expand_and_cas_allocate(size_t word_size) {
 }
 
 void PSOldGen::expand(size_t bytes) {
+  if (bytes == 0) {
+    return;
+  }
   MutexLocker x(ExpandHeap_lock);
   const size_t alignment = virtual_space()->alignment();
   size_t aligned_bytes  = align_size_up(bytes, alignment);
   size_t aligned_expand_bytes = align_size_up(MinHeapDeltaBytes, alignment);
+  if (aligned_bytes == 0){
+    // The alignment caused the number of bytes to wrap.  An expand_by(0) will
+    // return true with the implication that and expansion was done when it
+    // was not.  A call to expand implies a best effort to expand by "bytes"
+    // but not a guarantee.  Align down to give a best effort.  This is likely
+    // the most that the generation can expand since it has some capacity to
+    // start with.
+    aligned_bytes = align_size_down(bytes, alignment);
+  }
 
   bool success = false;
   if (aligned_expand_bytes > aligned_bytes) {
@@ -223,8 +241,8 @@ void PSOldGen::expand(size_t bytes) {
     success = expand_to_reserved();
   }
 
-  if (GC_locker::is_active()) {
-    if (PrintGC && Verbose) {
+  if (PrintGC && Verbose) {
+    if (success && GC_locker::is_active()) {
       gclog_or_tty->print_cr("Garbage collection disabled, expanded heap instead");
     }
   }
@@ -233,8 +251,24 @@ void PSOldGen::expand(size_t bytes) {
 bool PSOldGen::expand_by(size_t bytes) {
   assert_lock_strong(ExpandHeap_lock);
   assert_locked_or_safepoint(Heap_lock);
+  if (bytes == 0) {
+    return true;  // That's what virtual_space()->expand_by(0) would return
+  }
   bool result = virtual_space()->expand_by(bytes);
   if (result) {
+    if (ZapUnusedHeapArea) {
+      // We need to mangle the newly expanded area. The memregion spans
+      // end -> new_end, we assume that top -> end is already mangled.
+      // Do the mangling before post_resize() is called because
+      // the space is available for allocation after post_resize();
+      HeapWord* const virtual_space_high = (HeapWord*) virtual_space()->high();
+      assert(object_space()->end() < virtual_space_high,
+        "Should be true before post_resize()");
+      MemRegion mangle_region(object_space()->end(), virtual_space_high);
+      // Note that the object space has not yet been updated to
+      // coincede with the new underlying virtual space.
+      SpaceMangler::mangle_region(mangle_region);
+    }
     post_resize();
     if (UsePerfData) {
       _space_counters->update_capacity();
@@ -245,8 +279,8 @@ bool PSOldGen::expand_by(size_t bytes) {
   if (result && Verbose && PrintGC) {
     size_t new_mem_size = virtual_space()->committed_size();
     size_t old_mem_size = new_mem_size - bytes;
-    gclog_or_tty->print_cr("Expanding %s from " SIZE_FORMAT "K by " 
-                                       SIZE_FORMAT "K to " 
+    gclog_or_tty->print_cr("Expanding %s from " SIZE_FORMAT "K by "
+                                       SIZE_FORMAT "K to "
                                        SIZE_FORMAT "K",
                     name(), old_mem_size/K, bytes/K, new_mem_size/K);
   }
@@ -280,8 +314,8 @@ void PSOldGen::shrink(size_t bytes) {
     if (Verbose && PrintGC) {
       size_t new_mem_size = virtual_space()->committed_size();
       size_t old_mem_size = new_mem_size + bytes;
-      gclog_or_tty->print_cr("Shrinking %s from " SIZE_FORMAT "K by " 
-                                         SIZE_FORMAT "K to " 
+      gclog_or_tty->print_cr("Shrinking %s from " SIZE_FORMAT "K by "
+                                         SIZE_FORMAT "K to "
                                          SIZE_FORMAT "K",
                       name(), old_mem_size/K, bytes/K, new_mem_size/K);
     }
@@ -344,23 +378,14 @@ void PSOldGen::resize(size_t desired_free_space) {
 // all heap related data structures, we may cause program failures.
 void PSOldGen::post_resize() {
   // First construct a memregion representing the new size
-  MemRegion new_memregion((HeapWord*)virtual_space()->low(), 
+  MemRegion new_memregion((HeapWord*)virtual_space()->low(),
     (HeapWord*)virtual_space()->high());
   size_t new_word_size = new_memregion.word_size();
 
   start_array()->set_covered_region(new_memregion);
   Universe::heap()->barrier_set()->resize_covered_region(new_memregion);
 
-  // Did we expand?
   HeapWord* const virtual_space_high = (HeapWord*) virtual_space()->high();
-  if (object_space()->end() < virtual_space_high) {
-    // We need to mangle the newly expanded area. The memregion spans
-    // end -> new_end, we assume that top -> end is already mangled.
-    // This cannot be safely tested for, as allocation may be taking
-    // place.
-    MemRegion mangle_region(object_space()->end(), virtual_space_high);
-    object_space()->mangle_region(mangle_region); 
-  }
 
   // ALWAYS do this last!!
   object_space()->set_end(virtual_space_high);
@@ -369,7 +394,7 @@ void PSOldGen::post_resize() {
     "Sanity");
 }
 
-size_t PSOldGen::gen_size_limit() { 
+size_t PSOldGen::gen_size_limit() {
   return _max_gen_size;
 }
 
@@ -392,16 +417,16 @@ void PSOldGen::print() const { print_on(tty);}
 void PSOldGen::print_on(outputStream* st) const {
   st->print(" %-15s", name());
   if (PrintGCDetails && Verbose) {
-    st->print(" total " SIZE_FORMAT ", used " SIZE_FORMAT, 
+    st->print(" total " SIZE_FORMAT ", used " SIZE_FORMAT,
                 capacity_in_bytes(), used_in_bytes());
   } else {
-    st->print(" total " SIZE_FORMAT "K, used " SIZE_FORMAT "K", 
+    st->print(" total " SIZE_FORMAT "K, used " SIZE_FORMAT "K",
                 capacity_in_bytes()/K, used_in_bytes()/K);
   }
   st->print_cr(" [" INTPTR_FORMAT ", " INTPTR_FORMAT ", " INTPTR_FORMAT ")",
-		virtual_space()->low_boundary(),
-		virtual_space()->high(),
-		virtual_space()->high_boundary());
+                virtual_space()->low_boundary(),
+                virtual_space()->high(),
+                virtual_space()->high_boundary());
 
   st->print("  object"); object_space()->print_on(st);
 }
@@ -426,17 +451,17 @@ void PSOldGen::update_counters() {
 #ifndef PRODUCT
 
 void PSOldGen::space_invariants() {
-  assert(object_space()->end() == (HeapWord*) virtual_space()->high(), 
+  assert(object_space()->end() == (HeapWord*) virtual_space()->high(),
     "Space invariant");
-  assert(object_space()->bottom() == (HeapWord*) virtual_space()->low(), 
+  assert(object_space()->bottom() == (HeapWord*) virtual_space()->low(),
     "Space invariant");
-  assert(virtual_space()->low_boundary() <= virtual_space()->low(), 
+  assert(virtual_space()->low_boundary() <= virtual_space()->low(),
     "Space invariant");
-  assert(virtual_space()->high_boundary() >= virtual_space()->high(), 
+  assert(virtual_space()->high_boundary() >= virtual_space()->high(),
     "Space invariant");
-  assert(virtual_space()->low_boundary() == (char*) _reserved.start(), 
+  assert(virtual_space()->low_boundary() == (char*) _reserved.start(),
     "Space invariant");
-  assert(virtual_space()->high_boundary() == (char*) _reserved.end(), 
+  assert(virtual_space()->high_boundary() == (char*) _reserved.end(),
     "Space invariant");
   assert(virtual_space()->committed_size() <= virtual_space()->reserved_size(),
     "Space invariant");
@@ -465,3 +490,10 @@ void PSOldGen::verify_object_start_array() {
   VerifyObjectStartArrayClosure check( this, &_start_array );
   object_iterate(&check);
 }
+
+#ifndef PRODUCT
+void PSOldGen::record_spaces_top() {
+  assert(ZapUnusedHeapArea, "Not mangling unused space");
+  object_space()->set_top_for_allocations();
+}
+#endif

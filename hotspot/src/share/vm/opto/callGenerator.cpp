@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)callGenerator.cpp	1.49 07/08/07 15:24:21 JVM"
-#endif
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -79,7 +76,7 @@ JVMState* ParseGenerator::generate(JVMState* jvms) {
 #ifdef ASSERT
   if (parser.tf() != (parser.depth() == 1 ? C->tf() : tf())) {
     MutexLockerEx ml(Compile_lock, Mutex::_no_safepoint_check_flag);
-    assert(C->env()->system_dictionary_modification_counter_changed(), 
+    assert(C->env()->system_dictionary_modification_counter_changed(),
            "Must invalidate if TypeFuncs differ");
   }
 #endif
@@ -467,6 +464,12 @@ JVMState* PredictedCallGenerator::generate(JVMState* jvms) {
     }
   }
 
+  if (kit.stopped()) {
+    // Instance exactly does not matches the desired type.
+    kit.set_jvms(slow_jvms);
+    return kit.transfer_exceptions_into_jvms();
+  }
+
   // fall through if the instance exactly matches the desired type
   kit.replace_in_map(receiver, exact_receiver);
 
@@ -626,7 +629,7 @@ bool WarmCallInfo::is_hot() const {
   return false;
 }
 
-// compute_heat:  
+// compute_heat:
 float WarmCallInfo::compute_heat() const {
   assert(!is_cold(), "compute heat only on warm nodes");
   assert(!is_hot(),  "compute heat only on warm nodes");

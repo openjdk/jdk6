@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)parallelScavengeHeap.hpp	1.62 07/10/04 10:49:30 JVM"
-#endif
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class AdjoiningGenerations;
@@ -61,9 +58,9 @@ class ParallelScavengeHeap : public CollectedHeap {
 
  public:
   ParallelScavengeHeap() : CollectedHeap() {
-    set_alignment(_perm_gen_alignment, intra_generation_alignment());
-    set_alignment(_young_gen_alignment, intra_generation_alignment());
-    set_alignment(_old_gen_alignment, intra_generation_alignment());
+    set_alignment(_perm_gen_alignment, intra_heap_alignment());
+    set_alignment(_young_gen_alignment, intra_heap_alignment());
+    set_alignment(_old_gen_alignment, intra_heap_alignment());
   }
 
   // For use by VM operations
@@ -95,14 +92,14 @@ class ParallelScavengeHeap : public CollectedHeap {
 
   void post_initialize();
   void update_counters();
-
   // The alignment used for the various generations.
   size_t perm_gen_alignment()  const { return _perm_gen_alignment; }
   size_t young_gen_alignment() const { return _young_gen_alignment; }
   size_t old_gen_alignment()  const { return _old_gen_alignment; }
 
-  // The alignment used for eden and survivors within the young gen.
-  size_t intra_generation_alignment() const { return 64 * K; }
+  // The alignment used for eden and survivors within the young gen
+  // and for boundary between young gen and old gen.
+  size_t intra_heap_alignment() const { return 64 * K; }
 
   size_t capacity() const;
   size_t used() const;
@@ -141,10 +138,10 @@ class ParallelScavengeHeap : public CollectedHeap {
   // and caused a NULL to be returned.  If a NULL is not returned,
   // "gc_time_limit_was_exceeded" has an undefined meaning.
 
-  HeapWord* mem_allocate(size_t size, 
-			 bool is_noref, 
-			 bool is_tlab,
-			 bool* gc_overhead_limit_was_exceeded);
+  HeapWord* mem_allocate(size_t size,
+                         bool is_noref,
+                         bool is_tlab,
+                         bool* gc_overhead_limit_was_exceeded);
   HeapWord* failed_mem_allocate(size_t size, bool is_tlab);
 
   HeapWord* permanent_mem_allocate(size_t size);
@@ -161,7 +158,7 @@ class ParallelScavengeHeap : public CollectedHeap {
 
   // These also should be called by the vm thread at a safepoint (e.g., from a
   // VM operation).
-  // 
+  //
   // The first collects the young generation only, unless the scavenge fails; it
   // will then attempt a full gc.  The second collects the entire heap; if
   // maximum_compaction is true, it will compact everything and clear all soft
@@ -172,8 +169,9 @@ class ParallelScavengeHeap : public CollectedHeap {
   size_t large_typearray_limit() { return FastAllocateSizeLimit; }
 
   bool supports_inline_contig_alloc() const { return !UseNUMA; }
-  HeapWord** top_addr() const { return !UseNUMA ? young_gen()->top_addr() : NULL; }
-  HeapWord** end_addr() const { return !UseNUMA ? young_gen()->end_addr() : NULL; }
+
+  HeapWord** top_addr() const { return !UseNUMA ? young_gen()->top_addr() : (HeapWord**)-1; }
+  HeapWord** end_addr() const { return !UseNUMA ? young_gen()->end_addr() : (HeapWord**)-1; }
 
   void ensure_parsability(bool retire_tlabs);
   void accumulate_statistics_all_tlabs();
@@ -185,6 +183,20 @@ class ParallelScavengeHeap : public CollectedHeap {
 
   size_t tlab_capacity(Thread* thr) const;
   size_t unsafe_max_tlab_alloc(Thread* thr) const;
+
+  // Can a compiler initialize a new object without store barriers?
+  // This permission only extends from the creation of a new object
+  // via a TLAB up to the first subsequent safepoint.
+  virtual bool can_elide_tlab_store_barriers() const {
+    return true;
+  }
+
+  // Can a compiler elide a store barrier when it writes
+  // a permanent oop into the heap?  Applies when the compiler
+  // is storing x to the heap, where x->is_perm() is true.
+  virtual bool can_elide_permanent_oop_store_barriers() const {
+    return true;
+  }
 
   void oop_iterate(OopClosure* cl);
   void object_iterate(ObjectClosure* cl);
@@ -215,11 +227,17 @@ class ParallelScavengeHeap : public CollectedHeap {
   // Resize the old generation.  The reserved space for the
   // generation may be expanded in preparation for the resize.
   void resize_old_gen(size_t desired_free_space);
+
+  // Save the tops of the spaces in all generations
+  void record_gen_tops_before_GC() PRODUCT_RETURN;
+
+  // Mangle the unused parts of all spaces in the heap
+  void gen_mangle_unused_area() PRODUCT_RETURN;
 };
 
 inline size_t ParallelScavengeHeap::set_alignment(size_t& var, size_t val)
 {
   assert(is_power_of_2((intptr_t)val), "must be a power of 2");
-  var = round_to(val, intra_generation_alignment());
+  var = round_to(val, intra_heap_alignment());
   return var;
 }

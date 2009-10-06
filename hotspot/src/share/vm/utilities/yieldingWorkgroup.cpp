@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)yieldingWorkgroup.cpp	1.11 07/05/05 17:07:11 JVM"
-#endif
 /*
  * Copyright 2005 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -34,8 +31,8 @@ class GangWorker;
 class WorkData;
 
 YieldingFlexibleWorkGang::YieldingFlexibleWorkGang(
-  const char* name, int workers, bool are_GC_threads) :
-  AbstractWorkGang(name, are_GC_threads) {
+  const char* name, int workers, bool are_GC_task_threads) :
+  AbstractWorkGang(name, are_GC_task_threads, false) {
   // Save arguments.
   _total_workers = workers;
   assert(_total_workers > 0, "Must have more than 1 worker");
@@ -70,7 +67,7 @@ YieldingFlexibleWorkGang::YieldingFlexibleWorkGang(
 // immediately with no actual work having been done by the workers.
 /////////////////////
 // Implementatiuon notes: remove before checking XXX
-/* 
+/*
 Each gang is working on a task at a certain time.
 Some subset of workers may have yielded and some may
 have finished their quota of work. Until this task has
@@ -150,13 +147,13 @@ void YieldingFlexibleWorkGang::start_task(YieldingFlexibleGangTask* new_task) {
   assert(_finished_workers == 0, "Tabula rasa non");
   assert(_yielded_workers == 0, "Tabula rasa non");
   yielding_task()->set_status(ACTIVE);
-  
+
   // Wake up all the workers, the first few will get to work,
   // and the rest will go back to sleep
   monitor()->notify_all();
   wait_for_gang();
 }
-  
+
 void YieldingFlexibleWorkGang::wait_for_gang() {
 
   assert(monitor()->owned_by_self(), "Data race");
@@ -236,7 +233,7 @@ void YieldingFlexibleWorkGang::yield() {
   } else {
     yielding_task()->set_status(YIELDING);
   }
-  
+
   while (true) {
     switch (yielding_task()->status()) {
       case YIELDING:
@@ -325,7 +322,7 @@ void YieldingFlexibleGangWorker::loop() {
       assert(gang()->task() == NULL, "No task binding");
       // set_status(TERMINATED);
       return;
-    } else if (data.task() != NULL && 
+    } else if (data.task() != NULL &&
                data.sequence_number() != previous_sequence_number) {
       // There is work to be done.
       // First check if we need to become active or if there

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)vframe.hpp	1.89 07/05/17 16:07:04 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +19,11 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // vframes are virtual stack frames representing source level activations.
-// A single frame may hold several source level activations in the case of 
+// A single frame may hold several source level activations in the case of
 // optimized code. The debugging stored with the optimized code enables
 // us to unfold a frame as a stack of vframes.
 // A cVFrame represents an activation of a non-java method.
@@ -52,13 +49,13 @@ class vframe: public ResourceObj {
  public:
   // Factory method for creating vframes
   static vframe* new_vframe(const frame* f, const RegisterMap *reg_map, JavaThread* thread);
-  
+
   // Accessors
   frame              fr()           const { return _fr;       }
   CodeBlob*          cb()         const { return _fr.cb();  }
-  nmethod*           nm()         const { 
-      assert( cb() != NULL && cb()->is_nmethod(), "usage"); 
-      return (nmethod*) cb(); 
+  nmethod*           nm()         const {
+      assert( cb() != NULL && cb()->is_nmethod(), "usage");
+      return (nmethod*) cb();
   }
 
 // ???? Does this need to be a copy?
@@ -72,15 +69,15 @@ class vframe: public ResourceObj {
   // Returns the next javaVFrame on the stack (skipping all other kinds of frame)
   javaVFrame *java_sender() const;
 
-  // Answers if the this is the top vframe in the frame, i.e., if the sender vframe 
+  // Answers if the this is the top vframe in the frame, i.e., if the sender vframe
   // is in the caller frame
   virtual bool is_top() const { return true; }
 
-  // Returns top vframe within same frame (see is_top())	
+  // Returns top vframe within same frame (see is_top())
   virtual vframe* top() const;
 
   // Type testing operations
-  virtual bool is_entry_frame()       const { return false; }  
+  virtual bool is_entry_frame()       const { return false; }
   virtual bool is_java_frame()        const { return false; }
   virtual bool is_interpreted_frame() const { return false; }
   virtual bool is_compiled_frame()    const { return false; }
@@ -99,7 +96,7 @@ class javaVFrame: public vframe {
   virtual methodOop                    method()         const = 0;
   virtual int                          bci()            const = 0;
   virtual StackValueCollection*        locals()         const = 0;
-  virtual StackValueCollection*        expressions()    const = 0;  
+  virtual StackValueCollection*        expressions()    const = 0;
   // the order returned by monitors() is from oldest -> youngest#4418568
   virtual GrowableArray<MonitorInfo*>* monitors()       const = 0;
 
@@ -108,7 +105,7 @@ class javaVFrame: public vframe {
   // Deoptimize first if necessary.
   virtual void set_locals(StackValueCollection* values) const = 0;
 
-  // Test operation 
+  // Test operation
   bool is_java_frame() const { return true; }
 
  protected:
@@ -127,7 +124,7 @@ class javaVFrame: public vframe {
 
   // printing used during stack dumps
   void print_lock_info_on(outputStream* st, int frame_count);
-  void print_lock_info(int frame_count)	{ print_lock_info_on(tty, frame_count); }
+  void print_lock_info(int frame_count) { print_lock_info_on(tty, frame_count); }
 
 #ifndef PRODUCT
  public:
@@ -179,7 +176,7 @@ class interpretedVFrame: public javaVFrame {
 
   // returns where the parameters starts relative to the frame pointer
   int start_of_parameters() const;
-  
+
 #ifndef PRODUCT
  public:
   // verify operations
@@ -218,7 +215,7 @@ class entryVFrame: public externalVFrame {
 
 #ifndef PRODUCT
  public:
-  // printing 
+  // printing
   void print_value() const;
   void print();
 #endif
@@ -233,20 +230,23 @@ class MonitorInfo : public ResourceObj {
  private:
   oop        _owner; // the object owning the monitor
   BasicLock* _lock;
+  bool       _eliminated;
  public:
   // Constructor
-  MonitorInfo(oop owner, BasicLock* lock) {
+  MonitorInfo(oop owner, BasicLock* lock, bool eliminated) {
     _owner = owner;
     _lock  = lock;
+    _eliminated = eliminated;
   }
   // Accessors
   oop        owner() const { return _owner; }
   BasicLock* lock()  const { return _lock;  }
+  bool eliminated()  const { return _eliminated; }
 };
 
 class vframeStreamCommon : StackObj {
  protected:
-  // common 
+  // common
   frame        _frame;
   JavaThread*  _thread;
   RegisterMap  _reg_map;
@@ -286,9 +286,9 @@ class vframeStreamCommon : StackObj {
   address frame_pc() const { return _frame.pc(); }
 
   CodeBlob*          cb()         const { return _frame.cb();  }
-  nmethod*           nm()         const { 
-      assert( cb() != NULL && cb()->is_nmethod(), "usage"); 
-      return (nmethod*) cb(); 
+  nmethod*           nm()         const {
+      assert( cb() != NULL && cb()->is_nmethod(), "usage");
+      return (nmethod*) cb();
   }
 
   // Frame type
@@ -302,7 +302,7 @@ class vframeStreamCommon : StackObj {
 
     // handle general case
     do {
-      _frame = _frame.sender(&_reg_map);    
+      _frame = _frame.sender(&_reg_map);
     } while (!fill_from_frame());
   }
 
@@ -386,36 +386,78 @@ inline void vframeStreamCommon::fill_from_compiled_frame(int decode_offset) {
   _method               = methodOop(buffer.read_oop());
   _bci                  = buffer.read_bci();
 
-  assert(_method->is_method(), "checking type of decoded method");  
+  assert(_method->is_method(), "checking type of decoded method");
 }
 
 // The native frames are handled specially. We do not rely on ScopeDesc info
 // since the pc might not be exact due to the _last_native_pc trick.
 inline void vframeStreamCommon::fill_from_compiled_native_frame() {
   _mode = compiled_mode;
-  _sender_decode_offset = DebugInformationRecorder::serialized_null; 
+  _sender_decode_offset = DebugInformationRecorder::serialized_null;
   _method = nm()->method();
   _bci = 0;
 }
 
-inline bool vframeStreamCommon::fill_from_frame() {  
+inline bool vframeStreamCommon::fill_from_frame() {
   // Interpreted frame
   if (_frame.is_interpreted_frame()) {
     fill_from_interpreter_frame();
     return true;
   }
 
-  // Compiled frame  
+  // Compiled frame
 
   if (cb() != NULL && cb()->is_nmethod()) {
     if (nm()->is_native_method()) {
       // Do not rely on scopeDesc since the pc might be unprecise due to the _last_native_pc trick.
       fill_from_compiled_native_frame();
-    } else {    
+    } else {
       PcDesc* pc_desc = nm()->pc_desc_at(_frame.pc());
       int decode_offset;
       if (pc_desc == NULL) {
         // Should not happen, but let fill_from_compiled_frame handle it.
+
+        // If we are trying to walk the stack of a thread that is not
+        // at a safepoint (like AsyncGetCallTrace would do) then this is an
+        // acceptable result. [ This is assuming that safe_for_sender
+        // is so bullet proof that we can trust the frames it produced. ]
+        //
+        // So if we see that the thread is not safepoint safe
+        // then simply produce the method and a bci of zero
+        // and skip the possibility of decoding any inlining that
+        // may be present. That is far better than simply stopping (or
+        // asserting. If however the thread is safepoint safe this
+        // is the sign of a compiler bug  and we'll let
+        // fill_from_compiled_frame handle it.
+
+
+        JavaThreadState state = _thread->thread_state();
+
+        // in_Java should be good enough to test safepoint safety
+        // if state were say in_Java_trans then we'd expect that
+        // the pc would have already been slightly adjusted to
+        // one that would produce a pcDesc since the trans state
+        // would be one that might in fact anticipate a safepoint
+
+        if (state == _thread_in_Java ) {
+          // This will get a method a zero bci and no inlining.
+          // Might be nice to have a unique bci to signify this
+          // particular case but for now zero will do.
+
+          fill_from_compiled_native_frame();
+
+          // There is something to be said for setting the mode to
+          // at_end_mode to prevent trying to walk further up the
+          // stack. There is evidence that if we walk any further
+          // that we could produce a bad stack chain. However until
+          // we see evidence that allowing this causes us to find
+          // frames bad enough to cause segv's or assertion failures
+          // we don't do it as while we may get a bad call chain the
+          // probability is much higher (several magnitudes) that we
+          // get good data.
+
+          return true;
+        }
         decode_offset = DebugInformationRecorder::serialized_null;
       } else {
         decode_offset = pc_desc->scope_decode_offset();
@@ -429,7 +471,7 @@ inline bool vframeStreamCommon::fill_from_frame() {
   if (_frame.is_first_frame() || (_stop_at_java_call_stub && _frame.is_entry_frame())) {
     _mode = at_end_mode;
     return true;
-  }    
+  }
 
   return false;
 }

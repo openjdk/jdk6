@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)node.hpp	1.224 07/09/28 10:33:17 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Portions of code courtesy of Clifford Click
@@ -56,6 +53,8 @@ class ConstraintCastNode;
 class ConNode;
 class CountedLoopNode;
 class CountedLoopEndNode;
+class DecodeNNode;
+class EncodePNode;
 class FastLockNode;
 class FastUnlockNode;
 class IfNode;
@@ -94,6 +93,7 @@ class Node_List;
 class Node_Stack;
 class NullCheckNode;
 class OopMap;
+class ParmNode;
 class PCTableNode;
 class PhaseCCP;
 class PhaseGVN;
@@ -108,6 +108,7 @@ class RegMask;
 class RegionNode;
 class RootNode;
 class SafePointNode;
+class SafePointScalarObjectNode;
 class StartNode;
 class State;
 class StoreNode;
@@ -120,7 +121,7 @@ class IfTrueNode;
 class IfFalseNode;
 typedef void (*NFunc)(Node&,void*);
 extern "C" {
-  typedef int (*C_sort_func_t)(const void *, const void *); 
+  typedef int (*C_sort_func_t)(const void *, const void *);
 }
 
 // The type of all node counts and indexes.
@@ -184,9 +185,9 @@ public:
   // from.  This should allow fast access to node creation & deletion.  This
   // field is a local cache of a value defined in some "program fragment" for
   // which these Nodes are just a part of.
-  
+
   // New Operator that takes a Compile pointer, this will eventually
-  // be the "new" New operator. 
+  // be the "new" New operator.
   inline void* operator new( size_t x, Compile* C) {
     Node* n = (Node*)C->node_arena()->Amalloc_D(x);
 #ifdef ASSERT
@@ -197,8 +198,8 @@ public:
   }
 
   // New Operator that takes a Compile pointer, this will eventually
-  // be the "new" New operator. 
-  inline void* operator new( size_t x, Compile* C, int y) { 
+  // be the "new" New operator.
+  inline void* operator new( size_t x, Compile* C, int y) {
     Node* n = (Node*)C->node_arena()->Amalloc_D(x + y*sizeof(void*));
     n->_in = (Node**)(((char*)n) + x);
 #ifdef ASSERT
@@ -206,7 +207,7 @@ public:
 #endif
     n->_out = (Node**)C;
     return (void*)n;
-  }  
+  }
 
   // Delete is a NOP
   void operator delete( void *ptr ) {}
@@ -218,7 +219,7 @@ public:
   Node( uint required );
 
   // Create a new Node with given input edges.
-  // This version requires use of the "edge-count" new.  
+  // This version requires use of the "edge-count" new.
   // E.g.  new (C,3) FooNode( C, NULL, left, right );
   Node( Node *n0 );
   Node( Node *n0, Node *n1 );
@@ -349,9 +350,9 @@ protected:
   // Return the unique out edge.
   Node* unique_out() const { assert(_outcnt==1,"not unique"); return _out[0]; }
   // Delete out edge at position 'i' by moving last out edge to position 'i'
-  void  raw_del_out(uint i) { 
-    assert(i < _outcnt,"oob"); 
-    assert(_outcnt > 0,"oob"); 
+  void  raw_del_out(uint i) {
+    assert(i < _outcnt,"oob");
+    assert(_outcnt > 0,"oob");
     #if OPTO_DU_ITERATOR_ASSERT
     // Record that a change happened here.
     debug_only(_last_del = _out[i]; ++_del_tick);
@@ -364,7 +365,7 @@ protected:
 #ifdef ASSERT
   bool is_dead() const;
 #define is_not_dead(n) ((n) == NULL || !VerifyIterativeGVN || !((n)->is_dead()))
-#endif 
+#endif
 
   // Set a required input edge, also updates corresponding output edge
   void add_req( Node *n ); // Append a NEW required input
@@ -383,7 +384,7 @@ protected:
   }
   // Light version of set_req() to init inputs after node creation.
   void init_req( uint i, Node *n ) {
-    assert( i == 0 && this == n || 
+    assert( i == 0 && this == n ||
             is_not_dead(n), "can not use dead node");
     assert( i < _cnt, "oob");
     assert( !VerifyHashTableKeys || _hash_lock == 0,
@@ -439,6 +440,12 @@ private:
 public:
   // Globally replace this node by a given new node, updating all uses.
   void replace_by(Node* new_node);
+  // Globally replace this node by a given new node, updating all uses
+  // and cutting input edges of old node.
+  void subsume_by(Node* new_node) {
+    replace_by(new_node);
+    disconnect_inputs(NULL);
+  }
   void set_req_X( uint i, Node *n, PhaseIterGVN *igvn );
   // Find the one non-null required input.  RegionNode only
   Node *nonnull_req() const;
@@ -447,7 +454,7 @@ public:
   void rm_prec( uint i );
   void set_prec( uint i, Node *n ) {
     assert( is_not_dead(n), "can not use dead node");
-    assert( i >= _cnt, "not a precedence edge"); 
+    assert( i >= _cnt, "not a precedence edge");
     if (_in[i] != NULL) _in[i]->del_out((Node *)this);
     _in[i] = n;
     if (n != NULL) n->add_out((Node *)this);
@@ -477,7 +484,7 @@ public:
 
   // Generate class id for some ideal nodes to avoid virtual query
   // methods is_<Node>().
-  // Class id is the set of bits corresponded to the node class and all its 
+  // Class id is the set of bits corresponded to the node class and all its
   // super classes so that queries for super classes are also valid.
   // Subclasses of the same super class have different assigned bit
   // (the third parameter in the macro DEFINE_CLASS_ID).
@@ -490,7 +497,7 @@ public:
   //
   //  Class_MachCall=30, ClassMask_MachCall=31
   // 12               8               4               0
-  //  0   0   0   0   0   0   0   0   1   1   1   1   0 
+  //  0   0   0   0   0   0   0   0   1   1   1   1   0
   //                                  |   |   |   |
   //                                  |   |   |   Bit_Mach=2
   //                                  |   |   Bit_MachReturn=4
@@ -499,7 +506,7 @@ public:
   //
   //  Class_CountedLoop=56, ClassMask_CountedLoop=63
   // 12               8               4               0
-  //  0   0   0   0   0   0   0   1   1   1   0   0   0 
+  //  0   0   0   0   0   0   0   1   1   1   0   0   0
   //                              |   |   |
   //                              |   |   Bit_Region=8
   //                              |   Bit_Loop=16
@@ -508,7 +515,7 @@ public:
   #define DEFINE_CLASS_ID(cl, supcl, subn) \
   Bit_##cl = (Class_##supcl == 0) ? 1 << subn : (Bit_##supcl) << (1 + subn) , \
   Class_##cl = Class_##supcl + Bit_##cl , \
-  ClassMask_##cl = ((Bit_##cl << 1) - 1) , 
+  ClassMask_##cl = ((Bit_##cl << 1) - 1) ,
 
   // This enum is used only for C2 ideal and mach nodes with is_<node>() methods
   // so that it's values fits into 16 bits.
@@ -560,6 +567,7 @@ public:
       DEFINE_CLASS_ID(JumpProj,  Proj, 1)
       DEFINE_CLASS_ID(IfTrue,    Proj, 2)
       DEFINE_CLASS_ID(IfFalse,   Proj, 3)
+      DEFINE_CLASS_ID(Parm,      Proj, 4)
 
     DEFINE_CLASS_ID(Region, Node, 3)
       DEFINE_CLASS_ID(Loop, Region, 0)
@@ -576,6 +584,9 @@ public:
       DEFINE_CLASS_ID(ConstraintCast, Type, 1)
       DEFINE_CLASS_ID(CheckCastPP, Type, 2)
       DEFINE_CLASS_ID(CMove, Type, 3)
+      DEFINE_CLASS_ID(SafePointScalarObject, Type, 4)
+      DEFINE_CLASS_ID(DecodeN, Type, 5)
+      DEFINE_CLASS_ID(EncodeP, Type, 6)
 
     DEFINE_CLASS_ID(Mem,   Node, 6)
       DEFINE_CLASS_ID(Load,  Mem, 0)
@@ -639,14 +650,14 @@ public:
 
   // Return a dense integer opcode number
   virtual int Opcode() const;
-  
+
   // Virtual inherited Node size
   virtual uint size_of() const;
 
   // Other interesting Node properties
 
   // Special case: is_Call() returns true for both CallNode and MachCallNode.
-  bool is_Call() const { 
+  bool is_Call() const {
     return (_flags & Flag_is_Call) != 0;
   }
 
@@ -684,6 +695,8 @@ public:
   DEFINE_CLASS_QUERY(Cmp)
   DEFINE_CLASS_QUERY(CountedLoop)
   DEFINE_CLASS_QUERY(CountedLoopEnd)
+  DEFINE_CLASS_QUERY(DecodeN)
+  DEFINE_CLASS_QUERY(EncodeP)
   DEFINE_CLASS_QUERY(FastLock)
   DEFINE_CLASS_QUERY(FastUnlock)
   DEFINE_CLASS_QUERY(If)
@@ -715,12 +728,14 @@ public:
   DEFINE_CLASS_QUERY(Mul)
   DEFINE_CLASS_QUERY(Multi)
   DEFINE_CLASS_QUERY(MultiBranch)
+  DEFINE_CLASS_QUERY(Parm)
   DEFINE_CLASS_QUERY(PCTable)
   DEFINE_CLASS_QUERY(Phi)
   DEFINE_CLASS_QUERY(Proj)
   DEFINE_CLASS_QUERY(Region)
   DEFINE_CLASS_QUERY(Root)
   DEFINE_CLASS_QUERY(SafePoint)
+  DEFINE_CLASS_QUERY(SafePointScalarObject)
   DEFINE_CLASS_QUERY(Start)
   DEFINE_CLASS_QUERY(Store)
   DEFINE_CLASS_QUERY(Sub)
@@ -730,16 +745,17 @@ public:
   #undef DEFINE_CLASS_QUERY
 
   // duplicate of is_MachSpillCopy()
-  bool is_SpillCopy () const { 
+  bool is_SpillCopy () const {
     return ((_class_id & ClassMask_MachSpillCopy) == Class_MachSpillCopy);
   }
 
   bool is_Con () const { return (_flags & Flag_is_Con) != 0; }
   bool is_Goto() const { return (_flags & Flag_is_Goto) != 0; }
   // The data node which is safe to leave in dead loop during IGVN optimization.
-  bool is_dead_loop_safe() const { 
-    return is_Phi() || is_Proj() ||
-           (_flags & (Flag_is_dead_loop_safe | Flag_is_Con)) != 0;
+  bool is_dead_loop_safe() const {
+    return is_Phi() || (is_Proj() && in(0) == NULL) ||
+           ((_flags & (Flag_is_dead_loop_safe | Flag_is_Con)) != 0 &&
+            (!is_Proj() || !in(0)->is_Allocate()));
   }
 
   // is_Copy() returns copied edge index (0 or 1)
@@ -762,7 +778,7 @@ public:
   // Nodes, next block selector Nodes (block enders), and next block
   // projections.  These calls need to work on their machine equivalents.  The
   // Ideal beginning Nodes are RootNode, RegionNode and StartNode.
-  bool is_block_start() const { 
+  bool is_block_start() const {
     if ( is_Region() )
       return this == (const Node*)in(0);
     else
@@ -796,14 +812,14 @@ public:
   virtual const class TypePtr *adr_type() const { return NULL; }
 
   // Return an existing node which computes the same function as this node.
-  // The optimistic combined algorithm requires this to return a Node which 
+  // The optimistic combined algorithm requires this to return a Node which
   // is a small number of steps away (e.g., one of my inputs).
   virtual Node *Identity( PhaseTransform *phase );
 
   // Return the set of values this Node can take on at runtime.
   virtual const Type *Value( PhaseTransform *phase ) const;
 
-  // Return a node which is more "ideal" than the current node.  
+  // Return a node which is more "ideal" than the current node.
   // The invariants on this call are subtle.  If in doubt, read the
   // treatise in node.cpp above the default implemention AND TEST WITH
   // +VerifyIterativeGVN!
@@ -813,6 +829,12 @@ public:
   // unique users of specific nodes. Such nodes should be put on IGVN worklist
   // for the transformations to happen.
   bool has_special_unique_user() const;
+
+  // Skip Proj and CatchProj nodes chains. Check for Null and Top.
+  Node* find_exact_control(Node* ctrl);
+
+  // Check if 'this' node dominates or equal to 'sub'.
+  bool dominates(Node* sub, Node_List &nlist);
 
 protected:
   bool remove_dead_region(PhaseGVN *phase, bool can_reshape);
@@ -879,7 +901,7 @@ public:
   // Print as assembly
   virtual void format( PhaseRegAlloc *, outputStream* st = tty ) const;
   // Emit bytes starting at parameter 'ptr'
-  // Bump 'ptr' by the number of output bytes 
+  // Bump 'ptr' by the number of output bytes
   virtual void emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const;
   // Size of instruction in bytes
   virtual uint size(PhaseRegAlloc *ra_) const;
@@ -914,6 +936,7 @@ public:
 
   // These guys are called by code generated by ADLC:
   intptr_t get_ptr() const;
+  intptr_t get_narrowcon() const;
   jdouble getd() const;
   jfloat getf() const;
 
@@ -1230,7 +1253,7 @@ Node* Node::last_out(DUIterator_Last& i) const {
 //-----------------------------------------------------------------------------
 // Map dense integer indices to Nodes.  Uses classic doubling-array trick.
 // Abstractly provides an infinite array of Node*'s, initialized to NULL.
-// Note that the constructor just zeros things, and since I use Arena 
+// Note that the constructor just zeros things, and since I use Arena
 // allocation I do not need a destructor to reclaim storage.
 class Node_Array : public ResourceObj {
 protected:
@@ -1290,14 +1313,15 @@ public:
   bool member( Node *n ) { return _in_worklist.test(n->_idx) != 0; }
   VectorSet &member_set(){ return _in_worklist; }
 
-  void push( Node *b ) { 
-    if( !_in_worklist.test_set(b->_idx) ) 
+  void push( Node *b ) {
+    if( !_in_worklist.test_set(b->_idx) )
       Node_List::push(b);
   }
   Node *pop() {
     if( _clock_index >= size() ) _clock_index = 0;
     Node *b = at(_clock_index);
-    map( _clock_index++, Node_List::pop());
+    map( _clock_index, Node_List::pop());
+    if (size() != 0) _clock_index++; // Always start from 0
     _in_worklist >>= b->_idx;
     return b;
   }
@@ -1325,7 +1349,6 @@ public:
 // Inline definition of Compile::record_for_igvn must be deferred to this point.
 inline void Compile::record_for_igvn(Node* n) {
   _for_igvn->push(n);
-  record_for_escape_analysis(n);
 }
 
 //------------------------------Node_Stack-------------------------------------
@@ -1341,15 +1364,15 @@ protected:
   Arena *_a;         // Arena to allocate in
   void grow();
 public:
-  Node_Stack(int size) { 
+  Node_Stack(int size) {
     size_t max = (size > OptoNodeListSize) ? size : OptoNodeListSize;
     _a = Thread::current()->resource_area();
     _inodes = NEW_ARENA_ARRAY( _a, INode, max );
     _inode_max = _inodes + max;
     _inode_top = _inodes - 1; // stack is empty
   }
-  
-  Node_Stack(Arena *a, int size) : _a(a) { 
+
+  Node_Stack(Arena *a, int size) : _a(a) {
     size_t max = (size > OptoNodeListSize) ? size : OptoNodeListSize;
     _inodes = NEW_ARENA_ARRAY( _a, INode, max );
     _inode_max = _inodes + max;
@@ -1377,6 +1400,10 @@ public:
   uint index() const {
     return _inode_top->indx;
   }
+  uint index_at(uint i) const {
+    assert(_inodes + i <= _inode_top, "in range");
+    return _inodes[i].indx;
+  }
   void set_node(Node *n) {
     _inode_top->node = n;
   }
@@ -1384,7 +1411,7 @@ public:
     _inode_top->indx = i;
   }
   uint size_max() const { return (uint)pointer_delta(_inode_max, _inodes,  sizeof(INode)); } // Max size
-  uint size() const { return (uint)pointer_delta(_inode_top, _inodes,  sizeof(INode)) + 1; } // Current size
+  uint size() const { return (uint)pointer_delta((_inode_top+1), _inodes,  sizeof(INode)); } // Current size
   bool is_nonempty() const { return (_inode_top >= _inodes); }
   bool is_empty() const { return (_inode_top < _inodes); }
   void clear() { _inode_top = _inodes - 1; } // retain storage
@@ -1404,7 +1431,7 @@ public:
 
   JVMState* jvms()            { return _jvms; }
   void  set_jvms(JVMState* x) {        _jvms = x; }
-  
+
   // True if there is nothing here.
   bool is_clear() {
     return (_jvms == NULL);
@@ -1493,4 +1520,3 @@ public:
   virtual void dump_spec(outputStream *st) const;
 #endif
 };
-

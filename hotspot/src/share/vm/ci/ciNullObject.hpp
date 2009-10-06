@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)ciNullObject.hpp	1.13 07/09/28 10:23:21 JVM"
-#endif
 /*
  * Copyright 1999-2000 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // ciNullObject
@@ -50,5 +47,3 @@ public:
   // Get the distinguished instance of this klass.
   static ciNullObject* make();
 };
-
-

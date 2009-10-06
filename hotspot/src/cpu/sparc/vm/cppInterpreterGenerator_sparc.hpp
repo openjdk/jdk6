@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)cppInterpreterGenerator_sparc.hpp	1.1 07/08/07 10:21:42 JVM"
-#endif
 /*
  * Copyright 2002 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
   static address frame_manager_return;
@@ -32,6 +29,6 @@
   void generate_more_monitors();
   void generate_deopt_handling();
   void adjust_callers_stack(Register args);
-  void generate_compute_interpreter_state(const Register state, 
-					  const Register prev_state, 
-					  bool native); 
+  void generate_compute_interpreter_state(const Register state,
+                                          const Register prev_state,
+                                          bool native);

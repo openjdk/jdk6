@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)vmGCOperations.cpp	1.21 07/05/29 09:44:12 JVM"
-#endif
 /*
- * Copyright 2005-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 # include "incls/_precompiled.incl"
 # include "incls/_vmGCOperations.cpp.incl"
@@ -56,8 +53,8 @@ void VM_GC_Operation::release_and_notify_pending_list_lock() {
 // resulting in multiple gc requests.  We only want to do one of them.
 // In case a GC locker is active and the need for a GC is already signalled,
 // we want to skip this GC attempt altogether, without doing a futile
-// safepoint operation. 
-bool VM_GC_Operation::skip_operation() const { 
+// safepoint operation.
+bool VM_GC_Operation::skip_operation() const {
   bool skip = (_gc_count_before != Universe::heap()->total_collections());
   if (_full && skip) {
     skip = (_full_gc_count_before != Universe::heap()->total_full_collections());
@@ -77,6 +74,7 @@ bool VM_GC_Operation::doit_prologue() {
   // If the GC count has changed someone beat us to the collection
   // Get the Heap_lock after the pending_list_lock.
   Heap_lock->lock();
+
   // Check invocations
   if (skip_operation()) {
     // skip collection
@@ -85,6 +83,8 @@ bool VM_GC_Operation::doit_prologue() {
     _prologue_succeeded = false;
   } else {
     _prologue_succeeded = true;
+    SharedHeap* sh = SharedHeap::heap();
+    if (sh != NULL) sh->_thread_holds_heap_lock_for_gc = true;
   }
   return _prologue_succeeded;
 }
@@ -93,6 +93,8 @@ bool VM_GC_Operation::doit_prologue() {
 void VM_GC_Operation::doit_epilogue() {
   assert(Thread::current()->is_Java_thread(), "just checking");
   // Release the Heap_lock first.
+  SharedHeap* sh = SharedHeap::heap();
+  if (sh != NULL) sh->_thread_holds_heap_lock_for_gc = false;
   Heap_lock->unlock();
   release_and_notify_pending_list_lock();
 }
@@ -136,7 +138,7 @@ void VM_GenCollectForAllocation::doit() {
     set_gc_locked();
   }
   notify_gc_end();
-} 			
+}
 
 void VM_GenCollectFull::doit() {
   JvmtiGCFullMarker jgcm;
@@ -146,4 +148,34 @@ void VM_GenCollectFull::doit() {
   GCCauseSetter gccs(gch, _gc_cause);
   gch->do_full_collection(gch->must_clear_all_soft_refs(), _max_level);
   notify_gc_end();
-} 			
+}
+
+void VM_GenCollectForPermanentAllocation::doit() {
+  JvmtiGCForAllocationMarker jgcm;
+  notify_gc_begin(true);
+  SharedHeap* heap = (SharedHeap*)Universe::heap();
+  GCCauseSetter gccs(heap, _gc_cause);
+  switch (heap->kind()) {
+    case (CollectedHeap::GenCollectedHeap): {
+      GenCollectedHeap* gch = (GenCollectedHeap*)heap;
+      gch->do_full_collection(gch->must_clear_all_soft_refs(),
+                              gch->n_gens() - 1);
+      break;
+    }
+#ifndef SERIALGC
+    case (CollectedHeap::G1CollectedHeap): {
+      G1CollectedHeap* g1h = (G1CollectedHeap*)heap;
+      g1h->do_full_collection(_gc_cause == GCCause::_last_ditch_collection);
+      break;
+    }
+#endif // SERIALGC
+    default:
+      ShouldNotReachHere();
+  }
+  _res = heap->perm_gen()->allocate(_size, false);
+  assert(heap->is_in_reserved_or_null(_res), "result not in heap");
+  if (_res == NULL && GC_locker::is_active_and_needs_gc()) {
+    set_gc_locked();
+  }
+  notify_gc_end();
+}
