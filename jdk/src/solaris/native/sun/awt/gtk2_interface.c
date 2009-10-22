@@ -636,7 +636,6 @@ gboolean gtk2_load()
     if (gtk_modules_env && strstr (gtk_modules_env, "atk-bridge") ||
         gtk_modules_env && strstr (gtk_modules_env, "gail"))
     {
-        gchar *tmp_env = strdup (gtk_modules_env);
         /* the new env will be smaller than the old one */
         gchar *s, *new_env = SAFE_SIZE_STRUCT_ALLOC(malloc,
                 sizeof(ENV_PREFIX), 1, strlen (gtk_modules_env));
@@ -644,6 +643,7 @@ gboolean gtk2_load()
         if (new_env != NULL )
         {
             /* careful, strtok modifies its args */
+            gchar *tmp_env = strdup (gtk_modules_env);
             strcpy(new_env, ENV_PREFIX);
 
             /* strip out 'atk-bridge' and 'gail' */
