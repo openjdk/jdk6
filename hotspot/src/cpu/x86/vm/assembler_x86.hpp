@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,8 +16,8 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores,
+ * CA 94065 USA or visit www.oracle.com if you need additional information or
  * have any questions.
  *
  */
@@ -1244,7 +1244,9 @@ private:
   void pcmpestri(XMMRegister xmm1, XMMRegister xmm2, int imm8);
   void pcmpestri(XMMRegister xmm1, Address src, int imm8);
 
+#ifndef _LP64 // no 32bit push/pop on amd64
   void popl(Address dst);
+#endif
 
 #ifdef _LP64
   void popq(Address dst);
@@ -1285,7 +1287,9 @@ private:
   // Interleave Low Bytes
   void punpcklbw(XMMRegister dst, XMMRegister src);
 
+#ifndef _LP64 // no 32bit push/pop on amd64
   void pushl(Address src);
+#endif
 
   void pushq(Address src);
 
@@ -2217,6 +2221,20 @@ public:
   void movl2ptr(Register dst, Address src) { LP64_ONLY(movslq(dst, src)) NOT_LP64(movl(dst, src)); }
   void movl2ptr(Register dst, Register src) { LP64_ONLY(movslq(dst, src)) NOT_LP64(if (dst != src) movl(dst, src)); }
 
+  // IndexOf strings.
+  void string_indexof(Register str1, Register str2,
+                      Register cnt1, Register cnt2, Register result,
+                      XMMRegister vec, Register tmp);
+
+  // Compare strings.
+  void string_compare(Register str1, Register str2,
+                      Register cnt1, Register cnt2, Register result,
+                      XMMRegister vec1, XMMRegister vec2);
+
+  // Compare char[] arrays.
+  void char_arrays_equals(bool is_array_equ, Register ary1, Register ary2,
+                          Register limit, Register result, Register chr,
+                          XMMRegister vec1, XMMRegister vec2);
 
 #undef VIRTUAL
 

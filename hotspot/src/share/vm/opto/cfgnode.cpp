@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2010 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,8 +16,8 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores,
+ * CA 94065 USA or visit www.oracle.com if you need additional information or
  * have any questions.
  *
  */
@@ -1532,6 +1532,8 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
     return NULL;                // No change
 
   Node *top = phase->C->top();
+  bool new_phi = (outcnt() == 0); // transforming new Phi
+  assert(!can_reshape || !new_phi, "for igvn new phi should be hooked");
 
   // The are 2 situations when only one valid phi's input is left
   // (in addition to Region input).
@@ -1549,6 +1551,12 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
         progress = this;        // Record progress
       }
     }
+  }
+
+  if (can_reshape && outcnt() == 0) {
+    // set_req() above may kill outputs if Phi is referenced
+    // only by itself on the dead (top) control path.
+    return top;
   }
 
   Node* uin = unique_input(phase);
@@ -1685,8 +1693,7 @@ Node *PhiNode::Ideal(PhaseGVN *phase, bool can_reshape) {
             // Equivalent code is in MemNode::Ideal_common
             Node *m  = phase->transform(n);
             if (outcnt() == 0) {  // Above transform() may kill us!
-              progress = phase->C->top();
-              break;
+              return top;
             }
             // If transformed to a MergeMem, get the desired slice
             // Otherwise the returned node represents memory for every slice

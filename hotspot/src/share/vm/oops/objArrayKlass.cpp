@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,8 +16,8 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores,
+ * CA 94065 USA or visit www.oracle.com if you need additional information or
  * have any questions.
  *
  */
@@ -246,8 +246,8 @@ objArrayOop objArrayKlass::compute_secondary_supers(int num_extra_slots, TRAPS) 
   } else {
     objArrayOop sec_oop = oopFactory::new_system_objArray(num_secondaries, CHECK_NULL);
     objArrayHandle secondaries(THREAD, sec_oop);
-    secondaries->obj_at_put(num_extra_slots+0, SystemDictionary::cloneable_klass());
-    secondaries->obj_at_put(num_extra_slots+1, SystemDictionary::serializable_klass());
+    secondaries->obj_at_put(num_extra_slots+0, SystemDictionary::Cloneable_klass());
+    secondaries->obj_at_put(num_extra_slots+1, SystemDictionary::Serializable_klass());
     for (int i = 0; i < num_elem_supers; i++) {
       klassOop elem_super = (klassOop) elem_supers->obj_at(i);
       klassOop array_super = elem_super->klass_part()->array_klass_or_null();
@@ -499,6 +499,8 @@ void objArrayKlass::oop_print_on(oop obj, outputStream* st) {
   }
 }
 
+#endif //PRODUCT
+
 static int max_objArray_print_length = 4;
 
 void objArrayKlass::oop_print_value_on(oop obj, outputStream* st) {
@@ -508,7 +510,7 @@ void objArrayKlass::oop_print_value_on(oop obj, outputStream* st) {
   int len = objArrayOop(obj)->length();
   st->print("[%d] ", len);
   obj->print_address_on(st);
-  if (PrintOopAddress || PrintMiscellaneous && (WizardMode || Verbose)) {
+  if (NOT_PRODUCT(PrintOopAddress ||) PrintMiscellaneous && (WizardMode || Verbose)) {
     st->print("{");
     for (int i = 0; i < len; i++) {
       if (i > max_objArray_print_length) {
@@ -519,8 +521,6 @@ void objArrayKlass::oop_print_value_on(oop obj, outputStream* st) {
     st->print(" }");
   }
 }
-
-#endif // PRODUCT
 
 const char* objArrayKlass::internal_name() const {
   return external_name();

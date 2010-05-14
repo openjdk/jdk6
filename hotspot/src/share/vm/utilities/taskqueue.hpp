@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,8 +16,8 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores,
+ * CA 94065 USA or visit www.oracle.com if you need additional information or
  * have any questions.
  *
  */
@@ -133,6 +133,9 @@ public:
   // Maximum number of elements allowed in the queue.  This is two less
   // than the actual queue size, for somewhat complicated reasons.
   uint max_elems() { return N - 2; }
+
+  // Total size of queue.
+  static const uint total_size() { return N; }
 };
 
 template<class E> class GenericTaskQueue: public TaskQueueSuper {
@@ -207,7 +210,7 @@ bool GenericTaskQueue<E>::push_slow(E t, uint dirty_n_elems) {
     // Actually means 0, so do the push.
     uint localBot = _bottom;
     _elems[localBot] = t;
-    _bottom = increment_index(localBot);
+    OrderAccess::release_store(&_bottom, increment_index(localBot));
     return true;
   }
   return false;
@@ -465,19 +468,7 @@ public:
 #endif
 };
 
-#define SIMPLE_STACK 0
-
 template<class E> inline bool GenericTaskQueue<E>::push(E t) {
-#if SIMPLE_STACK
-  uint localBot = _bottom;
-  if (_bottom < max_elems()) {
-    _elems[localBot] = t;
-    _bottom = localBot + 1;
-    return true;
-  } else {
-    return false;
-  }
-#else
   uint localBot = _bottom;
   assert((localBot >= 0) && (localBot < N), "_bottom out of range.");
   idx_t top = _age.top();
@@ -485,23 +476,14 @@ template<class E> inline bool GenericTaskQueue<E>::push(E t) {
   assert((dirty_n_elems >= 0) && (dirty_n_elems < N), "n_elems out of range.");
   if (dirty_n_elems < max_elems()) {
     _elems[localBot] = t;
-    _bottom = increment_index(localBot);
+    OrderAccess::release_store(&_bottom, increment_index(localBot));
     return true;
   } else {
     return push_slow(t, dirty_n_elems);
   }
-#endif
 }
 
 template<class E> inline bool GenericTaskQueue<E>::pop_local(E& t) {
-#if SIMPLE_STACK
-  uint localBot = _bottom;
-  assert(localBot > 0, "precondition.");
-  localBot--;
-  t = _elems[localBot];
-  _bottom = localBot;
-  return true;
-#else
   uint localBot = _bottom;
   // This value cannot be N-1.  That can only occur as a result of
   // the assignment to bottom in this method.  If it does, this method
@@ -529,7 +511,6 @@ template<class E> inline bool GenericTaskQueue<E>::pop_local(E& t) {
     // path.
     return pop_local_slow(localBot, _age.get());
   }
-#endif
 }
 
 typedef oop Task;
@@ -576,13 +557,13 @@ typedef GenericTaskQueueSet<RegionTask> RegionTaskQueueSet;
 
 class RegionTaskQueueWithOverflow: public CHeapObj {
  protected:
-  RegionTaskQueue              _region_queue;
-  GrowableArray<RegionTask>*   _overflow_stack;
+  RegionTaskQueue   _region_queue;
+  Stack<RegionTask> _overflow_stack;
 
  public:
-  RegionTaskQueueWithOverflow() : _overflow_stack(NULL) {}
+  RegionTaskQueueWithOverflow() { }
   // Initialize both stealable queue and overflow
-  void initialize();
+  inline void initialize();
   // Save first to stealable queue and then to overflow
   void save(RegionTask t);
   // Retrieve first from overflow and then from stealable queue
@@ -591,11 +572,27 @@ class RegionTaskQueueWithOverflow: public CHeapObj {
   bool retrieve_from_stealable_queue(RegionTask& region_index);
   // Retrieve from overflow
   bool retrieve_from_overflow(RegionTask& region_index);
-  bool is_empty();
-  bool stealable_is_empty();
-  bool overflow_is_empty();
+  inline bool is_empty();
+  inline bool stealable_is_empty();
+  inline bool overflow_is_empty();
   uint stealable_size() { return _region_queue.size(); }
   RegionTaskQueue* task_queue() { return &_region_queue; }
 };
+
+void RegionTaskQueueWithOverflow::initialize() {
+  _region_queue.initialize();
+}
+
+bool RegionTaskQueueWithOverflow::is_empty() {
+  return _region_queue.size() == 0 && _overflow_stack.is_empty();
+}
+
+bool RegionTaskQueueWithOverflow::stealable_is_empty() {
+  return _region_queue.size() == 0;
+}
+
+bool RegionTaskQueueWithOverflow::overflow_is_empty() {
+  return _overflow_stack.is_empty();
+}
 
 #define USE_RegionTaskQueueWithOverflow

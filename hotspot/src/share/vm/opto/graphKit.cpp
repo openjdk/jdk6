@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,8 +16,8 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores,
+ * CA 94065 USA or visit www.oracle.com if you need additional information or
  * have any questions.
  *
  */
@@ -455,16 +455,44 @@ Bytecodes::Code GraphKit::java_bc() const {
     return Bytecodes::_illegal;
 }
 
+void GraphKit::uncommon_trap_if_should_post_on_exceptions(Deoptimization::DeoptReason reason,
+                                                          bool must_throw) {
+    // if the exception capability is set, then we will generate code
+    // to check the JavaThread.should_post_on_exceptions flag to see
+    // if we actually need to report exception events (for this
+    // thread).  If we don't need to report exception events, we will
+    // take the normal fast path provided by add_exception_events.  If
+    // exception event reporting is enabled for this thread, we will
+    // take the uncommon_trap in the BuildCutout below.
+
+    // first must access the should_post_on_exceptions_flag in this thread's JavaThread
+    Node* jthread = _gvn.transform(new (C, 1) ThreadLocalNode());
+    Node* adr = basic_plus_adr(top(), jthread, in_bytes(JavaThread::should_post_on_exceptions_flag_offset()));
+    Node* should_post_flag = make_load(control(), adr, TypeInt::INT, T_INT, Compile::AliasIdxRaw, false);
+
+    // Test the should_post_on_exceptions_flag vs. 0
+    Node* chk = _gvn.transform( new (C, 3) CmpINode(should_post_flag, intcon(0)) );
+    Node* tst = _gvn.transform( new (C, 2) BoolNode(chk, BoolTest::eq) );
+
+    // Branch to slow_path if should_post_on_exceptions_flag was true
+    { BuildCutout unless(this, tst, PROB_MAX);
+      // Do not try anything fancy if we're notifying the VM on every throw.
+      // Cf. case Bytecodes::_athrow in parse2.cpp.
+      uncommon_trap(reason, Deoptimization::Action_none,
+                    (ciKlass*)NULL, (char*)NULL, must_throw);
+    }
+
+}
+
 //------------------------------builtin_throw----------------------------------
 void GraphKit::builtin_throw(Deoptimization::DeoptReason reason, Node* arg) {
   bool must_throw = true;
 
-  if (env()->jvmti_can_post_exceptions()) {
-    // Do not try anything fancy if we're notifying the VM on every throw.
-    // Cf. case Bytecodes::_athrow in parse2.cpp.
-    uncommon_trap(reason, Deoptimization::Action_none,
-                  (ciKlass*)NULL, (char*)NULL, must_throw);
-    return;
+  if (env()->jvmti_can_post_on_exceptions()) {
+    // check if we must post exception events, take uncommon trap if so
+    uncommon_trap_if_should_post_on_exceptions(reason, must_throw);
+    // here if should_post_on_exceptions is false
+    // continue on with the normal codegen
   }
 
   // If this particular condition has not yet happened at this
@@ -622,11 +650,13 @@ BuildCutout::~BuildCutout() {
 
 //---------------------------PreserveReexecuteState----------------------------
 PreserveReexecuteState::PreserveReexecuteState(GraphKit* kit) {
+  assert(!kit->stopped(), "must call stopped() before");
   _kit    =    kit;
   _sp     =    kit->sp();
   _reexecute = kit->jvms()->_reexecute;
 }
 PreserveReexecuteState::~PreserveReexecuteState() {
+  if (_kit->stopped()) return;
   _kit->jvms()->_reexecute = _reexecute;
   _kit->set_sp(_sp);
 }
@@ -750,12 +780,20 @@ bool GraphKit::dead_locals_are_killed() {
 
 // Helper function for enforcing certain bytecodes to reexecute if
 // deoptimization happens
-static bool should_reexecute_implied_by_bytecode(JVMState *jvms) {
+static bool should_reexecute_implied_by_bytecode(JVMState *jvms, bool is_anewarray) {
   ciMethod* cur_method = jvms->method();
   int       cur_bci   = jvms->bci();
   if (cur_method != NULL && cur_bci != InvocationEntryBci) {
     Bytecodes::Code code = cur_method->java_code_at_bci(cur_bci);
-    return Interpreter::bytecode_should_reexecute(code);
+    return Interpreter::bytecode_should_reexecute(code) ||
+           is_anewarray && code == Bytecodes::_multianewarray;
+    // Reexecute _multianewarray bytecode which was replaced with
+    // sequence of [a]newarray. See Parse::do_multianewarray().
+    //
+    // Note: interpreter should not have it set since this optimization
+    // is limited by dimensions and guarded by flag so in some cases
+    // multianewarray() runtime calls will be generated and
+    // the bytecode should not be reexecutes (stack will not be reset).
   } else
     return false;
 }
@@ -806,7 +844,7 @@ void GraphKit::add_safepoint_edges(SafePointNode* call, bool must_throw) {
   // For a known set of bytecodes, the interpreter should reexecute them if
   // deoptimization happens. We set the reexecute state for them here
   if (out_jvms->is_reexecute_undefined() && //don't change if already specified
-      should_reexecute_implied_by_bytecode(out_jvms)) {
+      should_reexecute_implied_by_bytecode(out_jvms, call->is_AllocateArray())) {
     out_jvms->set_should_reexecute(true); //NOTE: youngest_jvms not changed
   }
 
@@ -979,14 +1017,19 @@ bool GraphKit::compute_stack_effects(int& inputs, int& depth) {
   case Bytecodes::_invokedynamic:
   case Bytecodes::_invokeinterface:
     {
-      bool is_static = (depth == 0);
       bool ignore;
       ciBytecodeStream iter(method());
       iter.reset_to_bci(bci());
       iter.next();
       ciMethod* method = iter.get_method(ignore);
       inputs = method->arg_size_no_receiver();
-      if (!is_static)  inputs += 1;
+      // Add a receiver argument, maybe:
+      if (code != Bytecodes::_invokestatic &&
+          code != Bytecodes::_invokedynamic)
+        inputs += 1;
+      // (Do not use ciMethod::arg_size(), because
+      // it might be an unloaded method, which doesn't
+      // know whether it is static or not.)
       int size = method->return_type()->size();
       depth = size - inputs;
     }
@@ -1086,7 +1129,7 @@ Node* GraphKit::load_array_length(Node* array) {
     alen = _gvn.transform( new (C, 3) LoadRangeNode(0, immutable_memory(), r_adr, TypeInt::POS));
   } else {
     alen = alloc->Ideal_length();
-    Node* ccast = alloc->make_ideal_length(_gvn.type(array)->is_aryptr(), &_gvn);
+    Node* ccast = alloc->make_ideal_length(_gvn.type(array)->is_oopptr(), &_gvn);
     if (ccast != alen) {
       alen = _gvn.transform(ccast);
     }
@@ -1123,8 +1166,8 @@ Node* GraphKit::null_check_common(Node* value, BasicType type,
     case T_OBJECT : {
       const Type *t = _gvn.type( value );
 
-      const TypeInstPtr* tp = t->isa_instptr();
-      if (tp != NULL && !tp->klass()->is_loaded()
+      const TypeOopPtr* tp = t->isa_oopptr();
+      if (tp != NULL && tp->klass() != NULL && !tp->klass()->is_loaded()
           // Only for do_null_check, not any of its siblings:
           && !assert_null && null_control == NULL) {
         // Usually, any field access or invocation on an unloaded oop type
@@ -1448,7 +1491,7 @@ void GraphKit::post_barrier(Node* ctl,
 
     case BarrierSet::CardTableModRef:
     case BarrierSet::CardTableExtension:
-      write_barrier_post(store, obj, adr, val, use_precise);
+      write_barrier_post(store, obj, adr, adr_idx, val, use_precise);
       break;
 
     case BarrierSet::ModRef:
@@ -1712,6 +1755,11 @@ void GraphKit::replace_call(CallNode* call, Node* result) {
     C->gvn_replace_by(callprojs.catchall_catchproj, C->top());
     C->gvn_replace_by(callprojs.catchall_memproj,   C->top());
     C->gvn_replace_by(callprojs.catchall_ioproj,    C->top());
+
+    // Replace the old exception object with top
+    if (callprojs.exobj != NULL) {
+      C->gvn_replace_by(callprojs.exobj, C->top());
+    }
   } else {
     GraphKit ekit(ejvms);
 
@@ -3223,6 +3271,7 @@ void GraphKit::sync_kit(IdealKit& ideal) {
 void GraphKit::write_barrier_post(Node* oop_store,
                                   Node* obj,
                                   Node* adr,
+                                  uint  adr_idx,
                                   Node* val,
                                   bool use_precise) {
   // No store check needed if we're storing a NULL or an old object
@@ -3282,7 +3331,7 @@ void GraphKit::write_barrier_post(Node* oop_store,
     __ store(__ ctrl(), card_adr, zero, bt, adr_type);
   } else {
     // Specialized path for CM store barrier
-    __ storeCM(__ ctrl(), card_adr, zero, oop_store, bt, adr_type);
+    __ storeCM(__ ctrl(), card_adr, zero, oop_store, adr_idx, bt, adr_type);
   }
 
   // Final sync IdealKit and GraphKit.
@@ -3382,6 +3431,7 @@ void GraphKit::g1_write_barrier_pre(Node* obj,
 void GraphKit::g1_mark_card(IdealKit& ideal,
                             Node* card_adr,
                             Node* oop_store,
+                            uint oop_alias_idx,
                             Node* index,
                             Node* index_adr,
                             Node* buffer,
@@ -3391,7 +3441,7 @@ void GraphKit::g1_mark_card(IdealKit& ideal,
   Node* no_base = __ top();
   BasicType card_bt = T_BYTE;
   // Smash zero into card. MUST BE ORDERED WRT TO STORE
-  __ storeCM(__ ctrl(), card_adr, zero, oop_store, card_bt, Compile::AliasIdxRaw);
+  __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
 
   //  Now do the queue work
   __ if_then(index, BoolTest::ne, zero); {
@@ -3503,13 +3553,13 @@ void GraphKit::g1_write_barrier_post(Node* oop_store,
         Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
 
         __ if_then(card_val, BoolTest::ne, zero); {
-          g1_mark_card(ideal, card_adr, oop_store, index, index_adr, buffer, tf);
+          g1_mark_card(ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
         } __ end_if();
       } __ end_if();
     } __ end_if();
   } else {
     // Object.clone() instrinsic uses this path.
-    g1_mark_card(ideal, card_adr, oop_store, index, index_adr, buffer, tf);
+    g1_mark_card(ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
   }
 
   // Final sync IdealKit and GraphKit.

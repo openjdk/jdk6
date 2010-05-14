@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,8 +16,8 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores,
+ * CA 94065 USA or visit www.oracle.com if you need additional information or
  * have any questions.
  *
  */
@@ -143,7 +143,7 @@ bool Verifier::verify(instanceKlassHandle klass, Verifier::Mode mode, bool shoul
 
 bool Verifier::is_eligible_for_verification(instanceKlassHandle klass, bool should_verify_class) {
   symbolOop name = klass->name();
-  klassOop refl_magic_klass = SystemDictionary::reflect_magic_klass();
+  klassOop refl_magic_klass = SystemDictionary::reflect_MagicAccessorImpl_klass();
 
   return (should_verify_for(klass->class_loader(), should_verify_class) &&
     // return if the class is a bootstrapping class
@@ -1903,17 +1903,8 @@ void ClassVerifier::verify_invoke_instructions(
   verify_cp_type(index, cp, types, CHECK_VERIFY(this));
 
   // Get method name and signature
-  symbolHandle method_name;
-  symbolHandle method_sig;
-  if (opcode == Bytecodes::_invokedynamic) {
-    int name_index = cp->name_ref_index_at(index);
-    int sig_index  = cp->signature_ref_index_at(index);
-    method_name = symbolHandle(THREAD, cp->symbol_at(name_index));
-    method_sig  = symbolHandle(THREAD, cp->symbol_at(sig_index));
-  } else {
-    method_name = symbolHandle(THREAD, cp->name_ref_at(index));
-    method_sig  = symbolHandle(THREAD, cp->signature_ref_at(index));
-  }
+  symbolHandle method_name(THREAD, cp->name_ref_at(index));
+  symbolHandle method_sig(THREAD, cp->signature_ref_at(index));
 
   if (!SignatureVerifier::is_valid_method_signature(method_sig)) {
     class_format_error(

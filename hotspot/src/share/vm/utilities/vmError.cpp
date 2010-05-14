@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,8 +16,8 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores,
+ * CA 94065 USA or visit www.oracle.com if you need additional information or
  * have any questions.
  *
  */
@@ -500,6 +500,23 @@ void VMError::report(outputStream* st) {
          }
        }
 #endif // ZERO
+     }
+
+  STEP(135, "(printing target Java thread stack)" )
+
+     // printing Java thread stack trace if it is involved in GC crash
+     if (_verbose && (_thread->is_Named_thread())) {
+       JavaThread*  jt = ((NamedThread *)_thread)->processed_thread();
+       if (jt != NULL) {
+         st->print_cr("JavaThread " PTR_FORMAT " (nid = " UINTX_FORMAT ") was being processed", jt, jt->osthread()->thread_id());
+         if (jt->has_last_Java_frame()) {
+           st->print_cr("Java frames: (J=compiled Java code, j=interpreted, Vv=VM code)");
+           for(StackFrameStream sfs(jt); !sfs.is_done(); sfs.next()) {
+             sfs.current()->print_on_error(st, buf, sizeof(buf), true);
+             st->cr();
+           }
+         }
+       }
      }
 
   STEP(140, "(printing VM operation)" )

@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,26 +16,28 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores,
+ * CA 94065 USA or visit www.oracle.com if you need additional information or
  * have any questions.
  *
  */
 
-void PtrQueue::handle_zero_index() {
-  assert(0 == _index, "Precondition.");
-  // This thread records the full buffer and allocates a new one (while
-  // holding the lock if there is one).
-  void** buf = _buf;
-  _buf = qset()->allocate_buffer();
-  _sz = qset()->buffer_size();
-  _index = _sz;
-  assert(0 <= _index && _index <= _sz, "Invariant.");
-  if (buf != NULL) {
-    if (_lock) {
-      locking_enqueue_completed_buffer(buf);
-    } else {
-      qset()->enqueue_complete_buffer(buf);
-    }
-  }
-}
+// ciCPCache
+//
+// This class represents a constant pool cache.
+//
+// Note: This class is called ciCPCache as ciConstantPoolCache is used
+// for something different.
+class ciCPCache : public ciObject {
+public:
+  ciCPCache(constantPoolCacheHandle cpcache) : ciObject(cpcache) {}
+
+  // What kind of ciObject is this?
+  bool is_cpcache() const { return true; }
+
+  // Get the offset in bytes from the oop to the f1 field of the
+  // requested entry.
+  size_t get_f1_offset(int index);
+
+  void print();
+};
