@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2010 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -1561,12 +1561,17 @@ void os::print_os_info(outputStream* st) {
             st->print(" Windows Server 2008");
         if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64)
             st->print(" , 64 bit");
-      } else { // os_vers == 6001
+      } else if (os_vers == 6001) {
         if (osvi.wProductType == VER_NT_WORKSTATION) {
             st->print(" Windows 7");
         } else {
             st->print(" Windows Server 2008 R2");
         }
+        if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64)
+            st->print(" , 64 bit");
+      } else { // future os
+        // Unrecognized windows, print out its major and minor versions
+        st->print(" Windows NT %d.%d", osvi.dwMajorVersion, osvi.dwMinorVersion);
         if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64)
             st->print(" , 64 bit");
       }
@@ -3155,7 +3160,7 @@ void os::win32::initialize_system_info() {
   _vm_allocation_granularity = si.dwAllocationGranularity;
   _processor_type  = si.dwProcessorType;
   _processor_level = si.wProcessorLevel;
-  _processor_count = si.dwNumberOfProcessors;
+  set_processor_count(si.dwNumberOfProcessors);
 
   MEMORYSTATUSEX ms;
   ms.dwLength = sizeof(ms);

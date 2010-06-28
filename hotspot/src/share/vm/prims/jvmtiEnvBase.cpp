@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 # include "incls/_precompiled.incl"
@@ -527,7 +527,7 @@ JvmtiEnvBase::new_jthreadGroupArray(int length, Handle *handles) {
 JavaThread *
 JvmtiEnvBase::get_JavaThread(jthread jni_thread) {
   oop t = JNIHandles::resolve_external_guard(jni_thread);
-  if (t == NULL || !t->is_a(SystemDictionary::thread_klass())) {
+  if (t == NULL || !t->is_a(SystemDictionary::Thread_klass())) {
     return NULL;
   }
   // The following returns NULL if the thread has not yet run or is in
@@ -1269,7 +1269,7 @@ VM_GetThreadListStackTraces::doit() {
   for (int i = 0; i < _thread_count; ++i) {
     jthread jt = _thread_list[i];
     oop thread_oop = JNIHandles::resolve_external_guard(jt);
-    if (thread_oop == NULL || !thread_oop->is_a(SystemDictionary::thread_klass())) {
+    if (thread_oop == NULL || !thread_oop->is_a(SystemDictionary::Thread_klass())) {
       set_result(JVMTI_ERROR_INVALID_THREAD);
       return;
     }

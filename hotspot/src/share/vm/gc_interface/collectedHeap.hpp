@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -133,14 +133,14 @@ class CollectedHeap : public CHeapObj {
   static inline size_t filler_array_max_size();
 
   DEBUG_ONLY(static void fill_args_check(HeapWord* start, size_t words);)
-  DEBUG_ONLY(static void zap_filler_array(HeapWord* start, size_t words);)
+  DEBUG_ONLY(static void zap_filler_array(HeapWord* start, size_t words, bool zap = true);)
 
   // Fill with a single array; caller must ensure filler_array_min_size() <=
   // words <= filler_array_max_size().
-  static inline void fill_with_array(HeapWord* start, size_t words);
+  static inline void fill_with_array(HeapWord* start, size_t words, bool zap = true);
 
   // Fill with a single object (either an int array or a java.lang.Object).
-  static inline void fill_with_object_impl(HeapWord* start, size_t words);
+  static inline void fill_with_object_impl(HeapWord* start, size_t words, bool zap = true);
 
   // Verification functions
   virtual void check_for_bad_heap_word_value(HeapWord* addr, size_t size)
@@ -245,6 +245,9 @@ class CollectedHeap : public CHeapObj {
     return p == NULL || is_in_closed_subset(p);
   }
 
+  // XXX is_permanent() and is_in_permanent() should be better named
+  // to distinguish one from the other.
+
   // Returns "TRUE" if "p" is allocated as "permanent" data.
   // If the heap does not use "permanent" data, returns the same
   // value is_in_reserved() would return.
@@ -253,13 +256,25 @@ class CollectedHeap : public CHeapObj {
   // space). If you need the more conservative answer use is_permanent().
   virtual bool is_in_permanent(const void *p) const = 0;
 
+  bool is_in_permanent_or_null(const void *p) const {
+    return p == NULL || is_in_permanent(p);
+  }
+
   // Returns "TRUE" if "p" is in the committed area of  "permanent" data.
   // If the heap does not use "permanent" data, returns the same
   // value is_in() would return.
   virtual bool is_permanent(const void *p) const = 0;
 
-  bool is_in_permanent_or_null(const void *p) const {
-    return p == NULL || is_in_permanent(p);
+  bool is_permanent_or_null(const void *p) const {
+    return p == NULL || is_permanent(p);
+  }
+
+  // An object is scavengable if its location may move during a scavenge.
+  // (A scavenge is a GC which is not a full GC.)
+  // Currently, this just means it is not perm (and not null).
+  // This could change if we rethink what's in perm-gen.
+  bool is_scavengable(const void *p) const {
+    return !is_in_permanent_or_null(p);
   }
 
   // Returns "TRUE" if "p" is a method oop in the
@@ -329,14 +344,14 @@ class CollectedHeap : public CHeapObj {
     return size_t(align_object_size(oopDesc::header_size()));
   }
 
-  static void fill_with_objects(HeapWord* start, size_t words);
+  static void fill_with_objects(HeapWord* start, size_t words, bool zap = true);
 
-  static void fill_with_object(HeapWord* start, size_t words);
-  static void fill_with_object(MemRegion region) {
-    fill_with_object(region.start(), region.word_size());
+  static void fill_with_object(HeapWord* start, size_t words, bool zap = true);
+  static void fill_with_object(MemRegion region, bool zap = true) {
+    fill_with_object(region.start(), region.word_size(), zap);
   }
-  static void fill_with_object(HeapWord* start, HeapWord* end) {
-    fill_with_object(start, pointer_delta(end, start));
+  static void fill_with_object(HeapWord* start, HeapWord* end, bool zap = true) {
+    fill_with_object(start, pointer_delta(end, start), zap);
   }
 
   // Some heaps may offer a contiguous region for shared non-blocking

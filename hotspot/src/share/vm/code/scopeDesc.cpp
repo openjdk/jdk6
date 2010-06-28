@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -26,17 +26,21 @@
 # include "incls/_scopeDesc.cpp.incl"
 
 
-ScopeDesc::ScopeDesc(const nmethod* code, int decode_offset, int obj_decode_offset) {
+ScopeDesc::ScopeDesc(const nmethod* code, int decode_offset, int obj_decode_offset, bool reexecute, bool return_oop) {
   _code          = code;
   _decode_offset = decode_offset;
   _objects       = decode_object_values(obj_decode_offset);
+  _reexecute     = reexecute;
+  _return_oop    = return_oop;
   decode_body();
 }
 
-ScopeDesc::ScopeDesc(const nmethod* code, int decode_offset) {
+ScopeDesc::ScopeDesc(const nmethod* code, int decode_offset, bool reexecute, bool return_oop) {
   _code          = code;
   _decode_offset = decode_offset;
   _objects       = decode_object_values(DebugInformationRecorder::serialized_null);
+  _reexecute     = reexecute;
+  _return_oop    = return_oop;
   decode_body();
 }
 
@@ -45,8 +49,9 @@ ScopeDesc::ScopeDesc(const ScopeDesc* parent) {
   _code          = parent->_code;
   _decode_offset = parent->_sender_decode_offset;
   _objects       = parent->_objects;
+  _reexecute     = false; //reexecute only applies to the first scope
+  _return_oop    = false;
   decode_body();
-  assert(_reexecute == false, "reexecute not allowed");
 }
 
 
@@ -57,7 +62,6 @@ void ScopeDesc::decode_body() {
     _sender_decode_offset = DebugInformationRecorder::serialized_null;
     _method = methodHandle(_code->method());
     _bci = InvocationEntryBci;
-    _reexecute = false;
     _locals_decode_offset = DebugInformationRecorder::serialized_null;
     _expressions_decode_offset = DebugInformationRecorder::serialized_null;
     _monitors_decode_offset = DebugInformationRecorder::serialized_null;
@@ -67,7 +71,7 @@ void ScopeDesc::decode_body() {
 
     _sender_decode_offset = stream->read_int();
     _method = methodHandle((methodOop) stream->read_oop());
-    _bci    = stream->read_bci_and_reexecute(_reexecute);
+    _bci    = stream->read_bci();
 
     // decode offsets for body and sender
     _locals_decode_offset      = stream->read_int();

@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -255,8 +255,7 @@ class DebugInfoReadStream : public CompressedReadStream {
   ScopeValue* read_object_value();
   ScopeValue* get_cached_object();
   // BCI encoding is mostly unsigned, but -1 is a distinguished value
-  // Decoding based on encoding: bci = InvocationEntryBci + read_int()/2; reexecute = read_int()%2 == 1 ? true : false;
-  int read_bci_and_reexecute(bool& reexecute) { int i = read_int(); reexecute = (i & 1) ? true : false; return (i >> 1) + InvocationEntryBci; }
+  int read_bci() { return read_int() + InvocationEntryBci; }
 };
 
 // DebugInfoWriteStream specializes CompressedWriteStream for
@@ -269,6 +268,5 @@ class DebugInfoWriteStream : public CompressedWriteStream {
  public:
   DebugInfoWriteStream(DebugInformationRecorder* recorder, int initial_size);
   void write_handle(jobject h);
-  //Encoding bci and reexecute into one word as (bci - InvocationEntryBci)*2 + reexecute
-  void write_bci_and_reexecute(int bci, bool reexecute) { write_int(((bci - InvocationEntryBci) << 1) + (reexecute ? 1 : 0)); }
+  void write_bci(int bci) { write_int(bci - InvocationEntryBci); }
 };

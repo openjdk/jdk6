@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2005, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -100,6 +100,7 @@ class CallGenerator : public ResourceObj {
 
   // How to generate vanilla out-of-line call sites:
   static CallGenerator* for_direct_call(ciMethod* m, bool separate_io_projs = false);   // static, special
+  static CallGenerator* for_dynamic_call(ciMethod* m);   // invokedynamic
   static CallGenerator* for_virtual_call(ciMethod* m, int vtable_index);  // virtual, interface
 
   // How to generate a replace a direct call with an inline version
@@ -115,6 +116,12 @@ class CallGenerator : public ResourceObj {
                                            CallGenerator* if_missed,
                                            CallGenerator* if_hit,
                                            float hit_prob);
+
+  // How to make a call that optimistically assumes a MethodHandle target:
+  static CallGenerator* for_predicted_dynamic_call(ciMethodHandle* predicted_method_handle,
+                                                   CallGenerator* if_missed,
+                                                   CallGenerator* if_hit,
+                                                   float hit_prob);
 
   // How to make a call that gives up and goes back to the interpreter:
   static CallGenerator* for_uncommon_trap(ciMethod* m,

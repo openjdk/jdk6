@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -78,9 +78,9 @@ void instanceRefKlass::oop_follow_contents(oop obj) {
 
 #ifndef SERIALGC
 template <class T>
-static void specialized_oop_follow_contents(instanceRefKlass* ref,
-                                            ParCompactionManager* cm,
-                                            oop obj) {
+void specialized_oop_follow_contents(instanceRefKlass* ref,
+                                     ParCompactionManager* cm,
+                                     oop obj) {
   T* referent_addr = (T*)java_lang_ref_Reference::referent_addr(obj);
   T heap_oop = oopDesc::load_heap_oop(referent_addr);
   debug_only(
@@ -397,7 +397,7 @@ void instanceRefKlass::update_nonstatic_oop_maps(klassOop k) {
 
   // Check that we have the right class
   debug_only(static bool first_time = true);
-  assert(k == SystemDictionary::reference_klass() && first_time,
+  assert(k == SystemDictionary::Reference_klass() && first_time,
          "Invalid update of maps");
   debug_only(first_time = false);
   assert(ik->nonstatic_oop_map_count() == 1, "just checking");

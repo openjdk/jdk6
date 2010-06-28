@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -421,21 +421,23 @@ void JVMState::format(PhaseRegAlloc *regalloc, const Node *n, outputStream* st) 
         iklass = cik->as_instance_klass();
       } else if (cik->is_type_array_klass()) {
         cik->as_array_klass()->base_element_type()->print_name_on(st);
-        st->print("[%d]=", spobj->n_fields());
+        st->print("[%d]", spobj->n_fields());
       } else if (cik->is_obj_array_klass()) {
-        ciType* cie = cik->as_array_klass()->base_element_type();
-        int ndim = 1;
-        while (cie->is_obj_array_klass()) {
-          ndim += 1;
-          cie = cie->as_array_klass()->base_element_type();
+        ciKlass* cie = cik->as_obj_array_klass()->base_element_klass();
+        if (cie->is_instance_klass()) {
+          cie->print_name_on(st);
+        } else if (cie->is_type_array_klass()) {
+          cie->as_array_klass()->base_element_type()->print_name_on(st);
+        } else {
+          ShouldNotReachHere();
         }
-        cie->print_name_on(st);
+        st->print("[%d]", spobj->n_fields());
+        int ndim = cik->as_array_klass()->dimension() - 1;
         while (ndim-- > 0) {
           st->print("[]");
         }
-        st->print("[%d]=", spobj->n_fields());
       }
-      st->print("{");
+      st->print("={");
       uint nf = spobj->n_fields();
       if (nf > 0) {
         uint first_ind = spobj->first_index();
@@ -493,7 +495,8 @@ void JVMState::dump_spec(outputStream *st) const {
     if (!printed)
       _method->print_short_name(st);
     st->print(" @ bci:%d",_bci);
-    st->print(" reexecute:%s", _reexecute==Reexecute_True?"true":"false");
+    if(_reexecute == Reexecute_True)
+      st->print(" reexecute");
   } else {
     st->print(" runtime stub");
   }

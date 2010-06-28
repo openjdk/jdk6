@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -65,8 +65,9 @@ CollectedHeap::CollectedHeap()
 void CollectedHeap::pre_initialize() {
   // Used for ReduceInitialCardMarks (when COMPILER2 is used);
   // otherwise remains unused.
-#ifdef COMPLER2
-  _defer_initial_card_mark = ReduceInitialCardMarks && (DeferInitialCardMark || card_mark_must_follow_store());
+#ifdef COMPILER2
+  _defer_initial_card_mark =    ReduceInitialCardMarks && can_elide_tlab_store_barriers()
+                             && (DeferInitialCardMark || card_mark_must_follow_store());
 #else
   assert(_defer_initial_card_mark == false, "Who would set it?");
 #endif
@@ -258,9 +259,9 @@ void CollectedHeap::fill_args_check(HeapWord* start, size_t words)
   assert(Universe::heap()->is_in_reserved(start + words - 1), "not in heap");
 }
 
-void CollectedHeap::zap_filler_array(HeapWord* start, size_t words)
+void CollectedHeap::zap_filler_array(HeapWord* start, size_t words, bool zap)
 {
-  if (ZapFillerObjects) {
+  if (ZapFillerObjects && zap) {
     Copy::fill_to_words(start + filler_array_hdr_size(),
                         words - filler_array_hdr_size(), 0XDEAFBABE);
   }
@@ -268,7 +269,7 @@ void CollectedHeap::zap_filler_array(HeapWord* start, size_t words)
 #endif // ASSERT
 
 void
-CollectedHeap::fill_with_array(HeapWord* start, size_t words)
+CollectedHeap::fill_with_array(HeapWord* start, size_t words, bool zap)
 {
   assert(words >= filler_array_min_size(), "too small for an array");
   assert(words <= filler_array_max_size(), "too big for a single object");
@@ -279,31 +280,31 @@ CollectedHeap::fill_with_array(HeapWord* start, size_t words)
   // Set the length first for concurrent GC.
   ((arrayOop)start)->set_length((int)len);
   post_allocation_setup_common(Universe::intArrayKlassObj(), start, words);
-  DEBUG_ONLY(zap_filler_array(start, words);)
+  DEBUG_ONLY(zap_filler_array(start, words, zap);)
 }
 
 void
-CollectedHeap::fill_with_object_impl(HeapWord* start, size_t words)
+CollectedHeap::fill_with_object_impl(HeapWord* start, size_t words, bool zap)
 {
   assert(words <= filler_array_max_size(), "too big for a single object");
 
   if (words >= filler_array_min_size()) {
-    fill_with_array(start, words);
+    fill_with_array(start, words, zap);
   } else if (words > 0) {
     assert(words == min_fill_size(), "unaligned size");
-    post_allocation_setup_common(SystemDictionary::object_klass(), start,
+    post_allocation_setup_common(SystemDictionary::Object_klass(), start,
                                  words);
   }
 }
 
-void CollectedHeap::fill_with_object(HeapWord* start, size_t words)
+void CollectedHeap::fill_with_object(HeapWord* start, size_t words, bool zap)
 {
   DEBUG_ONLY(fill_args_check(start, words);)
   HandleMark hm;  // Free handles before leaving.
-  fill_with_object_impl(start, words);
+  fill_with_object_impl(start, words, zap);
 }
 
-void CollectedHeap::fill_with_objects(HeapWord* start, size_t words)
+void CollectedHeap::fill_with_objects(HeapWord* start, size_t words, bool zap)
 {
   DEBUG_ONLY(fill_args_check(start, words);)
   HandleMark hm;  // Free handles before leaving.
@@ -316,13 +317,13 @@ void CollectedHeap::fill_with_objects(HeapWord* start, size_t words)
   const size_t max = filler_array_max_size();
   while (words > max) {
     const size_t cur = words - max >= min ? max : max - min;
-    fill_with_array(start, cur);
+    fill_with_array(start, cur, zap);
     start += cur;
     words -= cur;
   }
 #endif
 
-  fill_with_object_impl(start, words);
+  fill_with_object_impl(start, words, zap);
 }
 
 HeapWord* CollectedHeap::allocate_new_tlab(size_t size) {

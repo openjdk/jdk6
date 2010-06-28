@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -47,20 +47,15 @@ class MarkRefsIntoClosure: public OopsInGenClosure {
  private:
   const MemRegion _span;
   CMSBitMap*      _bitMap;
-  const bool      _should_do_nmethods;
  protected:
   DO_OOP_WORK_DEFN
  public:
-  MarkRefsIntoClosure(MemRegion span, CMSBitMap* bitMap,
-                      bool should_do_nmethods);
+  MarkRefsIntoClosure(MemRegion span, CMSBitMap* bitMap);
   virtual void do_oop(oop* p);
   virtual void do_oop(narrowOop* p);
   inline void do_oop_nv(oop* p)       { MarkRefsIntoClosure::do_oop_work(p); }
   inline void do_oop_nv(narrowOop* p) { MarkRefsIntoClosure::do_oop_work(p); }
   bool do_header() { return true; }
-  virtual const bool do_nmethods() const {
-    return _should_do_nmethods;
-  }
   Prefetch::style prefetch_style() {
     return Prefetch::do_read;
   }
@@ -73,20 +68,16 @@ class MarkRefsIntoVerifyClosure: public OopsInGenClosure {
   const MemRegion _span;
   CMSBitMap*      _verification_bm;
   CMSBitMap*      _cms_bm;
-  const bool      _should_do_nmethods;
  protected:
   DO_OOP_WORK_DEFN
  public:
   MarkRefsIntoVerifyClosure(MemRegion span, CMSBitMap* verification_bm,
-                            CMSBitMap* cms_bm, bool should_do_nmethods);
+                            CMSBitMap* cms_bm);
   virtual void do_oop(oop* p);
   virtual void do_oop(narrowOop* p);
   inline void do_oop_nv(oop* p)       { MarkRefsIntoVerifyClosure::do_oop_work(p); }
   inline void do_oop_nv(narrowOop* p) { MarkRefsIntoVerifyClosure::do_oop_work(p); }
   bool do_header() { return true; }
-  virtual const bool do_nmethods() const {
-    return _should_do_nmethods;
-  }
   Prefetch::style prefetch_style() {
     return Prefetch::do_read;
   }
@@ -155,6 +146,12 @@ class PushAndMarkClosure: public KlassRememberingOopClosure {
   Prefetch::style prefetch_style() {
     return Prefetch::do_read;
   }
+  // In support of class unloading
+  virtual const bool should_remember_mdo() const {
+    return false;
+    // return _should_remember_klasses;
+  }
+  virtual void remember_mdo(DataLayout* v);
 };
 
 // In the parallel case, the revisit stack, the bit map and the
@@ -185,6 +182,12 @@ class Par_PushAndMarkClosure: public Par_KlassRememberingOopClosure {
   Prefetch::style prefetch_style() {
     return Prefetch::do_read;
   }
+  // In support of class unloading
+  virtual const bool should_remember_mdo() const {
+    return false;
+    // return _should_remember_klasses;
+  }
+  virtual void remember_mdo(DataLayout* v);
 };
 
 // The non-parallel version (the parallel version appears further below).
@@ -216,7 +219,6 @@ class MarkRefsIntoAndScanClosure: public OopsInGenClosure {
   inline void do_oop_nv(oop* p)       { MarkRefsIntoAndScanClosure::do_oop_work(p); }
   inline void do_oop_nv(narrowOop* p) { MarkRefsIntoAndScanClosure::do_oop_work(p); }
   bool do_header() { return true; }
-  virtual const bool do_nmethods() const { return true; }
   Prefetch::style prefetch_style() {
     return Prefetch::do_read;
   }
@@ -261,7 +263,6 @@ class Par_MarkRefsIntoAndScanClosure: public OopsInGenClosure {
   inline void do_oop_nv(oop* p)       { Par_MarkRefsIntoAndScanClosure::do_oop_work(p); }
   inline void do_oop_nv(narrowOop* p) { Par_MarkRefsIntoAndScanClosure::do_oop_work(p); }
   bool do_header() { return true; }
-  virtual const bool do_nmethods() const { return true; }
   // When ScanMarkedObjectsAgainClosure is used,
   // it passes [Par_]MarkRefsIntoAndScanClosure to oop_oop_iterate(),
   // and this delegation is used.
@@ -303,6 +304,13 @@ class PushOrMarkClosure: public KlassRememberingOopClosure {
   virtual void do_oop(narrowOop* p);
   inline void do_oop_nv(oop* p)       { PushOrMarkClosure::do_oop_work(p); }
   inline void do_oop_nv(narrowOop* p) { PushOrMarkClosure::do_oop_work(p); }
+  // In support of class unloading
+  virtual const bool should_remember_mdo() const {
+    return false;
+    // return _should_remember_klasses;
+  }
+  virtual void remember_mdo(DataLayout* v);
+
   // Deal with a stack overflow condition
   void handle_stack_overflow(HeapWord* lost);
  private:
@@ -340,6 +348,13 @@ class Par_PushOrMarkClosure: public Par_KlassRememberingOopClosure {
   virtual void do_oop(narrowOop* p);
   inline void do_oop_nv(oop* p)       { Par_PushOrMarkClosure::do_oop_work(p); }
   inline void do_oop_nv(narrowOop* p) { Par_PushOrMarkClosure::do_oop_work(p); }
+  // In support of class unloading
+  virtual const bool should_remember_mdo() const {
+    return false;
+    // return _should_remember_klasses;
+  }
+  virtual void remember_mdo(DataLayout* v);
+
   // Deal with a stack overflow condition
   void handle_stack_overflow(HeapWord* lost);
  private:
