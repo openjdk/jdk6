@@ -602,7 +602,9 @@ public class Main {
                     boolean inScope = (inStoreOrScope & IN_SCOPE) != 0;
 
                     notSignedByAlias |= (inStoreOrScope & NOT_ALIAS) != 0;
-                    aliasNotInStore |= isSigned && (!inStore && !inScope);
+                    if (keystore != null) {
+                        aliasNotInStore |= isSigned && (!inStore && !inScope);
+                    }
 
                     // Only used when -verbose provided
                     StringBuffer sb = null;
@@ -819,7 +821,7 @@ public class Main {
      * Note: no newline character at the end
      */
     String printCert(String tab, Certificate c, boolean checkValidityPeriod,
-        long now) {
+        long now, boolean checkUsage) {
 
         StringBuilder certStr = new StringBuilder();
         String space = rb.getString("SPACE");
@@ -889,24 +891,26 @@ public class Main {
             }
             certStr.append("]");
 
-            boolean[] bad = new boolean[3];
-            checkCertUsage(x509Cert, bad);
-            if (bad[0] || bad[1] || bad[2]) {
-                String x = "";
-                if (bad[0]) {
-                    x ="KeyUsage";
-                }
-                if (bad[1]) {
-                    if (x.length() > 0) x = x + ", ";
-                    x = x + "ExtendedKeyUsage";
-                }
-                if (bad[2]) {
-                    if (x.length() > 0) x = x + ", ";
-                    x = x + "NetscapeCertType";
-                }
-                certStr.append("\n").append(tab)
+            if (checkUsage) {
+                boolean[] bad = new boolean[3];
+                checkCertUsage(x509Cert, bad);
+                if (bad[0] || bad[1] || bad[2]) {
+                    String x = "";
+                    if (bad[0]) {
+                        x ="KeyUsage";
+                    }
+                    if (bad[1]) {
+                        if (x.length() > 0) x = x + ", ";
+                        x = x + "ExtendedKeyUsage";
+                    }
+                    if (bad[2]) {
+                        if (x.length() > 0) x = x + ", ";
+                        x = x + "NetscapeCertType";
+                    }
+                    certStr.append("\n").append(tab)
                         .append(MessageFormat.format(rb.getString(
                         ".{0}.extension.does.not.support.code.signing."), x));
+                }
             }
         }
         return certStr.toString();
@@ -1272,7 +1276,7 @@ public class Main {
                             tsaURI);
                     }
                     System.out.println(rb.getString("TSA.certificate.") +
-                        printCert("", tsaCert, false, 0));
+                        printCert("", tsaCert, false, 0, false));
                 }
                 if (signingMechanism != null) {
                     System.out.println(
@@ -1466,10 +1470,13 @@ public class Main {
         if (timestamp != null) {
             s.append(printTimestamp(tab, timestamp));
         }
-        // display the certificate(s)
+        // display the certificate(s). The first one is end-enity cert and
+        // its KeyUsage should be checked.
+        boolean first = true;
         for (Certificate c : certs) {
-            s.append(printCert(tab, c, true, now));
+            s.append(printCert(tab, c, true, now, first));
             s.append('\n');
+            first = false;
         }
         try {
             CertPath cp = certificateFactory.generateCertPath(certs);
@@ -1768,7 +1775,7 @@ public class Main {
 
             // We don't meant to print anything, the next call
             // checks validity and keyUsage etc
-            printCert("", certChain[0], true, 0);
+            printCert("", certChain[0], true, 0, true);
 
             try {
                 CertPath cp = certificateFactory.generateCertPath(Arrays.asList(certChain));
