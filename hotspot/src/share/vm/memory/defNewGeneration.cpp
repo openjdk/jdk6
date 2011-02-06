@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2008, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -589,6 +589,10 @@ void DefNewGeneration::collect(bool   full,
     _tenuring_threshold =
       age_table()->compute_tenuring_threshold(to()->capacity()/HeapWordSize);
 
+    // A successful scavenge should restart the GC time limit count which is
+    // for full GC's.
+    AdaptiveSizePolicy* size_policy = gch->gen_policy()->size_policy();
+    size_policy->reset_gc_overhead_limit_count();
     if (PrintGC && !PrintGCDetails) {
       gch->print_heap_change(gch_prev_used);
     }

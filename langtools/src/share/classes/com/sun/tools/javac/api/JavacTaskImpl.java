@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,6 +42,7 @@ import com.sun.source.util.*;
 import com.sun.tools.javac.code.*;
 import com.sun.tools.javac.code.Symbol.*;
 import com.sun.tools.javac.comp.*;
+import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.main.*;
 import com.sun.tools.javac.model.*;
 import com.sun.tools.javac.parser.Parser;
@@ -381,8 +382,8 @@ public class JavacTaskImpl extends JavacTask {
         return results;
     }
     // where
-        private void handleFlowResults(List<Env<AttrContext>> list, ListBuffer<Element> elems) {
-            for (Env<AttrContext> env: list) {
+        private void handleFlowResults(Queue<Env<AttrContext>> queue, ListBuffer<Element> elems) {
+            for (Env<AttrContext> env: queue) {
                 switch (env.tree.getTag()) {
                     case JCTree.CLASSDEF:
                         JCClassDecl cdef = (JCClassDecl) env.tree;
@@ -396,7 +397,7 @@ public class JavacTaskImpl extends JavacTask {
                         break;
                 }
             }
-            genList.appendList(list);
+            genList.addAll(queue);
         }
 
 
@@ -424,13 +425,13 @@ public class JavacTaskImpl extends JavacTask {
             analyze(null);  // ensure all classes have been parsed, entered, and analyzed
 
             if (classes == null) {
-                compiler.generate(compiler.desugar(genList.toList()), results);
+                compiler.generate(compiler.desugar(genList), results);
                 genList.clear();
             }
             else {
                 Filter f = new Filter() {
                         public void process(Env<AttrContext> env) {
-                            compiler.generate(compiler.desugar(List.of(env)), results);
+                            compiler.generate(compiler.desugar(ListBuffer.of(env)), results);
                         }
                     };
                 f.run(genList, classes);
@@ -472,23 +473,22 @@ public class JavacTaskImpl extends JavacTask {
     }
 
     abstract class Filter {
-        void run(ListBuffer<Env<AttrContext>> list, Iterable<? extends TypeElement> classes) {
+        void run(Queue<Env<AttrContext>> list, Iterable<? extends TypeElement> classes) {
             Set<TypeElement> set = new HashSet<TypeElement>();
             for (TypeElement item: classes)
                 set.add(item);
 
-            List<Env<AttrContext>> defer = List.<Env<AttrContext>>nil();
-            while (list.nonEmpty()) {
-                Env<AttrContext> env = list.next();
+            ListBuffer<Env<AttrContext>> defer = ListBuffer.<Env<AttrContext>>lb();
+            while (list.peek() != null) {
+                Env<AttrContext> env = list.remove();
                 ClassSymbol csym = env.enclClass.sym;
                 if (csym != null && set.contains(csym.outermostClass()))
                     process(env);
                 else
-                    defer = defer.prepend(env);
+                    defer = defer.append(env);
             }
 
-            for (List<Env<AttrContext>> l = defer; l.nonEmpty(); l = l.tail)
-                list.prepend(l.head);
+            list.addAll(defer);
         }
 
         abstract void process(Env<AttrContext> env);

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 1995, 2007, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 1995, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -100,17 +100,6 @@ ifdef PROGRAM
 endif # PROGRAM
 
 LDLIBS_COMMON += $(EXTRA_LIBS)
-
-#
-# Default is to build, not import native binaries
-#
-ifndef IMPORT_NATIVE_BINARIES
-  IMPORT_NATIVE_BINARIES=false
-endif
-# If importing libraries in, no incremental builds
-ifeq ($(IMPORT_NATIVE_BINARIES),true)
- INCREMENTAL_BUILD=false
-endif
 
 # for generated libraries
 LIBDIR              = $(OUTPUTDIR)/lib

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -262,8 +262,11 @@ public class Enter extends JCTree.Visitor {
      */
     <T extends JCTree> List<Type> classEnter(List<T> trees, Env<AttrContext> env) {
         ListBuffer<Type> ts = new ListBuffer<Type>();
-        for (List<T> l = trees; l.nonEmpty(); l = l.tail)
-            ts.append(classEnter(l.head, env));
+        for (List<T> l = trees; l.nonEmpty(); l = l.tail) {
+            Type t = classEnter(l.head, env);
+            if (t != null)
+                ts.append(t);
+        }
         return ts.toList();
     }
 
