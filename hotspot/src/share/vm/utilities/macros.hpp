@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -106,11 +106,13 @@
 #ifdef ASSERT
 #define DEBUG_ONLY(code) code
 #define NOT_DEBUG(code)
+#define NOT_DEBUG_RETURN  /*next token must be ;*/
 // Historical.
 #define debug_only(code) code
 #else // ASSERT
 #define DEBUG_ONLY(code)
 #define NOT_DEBUG(code) code
+#define NOT_DEBUG_RETURN {}
 #define debug_only(code)
 #endif // ASSERT
 
@@ -149,9 +151,11 @@
 #if defined(IA32) || defined(AMD64)
 #define X86
 #define X86_ONLY(code) code
+#define NOT_X86(code)
 #else
 #undef X86
 #define X86_ONLY(code)
+#define NOT_X86(code) code
 #endif
 
 #ifdef IA32
@@ -186,6 +190,37 @@
 #define NOT_SPARC(code) code
 #endif
 
-#define FIX_THIS(code) report_assertion_failure("FIX_THIS",__FILE__, __LINE__, "")
+#ifdef PPC
+#define PPC_ONLY(code) code
+#define NOT_PPC(code)
+#else
+#define PPC_ONLY(code)
+#define NOT_PPC(code) code
+#endif
+
+#ifdef E500V2
+#define E500V2_ONLY(code) code
+#define NOT_E500V2(code)
+#else
+#define E500V2_ONLY(code)
+#define NOT_E500V2(code) code
+#endif
+
+
+#ifdef ARM
+#define ARM_ONLY(code) code
+#define NOT_ARM(code)
+#else
+#define ARM_ONLY(code)
+#define NOT_ARM(code) code
+#endif
+
+#ifdef JAVASE_EMBEDDED
+#define EMBEDDED_ONLY(code) code
+#define NOT_EMBEDDED(code)
+#else
+#define EMBEDDED_ONLY(code)
+#define NOT_EMBEDDED(code) code
+#endif
 
 #define define_pd_global(type, name, value) const type pd_##name = value;

@@ -1,12 +1,12 @@
 /*
- * Copyright 2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.sun.media.sound;
 
@@ -116,7 +116,7 @@ public class SoftChannel implements MidiChannel, ModelDirectedPlayer {
     protected int tuning_program = 0;
     protected SoftInstrument current_instrument = null;
     protected ModelChannelMixer current_mixer = null;
-    private ModelDirector current_director = null;
+    protected ModelDirector current_director = null;
 
     // Controller Destination Settings
     protected int cds_control_number = -1;
@@ -1259,18 +1259,21 @@ public class SoftChannel implements MidiChannel, ModelDirectedPlayer {
         }
     }
 
-    public void programChange(int program) {        
+    public void programChange(int program) {
         programChange(bank, program);
     }
 
     public void programChange(int bank, int program) {
-        bank = restrict7Bit(bank);
-        program = restrict7Bit(program);        
+        bank = restrict14Bit(bank);
+        program = restrict7Bit(program);
         synchronized (control_mutex) {
             mainmixer.activity();
-            this.bank = bank;
-            this.program = program;
-            current_instrument = null;
+            if(this.bank != bank || this.program != program)
+            {
+                this.bank = bank;
+                this.program = program;
+                current_instrument = null;
+            }
         }
     }
 

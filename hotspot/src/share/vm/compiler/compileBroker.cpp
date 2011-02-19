@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -69,6 +69,7 @@ HS_DTRACE_PROBE_DECL9(hotspot, method__compile__end,
 
 bool CompileBroker::_initialized = false;
 volatile bool CompileBroker::_should_block = false;
+volatile jint CompileBroker::_should_compile_new_jobs = run_compilation;
 
 // The installed compiler(s)
 AbstractCompiler* CompileBroker::_compilers[2];
@@ -460,12 +461,25 @@ void CompileQueue::add(CompileTask* task) {
 //
 // Get the next CompileTask from a CompileQueue
 CompileTask* CompileQueue::get() {
+  NMethodSweeper::possibly_sweep();
+
   MutexLocker locker(lock());
 
   // Wait for an available CompileTask.
   while (_first == NULL) {
     // There is no work to be done right now.  Wait.
-    lock()->wait();
+    if (UseCodeCacheFlushing && (!CompileBroker::should_compile_new_jobs() || CodeCache::needs_flushing())) {
+      // During the emergency sweeping periods, wake up and sweep occasionally
+      bool timedout = lock()->wait(!Mutex::_no_safepoint_check_flag, NmethodSweepCheckInterval*1000);
+      if (timedout) {
+        MutexUnlocker ul(lock());
+        // When otherwise not busy, run nmethod sweeping
+        NMethodSweeper::possibly_sweep();
+      }
+    } else {
+      // During normal operation no need to wake up on timer
+      lock()->wait();
+    }
   }
 
   CompileTask* task = _first;
@@ -553,6 +567,14 @@ void CompileBroker::compilation_init() {
   _compilers[0] = _compilers[1];
 #endif
 #endif // COMPILER2
+
+#ifdef SHARK
+#if defined(COMPILER1) || defined(COMPILER2)
+#error "Can't use COMPILER1 or COMPILER2 with shark"
+#endif
+  _compilers[0] = new SharkCompiler();
+  _compilers[1] = _compilers[0];
+#endif
 
   // Initialize the CompileTask free list
   _task_free_list = NULL;
@@ -986,6 +1008,15 @@ nmethod* CompileBroker::compile_method(methodHandle method, int osr_bci,
       return method_code;
     }
     if (method->is_not_compilable(comp_level)) return NULL;
+
+    if (UseCodeCacheFlushing) {
+      nmethod* saved = CodeCache::find_and_remove_saved_code(method());
+      if (saved != NULL) {
+        method->set_code(method, saved);
+        return saved;
+      }
+    }
+
   } else {
     // osr compilation
 #ifndef TIERED
@@ -1035,6 +1066,14 @@ nmethod* CompileBroker::compile_method(methodHandle method, int osr_bci,
   // a lock the compiling thread can not acquire. Prefetch it here.
   if (JvmtiExport::should_post_compiled_method_load()) {
     method->jmethod_id();
+  }
+
+  // If the compiler is shut off due to code cache flushing or otherwise,
+  // fail out now so blocking compiles dont hang the java thread
+  if (!should_compile_new_jobs() || (UseCodeCacheFlushing && CodeCache::needs_flushing())) {
+    method->invocation_counter()->decay();
+    method->backedge_counter()->decay();
+    return NULL;
   }
 
   // do the compilation
@@ -1116,7 +1155,7 @@ bool CompileBroker::compilation_is_prohibited(methodHandle method, int osr_bci, 
   // the specified level
   if (is_native &&
       (!CICompileNatives || !compiler(comp_level)->supports_native())) {
-    method->set_not_compilable();
+    method->set_not_compilable_quietly();
     return true;
   }
 
@@ -1140,7 +1179,7 @@ bool CompileBroker::compilation_is_prohibited(methodHandle method, int osr_bci, 
       method->print_short_name(tty);
       tty->cr();
     }
-    method->set_not_compilable();
+    method->set_not_compilable_quietly();
   }
 
   return false;
@@ -1173,7 +1212,7 @@ uint CompileBroker::assign_compile_id(methodHandle method, int osr_bci) {
   }
 
   // Method was not in the appropriate compilation range.
-  method->set_not_compilable();
+  method->set_not_compilable_quietly();
   return 0;
 }
 
@@ -1325,26 +1364,13 @@ void CompileBroker::compiler_thread_loop() {
     {
       // We need this HandleMark to avoid leaking VM handles.
       HandleMark hm(thread);
+
       if (CodeCache::unallocated_capacity() < CodeCacheMinimumFreeSpace) {
-        // The CodeCache is full.  Print out warning and disable compilation.
-        UseInterpreter = true;
-        if (UseCompiler || AlwaysCompileLoopMethods ) {
-          if (log != NULL) {
-            log->begin_elem("code_cache_full");
-            log->stamp();
-            log->end_elem();
-          }
-#ifndef PRODUCT
-          warning("CodeCache is full. Compiler has been disabled");
-          if (CompileTheWorld || ExitOnFullCodeCache) {
-            before_exit(thread);
-            exit_globals(); // will delete tty
-            vm_direct_exit(CompileTheWorld ? 0 : 1);
-          }
-#endif
-          UseCompiler               = false;
-          AlwaysCompileLoopMethods  = false;
-        }
+        // the code cache is really full
+        handle_full_code_cache();
+      } else if (UseCodeCacheFlushing && CodeCache::needs_flushing()) {
+        // Attempt to start cleaning the code cache while there is still a little headroom
+        NMethodSweeper::handle_full_code_cache(false);
       }
 
       CompileTask* task = queue->get();
@@ -1369,7 +1395,7 @@ void CompileBroker::compiler_thread_loop() {
       // Never compile a method if breakpoints are present in it
       if (method()->number_of_breakpoints() == 0) {
         // Compile the method.
-        if (UseCompiler || AlwaysCompileLoopMethods) {
+        if ((UseCompiler || AlwaysCompileLoopMethods) && CompileBroker::should_compile_new_jobs()) {
 #ifdef COMPILER1
           // Allow repeating compilations for the purpose of benchmarking
           // compile speed. This is not useful for customers.
@@ -1409,9 +1435,14 @@ void CompileBroker::init_compiler_thread_log() {
     intx thread_id = os::current_thread_id();
     for (int try_temp_dir = 1; try_temp_dir >= 0; try_temp_dir--) {
       const char* dir = (try_temp_dir ? os::get_temp_directory() : NULL);
-      if (dir == NULL)  dir = "";
-      sprintf(fileBuf, "%shs_c" UINTX_FORMAT "_pid%u.log",
-              dir, thread_id, os::current_process_id());
+      if (dir == NULL) {
+        jio_snprintf(fileBuf, sizeof(fileBuf), "hs_c" UINTX_FORMAT "_pid%u.log",
+                     thread_id, os::current_process_id());
+      } else {
+        jio_snprintf(fileBuf, sizeof(fileBuf),
+                     "%s%shs_c" UINTX_FORMAT "_pid%u.log", dir,
+                     os::file_separator(), thread_id, os::current_process_id());
+      }
       fp = fopen(fileBuf, "at");
       if (fp != NULL) {
         file = NEW_C_HEAP_ARRAY(char, strlen(fileBuf)+1);
@@ -1530,6 +1561,12 @@ void CompileBroker::invoke_compiler_on_method(CompileTask* task) {
     assert(thread->env() == &ci_env, "set by ci_env");
     // The thread-env() field is cleared in ~CompileTaskWrapper.
 
+    // Cache Jvmti state
+    ci_env.cache_jvmti_state();
+
+    // Cache DTrace flags
+    ci_env.cache_dtrace_flags();
+
     ciMethod* target = ci_env.get_method_from_handle(target_handle);
 
     TraceTime t1("compilation", &time);
@@ -1581,10 +1618,10 @@ void CompileBroker::invoke_compiler_on_method(CompileTask* task) {
     if (is_osr) {
       method->set_not_osr_compilable();
     } else {
-      method->set_not_compilable();
+      method->set_not_compilable_quietly();
     }
   } else if (compilable == ciEnv::MethodCompilable_not_at_tier) {
-    method->set_not_compilable(task->comp_level());
+    method->set_not_compilable_quietly(task->comp_level());
   }
 
   // Note that the queued_for_compilation bits are cleared without
@@ -1606,6 +1643,37 @@ void CompileBroker::invoke_compiler_on_method(CompileTask* task) {
 #endif
 }
 
+
+// ------------------------------------------------------------------
+// CompileBroker::handle_full_code_cache
+//
+// The CodeCache is full.  Print out warning and disable compilation or
+// try code cache cleaning so compilation can continue later.
+void CompileBroker::handle_full_code_cache() {
+  UseInterpreter = true;
+  if (UseCompiler || AlwaysCompileLoopMethods ) {
+    if (xtty != NULL) {
+      xtty->begin_elem("code_cache_full");
+      xtty->stamp();
+      xtty->end_elem();
+    }
+    warning("CodeCache is full. Compiler has been disabled.");
+    warning("Try increasing the code cache size using -XX:ReservedCodeCacheSize=");
+#ifndef PRODUCT
+    if (CompileTheWorld || ExitOnFullCodeCache) {
+      before_exit(JavaThread::current());
+      exit_globals(); // will delete tty
+      vm_direct_exit(CompileTheWorld ? 0 : 1);
+    }
+#endif
+    if (UseCodeCacheFlushing) {
+      NMethodSweeper::handle_full_code_cache(true);
+    } else {
+      UseCompiler               = false;
+      AlwaysCompileLoopMethods  = false;
+    }
+  }
+}
 
 // ------------------------------------------------------------------
 // CompileBroker::set_last_compile
@@ -1814,9 +1882,11 @@ void CompileBroker::print_times() {
                 CompileBroker::_t_standard_compilation.seconds(),
                 CompileBroker::_t_standard_compilation.seconds() / CompileBroker::_total_standard_compile_count);
   tty->print_cr("    On stack replacement   : %6.3f s, Average : %2.3f", CompileBroker::_t_osr_compilation.seconds(), CompileBroker::_t_osr_compilation.seconds() / CompileBroker::_total_osr_compile_count);
-  compiler(CompLevel_fast_compile)->print_timers();
-  if (compiler(CompLevel_fast_compile) != compiler(CompLevel_highest_tier)) {
-    compiler(CompLevel_highest_tier)->print_timers();
+
+  if (compiler(CompLevel_fast_compile)) {
+    compiler(CompLevel_fast_compile)->print_timers();
+    if (compiler(CompLevel_fast_compile) != compiler(CompLevel_highest_tier))
+      compiler(CompLevel_highest_tier)->print_timers();
   }
 
   tty->cr();

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -35,14 +35,14 @@
 extern address JVM_FunctionAtStart();
 extern address JVM_FunctionAtEnd();
 
-// Complain and stop. All error conditions occuring during the writing of
+// Complain and stop. All error conditions occurring during the writing of
 // an archive file should stop the process.  Unrecoverable errors during
 // the reading of the archive file should stop the process.
 
 static void fail(const char *msg, va_list ap) {
   // This occurs very early during initialization: tty is not initialized.
   jio_fprintf(defaultStream::error_stream(),
-              "An error has occured while processing the"
+              "An error has occurred while processing the"
               " shared archive file.\n");
   jio_vfprintf(defaultStream::error_stream(), msg, ap);
   jio_fprintf(defaultStream::error_stream(), "\n");

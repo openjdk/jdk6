@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -968,22 +968,23 @@ const Type *Node::Value( PhaseTransform * ) const {
 // Example: when reshape "(X+3)+4" into "X+7" you must leave the Node for
 // "X+3" unchanged in case it is shared.
 //
-// If you modify the 'this' pointer's inputs, you must use 'set_req' with
-// def-use info.  If you are making a new Node (either as the new root or
-// some new internal piece) you must NOT use set_req with def-use info.
-// You can make a new Node with either 'new' or 'clone'.  In either case,
-// def-use info is (correctly) not generated.
+// If you modify the 'this' pointer's inputs, you should use
+// 'set_req'.  If you are making a new Node (either as the new root or
+// some new internal piece) you may use 'init_req' to set the initial
+// value.  You can make a new Node with either 'new' or 'clone'.  In
+// either case, def-use info is correctly maintained.
+//
 // Example: reshape "(X+3)+4" into "X+7":
-//    set_req(1,in(1)->in(1) /* grab X */, du /* must use DU on 'this' */);
-//    set_req(2,phase->intcon(7),du);
+//    set_req(1, in(1)->in(1));
+//    set_req(2, phase->intcon(7));
 //    return this;
-// Example: reshape "X*4" into "X<<1"
-//    return new (C,3) LShiftINode( in(1), phase->intcon(1) );
+// Example: reshape "X*4" into "X<<2"
+//    return new (C,3) LShiftINode(in(1), phase->intcon(2));
 //
 // You must call 'phase->transform(X)' on any new Nodes X you make, except
-// for the returned root node.  Example: reshape "X*31" with "(X<<5)-1".
+// for the returned root node.  Example: reshape "X*31" with "(X<<5)-X".
 //    Node *shift=phase->transform(new(C,3)LShiftINode(in(1),phase->intcon(5)));
-//    return new (C,3) AddINode(shift, phase->intcon(-1));
+//    return new (C,3) AddINode(shift, in(1));
 //
 // When making a Node for a constant use 'phase->makecon' or 'phase->intcon'.
 // These forms are faster than 'phase->transform(new (C,1) ConNode())' and Do
@@ -1187,7 +1188,7 @@ static void kill_dead_code( Node *dead, PhaseIterGVN *igvn ) {
         Node* use = dead->last_out(k);
         igvn->hash_delete(use);       // Yank from hash table prior to mod
         if (use->in(0) == dead) {     // Found another dead node
-          assert (!use->is_Con(), "Control for Con node should be Root node.")
+          assert (!use->is_Con(), "Control for Con node should be Root node.");
           use->set_req(0, top);       // Cut dead edge to prevent processing
           nstack.push(use);           // the dead node again.
         } else {                      // Else found a not-dead user
@@ -1679,7 +1680,7 @@ void Node::verify_edges(Unique_Node_List &visited) {
   if (visited.member(this))  return;
   visited.push(this);
 
-  // Walk over all input edges, checking for correspondance
+  // Walk over all input edges, checking for correspondence
   for( i = 0; i < len(); i++ ) {
     n = in(i);
     if (n != NULL && !n->is_top()) {
@@ -1723,7 +1724,7 @@ void Node::verify_recur(const Node *n, int verify_depth,
   // Contained in new_space or old_space?
   VectorSet *v = C->node_arena()->contains(n) ? &new_space : &old_space;
   // Check for visited in the proper space.  Numberings are not unique
-  // across spaces so we need a seperate VectorSet for each space.
+  // across spaces so we need a separate VectorSet for each space.
   if( v->test_set(n->_idx) ) return;
 
   if (n->is_Con() && n->bottom_type() == Type::TOP) {

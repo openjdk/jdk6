@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -63,8 +63,14 @@ class JNIHandles : AllStatic {
   // refers to NULL (as is the case for any weak reference).
   static jmethodID make_jmethod_id(methodHandle mh);
   static void destroy_jmethod_id(jmethodID mid);
+  // Use resolve_jmethod_id() in situations where the caller is expected
+  // to provide a valid jmethodID; the only sanity checks are in asserts;
+  // result guaranteed not to be NULL.
   inline static methodOop resolve_jmethod_id(jmethodID mid);
-  inline static methodOop checked_resolve_jmethod_id(jmethodID mid); // NULL on invalid jmethodID
+  // Use checked_resolve_jmethod_id() in situations where the caller
+  // should provide a valid jmethodID, but might not. NULL is returned
+  // when the jmethodID does not refer to a valid method.
+  inline static methodOop checked_resolve_jmethod_id(jmethodID mid);
   static void change_method_associated_with_jmethod_id(jmethodID jmid, methodHandle mh);
 
   // Sentinel marking deleted handles in block. Note that we cannot store NULL as
@@ -99,6 +105,8 @@ class JNIHandles : AllStatic {
 
 class JNIHandleBlock : public CHeapObj {
   friend class VMStructs;
+  friend class CppInterpreter;
+
  private:
   enum SomeConstants {
     block_size_in_oops  = 32                    // Number of handles per handle block
@@ -126,9 +134,11 @@ class JNIHandleBlock : public CHeapObj {
   // Fill block with bad_handle values
   void zap();
 
+ protected:
   // No more handles in the both the current and following blocks
   void clear() { _top = 0; }
 
+ private:
   // Free list computation
   void rebuild_free_list();
 
@@ -196,12 +206,12 @@ inline methodOop JNIHandles::resolve_jmethod_id(jmethodID mid) {
 };
 
 inline methodOop JNIHandles::checked_resolve_jmethod_id(jmethodID mid) {
-  jobject handle = (jobject)mid;
-  if (is_weak_global_handle(handle)) {
-    return (methodOop) resolve_non_null(handle);
-  } else {
+  oop o = resolve_external_guard((jobject) mid);
+  if (o == NULL || !o->is_method()) {
     return (methodOop) NULL;
   }
+
+  return (methodOop) o;
 };
 
 

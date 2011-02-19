@@ -1,5 +1,5 @@
 //
-// Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+// Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
 // DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 //
 // This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
 // 2 along with this work; if not, write to the Free Software Foundation,
 // Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 //
-// Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-// CA 95054 USA or visit www.sun.com if you need additional information or
-// have any questions.
+// Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+// or visit www.oracle.com if you need additional information or have any
+// questions.
 //
 //
 
@@ -435,10 +435,12 @@ void ArchDesc::build_chain_rule(OperandForm *oper) {
   if ((oper->_matrule) && (oper->_matrule->_lChild == NULL) &&
       (oper->_matrule->_rChild == NULL)) {
 
-    const Form *form = _globalNames[oper->_matrule->_opType];
-    if ((form) && form->is_operand() &&
-        (form->ideal_only() == false)) {
-      add_chain_rule_entry(oper->_matrule->_opType, oper->cost(), oper->_ident);
+    {
+      const Form *form = _globalNames[oper->_matrule->_opType];
+      if ((form) && form->is_operand() &&
+          (form->ideal_only() == false)) {
+        add_chain_rule_entry(oper->_matrule->_opType, oper->cost(), oper->_ident);
+      }
     }
     // Check for additional chain rules
     if (oper->_matrule->_next) {
@@ -1014,12 +1016,12 @@ void ArchDesc::initBaseOpTypes() {
   int idealIndex = 0;
   for (idealIndex = 1; idealIndex < _last_machine_leaf; ++idealIndex) {
     const char *idealName = NodeClassNames[idealIndex];
-    _idealIndex.Insert((void*)idealName, (void*)idealIndex);
+    _idealIndex.Insert((void*) idealName, (void*) (intptr_t) idealIndex);
   }
   for ( idealIndex = _last_machine_leaf+1;
         idealIndex < _last_opcode; ++idealIndex) {
     const char *idealName = NodeClassNames[idealIndex];
-    _idealIndex.Insert((void*)idealName, (void*)idealIndex);
+    _idealIndex.Insert((void*) idealName, (void*) (intptr_t) idealIndex);
   }
 
 }
@@ -1028,7 +1030,8 @@ void ArchDesc::initBaseOpTypes() {
 //---------------------------addSUNcopyright-------------------------------
 // output SUN copyright info
 void ArchDesc::addSunCopyright(char* legal, int size, FILE *fp) {
-  fwrite(legal, size, 1, fp);
+  size_t count = fwrite(legal, 1, size, fp);
+  assert(count == (size_t) size, "copyright info truncated");
   fprintf(fp,"\n");
   fprintf(fp,"// Machine Generated File.  Do Not Edit!\n");
   fprintf(fp,"\n");

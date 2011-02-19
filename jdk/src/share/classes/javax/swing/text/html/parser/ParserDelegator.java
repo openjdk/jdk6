@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2002 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,12 +18,14 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing.text.html.parser;
+
+import sun.awt.AppContext;
 
 import javax.swing.text.html.HTMLEditorKit;
 import java.io.BufferedInputStream;
@@ -33,7 +35,6 @@ import java.io.DataInputStream;
 import java.io.ObjectInputStream;
 import java.io.Reader;
 import java.io.Serializable;
-import java.lang.reflect.Method;
 
 /**
  * Responsible for starting up a new DocumentParser
@@ -45,9 +46,13 @@ import java.lang.reflect.Method;
 
 public class ParserDelegator extends HTMLEditorKit.Parser implements Serializable {
 
-    private static DTD dtd = null;
+    private static final Object DTD_KEY = new Object();
 
     protected static synchronized void setDefaultDTD() {
+        AppContext appContext = AppContext.getAppContext();
+
+        DTD dtd = (DTD) appContext.get(DTD_KEY);
+
         if (dtd == null) {
             DTD _dtd = null;
             // (PENDING) Hate having to hard code!
@@ -59,6 +64,8 @@ public class ParserDelegator extends HTMLEditorKit.Parser implements Serializabl
                 System.out.println("Throw an exception: could not get default dtd: " + nm);
             }
             dtd = createDTD(_dtd, nm);
+
+            appContext.put(DTD_KEY, dtd);
         }
     }
 
@@ -81,13 +88,11 @@ public class ParserDelegator extends HTMLEditorKit.Parser implements Serializabl
 
 
     public ParserDelegator() {
-        if (dtd == null) {
-            setDefaultDTD();
-        }
+        setDefaultDTD();
     }
 
     public void parse(Reader r, HTMLEditorKit.ParserCallback cb, boolean ignoreCharSet) throws IOException {
-        new DocumentParser(dtd).parse(r, cb, ignoreCharSet);
+        new DocumentParser((DTD) AppContext.getAppContext().get(DTD_KEY)).parse(r, cb, ignoreCharSet);
     }
 
     /**
@@ -113,8 +118,6 @@ public class ParserDelegator extends HTMLEditorKit.Parser implements Serializabl
     private void readObject(ObjectInputStream s)
         throws ClassNotFoundException, IOException {
         s.defaultReadObject();
-        if (dtd == null) {
-            setDefaultDTD();
-        }
+        setDefaultDTD();
     }
 }

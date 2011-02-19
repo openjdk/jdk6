@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.awt.X11;
@@ -824,7 +824,9 @@ public class XBaseWindow implements XConstants, XUtilConstants {
      * The active grab overrides activated automatic grab.
      */
     public boolean grabInput() {
-        grabLog.log(Level.FINE, "Grab input on {0}", new Object[] {this});
+        if (grabLog.isLoggable(Level.FINE)) {
+            grabLog.log(Level.FINE, "Grab input on {0}", new Object[] {String.valueOf(this)});
+        }
 
         XToolkit.awtLock();
         try {
@@ -879,7 +881,10 @@ public class XBaseWindow implements XConstants, XUtilConstants {
         XToolkit.awtLock();
         try {
             XBaseWindow grabWindow = XAwtState.getGrabWindow();
-            grabLog.log(Level.FINE, "UnGrab input on {0}", new Object[] {grabWindow});
+            if (grabLog.isLoggable(Level.FINE)) {
+                grabLog.log(Level.FINE, "UnGrab input on {0}",
+                            new Object[] {String.valueOf(grabWindow)});
+            }
             if (grabWindow != null) {
                 grabWindow.ungrabInputImpl();
                 XlibWrapper.XUngrabPointer(XToolkit.getDisplay(), CurrentTime);
@@ -930,7 +935,7 @@ public class XBaseWindow implements XConstants, XUtilConstants {
             XPropertyCache.clearCache(window, XAtom.get(msg.get_atom()));
         }
         if (eventLog.isLoggable(Level.FINER)) {
-            eventLog.log(Level.FINER, "{0}", new Object[] {msg});
+            eventLog.log(Level.FINER, "{0}", new Object[] {String.valueOf(msg)});
         }
     }
 
@@ -1000,8 +1005,10 @@ public class XBaseWindow implements XConstants, XUtilConstants {
     }
     public void handleConfigureNotifyEvent(XEvent xev) {
         XConfigureEvent xe = xev.get_xconfigure();
-        insLog.log(Level.FINER, "Configure, {0}",
-                   new Object[] {xe});
+        if (insLog.isLoggable(Level.FINER)) {
+            insLog.log(Level.FINER, "Configure, {0}",
+                       new Object[] {String.valueOf(xe)});
+        }
         x = xe.get_x();
         y = xe.get_y();
         width = xe.get_width();

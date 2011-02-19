@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,15 +18,19 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing;
 
 import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Locale;
+import java.util.Map.Entry;
+import java.util.Set;
 
 
 
@@ -48,7 +52,7 @@ class MultiUIDefaults extends UIDefaults
         tables = new UIDefaults[0];
     }
 
-
+    @Override
     public Object get(Object key)
     {
         Object value = super.get(key);
@@ -67,7 +71,7 @@ class MultiUIDefaults extends UIDefaults
         return null;
     }
 
-
+    @Override
     public Object get(Object key, Locale l)
     {
         Object value = super.get(key,l);
@@ -86,49 +90,44 @@ class MultiUIDefaults extends UIDefaults
         return null;
     }
 
-
+    @Override
     public int size() {
-        int n = super.size();
-        for(int i = 0; i < tables.length; i++) {
-            UIDefaults table = tables[i];
-            n += (table != null) ? table.size() : 0;
-        }
-        return n;
+        return entrySet().size();
     }
 
-
+    @Override
     public boolean isEmpty() {
         return size() == 0;
     }
 
-
+    @Override
     public Enumeration keys()
     {
-        Enumeration[] enums = new Enumeration[1 + tables.length];
-        enums[0] = super.keys();
-        for(int i = 0; i < tables.length; i++) {
-            UIDefaults table = tables[i];
-            if (table != null) {
-                enums[i + 1] = table.keys();
-            }
-        }
-        return new MultiUIDefaultsEnumerator(enums);
+        return new MultiUIDefaultsEnumerator(
+                MultiUIDefaultsEnumerator.Type.KEYS, entrySet());
     }
 
 
+    @Override
     public Enumeration elements()
     {
-        Enumeration[] enums = new Enumeration[1 + tables.length];
-        enums[0] = super.elements();
-        for(int i = 0; i < tables.length; i++) {
-            UIDefaults table = tables[i];
-            if (table != null) {
-                enums[i + 1] = table.elements();
-            }
-        }
-        return new MultiUIDefaultsEnumerator(enums);
+        return new MultiUIDefaultsEnumerator(
+                MultiUIDefaultsEnumerator.Type.ELEMENTS, entrySet());
     }
 
+    @Override
+    public Set<Entry<Object, Object>> entrySet() {
+        Set<Entry<Object, Object>> set = new HashSet<Entry<Object, Object>>();
+        for (int i = tables.length - 1; i >= 0; i--) {
+            if (tables[i] != null) {
+                set.addAll(tables[i].entrySet());
+            }
+        }
+        set.addAll(super.entrySet());
+        return set;
+    }
+
+    @Override
     protected void getUIError(String msg) {
         if (tables.length > 0) {
             tables[0].getUIError(msg);
@@ -139,54 +138,49 @@ class MultiUIDefaults extends UIDefaults
 
     private static class MultiUIDefaultsEnumerator implements Enumeration
     {
-        Enumeration[] enums;
-        int n = 0;
+        public static enum Type { KEYS, ELEMENTS };
+        private Iterator<Entry<Object, Object>> iterator;
+        private Type type;
 
-        MultiUIDefaultsEnumerator(Enumeration[] enums) {
-            this.enums = enums;
+        MultiUIDefaultsEnumerator(Type type, Set<Entry<Object, Object>> entries) {
+            this.type = type;
+            this.iterator = entries.iterator();
         }
 
         public boolean hasMoreElements() {
-            for(int i = n; i < enums.length; i++) {
-                Enumeration e = enums[i];
-                if ((e != null) && (e.hasMoreElements())) {
-                    return true;
-                }
-            }
-            return false;
+            return iterator.hasNext();
         }
 
         public Object nextElement() {
-            for(; n < enums.length; n++) {
-                Enumeration e = enums[n];
-                if ((e != null) && (e.hasMoreElements())) {
-                    return e.nextElement();
-                }
+            switch (type) {
+                case KEYS: return iterator.next().getKey();
+                case ELEMENTS: return iterator.next().getValue();
+                default: return null;
             }
-            return null;
         }
     }
 
-
+    @Override
     public Object remove(Object key)
     {
-        Object value = super.remove(key);
-        if (value != null) {
-            return value;
-        }
-
-        for(int i = 0; i < tables.length; i++) {
-            UIDefaults table = tables[i];
-            value = (table != null) ? table.remove(key) : null;
-            if (value != null) {
-                return value;
+        Object value = null;
+        for (int i = tables.length - 1; i >= 0; i--) {
+            if (tables[i] != null) {
+                Object v = tables[i].remove(key);
+                if (v != null) {
+                    value = v;
+                }
             }
         }
+        Object v = super.remove(key);
+        if (v != null) {
+            value = v;
+        }
 
-        return null;
+        return value;
     }
 
-
+    @Override
     public void clear() {
         super.clear();
         for(int i = 0; i < tables.length; i++) {
@@ -197,6 +191,7 @@ class MultiUIDefaults extends UIDefaults
         }
     }
 
+    @Override
     public synchronized String toString() {
         StringBuffer buf = new StringBuffer();
         buf.append("{");

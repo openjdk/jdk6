@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,16 +16,16 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
 # include "incls/_precompiled.incl"
 # include "incls/_constantPoolKlass.cpp.incl"
 
-constantPoolOop constantPoolKlass::allocate(int length, TRAPS) {
+constantPoolOop constantPoolKlass::allocate(int length, bool is_conc_safe, TRAPS) {
   int size = constantPoolOopDesc::object_size(length);
   KlassHandle klass (THREAD, as_klassOop());
   constantPoolOop c =
@@ -38,6 +38,9 @@ constantPoolOop constantPoolKlass::allocate(int length, TRAPS) {
   c->set_flags(0);
   // only set to non-zero if constant pool is merged by RedefineClasses
   c->set_orig_length(0);
+  // if constant pool may change during RedefineClasses, it is created
+  // unsafe for GC concurrent processing.
+  c->set_is_conc_safe(is_conc_safe);
   // all fields are initialized; needed for GC
 
   // initialize tag array
@@ -207,6 +210,11 @@ int constantPoolKlass::oop_oop_iterate_m(oop obj, OopClosure* blk, MemRegion mr)
   return size;
 }
 
+bool constantPoolKlass::oop_is_conc_safe(oop obj) const {
+  assert(obj->is_constantPool(), "must be constantPool");
+  return constantPoolOop(obj)->is_conc_safe();
+}
+
 #ifndef SERIALGC
 int constantPoolKlass::oop_update_pointers(ParCompactionManager* cm, oop obj) {
   assert (obj->is_constantPool(), "obj must be constant pool");
@@ -260,21 +268,6 @@ constantPoolKlass::oop_update_pointers(ParCompactionManager* cm, oop obj,
   return cp->object_size();
 }
 
-void constantPoolKlass::oop_copy_contents(PSPromotionManager* pm, oop obj) {
-  assert(obj->is_constantPool(), "should be constant pool");
-  constantPoolOop cp = (constantPoolOop) obj;
-  if (AnonymousClasses && cp->has_pseudo_string() && cp->tags() != NULL) {
-    oop* base = (oop*)cp->base();
-    for (int i = 0; i < cp->length(); ++i, ++base) {
-      if (cp->tag_at(i).is_string()) {
-        if (PSScavenge::should_scavenge(base)) {
-          pm->claim_or_forward_breadth(base);
-        }
-      }
-    }
-  }
-}
-
 void constantPoolKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
   assert(obj->is_constantPool(), "should be constant pool");
   constantPoolOop cp = (constantPoolOop) obj;
@@ -291,8 +284,6 @@ void constantPoolKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
 }
 #endif // SERIALGC
 
-#ifndef PRODUCT
-
 // Printing
 
 void constantPoolKlass::oop_print_on(oop obj, outputStream* st) {
@@ -302,14 +293,12 @@ void constantPoolKlass::oop_print_on(oop obj, outputStream* st) {
   Klass::oop_print_on(obj, st);
   constantPoolOop cp = constantPoolOop(obj);
   if (cp->flags() != 0) {
-    st->print(" - flags : 0x%x", cp->flags());
+    st->print(" - flags: 0x%x", cp->flags());
     if (cp->has_pseudo_string()) st->print(" has_pseudo_string");
+    if (cp->has_invokedynamic()) st->print(" has_invokedynamic");
     st->cr();
   }
-
-  // Temp. remove cache so we can do lookups with original indicies.
-  constantPoolCacheHandle cache (THREAD, cp->cache());
-  cp->set_cache(NULL);
+  st->print_cr(" - cache: " INTPTR_FORMAT, cp->cache());
 
   for (int index = 1; index < cp->length(); index++) {      // Index 0 is unused
     st->print(" - %3d : ", index);
@@ -325,8 +314,8 @@ void constantPoolKlass::oop_print_on(oop obj, outputStream* st) {
       case JVM_CONSTANT_Fieldref :
       case JVM_CONSTANT_Methodref :
       case JVM_CONSTANT_InterfaceMethodref :
-        st->print("klass_index=%d", cp->klass_ref_index_at(index));
-        st->print(" name_and_type_index=%d", cp->name_and_type_ref_index_at(index));
+        st->print("klass_index=%d", cp->uncached_klass_ref_index_at(index));
+        st->print(" name_and_type_index=%d", cp->uncached_name_and_type_ref_index_at(index));
         break;
       case JVM_CONSTANT_UnresolvedString :
       case JVM_CONSTANT_String :
@@ -366,6 +355,17 @@ void constantPoolKlass::oop_print_on(oop obj, outputStream* st) {
         entry->print_value_on(st);
         }
         break;
+      case JVM_CONSTANT_MethodHandle :
+        st->print("ref_kind=%d", cp->method_handle_ref_kind_at(index));
+        st->print(" ref_index=%d", cp->method_handle_index_at(index));
+        break;
+      case JVM_CONSTANT_MethodType :
+        st->print("signature_index=%d", cp->method_type_index_at(index));
+        break;
+      case JVM_CONSTANT_InvokeDynamic :
+        st->print("bootstrap_method_index=%d", cp->invoke_dynamic_bootstrap_method_ref_index_at(index));
+        st->print(" name_and_type_index=%d", cp->invoke_dynamic_name_and_type_ref_index_at(index));
+        break;
       default:
         ShouldNotReachHere();
         break;
@@ -373,13 +373,21 @@ void constantPoolKlass::oop_print_on(oop obj, outputStream* st) {
     st->cr();
   }
   st->cr();
-
-  // Restore cache
-  cp->set_cache(cache());
 }
 
-
-#endif
+void constantPoolKlass::oop_print_value_on(oop obj, outputStream* st) {
+  assert(obj->is_constantPool(), "must be constantPool");
+  constantPoolOop cp = constantPoolOop(obj);
+  st->print("constant pool [%d]", cp->length());
+  if (cp->has_pseudo_string()) st->print("/pseudo_string");
+  if (cp->has_invokedynamic()) st->print("/invokedynamic");
+  cp->print_address_on(st);
+  st->print(" for ");
+  cp->pool_holder()->print_value_on(st);
+  if (cp->cache() != NULL) {
+    st->print(" cache=" PTR_FORMAT, cp->cache());
+  }
+}
 
 const char* constantPoolKlass::internal_name() const {
   return "{constant pool}";
@@ -421,6 +429,7 @@ void constantPoolKlass::oop_verify_on(oop obj, outputStream* st) {
           // can be non-perm, can be non-instance (array)
         }
       }
+      // FIXME: verify JSR 292 tags JVM_CONSTANT_MethodHandle, etc.
       base++;
     }
     guarantee(cp->tags()->is_perm(),         "should be in permspace");

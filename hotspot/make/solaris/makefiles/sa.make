@@ -1,5 +1,5 @@
 #
-# Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 2003, 2008, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #  
 #
 
@@ -35,6 +35,9 @@ GENERATED = ../generated
 
 # tools.jar is needed by the JDI - SA binding
 SA_CLASSPATH = $(BOOT_JAVA_HOME)/lib/tools.jar
+
+# TODO: if it's a modules image, check if SA module is installed.
+MODULELIB_PATH= $(BOOT_JAVA_HOME)/lib/modules
 
 # gnumake 3.78.1 does not accept the *s that
 # are in AGENT_FILES1 and AGENT_FILES2, so use the shell to expand them
@@ -59,7 +62,7 @@ $(GENERATED)/sa-jdi.jar: $(AGENT_FILES1) $(AGENT_FILES2)
 	   echo "ALT_BOOTDIR, BOOTDIR or JAVA_HOME needs to be defined to build SA"; \
 	   exit 1; \
 	fi
-	$(QUIETLY) if [ ! -f $(SA_CLASSPATH) ] ; then \
+	$(QUIETLY) if [ ! -f $(SA_CLASSPATH) -a ! -d $(MODULELIB_PATH) ] ; then \
 	  echo "Missing $(SA_CLASSPATH) file. Use 1.6.0 or later version of JDK";\
 	  echo ""; \
 	  exit 1; \
@@ -67,8 +70,8 @@ $(GENERATED)/sa-jdi.jar: $(AGENT_FILES1) $(AGENT_FILES2)
 	$(QUIETLY) if [ ! -d $(SA_CLASSDIR) ] ; then \
 	  mkdir -p $(SA_CLASSDIR);        \
 	fi
-	$(QUIETLY) $(COMPILE.JAVAC) -source 1.4 -classpath $(SA_CLASSPATH) -sourcepath $(AGENT_SRC_DIR) -g -d $(SA_CLASSDIR) $(AGENT_FILES1)
-	$(QUIETLY) $(COMPILE.JAVAC) -source 1.4 -classpath $(SA_CLASSPATH) -sourcepath $(AGENT_SRC_DIR) -g -d $(SA_CLASSDIR) $(AGENT_FILES2)
+	$(QUIETLY) $(COMPILE.JAVAC) -source 1.4 -target 1.4 -classpath $(SA_CLASSPATH) -sourcepath $(AGENT_SRC_DIR) -d $(SA_CLASSDIR) $(AGENT_FILES1)
+	$(QUIETLY) $(COMPILE.JAVAC) -source 1.4 -target 1.4 -classpath $(SA_CLASSPATH) -sourcepath $(AGENT_SRC_DIR) -d $(SA_CLASSDIR) $(AGENT_FILES2)
 	
 	$(QUIETLY) $(COMPILE.RMIC)  -classpath $(SA_CLASSDIR) -d $(SA_CLASSDIR) sun.jvm.hotspot.debugger.remote.RemoteDebuggerServer
 	$(QUIETLY) echo "$(SA_BUILD_VERSION_PROP)" > $(SA_PROPERTIES)

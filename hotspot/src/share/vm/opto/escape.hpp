@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -210,6 +210,8 @@ private:
   Unique_Node_List  _delayed_worklist; // Nodes to be processed before
                                        // the call build_connection_graph().
 
+  GrowableArray<MergeMemNode *>  _mergemem_worklist; // List of all MergeMem nodes
+
   VectorSet                _processed; // Records which nodes have been
                                        // processed.
 
@@ -225,6 +227,7 @@ private:
   uint                     _noop_null; // ConN(#NULL)
 
   Compile *                  _compile; // Compile object for current compilation
+  PhaseIterGVN *                _igvn; // Value numbering
 
   // Address of an element in _nodes.  Used when the element is to be modified
   PointsToNode *ptnode_adr(uint idx) const {
@@ -255,7 +258,7 @@ private:
   // walk the connection graph starting at the node corresponding to "n" and
   // add the index of everything it could point to, to "ptset".  This may cause
   // Phi's encountered to get (re)processed  (which requires "phase".)
-  void PointsTo(VectorSet &ptset, Node * n, PhaseTransform *phase);
+  void PointsTo(VectorSet &ptset, Node * n);
 
   //  Edge manipulation.  The "from_i" and "to_i" arguments are the
   //  node indices of the source and destination of the edge
@@ -289,7 +292,7 @@ private:
   bool split_AddP(Node *addp, Node *base,  PhaseGVN  *igvn);
   PhiNode *create_split_phi(PhiNode *orig_phi, int alias_idx, GrowableArray<PhiNode *>  &orig_phi_worklist, PhaseGVN  *igvn, bool &new_created);
   PhiNode *split_memory_phi(PhiNode *orig_phi, int alias_idx, GrowableArray<PhiNode *>  &orig_phi_worklist, PhaseGVN  *igvn);
-  Node *find_mem(Node *mem, int alias_idx, PhaseGVN  *igvn);
+  void  move_inst_mem(Node* n, GrowableArray<PhiNode *>  &orig_phis, PhaseGVN *igvn);
   Node *find_inst_mem(Node *mem, int alias_idx,GrowableArray<PhiNode *>  &orig_phi_worklist,  PhaseGVN  *igvn);
 
   // Propagate unique types created for unescaped allocated objects
@@ -298,7 +301,6 @@ private:
 
   // manage entries in _node_map
   void  set_map(int idx, Node *n)        { _node_map.map(idx, n); }
-  void  set_map_phi(int idx, PhiNode *p) { _node_map.map(idx, (Node *) p); }
   Node *get_map(int idx)                 { return _node_map[idx]; }
   PhiNode *get_map_phi(int idx) {
     Node *phi = _node_map[idx];
@@ -309,23 +311,30 @@ private:
   // Node:  This assumes that escape analysis is run before
   //        PhaseIterGVN creation
   void record_for_optimizer(Node *n) {
-    _compile->record_for_igvn(n);
+    _igvn->_worklist.push(n);
   }
 
   // Set the escape state of a node
   void set_escape_state(uint ni, PointsToNode::EscapeState es);
 
+  // Search for objects which are not scalar replaceable.
+  void verify_escape_state(int nidx, VectorSet& ptset, PhaseTransform* phase);
+
 public:
-  ConnectionGraph(Compile *C);
+  ConnectionGraph(Compile *C, PhaseIterGVN *igvn);
 
   // Check for non-escaping candidates
   static bool has_candidates(Compile *C);
+
+  // Perform escape analysis
+  static void do_analysis(Compile *C, PhaseIterGVN *igvn);
 
   // Compute the escape information
   bool compute_escape();
 
   // escape state of a node
-  PointsToNode::EscapeState escape_state(Node *n, PhaseTransform *phase);
+  PointsToNode::EscapeState escape_state(Node *n);
+
   // other information we have collected
   bool is_scalar_replaceable(Node *n) {
     if (_collecting || (n->_idx >= nodes_size()))

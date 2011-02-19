@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -32,7 +32,7 @@ extern int explicit_null_checks_inserted,
 void Parse::array_load(BasicType elem_type) {
   const Type* elem = Type::TOP;
   Node* adr = array_addressing(elem_type, 0, &elem);
-  if (stopped())  return;     // guarenteed null or range check
+  if (stopped())  return;     // guaranteed null or range check
   _sp -= 2;                   // Pop array and index
   const TypeAryPtr* adr_type = TypeAryPtr::get_array_body_type(elem_type);
   Node* ld = make_load(control(), adr, elem, elem_type, adr_type);
@@ -43,7 +43,7 @@ void Parse::array_load(BasicType elem_type) {
 //--------------------------------array_store----------------------------------
 void Parse::array_store(BasicType elem_type) {
   Node* adr = array_addressing(elem_type, 1);
-  if (stopped())  return;     // guarenteed null or range check
+  if (stopped())  return;     // guaranteed null or range check
   Node* val = pop();
   _sp -= 2;                   // Pop array and index
   const TypeAryPtr* adr_type = TypeAryPtr::get_array_body_type(elem_type);
@@ -278,6 +278,11 @@ void Parse::do_tableswitch() {
   if (len < 1) {
     // If this is a backward branch, add safepoint
     maybe_add_safepoint(default_dest);
+    if (should_add_predicate(default_dest)){
+      _sp += 1; // set original stack for use by uncommon_trap
+      add_predicate();
+      _sp -= 1;
+    }
     merge(default_dest);
     return;
   }
@@ -324,6 +329,11 @@ void Parse::do_lookupswitch() {
 
   if (len < 1) {    // If this is a backward branch, add safepoint
     maybe_add_safepoint(default_dest);
+    if (should_add_predicate(default_dest)){
+      _sp += 1; // set original stack for use by uncommon_trap
+      add_predicate();
+      _sp -= 1;
+    }
     merge(default_dest);
     return;
   }
@@ -731,6 +741,9 @@ void Parse::do_jsr() {
   push(_gvn.makecon(ret_addr));
 
   // Flow to the jsr.
+  if (should_add_predicate(jsr_bci)){
+    add_predicate();
+  }
   merge(jsr_bci);
 }
 
@@ -881,7 +894,7 @@ bool Parse::seems_never_taken(float prob) {
 
 //-------------------------------repush_if_args--------------------------------
 // Push arguments of an "if" bytecode back onto the stack by adjusting _sp.
-inline void Parse::repush_if_args() {
+inline int Parse::repush_if_args() {
 #ifndef PRODUCT
   if (PrintOpto && WizardMode) {
     tty->print("defending against excessive implicit null exceptions on %s @%d in ",
@@ -895,6 +908,7 @@ inline void Parse::repush_if_args() {
   assert(argument(0) != NULL, "must exist");
   assert(bc_depth == 1 || argument(1) != NULL, "two must exist");
   _sp += bc_depth;
+  return bc_depth;
 }
 
 //----------------------------------do_ifnull----------------------------------
@@ -912,6 +926,7 @@ void Parse::do_ifnull(BoolTest::mask btest, Node *c) {
     if (PrintOpto && Verbose)
       tty->print_cr("Never-taken edge stops compilation at bci %d",bci());
 #endif
+    repush_if_args(); // to gather stats on loop
     // We need to mark this branch as taken so that if we recompile we will
     // see that it is possible. In the tiered system the interpreter doesn't
     // do profiling and by the time we get to the lower tier from the interpreter
@@ -953,8 +968,14 @@ void Parse::do_ifnull(BoolTest::mask btest, Node *c) {
       // Update method data
       profile_taken_branch(target_bci);
       adjust_map_after_if(btest, c, prob, branch_block, next_block);
-      if (!stopped())
+      if (!stopped()) {
+        if (should_add_predicate(target_bci)){ // add a predicate if it branches to a loop
+          int nargs = repush_if_args(); // set original stack for uncommon_trap
+          add_predicate();
+          _sp -= nargs;
+        }
         merge(target_bci);
+      }
     }
   }
 
@@ -1075,8 +1096,14 @@ void Parse::do_if(BoolTest::mask btest, Node* c) {
       // Update method data
       profile_taken_branch(target_bci);
       adjust_map_after_if(taken_btest, c, prob, branch_block, next_block);
-      if (!stopped())
+      if (!stopped()) {
+        if (should_add_predicate(target_bci)){ // add a predicate if it branches to a loop
+          int nargs = repush_if_args(); // set original stack for the uncommon_trap
+          add_predicate();
+          _sp -= nargs;
+        }
         merge(target_bci);
+      }
     }
   }
 
@@ -1290,41 +1317,30 @@ void Parse::do_one_bytecode() {
   case Bytecodes::_iconst_3: push(intcon( 3)); break;
   case Bytecodes::_iconst_4: push(intcon( 4)); break;
   case Bytecodes::_iconst_5: push(intcon( 5)); break;
-  case Bytecodes::_bipush:   push(intcon( iter().get_byte())); break;
-  case Bytecodes::_sipush:   push(intcon( iter().get_short())); break;
+  case Bytecodes::_bipush:   push(intcon(iter().get_constant_u1())); break;
+  case Bytecodes::_sipush:   push(intcon(iter().get_constant_u2())); break;
   case Bytecodes::_aconst_null: push(null());  break;
   case Bytecodes::_ldc:
   case Bytecodes::_ldc_w:
   case Bytecodes::_ldc2_w:
     // If the constant is unresolved, run this BC once in the interpreter.
-    if (iter().is_unresolved_string()) {
-      uncommon_trap(Deoptimization::make_trap_request
-                    (Deoptimization::Reason_unloaded,
-                     Deoptimization::Action_reinterpret,
-                     iter().get_constant_index()),
-                    NULL, "unresolved_string");
-      break;
-    } else {
+    {
       ciConstant constant = iter().get_constant();
-      if (constant.basic_type() == T_OBJECT) {
-        ciObject* c = constant.as_object();
-        if (c->is_klass()) {
-          // The constant returned for a klass is the ciKlass for the
-          // entry.  We want the java_mirror so get it.
-          ciKlass* klass = c->as_klass();
-          if (klass->is_loaded()) {
-            constant = ciConstant(T_OBJECT, klass->java_mirror());
-          } else {
-            uncommon_trap(Deoptimization::make_trap_request
-                          (Deoptimization::Reason_unloaded,
-                           Deoptimization::Action_reinterpret,
-                           iter().get_constant_index()),
-                          NULL, "unresolved_klass");
-            break;
-          }
-        }
+      if (constant.basic_type() == T_OBJECT &&
+          !constant.as_object()->is_loaded()) {
+        int index = iter().get_constant_pool_index();
+        constantTag tag = iter().get_constant_pool_tag(index);
+        uncommon_trap(Deoptimization::make_trap_request
+                      (Deoptimization::Reason_unloaded,
+                       Deoptimization::Action_reinterpret,
+                       index),
+                      NULL, tag.internal_name());
+        break;
       }
-      push_constant(constant);
+      assert(constant.basic_type() != T_OBJECT || !constant.as_object()->is_klass(),
+             "must be java_mirror of klass");
+      bool pushed = push_constant(constant, true);
+      guarantee(pushed, "must be possible to push this constant");
     }
 
     break;
@@ -1540,14 +1556,14 @@ void Parse::do_one_bytecode() {
   case Bytecodes::_aaload: array_load(T_OBJECT); break;
   case Bytecodes::_laload: {
     a = array_addressing(T_LONG, 0);
-    if (stopped())  return;     // guarenteed null or range check
+    if (stopped())  return;     // guaranteed null or range check
     _sp -= 2;                   // Pop array and index
     push_pair( make_load(control(), a, TypeLong::LONG, T_LONG, TypeAryPtr::LONGS));
     break;
   }
   case Bytecodes::_daload: {
     a = array_addressing(T_DOUBLE, 0);
-    if (stopped())  return;     // guarenteed null or range check
+    if (stopped())  return;     // guaranteed null or range check
     _sp -= 2;                   // Pop array and index
     push_pair( make_load(control(), a, Type::DOUBLE, T_DOUBLE, TypeAryPtr::DOUBLES));
     break;
@@ -1559,19 +1575,19 @@ void Parse::do_one_bytecode() {
   case Bytecodes::_fastore: array_store(T_FLOAT); break;
   case Bytecodes::_aastore: {
     d = array_addressing(T_OBJECT, 1);
-    if (stopped())  return;     // guarenteed null or range check
+    if (stopped())  return;     // guaranteed null or range check
     array_store_check();
     c = pop();                  // Oop to store
     b = pop();                  // index (already used)
     a = pop();                  // the array itself
-    const Type* elemtype  = _gvn.type(a)->is_aryptr()->elem();
+    const TypeOopPtr* elemtype  = _gvn.type(a)->is_aryptr()->elem()->make_oopptr();
     const TypeAryPtr* adr_type = TypeAryPtr::OOPS;
     Node* store = store_oop_to_array(control(), a, d, adr_type, c, elemtype, T_OBJECT);
     break;
   }
   case Bytecodes::_lastore: {
     a = array_addressing(T_LONG, 2);
-    if (stopped())  return;     // guarenteed null or range check
+    if (stopped())  return;     // guaranteed null or range check
     c = pop_pair();
     _sp -= 2;                   // Pop array and index
     store_to_memory(control(), a, c, T_LONG, TypeAryPtr::LONGS);
@@ -1579,7 +1595,7 @@ void Parse::do_one_bytecode() {
   }
   case Bytecodes::_dastore: {
     a = array_addressing(T_DOUBLE, 2);
-    if (stopped())  return;     // guarenteed null or range check
+    if (stopped())  return;     // guaranteed null or range check
     c = pop_pair();
     _sp -= 2;                   // Pop array and index
     c = dstore_rounding(c);
@@ -2051,13 +2067,6 @@ void Parse::do_one_bytecode() {
     // null exception oop throws NULL pointer exception
     do_null_check(peek(), T_OBJECT);
     if (stopped())  return;
-    if (JvmtiExport::can_post_exceptions()) {
-      // "Full-speed throwing" is not necessary here,
-      // since we're notifying the VM on every throw.
-      uncommon_trap(Deoptimization::Reason_unhandled,
-                    Deoptimization::Action_none);
-      return;
-    }
     // Hook the thrown exception directly to subsequent handlers.
     if (BailoutToInterpreterForThrows) {
       // Keep method interpreted from now on.
@@ -2065,6 +2074,11 @@ void Parse::do_one_bytecode() {
                     Deoptimization::Action_make_not_compilable);
       return;
     }
+    if (env()->jvmti_can_post_on_exceptions()) {
+      // check if we must post exception events, take uncommon trap if so (with must_throw = false)
+      uncommon_trap_if_should_post_on_exceptions(Deoptimization::Reason_unhandled, false);
+    }
+    // Here if either can_post_on_exceptions or should_post_on_exceptions is false
     add_exception_state(make_exception_state(peek()));
     break;
 
@@ -2078,6 +2092,10 @@ void Parse::do_one_bytecode() {
     // Update method data
     profile_taken_branch(target_bci);
 
+    // Add loop predicate if it goes to a loop
+    if (should_add_predicate(target_bci)){
+      add_predicate();
+    }
     // Merge the current control into the target basic block
     merge(target_bci);
 
@@ -2155,6 +2173,7 @@ void Parse::do_one_bytecode() {
     break;
 
   case Bytecodes::_invokestatic:
+  case Bytecodes::_invokedynamic:
   case Bytecodes::_invokespecial:
   case Bytecodes::_invokevirtual:
   case Bytecodes::_invokeinterface:

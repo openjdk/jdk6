@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 # include "incls/_precompiled.incl"
@@ -32,10 +32,12 @@ HS_DTRACE_PROBE_DECL(hotspot, gc__end);
 // for the other file anymore.   The dtrace probes have to remain stable.
 void VM_GC_Operation::notify_gc_begin(bool full) {
   HS_DTRACE_PROBE1(hotspot, gc__begin, full);
+  HS_DTRACE_WORKAROUND_TAIL_CALL_BUG();
 }
 
 void VM_GC_Operation::notify_gc_end() {
   HS_DTRACE_PROBE(hotspot, gc__end);
+  HS_DTRACE_WORKAROUND_TAIL_CALL_BUG();
 }
 
 void VM_GC_Operation::acquire_pending_list_lock() {
@@ -115,13 +117,27 @@ bool VM_GC_HeapInspection::skip_operation() const {
 void VM_GC_HeapInspection::doit() {
   HandleMark hm;
   CollectedHeap* ch = Universe::heap();
+  ch->ensure_parsability(false); // must happen, even if collection does
+                                 // not happen (e.g. due to GC_locker)
   if (_full_gc) {
-    ch->collect_as_vm_thread(GCCause::_heap_inspection);
-  } else {
-    // make the heap parsable (no need to retire TLABs)
-    ch->ensure_parsability(false);
+    // The collection attempt below would be skipped anyway if
+    // the gc locker is held. The following dump may then be a tad
+    // misleading to someone expecting only live objects to show
+    // up in the dump (see CR 6944195). Just issue a suitable warning
+    // in that case and do not attempt to do a collection.
+    // The latter is a subtle point, because even a failed attempt
+    // to GC will, in fact, induce one in the future, which we
+    // probably want to avoid in this case because the GC that we may
+    // be about to attempt holds value for us only
+    // if it happens now and not if it happens in the eventual
+    // future.
+    if (GC_locker::is_active()) {
+      warning("GC locker is held; pre-dump GC was skipped");
+    } else {
+      ch->collect_as_vm_thread(GCCause::_heap_inspection);
+    }
   }
-  HeapInspection::heap_inspection(_out);
+  HeapInspection::heap_inspection(_out, _need_prologue /* need_prologue */);
 }
 
 

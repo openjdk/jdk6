@@ -1,5 +1,5 @@
 #
-# Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 1998, 2008, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #  
 #
 
@@ -26,6 +26,9 @@
 # control workspace in exactly the same manner; the required
 # environment variables (Variant, WorkSpace, BootStrapDir, BuildUser, HOTSPOT_BUILD_VERSION)
 # are passed in as command line arguments.
+
+# Note: Running nmake or build.bat from the Windows command shell requires
+# that "sh" be accessible on the PATH. An MKS install does this.
 
 # SA components are built if BUILD_WIN_SA=1 is specified.
 # See notes in README. This produces files:
@@ -232,6 +235,12 @@ fastdebug: checks $(variantDir) $(variantDir)\local.make sanity
 develop: checks $(variantDir) $(variantDir)\local.make sanity
 	cd $(variantDir)
 	nmake -nologo -f $(WorkSpace)\make\windows\makefiles\top.make BUILD_FLAVOR=product DEVELOP=1 ARCH=$(ARCH)
+
+# target to create just the directory structure
+tree: checks $(variantDir) $(variantDir)\local.make sanity
+	mkdir $(variantDir)\product
+	mkdir $(variantDir)\debug
+	mkdir $(variantDir)\fastdebug
 
 sanity:
 	@ echo;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,14 +16,14 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 /**
  *  @test
- *  @bug 4836939
+ *  @bug 4836939 6646613
  *  @summary JDI add addSourceNameFilter to ClassPrepareRequest
  *
  *  @author jjh
@@ -31,7 +31,11 @@
  *  @run build TestScaffold VMConnection TargetListener TargetAdapter
  *  @run compile -g SourceNameFilterTest.java
  *  @run main SourceNameFilterTest
+ *  @run compile -g:none SourceNameFilterTest.java
+ *  @run main SourceNameFilterTest
  */
+// The compile -g:none suppresses the lineNumber table to trigger bug 6646613.
+
 import com.sun.jdi.*;
 import com.sun.jdi.event.*;
 import com.sun.jdi.request.*;
@@ -84,7 +88,6 @@ public class SourceNameFilterTest extends TestScaffold {
     boolean gotEvent1 = false;
     boolean gotEvent2 = false;
     boolean gotEvent3 = false;
-
     ClassPrepareRequest cpReq;
     boolean shouldResume = false;
     SourceNameFilterTest (String args[]) {
@@ -151,6 +154,18 @@ public class SourceNameFilterTest extends TestScaffold {
          */
         BreakpointEvent bpe = startToMain("SourceNameFilterTarg");
         targetClass = bpe.location().declaringType();
+        boolean noSourceName = false;
+        try {
+            targetClass.sourceName();
+        } catch (AbsentInformationException ee) {
+            noSourceName = true;
+        }
+        if (noSourceName) {
+            println("-- Running with no source names");
+        } else {
+            println("-- Running with source names");
+        }
+
         mainThread = bpe.thread();
         EventRequestManager erm = vm().eventRequestManager();
         addListener(this);
@@ -175,7 +190,9 @@ public class SourceNameFilterTest extends TestScaffold {
 
         /*
          * This should cause us to get a class prepare event for
-         * LoadedLater3
+         * LoadedLater3 except in the case where -g:none
+         * was used to compile so that there is no LineNumberTable
+         * and therefore, no source name for the class.
          */
         cpReq = erm.createClassPrepareRequest();
         cpReq.addSourceNameFilter("SourceNameFilterTest.java");
@@ -186,17 +203,21 @@ public class SourceNameFilterTest extends TestScaffold {
 
         if (!gotEvent1) {
             failure("failure: Did not get a class prepare request " +
-                    "for Loadedlater1");
+                    "for LoadedLater1");
         }
 
         if (gotEvent2) {
             failure("failure: Did get a class prepare request " +
-                    "for Loadedlater2");
+                    "for LoadedLater2");
         }
 
-        if (!gotEvent3) {
+        if (gotEvent3 && noSourceName) {
+            failure("failure: Did get a class prepare request " +
+                    "for LoadedLater3");
+        }
+        else if (!gotEvent3 && !noSourceName) {
             failure("failure: Did not get a class prepare request " +
-                    "for Loadedlater3");
+                    "for LoadedLater3");
         }
 
         /*

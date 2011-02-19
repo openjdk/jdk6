@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -131,14 +131,7 @@ address InterpreterGenerator::generate_math_entry(AbstractInterpreter::MethodKin
   //       java methods.  Interpreter::method_kind(...) will select
   //       this entry point for the corresponding methods in JDK 1.3.
   // get argument
-  if (TaggedStackInterpreter) {
-    __ pushl(Address(rsp, 3*wordSize));  // push hi (and note rsp -= wordSize)
-    __ pushl(Address(rsp, 2*wordSize));  // push lo
-    __ fld_d(Address(rsp, 0));           // get double in ST0
-    __ addptr(rsp, 2*wordSize);
-  } else {
-    __ fld_d(Address(rsp, 1*wordSize));
-  }
+  __ fld_d(Address(rsp, 1*wordSize));
   switch (kind) {
     case Interpreter::java_lang_math_sin :
         __ trigfunc('s');
@@ -201,11 +194,12 @@ address InterpreterGenerator::generate_abstract_entry(void) {
   address entry_point = __ pc();
 
   // abstract method entry
-  // remove return address. Not really needed, since exception handling throws away expression stack
-  __ pop(rbx);
 
-  // adjust stack to what a normal return would do
-  __ mov(rsp, rsi);
+  //  pop return address, reset last_sp to NULL
+  __ empty_expression_stack();
+  __ restore_bcp();      // rsi must be correct for exception handler   (was destroyed)
+  __ restore_locals();   // make sure locals pointer is correct as well (was destroyed)
+
   // throw exception
   __ call_VM(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::throw_AbstractMethodError));
   // the call_VM checks for exception, so we should never return here.
@@ -213,6 +207,20 @@ address InterpreterGenerator::generate_abstract_entry(void) {
 
   return entry_point;
 }
+
+
+// Method handle invoker
+// Dispatch a method of the form java.dyn.MethodHandles::invoke(...)
+address InterpreterGenerator::generate_method_handle_entry(void) {
+  if (!EnableMethodHandles) {
+    return generate_abstract_entry();
+  }
+
+  address entry_point = MethodHandles::generate_method_handle_interpreter_entry(_masm);
+
+  return entry_point;
+}
+
 
 // This method tells the deoptimizer how big an interpreted frame must be:
 int AbstractInterpreter::size_activation(methodOop method,

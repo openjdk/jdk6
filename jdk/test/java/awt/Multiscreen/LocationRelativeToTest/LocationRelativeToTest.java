@@ -1,5 +1,5 @@
 /*
- * Copyright 2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 /*
@@ -50,7 +50,8 @@ public class LocationRelativeToTest
 
         GraphicsEnvironment ge =
             GraphicsEnvironment.getLocalGraphicsEnvironment();
-        System.out.println("Center point: " + ge.getCenterPoint());
+        Point centerPoint = ge.getCenterPoint();
+        System.out.println("Center point: " + centerPoint);
         GraphicsDevice[] gds = ge.getScreenDevices();
         GraphicsDevice gdDef = ge.getDefaultScreenDevice();
         GraphicsConfiguration gcDef =
@@ -77,8 +78,9 @@ public class LocationRelativeToTest
             // second, check setLocationRelativeTo(invisible)
             f.setLocationRelativeTo(f2);
             Util.waitForIdle(r);
-            checkLocation(f, new Point(gcBounds.x + gcBounds.width / 2,
-                                       gcBounds.y + gcBounds.height / 2));
+            // Warning: this command is correct only
+            // on OpenJDK6, not OpenJDK7
+            checkLocation(f, centerPoint);
 
             // third, check setLocationRelativeTo(visible)
             f2.setVisible(true);

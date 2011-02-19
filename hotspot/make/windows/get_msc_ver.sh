@@ -1,5 +1,5 @@
 #
-# Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 2005, 2009, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -16,11 +16,13 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #  
 #
+
+set -e
 
 # This shell script echoes "MSC_VER=<munged version of cl>"
 # It ignores the micro version component.
@@ -29,6 +31,7 @@
 # cl version 13.10.3077 returns "MSC_VER=1310"
 # cl version 14.00.30701 returns "MSC_VER=1399" (OLD_MSSDK version)
 # cl version 14.00.40310.41 returns "MSC_VER=1400"
+# cl version 15.00.21022.8 returns "MSC_VER=1500"
 
 # Note that we currently do not have a way to set HotSpotMksHome in
 # the batch build, but so far this has not seemed to be a problem. The
@@ -37,17 +40,20 @@
 # sh, and it has been found that sometimes `which sh` fails.
 
 if [ "x$HotSpotMksHome" != "x" ]; then
- MKS_HOME="$HotSpotMksHome"
+  TOOL_DIR="$HotSpotMksHome"
 else
- SH=`which sh`
- MKS_HOME=`dirname "$SH"`
+  # HotSpotMksHome is not set so use the directory that contains "sh".
+  # This works with both MKS and Cygwin.
+  SH=`which sh`
+  TOOL_DIR=`dirname "$SH"`
 fi
 
-HEAD="$MKS_HOME/head"
-ECHO="$MKS_HOME/echo"
-EXPR="$MKS_HOME/expr"
-CUT="$MKS_HOME/cut"
-SED="$MKS_HOME/sed"
+DIRNAME="$TOOL_DIR/dirname"
+HEAD="$TOOL_DIR/head"
+ECHO="$TOOL_DIR/echo"
+EXPR="$TOOL_DIR/expr"
+CUT="$TOOL_DIR/cut"
+SED="$TOOL_DIR/sed"
 
 if [ "x$FORCE_MSC_VER" != "x" ]; then
   echo "MSC_VER=$FORCE_MSC_VER"
@@ -69,7 +75,15 @@ fi
 if [ "x$FORCE_LINK_VER" != "x" ]; then
   echo "LINK_VER=$FORCE_LINK_VER"
 else
-  LINK_VER_RAW=`link 2>&1 | "$HEAD" -n 1 | "$SED" 's/.*Version[\ ]*\([0-9][0-9.]*\).*/\1/'`
+  # use the "link" command that is co-located with the "cl" command
+  cl_cmd=`which cl`
+  if [ "x$cl_cmd" != "x" ]; then
+    link_cmd=`$DIRNAME "$cl_cmd"`/link
+  else
+    # which can't find "cl" so just use which ever "link" we find
+    link_cmd="link"
+  fi
+  LINK_VER_RAW=`"$link_cmd" 2>&1 | "$HEAD" -n 1 | "$SED" 's/.*Version[\ ]*\([0-9][0-9.]*\).*/\1/'`
   LINK_VER_MAJOR=`"$ECHO" $LINK_VER_RAW | "$CUT" -d'.' -f1`
   LINK_VER_MINOR=`"$ECHO" $LINK_VER_RAW | "$CUT" -d'.' -f2`
   LINK_VER_MICRO=`"$ECHO" $LINK_VER_RAW | "$CUT" -d'.' -f3`

@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2001 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2001, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,12 +18,14 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing.plaf.metal;
+
+import sun.awt.AppContext;
 
 import javax.swing.*;
 import javax.swing.plaf.basic.BasicCheckBoxUI;
@@ -55,7 +57,7 @@ public class MetalCheckBoxUI extends MetalRadioButtonUI {
     // of BasicCheckBoxUI because we want to pick up all the
     // painting changes made in MetalRadioButtonUI.
 
-    private final static MetalCheckBoxUI checkboxUI = new MetalCheckBoxUI();
+    private static final Object METAL_CHECK_BOX_UI_KEY = new Object();
 
     private final static String propertyPrefix = "CheckBox" + ".";
 
@@ -65,6 +67,13 @@ public class MetalCheckBoxUI extends MetalRadioButtonUI {
     //         Create PlAF
     // ********************************
     public static ComponentUI createUI(JComponent b) {
+        AppContext appContext = AppContext.getAppContext();
+        MetalCheckBoxUI checkboxUI = 
+                (MetalCheckBoxUI) appContext.get(METAL_CHECK_BOX_UI_KEY);
+        if (checkboxUI == null) {
+            checkboxUI = new MetalCheckBoxUI();
+            appContext.put(METAL_CHECK_BOX_UI_KEY, checkboxUI);
+        }
         return checkboxUI;
     }
 

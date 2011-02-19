@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -196,7 +196,7 @@ void NodeHash::hash_insert( Node *n ) {
 }
 
 //------------------------------hash_delete------------------------------------
-// Replace in hash table with sentinal
+// Replace in hash table with sentinel
 bool NodeHash::hash_delete( const Node *n ) {
   Node *k;
   uint hash = n->hash();
@@ -207,7 +207,7 @@ bool NodeHash::hash_delete( const Node *n ) {
   uint key = hash & (_max-1);
   uint stride = key | 0x01;
   debug_only( uint counter = 0; );
-  for( ; /* (k != NULL) && (k != _sentinal) */; ) {
+  for( ; /* (k != NULL) && (k != _sentinel) */; ) {
     debug_only( counter++ );
     debug_only( _delete_probes++ );
     k = _table[key];            // Get hashed value
@@ -715,7 +715,7 @@ Node *PhaseGVN::transform_no_reclaim( Node *n ) {
 
 #ifdef ASSERT
 //------------------------------dead_loop_check--------------------------------
-// Check for a simple dead loop when a data node references itself direcly
+// Check for a simple dead loop when a data node references itself directly
 // or through an other data node excluding cons and phis.
 void PhaseGVN::dead_loop_check( Node *n ) {
   // Phi may reference itself in a loop
@@ -844,10 +844,33 @@ void PhaseIterGVN::optimize() {
   }
 #endif
 
+#ifdef ASSERT
+  Node* prev = NULL;
+  uint rep_cnt = 0;
+#endif
+  uint loop_count = 0;
+
   // Pull from worklist; transform node;
   // If node has changed: update edge info and put uses on worklist.
   while( _worklist.size() ) {
     Node *n  = _worklist.pop();
+    if (++loop_count >= K * C->unique()) {
+      debug_only(n->dump(4);)
+      assert(false, "infinite loop in PhaseIterGVN::optimize");
+      C->record_method_not_compilable("infinite loop in PhaseIterGVN::optimize");
+      return;
+    }
+#ifdef ASSERT
+    if (n == prev) {
+      if (++rep_cnt > 3) {
+        n->dump(4);
+        assert(false, "loop in Ideal transformation");
+      }
+    } else {
+      rep_cnt = 0;
+    }
+    prev = n;
+#endif
     if (TraceIterativeGVN && Verbose) {
       tty->print("  Pop ");
       NOT_PRODUCT( n->dump(); )
@@ -1359,7 +1382,7 @@ void PhaseCCP::analyze() {
               worklist.push(p); // Propagate change to user
           }
         }
-        // If we changed the reciever type to a call, we need to revisit
+        // If we changed the receiver type to a call, we need to revisit
         // the Catch following the call.  It's looking for a non-NULL
         // receiver to know when to enable the regular fall-through path
         // in addition to the NullPtrException path
@@ -1447,16 +1470,12 @@ Node *PhaseCCP::transform_once( Node *n ) {
           Node* m = n->out(i);
           if( m->is_Phi() ) {
             assert(type(m) == Type::TOP, "Unreachable region should not have live phis.");
-            add_users_to_worklist(m);
-            hash_delete(m); // Yank from hash before hacking edges
-            subsume_node(m, nn);
+            replace_node(m, nn);
             --i; // deleted this phi; rescan starting with next position
           }
         }
       }
-      add_users_to_worklist(n); // Users of about-to-be-constant 'n'
-      hash_delete(n);           // Removed 'n' from table before subsuming it
-      subsume_node(n,nn);       // Update DefUse edges for new constant
+      replace_node(n,nn);       // Update DefUse edges for new constant
     }
     return nn;
   }
@@ -1502,7 +1521,7 @@ Node *PhaseCCP::transform_once( Node *n ) {
 //---------------------------------saturate------------------------------------
 const Type* PhaseCCP::saturate(const Type* new_type, const Type* old_type,
                                const Type* limit_type) const {
-  const Type* wide_type = new_type->widen(old_type);
+  const Type* wide_type = new_type->widen(old_type, limit_type);
   if (wide_type != new_type) {          // did we widen?
     // If so, we may have widened beyond the limit type.  Clip it back down.
     new_type = wide_type->filter(limit_type);
@@ -1622,9 +1641,11 @@ void Node::set_req_X( uint i, Node *n, PhaseIterGVN *igvn ) {
   // old goes dead?
   if( old ) {
     switch (old->outcnt()) {
-    case 0:      // Kill all his inputs, and recursively kill other dead nodes.
+    case 0:
+      // Put into the worklist to kill later. We do not kill it now because the
+      // recursive kill will delete the current node (this) if dead-loop exists
       if (!old->is_top())
-        igvn->remove_dead_node( old );
+        igvn->_worklist.push( old );
       break;
     case 1:
       if( old->is_Store() || old->has_special_unique_user() )

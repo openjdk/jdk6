@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -42,14 +42,19 @@ HeapRegionSeq::HeapRegionSeq(const size_t max_size) :
   // The line below is the worst bit of C++ hackery I've ever written
   // (Detlefs, 11/23).  You should think of it as equivalent to
   // "_regions(100, true)": initialize the growable array and inform it
-  // that it should allocate its elem array(s) on the C heap.  The first
-  // argument, however, is actually a comma expression (new-expr, 100).
-  // The purpose of the new_expr is to inform the growable array that it
-  // is *already* allocated on the C heap: it uses the placement syntax to
-  // keep it from actually doing any allocation.
-  _regions((ResourceObj::operator new (sizeof(GrowableArray<HeapRegion*>),
-                                       (void*)&_regions,
-                                       ResourceObj::C_HEAP),
+  // that it should allocate its elem array(s) on the C heap.
+  //
+  // The first argument, however, is actually a comma expression
+  // (set_allocation_type(this, C_HEAP), 100). The purpose of the
+  // set_allocation_type() call is to replace the default allocation
+  // type for embedded objects STACK_OR_EMBEDDED with C_HEAP. It will
+  // allow to pass the assert in GenericGrowableArray() which checks
+  // that a growable array object must be on C heap if elements are.
+  //
+  // Note: containing object is allocated on C heap since it is CHeapObj.
+  //
+  _regions((ResourceObj::set_allocation_type((address)&_regions,
+                                             ResourceObj::C_HEAP),
             (int)max_size),
            true),
   _next_rr_candidate(0),
@@ -302,9 +307,9 @@ MemRegion HeapRegionSeq::shrink_by(size_t shrink_bytes,
     if (cur->isHumongous()) {
       return MemRegion(last_start, end);
     }
-    cur->reset_zero_fill();
     assert(cur == _regions.top(), "Should be top");
     if (!cur->is_empty()) break;
+    cur->reset_zero_fill();
     shrink_bytes -= cur->capacity();
     num_regions_deleted++;
     _regions.pop();

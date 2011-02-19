@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -93,9 +93,17 @@ void Abstract_VM_Version::initialize() {
 #else // KERNEL
 #ifdef TIERED
   #define VMTYPE "Server"
-#else
-  #define VMTYPE COMPILER1_PRESENT("Client")   \
-                 COMPILER2_PRESENT("Server")
+#else // TIERED
+#ifdef ZERO
+#ifdef SHARK
+  #define VMTYPE "Shark"
+#else // SHARK
+  #define VMTYPE "Zero"
+#endif // SHARK
+#else // ZERO
+   #define VMTYPE COMPILER1_PRESENT("Client")   \
+                  COMPILER2_PRESENT("Server")
+#endif // ZERO
 #endif // TIERED
 #endif // KERNEL
 
@@ -142,10 +150,16 @@ const char* Abstract_VM_Version::vm_release() {
                  WINDOWS_ONLY("windows")         \
                  SOLARIS_ONLY("solaris")
 
+#ifdef ZERO
+#define CPU      ZERO_LIBARCH
+#else
 #define CPU      IA32_ONLY("x86")                \
                  IA64_ONLY("ia64")               \
                  AMD64_ONLY("amd64")             \
+                 ARM_ONLY("arm")                 \
+                 PPC_ONLY("ppc")                 \
                  SPARC_ONLY("sparc")
+#endif // ZERO
 
 const char *Abstract_VM_Version::vm_platform_string() {
   return OS "-" CPU;
@@ -163,9 +177,11 @@ const char* Abstract_VM_Version::internal_vm_info_string() {
       #elif _MSC_VER == 1200
         #define HOTSPOT_BUILD_COMPILER "MS VC++ 6.0"
       #elif _MSC_VER == 1310
-        #define HOTSPOT_BUILD_COMPILER "MS VC++ 7.1"
+        #define HOTSPOT_BUILD_COMPILER "MS VC++ 7.1 (VS2003)"
       #elif _MSC_VER == 1400
-        #define HOTSPOT_BUILD_COMPILER "MS VC++ 8.0"
+        #define HOTSPOT_BUILD_COMPILER "MS VC++ 8.0 (VS2005)"
+      #elif _MSC_VER == 1500
+        #define HOTSPOT_BUILD_COMPILER "MS VC++ 9.0 (VS2008)"
       #else
         #define HOTSPOT_BUILD_COMPILER "unknown MS VC++:" XSTR(_MSC_VER)
       #endif
@@ -180,6 +196,8 @@ const char* Abstract_VM_Version::internal_vm_info_string() {
         #define HOTSPOT_BUILD_COMPILER "Workshop 5.8"
       #elif __SUNPRO_CC == 0x590
         #define HOTSPOT_BUILD_COMPILER "Workshop 5.9"
+      #elif __SUNPRO_CC == 0x5100
+        #define HOTSPOT_BUILD_COMPILER "Sun Studio 12u1"
       #else
         #define HOTSPOT_BUILD_COMPILER "unknown Workshop:" XSTR(__SUNPRO_CC)
       #endif

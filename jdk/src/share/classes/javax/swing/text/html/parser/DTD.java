@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,12 +18,14 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing.text.html.parser;
+
+import sun.awt.AppContext;
 
 import java.io.PrintStream;
 import java.io.File;
@@ -316,13 +318,14 @@ class DTD implements DTDConstants {
     }
 
     /**
-     * The hashtable of DTDs.
+     * The hashtable key of DTDs in AppContext.
      */
-    static Hashtable dtdHash = new Hashtable();
+    private static final Object DTD_HASH_KEY = new Object();
 
-  public static void putDTDHash(String name, DTD dtd) {
-    dtdHash.put(name, dtd);
-  }
+    public static void putDTDHash(String name, DTD dtd) {
+        getDtdHash().put(name, dtd);
+    }
+
     /**
      * Returns a DTD with the specified <code>name</code>.  If
      * a DTD with that name doesn't exist, one is created
@@ -334,11 +337,25 @@ class DTD implements DTDConstants {
      */
     public static DTD getDTD(String name) throws IOException {
         name = name.toLowerCase();
-        DTD dtd = (DTD)dtdHash.get(name);
+        DTD dtd = getDtdHash().get(name);
         if (dtd == null)
           dtd = new DTD(name);
 
         return dtd;
+    }
+
+    private static Hashtable<String, DTD> getDtdHash() {
+        AppContext appContext = AppContext.getAppContext();
+
+        Hashtable<String, DTD> result = (Hashtable<String, DTD>) appContext.get(DTD_HASH_KEY);
+
+        if (result == null) {
+            result = new Hashtable<String, DTD>();
+
+            appContext.put(DTD_HASH_KEY, result);
+        }
+
+        return result;
     }
 
     /**

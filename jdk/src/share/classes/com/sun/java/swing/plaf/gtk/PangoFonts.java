@@ -1,12 +1,12 @@
 /*
- * Copyright 2002-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package com.sun.java.swing.plaf.gtk;
@@ -148,11 +148,6 @@ class PangoFonts {
          * case for it to be a problem the values would have to be different.
          * It also seems unlikely to arise except when a user explicitly
          * deletes the X resource database entry.
-         * 3) Because of rounding errors sizes may differ very slightly
-         * between JDK and GTK. To fix that would at the very least require
-         * Swing to specify floating pt font sizes.
-         * Eg "10 pts" for GTK at 96 dpi to get the same size at Java 2D's
-         * 72 dpi you'd need to specify exactly 13.33.
          * There also some other issues to be aware of for the future:
          * GTK specifies the Xft.dpi value as server-wide which when used
          * on systems with 2 distinct X screens with different physical DPI
@@ -195,11 +190,16 @@ class PangoFonts {
         String fcFamilyLC = family.toLowerCase();
         if (FontManager.mapFcName(fcFamilyLC) != null) {
             /* family is a Fc/Pango logical font which we need to expand. */
-           return FontManager.getFontConfigFUIR(fcFamilyLC, style, size);
+            Font font =  FontManager.getFontConfigFUIR(fcFamilyLC, style, size);
+            font = font.deriveFont(style, (float)dsize);
+            return new FontUIResource(font);
         } else {
             /* It's a physical font which we will create with a fallback */
-            Font font = new FontUIResource(family, style, size);
-            return FontManager.getCompositeFontUIResource(font);
+            Font font = new Font(family, style, size);
+            /* a roundabout way to set the font size in floating points */
+            font = font.deriveFont(style, (float)dsize);
+            FontUIResource fuir = new FontUIResource(font);
+            return FontManager.getCompositeFontUIResource(fuir);
         }
     }
 

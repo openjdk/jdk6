@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -42,35 +42,40 @@ protected:
     BufferLength = 1024
   };
 
-  oop          *_buffer[BufferLength];
-  oop         **_buffer_top;
-  oop         **_buffer_curr;
+  StarTask  _buffer[BufferLength];
+  StarTask* _buffer_top;
+  StarTask* _buffer_curr;
 
-  OopClosure  *_oc;
-  double       _closure_app_seconds;
+  OopClosure* _oc;
+  double      _closure_app_seconds;
 
   void process_buffer () {
-
     double start = os::elapsedTime();
-    for (oop **curr = _buffer; curr < _buffer_curr; ++curr) {
-      _oc->do_oop(*curr);
+    for (StarTask* curr = _buffer; curr < _buffer_curr; ++curr) {
+      if (curr->is_narrow()) {
+        assert(UseCompressedOops, "Error");
+        _oc->do_oop((narrowOop*)(*curr));
+      } else {
+        _oc->do_oop((oop*)(*curr));
+      }
     }
     _buffer_curr = _buffer;
     _closure_app_seconds += (os::elapsedTime() - start);
   }
 
-public:
-  virtual void do_oop(narrowOop* p) {
-    guarantee(false, "NYI");
-  }
-  virtual void do_oop(oop *p) {
+  template <class T> inline void do_oop_work(T* p) {
     if (_buffer_curr == _buffer_top) {
       process_buffer();
     }
-
-    *_buffer_curr = p;
+    StarTask new_ref(p);
+    *_buffer_curr = new_ref;
     ++_buffer_curr;
   }
+
+public:
+  virtual void do_oop(narrowOop* p) { do_oop_work(p); }
+  virtual void do_oop(oop* p)       { do_oop_work(p); }
+
   void done () {
     if (_buffer_curr > _buffer) {
       process_buffer();
@@ -88,18 +93,17 @@ public:
 class BufferingOopsInGenClosure: public OopsInGenClosure {
   BufferingOopClosure _boc;
   OopsInGenClosure* _oc;
-public:
+ protected:
+  template <class T> inline void do_oop_work(T* p) {
+    assert(generation()->is_in_reserved((void*)p), "Must be in!");
+    _boc.do_oop(p);
+  }
+ public:
   BufferingOopsInGenClosure(OopsInGenClosure *oc) :
     _boc(oc), _oc(oc) {}
 
-  virtual void do_oop(narrowOop* p) {
-    guarantee(false, "NYI");
-  }
-
-  virtual void do_oop(oop* p) {
-    assert(generation()->is_in_reserved(p), "Must be in!");
-    _boc.do_oop(p);
-  }
+  virtual void do_oop(narrowOop* p) { do_oop_work(p); }
+  virtual void do_oop(oop* p)       { do_oop_work(p); }
 
   void done() {
     _boc.done();
@@ -130,14 +134,14 @@ private:
     BufferLength = 1024
   };
 
-  oop                      *_buffer[BufferLength];
-  oop                     **_buffer_top;
-  oop                     **_buffer_curr;
+  StarTask     _buffer[BufferLength];
+  StarTask*    _buffer_top;
+  StarTask*    _buffer_curr;
 
-  HeapRegion               *_hr_buffer[BufferLength];
-  HeapRegion              **_hr_curr;
+  HeapRegion*  _hr_buffer[BufferLength];
+  HeapRegion** _hr_curr;
 
-  OopsInHeapRegionClosure  *_oc;
+  OopsInHeapRegionClosure*  _oc;
   double                    _closure_app_seconds;
 
   void process_buffer () {
@@ -146,15 +150,20 @@ private:
            "the two lengths should be the same");
 
     double start = os::elapsedTime();
-    HeapRegion **hr_curr = _hr_buffer;
-    HeapRegion *hr_prev = NULL;
-    for (oop **curr = _buffer; curr < _buffer_curr; ++curr) {
-      HeapRegion *region = *hr_curr;
+    HeapRegion** hr_curr = _hr_buffer;
+    HeapRegion*  hr_prev = NULL;
+    for (StarTask* curr = _buffer; curr < _buffer_curr; ++curr) {
+      HeapRegion* region = *hr_curr;
       if (region != hr_prev) {
         _oc->set_region(region);
         hr_prev = region;
       }
-      _oc->do_oop(*curr);
+      if (curr->is_narrow()) {
+        assert(UseCompressedOops, "Error");
+        _oc->do_oop((narrowOop*)(*curr));
+      } else {
+        _oc->do_oop((oop*)(*curr));
+      }
       ++hr_curr;
     }
     _buffer_curr = _buffer;
@@ -163,17 +172,16 @@ private:
   }
 
 public:
-  virtual void do_oop(narrowOop *p) {
-    guarantee(false, "NYI");
-  }
+  virtual void do_oop(narrowOop* p) { do_oop_work(p); }
+  virtual void do_oop(      oop* p) { do_oop_work(p); }
 
-  virtual void do_oop(oop *p) {
+  template <class T> void do_oop_work(T* p) {
     if (_buffer_curr == _buffer_top) {
       assert(_hr_curr > _hr_buffer, "_hr_curr should be consistent with _buffer_curr");
       process_buffer();
     }
-
-    *_buffer_curr = p;
+    StarTask new_ref(p);
+    *_buffer_curr = new_ref;
     ++_buffer_curr;
     *_hr_curr = _from;
     ++_hr_curr;

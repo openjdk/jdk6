@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -225,11 +225,11 @@ static int pipeline_reads_initializer(FILE *fp_cpp, NameList &pipeline_reads, Pi
     pipeclass->_parameters.reset();
 
   while ( (paramname = pipeclass->_parameters.iter()) != NULL ) {
-    const PipeClassOperandForm *pipeopnd =
+    const PipeClassOperandForm *tmppipeopnd =
         (const PipeClassOperandForm *)pipeclass->_localUsage[paramname];
 
-    if (pipeopnd)
-      templen += 10 + (int)strlen(pipeopnd->_stage);
+    if (tmppipeopnd)
+      templen += 10 + (int)strlen(tmppipeopnd->_stage);
     else
       templen += 19;
 
@@ -253,10 +253,10 @@ static int pipeline_reads_initializer(FILE *fp_cpp, NameList &pipeline_reads, Pi
     pipeclass->_parameters.reset();
 
   while ( (paramname = pipeclass->_parameters.iter()) != NULL ) {
-    const PipeClassOperandForm *pipeopnd =
+    const PipeClassOperandForm *tmppipeopnd =
         (const PipeClassOperandForm *)pipeclass->_localUsage[paramname];
     templen += sprintf(&operand_stages[templen], "  stage_%s%c\n",
-      pipeopnd ? pipeopnd->_stage : "undefined",
+      tmppipeopnd ? tmppipeopnd->_stage : "undefined",
       (++i < paramcount ? ',' : ' ') );
   }
 
@@ -721,8 +721,8 @@ void ArchDesc::build_pipe_classes(FILE *fp_cpp) {
   fprintf(fp_cpp, "  }\n");
   fprintf(fp_cpp, "#endif\n\n");
 #endif
-  fprintf(fp_cpp, "  assert(this, \"NULL pipeline info\")\n");
-  fprintf(fp_cpp, "  assert(pred, \"NULL predecessor pipline info\")\n\n");
+  fprintf(fp_cpp, "  assert(this, \"NULL pipeline info\");\n");
+  fprintf(fp_cpp, "  assert(pred, \"NULL predecessor pipline info\");\n\n");
   fprintf(fp_cpp, "  if (pred->hasFixedLatency())\n    return (pred->fixedLatency());\n\n");
   fprintf(fp_cpp, "  // If this is not an operand, then assume a dependence with 0 latency\n");
   fprintf(fp_cpp, "  if (opnd > _read_stage_count)\n    return (0);\n\n");
@@ -1042,10 +1042,10 @@ static void defineOut_RegMask(FILE *fp, const char *node, const char *regMask) {
 
 // Scan the peepmatch and output a test for each instruction
 static void check_peepmatch_instruction_tree(FILE *fp, PeepMatch *pmatch, PeepConstraint *pconstraint) {
-  intptr_t   parent        = -1;
-  intptr_t   inst_position = 0;
-  const char *inst_name    = NULL;
-  intptr_t   input         = 0;
+  int         parent        = -1;
+  int         inst_position = 0;
+  const char* inst_name     = NULL;
+  int         input         = 0;
   fprintf(fp, "      // Check instruction sub-tree\n");
   pmatch->reset();
   for( pmatch->next_instruction( parent, inst_position, inst_name, input );
@@ -1055,14 +1055,14 @@ static void check_peepmatch_instruction_tree(FILE *fp, PeepMatch *pmatch, PeepCo
     if( ! pmatch->is_placeholder() ) {
       // Define temporaries 'inst#', based on parent and parent's input index
       if( parent != -1 ) {                // root was initialized
-        fprintf(fp, "  inst%ld = inst%ld->in(%ld);\n",
+        fprintf(fp, "  inst%d = inst%d->in(%d);\n",
                 inst_position, parent, input);
       }
 
       // When not the root
       // Test we have the correct instruction by comparing the rule
       if( parent != -1 ) {
-        fprintf(fp, "  matches = matches &&  ( inst%ld->rule() == %s_rule );",
+        fprintf(fp, "  matches = matches &&  ( inst%d->rule() == %s_rule );",
                 inst_position, inst_name);
       }
     } else {
@@ -1073,20 +1073,20 @@ static void check_peepmatch_instruction_tree(FILE *fp, PeepMatch *pmatch, PeepCo
   }
 }
 
-static void print_block_index(FILE *fp, intptr_t inst_position) {
+static void print_block_index(FILE *fp, int inst_position) {
   assert( inst_position >= 0, "Instruction number less than zero");
   fprintf(fp, "block_index");
   if( inst_position != 0 ) {
-    fprintf(fp, " - %ld", inst_position);
+    fprintf(fp, " - %d", inst_position);
   }
 }
 
 // Scan the peepmatch and output a test for each instruction
 static void check_peepmatch_instruction_sequence(FILE *fp, PeepMatch *pmatch, PeepConstraint *pconstraint) {
-  intptr_t   parent        = -1;
-  intptr_t   inst_position = 0;
-  const char *inst_name    = NULL;
-  intptr_t   input         = 0;
+  int         parent        = -1;
+  int         inst_position = 0;
+  const char* inst_name     = NULL;
+  int         input         = 0;
   fprintf(fp, "  // Check instruction sub-tree\n");
   pmatch->reset();
   for( pmatch->next_instruction( parent, inst_position, inst_name, input );
@@ -1101,14 +1101,14 @@ static void check_peepmatch_instruction_sequence(FILE *fp, PeepMatch *pmatch, Pe
         print_block_index(fp, inst_position);
         fprintf(fp, " > 0 ) {\n    Node *n = block->_nodes.at(");
         print_block_index(fp, inst_position);
-        fprintf(fp, ");\n    inst%ld = (n->is_Mach()) ? ", inst_position);
+        fprintf(fp, ");\n    inst%d = (n->is_Mach()) ? ", inst_position);
         fprintf(fp, "n->as_Mach() : NULL;\n  }\n");
       }
 
       // When not the root
       // Test we have the correct instruction by comparing the rule.
       if( parent != -1 ) {
-        fprintf(fp, "  matches = matches && (inst%ld != NULL) && (inst%ld->rule() == %s_rule);\n",
+        fprintf(fp, "  matches = matches && (inst%d != NULL) && (inst%d->rule() == %s_rule);\n",
                 inst_position, inst_position, inst_name);
       }
     } else {
@@ -1121,10 +1121,10 @@ static void check_peepmatch_instruction_sequence(FILE *fp, PeepMatch *pmatch, Pe
 
 // Build mapping for register indices, num_edges to input
 static void build_instruction_index_mapping( FILE *fp, FormDict &globals, PeepMatch *pmatch ) {
-  intptr_t   parent        = -1;
-  intptr_t   inst_position = 0;
-  const char *inst_name    = NULL;
-  intptr_t   input         = 0;
+  int         parent        = -1;
+  int         inst_position = 0;
+  const char* inst_name     = NULL;
+  int         input         = 0;
   fprintf(fp, "      // Build map to register info\n");
   pmatch->reset();
   for( pmatch->next_instruction( parent, inst_position, inst_name, input );
@@ -1136,9 +1136,9 @@ static void build_instruction_index_mapping( FILE *fp, FormDict &globals, PeepMa
       InstructForm *inst = globals[inst_name]->is_instruction();
       if( inst != NULL ) {
         char inst_prefix[]  = "instXXXX_";
-        sprintf(inst_prefix, "inst%ld_",   inst_position);
+        sprintf(inst_prefix, "inst%d_",   inst_position);
         char receiver[]     = "instXXXX->";
-        sprintf(receiver,    "inst%ld->", inst_position);
+        sprintf(receiver,    "inst%d->", inst_position);
         inst->index_temps( fp, globals, inst_prefix, receiver );
       }
     }
@@ -1168,7 +1168,7 @@ static void check_peepconstraints(FILE *fp, FormDict &globals, PeepMatch *pmatch
       }
 
       // LEFT
-      intptr_t left_index  = pconstraint->_left_inst;
+      int left_index       = pconstraint->_left_inst;
       const char *left_op  = pconstraint->_left_op;
       // Access info on the instructions whose operands are compared
       InstructForm *inst_left = globals[pmatch->instruction_name(left_index)]->is_instruction();
@@ -1191,7 +1191,7 @@ static void check_peepconstraints(FILE *fp, FormDict &globals, PeepMatch *pmatch
 
       // RIGHT
       int right_op_index = -1;
-      intptr_t right_index = pconstraint->_right_inst;
+      int right_index      = pconstraint->_right_inst;
       const char *right_op = pconstraint->_right_op;
       if( right_index != -1 ) { // Match operand
         // Access info on the instructions whose operands are compared
@@ -1351,7 +1351,7 @@ static void generate_peepreplace( FILE *fp, FormDict &globals, PeepMatch *pmatch
     assert( root_form != NULL, "Replacement instruction was not previously defined");
     fprintf(fp, "        %sNode *root = new (C) %sNode();\n", root_inst, root_inst);
 
-    intptr_t    inst_num;
+    int         inst_num;
     const char *op_name;
     int         opnds_index = 0;            // define result operand
     // Then install the use-operands for the new sub-tree
@@ -1362,7 +1362,6 @@ static void generate_peepreplace( FILE *fp, FormDict &globals, PeepMatch *pmatch
       InstructForm *inst_form;
       inst_form  = globals[pmatch->instruction_name(inst_num)]->is_instruction();
       assert( inst_form, "Parser should guaranty this is an instruction");
-      int op_base     = inst_form->oper_input_base(globals);
       int inst_op_num = inst_form->operand_position(op_name, Component::USE);
       if( inst_op_num == NameList::Not_in_list )
         inst_op_num = inst_form->operand_position(op_name, Component::USE_DEF);
@@ -1379,32 +1378,32 @@ static void generate_peepreplace( FILE *fp, FormDict &globals, PeepMatch *pmatch
         // Add unmatched edges from root of match tree
         int op_base = root_form->oper_input_base(globals);
         for( int unmatched_edge = 1; unmatched_edge < op_base; ++unmatched_edge ) {
-          fprintf(fp, "        root->add_req(inst%ld->in(%d));        // unmatched ideal edge\n",
+          fprintf(fp, "        root->add_req(inst%d->in(%d));        // unmatched ideal edge\n",
                                           inst_num, unmatched_edge);
         }
         // If new instruction captures bottom type
-        if( root_form->captures_bottom_type() ) {
+        if( root_form->captures_bottom_type(globals) ) {
           // Get bottom type from instruction whose result we are replacing
-          fprintf(fp, "        root->_bottom_type = inst%ld->bottom_type();\n", inst_num);
+          fprintf(fp, "        root->_bottom_type = inst%d->bottom_type();\n", inst_num);
         }
         // Define result register and result operand
-        fprintf(fp, "        ra_->add_reference(root, inst%ld);\n", inst_num);
-        fprintf(fp, "        ra_->set_oop (root, ra_->is_oop(inst%ld));\n", inst_num);
-        fprintf(fp, "        ra_->set_pair(root->_idx, ra_->get_reg_second(inst%ld), ra_->get_reg_first(inst%ld));\n", inst_num, inst_num);
-        fprintf(fp, "        root->_opnds[0] = inst%ld->_opnds[0]->clone(C); // result\n", inst_num);
+        fprintf(fp, "        ra_->add_reference(root, inst%d);\n", inst_num);
+        fprintf(fp, "        ra_->set_oop (root, ra_->is_oop(inst%d));\n", inst_num);
+        fprintf(fp, "        ra_->set_pair(root->_idx, ra_->get_reg_second(inst%d), ra_->get_reg_first(inst%d));\n", inst_num, inst_num);
+        fprintf(fp, "        root->_opnds[0] = inst%d->_opnds[0]->clone(C); // result\n", inst_num);
         fprintf(fp, "        // ----- Done with initial setup -----\n");
       } else {
         if( (op_form == NULL) || (op_form->is_base_constant(globals) == Form::none) ) {
           // Do not have ideal edges for constants after matching
-          fprintf(fp, "        for( unsigned x%d = inst%ld_idx%d; x%d < inst%ld_idx%d; x%d++ )\n",
+          fprintf(fp, "        for( unsigned x%d = inst%d_idx%d; x%d < inst%d_idx%d; x%d++ )\n",
                   inst_op_num, inst_num, inst_op_num,
                   inst_op_num, inst_num, inst_op_num+1, inst_op_num );
-          fprintf(fp, "          root->add_req( inst%ld->in(x%d) );\n",
+          fprintf(fp, "          root->add_req( inst%d->in(x%d) );\n",
                   inst_num, inst_op_num );
         } else {
           fprintf(fp, "        // no ideal edge for constants after matching\n");
         }
-        fprintf(fp, "        root->_opnds[%d] = inst%ld->_opnds[%d]->clone(C);\n",
+        fprintf(fp, "        root->_opnds[%d] = inst%d->_opnds[%d]->clone(C);\n",
                 opnds_index, inst_num, inst_op_num );
       }
       ++opnds_index;
@@ -1443,7 +1442,7 @@ void ArchDesc::definePeephole(FILE *fp, InstructForm *node) {
   }
   for( int i = 0; i <= max_position; ++i ) {
     if( i == 0 ) {
-      fprintf(fp, "  MachNode *inst0 = this;\n", i);
+      fprintf(fp, "  MachNode *inst0 = this;\n");
     } else {
       fprintf(fp, "  MachNode *inst%d = NULL;\n", i);
     }
@@ -1497,7 +1496,7 @@ void ArchDesc::defineExpand(FILE *fp, InstructForm *node) {
   unsigned      i;
 
   // Generate Expand function header
-  fprintf(fp,"MachNode *%sNode::Expand(State *state, Node_List &proj_list) {\n", node->_ident);
+  fprintf(fp,"MachNode *%sNode::Expand(State *state, Node_List &proj_list, Node* mem) {\n", node->_ident);
   fprintf(fp,"Compile* C = Compile::current();\n");
   // Generate expand code
   if( node->expands() ) {
@@ -1547,15 +1546,16 @@ void ArchDesc::defineExpand(FILE *fp, InstructForm *node) {
     // Build a mapping from operand index to input edges
     fprintf(fp,"  unsigned idx0 = oper_input_base();\n");
 
-    // The order in which inputs are added to a node is very
+    // The order in which the memory input is added to a node is very
     // strange.  Store nodes get a memory input before Expand is
-    // called and all other nodes get it afterwards so
-    // oper_input_base is wrong during expansion.  This code adjusts
-    // is so that expansion will work correctly.
-    bool missing_memory_edge = node->_matrule->needs_ideal_memory_edge(_globalNames) &&
-                               node->is_ideal_store() == Form::none;
-    if (missing_memory_edge) {
-      fprintf(fp,"  idx0--; // Adjust base because memory edge hasn't been inserted yet\n");
+    // called and other nodes get it afterwards or before depending on
+    // match order so oper_input_base is wrong during expansion.  This
+    // code adjusts it so that expansion will work correctly.
+    int has_memory_edge = node->_matrule->needs_ideal_memory_edge(_globalNames);
+    if (has_memory_edge) {
+      fprintf(fp,"  if (mem == (Node*)1) {\n");
+      fprintf(fp,"    idx0--; // Adjust base because memory edge hasn't been inserted yet\n");
+      fprintf(fp,"  }\n");
     }
 
     for( i = 0; i < node->num_opnds(); i++ ) {
@@ -1612,9 +1612,11 @@ void ArchDesc::defineExpand(FILE *fp, InstructForm *node) {
         int node_mem_op = node->memory_operand(_globalNames);
         assert( node_mem_op != InstructForm::NO_MEMORY_OPERAND,
                 "expand rule member needs memory but top-level inst doesn't have any" );
-        if (!missing_memory_edge) {
+        if (has_memory_edge) {
           // Copy memory edge
-          fprintf(fp,"  n%d->add_req(_in[1]);\t// Add memory edge\n", cnt);
+          fprintf(fp,"  if (mem != (Node*)1) {\n");
+          fprintf(fp,"    n%d->add_req(_in[1]);\t// Add memory edge\n", cnt);
+          fprintf(fp,"  }\n");
         }
       }
 
@@ -1690,7 +1692,7 @@ void ArchDesc::defineExpand(FILE *fp, InstructForm *node) {
       } // done iterating over a new instruction's operands
 
       // Invoke Expand() for the newly created instruction.
-      fprintf(fp,"  result = n%d->Expand( state, proj_list );\n", cnt);
+      fprintf(fp,"  result = n%d->Expand( state, proj_list, mem );\n", cnt);
       assert( !new_inst->expands(), "Do not have complete support for recursive expansion");
     } // done iterating over new instructions
     fprintf(fp,"\n");
@@ -1743,9 +1745,10 @@ void ArchDesc::defineExpand(FILE *fp, InstructForm *node) {
       }
       // delete the rest of edges
       fprintf(fp,"  for(int i = idx%d - 1; i >= (int)idx%d; i--) {\n", cur_num_opnds, new_num_opnds);
-      fprintf(fp,"    del_req(i);\n", i);
+      fprintf(fp,"    del_req(i);\n");
       fprintf(fp,"  }\n");
       fprintf(fp,"  _num_opnds = %d;\n", new_num_opnds);
+      assert(new_num_opnds == node->num_unique_opnds(), "what?");
     }
   }
 
@@ -1817,7 +1820,7 @@ void ArchDesc::defineExpand(FILE *fp, InstructForm *node) {
 
   fprintf(fp,"\n");
   if( node->expands() ) {
-    fprintf(fp,"  return result;\n",cnt-1);
+    fprintf(fp,"  return result;\n");
   } else {
     fprintf(fp,"  return this;\n");
   }
@@ -2140,8 +2143,59 @@ public:
         // A subfield variable, '$$' prefix
         emit_field( rep_var );
       } else {
-        // A replacement variable, '$' prefix
-        emit_rep_var( rep_var );
+        if (_strings_to_emit.peek() != NULL &&
+            strcmp(_strings_to_emit.peek(), "$Address") == 0) {
+          fprintf(_fp, "Address::make_raw(");
+
+          emit_rep_var( rep_var );
+          fprintf(_fp,"->base(ra_,this,idx%d), ", _operand_idx);
+
+          _reg_status = LITERAL_ACCESSED;
+          emit_rep_var( rep_var );
+          fprintf(_fp,"->index(ra_,this,idx%d), ", _operand_idx);
+
+          _reg_status = LITERAL_ACCESSED;
+          emit_rep_var( rep_var );
+          fprintf(_fp,"->scale(), ");
+
+          _reg_status = LITERAL_ACCESSED;
+          emit_rep_var( rep_var );
+          Form::DataType stack_type = _operand ? _operand->is_user_name_for_sReg() : Form::none;
+          if( _operand  && _operand_idx==0 && stack_type != Form::none ) {
+            fprintf(_fp,"->disp(ra_,this,0), ");
+          } else {
+            fprintf(_fp,"->disp(ra_,this,idx%d), ", _operand_idx);
+          }
+
+          _reg_status = LITERAL_ACCESSED;
+          emit_rep_var( rep_var );
+          fprintf(_fp,"->disp_is_oop())");
+
+          // skip trailing $Address
+          _strings_to_emit.iter();
+        } else {
+          // A replacement variable, '$' prefix
+          const char* next = _strings_to_emit.peek();
+          const char* next2 = _strings_to_emit.peek(2);
+          if (next != NULL && next2 != NULL && strcmp(next2, "$Register") == 0 &&
+              (strcmp(next, "$base") == 0 || strcmp(next, "$index") == 0)) {
+            // handle $rev_var$$base$$Register and $rev_var$$index$$Register by
+            // producing as_Register(opnd_array(#)->base(ra_,this,idx1)).
+            fprintf(_fp, "as_Register(");
+            // emit the operand reference
+            emit_rep_var( rep_var );
+            rep_var = _strings_to_emit.iter();
+            assert(strcmp(rep_var, "$base") == 0 || strcmp(rep_var, "$index") == 0, "bad pattern");
+            // handle base or index
+            emit_field(rep_var);
+            rep_var = _strings_to_emit.iter();
+            assert(strcmp(rep_var, "$Register") == 0, "bad pattern");
+            // close up the parens
+            fprintf(_fp, ")");
+          } else {
+            emit_rep_var( rep_var );
+          }
+        }
       } // end replacement and/or subfield
     }
   }
@@ -2909,7 +2963,7 @@ void ArchDesc::defineClasses(FILE *fp) {
     used |= instr->define_cisc_version(*this, fp);
 
     // Output code to convert to the short branch version, if applicable
-    used |= instr->define_short_branch_methods(fp);
+    used |= instr->define_short_branch_methods(*this, fp);
   }
 
   // Construct the method called by cisc_version() to copy inputs and operands.
@@ -3654,7 +3708,7 @@ void ArchDesc::buildMachNode(FILE *fp_cpp, InstructForm *inst, const char *inden
   }
 
   // Fill in the bottom_type where requested
-  if ( inst->captures_bottom_type() ) {
+  if ( inst->captures_bottom_type(_globalNames) ) {
     fprintf(fp_cpp, "%s node->_bottom_type = _leaf->bottom_type();\n", indent);
   }
   if( inst->is_ideal_if() ) {
@@ -3708,9 +3762,15 @@ bool InstructForm::define_cisc_version(ArchDesc &AD, FILE *fp_cpp) {
     // Create the MachNode object
     fprintf(fp_cpp, "  %sNode *node = new (C) %sNode();\n", name, name);
     // Fill in the bottom_type where requested
-    if ( this->captures_bottom_type() ) {
+    if ( this->captures_bottom_type(AD.globalNames()) ) {
       fprintf(fp_cpp, "  node->_bottom_type = bottom_type();\n");
     }
+
+    uint cur_num_opnds = num_opnds();
+    if (cur_num_opnds > 1 && cur_num_opnds != num_unique_opnds()) {
+      fprintf(fp_cpp,"  node->_num_opnds = %d;\n", num_unique_opnds());
+    }
+
     fprintf(fp_cpp, "\n");
     fprintf(fp_cpp, "  // Copy _idx, inputs and operands to new node\n");
     fprintf(fp_cpp, "  fill_new_machnode(node, C);\n");
@@ -3738,7 +3798,7 @@ void InstructForm::declare_short_branch_methods(FILE *fp_hpp) {
 
 //---------------------------define_short_branch_methods-----------------------
 // Build definitions for short branch methods
-bool InstructForm::define_short_branch_methods(FILE *fp_cpp) {
+bool InstructForm::define_short_branch_methods(ArchDesc &AD, FILE *fp_cpp) {
   if (has_short_branch_form()) {
     InstructForm *short_branch = short_branch_form();
     const char   *name         = short_branch->_ident;
@@ -3753,7 +3813,7 @@ bool InstructForm::define_short_branch_methods(FILE *fp_cpp) {
       fprintf(fp_cpp, "  node->_fcnt = _fcnt;\n");
     }
     // Fill in the bottom_type where requested
-    if ( this->captures_bottom_type() ) {
+    if ( this->captures_bottom_type(AD.globalNames()) ) {
       fprintf(fp_cpp, "  node->_bottom_type = bottom_type();\n");
     }
 

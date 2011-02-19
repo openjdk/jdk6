@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,22 +18,30 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing.tree;
 
-import javax.swing.*;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Insets;
+import java.awt.Rectangle;
+import javax.swing.Icon;
+import javax.swing.JLabel;
+import javax.swing.JTree;
+import javax.swing.LookAndFeel;
+import javax.swing.UIManager;
+import javax.swing.border.EmptyBorder;
 import javax.swing.plaf.ColorUIResource;
 import javax.swing.plaf.FontUIResource;
 import javax.swing.plaf.basic.BasicGraphicsUtils;
-import java.awt.*;
-import java.awt.event.*;
-import java.beans.*;
-import java.io.*;
-import java.util.*;
+import sun.swing.DefaultLookup;
 
 /**
  * Displays an entry in a tree.
@@ -126,6 +134,7 @@ public class DefaultTreeCellRenderer extends JLabel implements TreeCellRenderer
     protected Color borderSelectionColor;
 
     private boolean isDropCell;
+    private boolean fillBackground = true;
 
     /**
      * Returns a new instance of DefaultTreeCellRenderer.  Alignment is
@@ -134,21 +143,28 @@ public class DefaultTreeCellRenderer extends JLabel implements TreeCellRenderer
      */
     public DefaultTreeCellRenderer() {
 
-        setLeafIcon(UIManager.getIcon("Tree.leafIcon"));
-        setClosedIcon(UIManager.getIcon("Tree.closedIcon"));
-        setOpenIcon(UIManager.getIcon("Tree.openIcon"));
+        setLeafIcon(DefaultLookup.getIcon(this, ui, "Tree.leafIcon"));
+        setClosedIcon(DefaultLookup.getIcon(this, ui, "Tree.closedIcon"));
+        setOpenIcon(DefaultLookup.getIcon(this, ui, "Tree.openIcon"));
 
-        setTextSelectionColor(UIManager.getColor("Tree.selectionForeground"));
-        setTextNonSelectionColor(UIManager.getColor("Tree.textForeground"));
-        setBackgroundSelectionColor(UIManager.getColor("Tree.selectionBackground"));
-        setBackgroundNonSelectionColor(UIManager.getColor("Tree.textBackground"));
-        setBorderSelectionColor(UIManager.getColor("Tree.selectionBorderColor"));
-        Object value = UIManager.get("Tree.drawsFocusBorderAroundIcon");
-        drawsFocusBorderAroundIcon = (value != null && ((Boolean)value).
-                                      booleanValue());
-        value = UIManager.get("Tree.drawDashedFocusIndicator");
-        drawDashedFocusIndicator = (value != null && ((Boolean)value).
-                                    booleanValue());
+        setTextSelectionColor(DefaultLookup.getColor(this, ui, "Tree.selectionForeground"));
+        setTextNonSelectionColor(DefaultLookup.getColor(this, ui, "Tree.textForeground"));
+        setBackgroundSelectionColor(DefaultLookup.getColor(this, ui, "Tree.selectionBackground"));
+        setBackgroundNonSelectionColor(DefaultLookup.getColor(this, ui, "Tree.textBackground"));
+        setBorderSelectionColor(DefaultLookup.getColor(this, ui, "Tree.selectionBorderColor"));
+        drawsFocusBorderAroundIcon = DefaultLookup.getBoolean(
+                this, ui, "Tree.drawsFocusBorderAroundIcon", false);
+        drawDashedFocusIndicator = DefaultLookup.getBoolean(
+                this, ui, "Tree.drawDashedFocusIndicator", false);
+
+        fillBackground = DefaultLookup.getBoolean(this, ui, "Tree.rendererFillBackground", true);
+        Insets margins = DefaultLookup.getInsets(this, ui, "Tree.rendererMargins");
+        if (margins != null) {
+            setBorder(new EmptyBorder(margins.top, margins.left,
+                    margins.bottom, margins.right));
+        }
+
+        setName("Tree.cellRenderer");
     }
 
 
@@ -157,7 +173,7 @@ public class DefaultTreeCellRenderer extends JLabel implements TreeCellRenderer
       * represent non-leaf nodes that are expanded.
       */
     public Icon getDefaultOpenIcon() {
-        return UIManager.getIcon("Tree.openIcon");
+        return DefaultLookup.getIcon(this, ui, "Tree.openIcon");
     }
 
     /**
@@ -165,7 +181,7 @@ public class DefaultTreeCellRenderer extends JLabel implements TreeCellRenderer
       * represent non-leaf nodes that are not expanded.
       */
     public Icon getDefaultClosedIcon() {
-        return UIManager.getIcon("Tree.closedIcon");
+        return DefaultLookup.getIcon(this, ui, "Tree.closedIcon");
     }
 
     /**
@@ -173,7 +189,7 @@ public class DefaultTreeCellRenderer extends JLabel implements TreeCellRenderer
       * represent leaf nodes.
       */
     public Icon getDefaultLeafIcon() {
-        return UIManager.getIcon("Tree.leafIcon");
+        return DefaultLookup.getIcon(this, ui, "Tree.leafIcon");
     }
 
     /**
@@ -362,7 +378,7 @@ public class DefaultTreeCellRenderer extends JLabel implements TreeCellRenderer
                 && dropLocation.getChildIndex() == -1
                 && tree.getRowForPath(dropLocation.getPath()) == row) {
 
-            Color col = UIManager.getColor("Tree.dropCellForeground");
+            Color col = DefaultLookup.getColor(this, ui, "Tree.dropCellForeground");
             if (col != null) {
                 fg = col;
             } else {
@@ -378,26 +394,24 @@ public class DefaultTreeCellRenderer extends JLabel implements TreeCellRenderer
 
         setForeground(fg);
 
-        // There needs to be a way to specify disabled icons.
+        Icon icon = null;
+        if (leaf) {
+            icon = getLeafIcon();
+        } else if (expanded) {
+            icon = getOpenIcon();
+        } else {
+            icon = getClosedIcon();
+        }
+
         if (!tree.isEnabled()) {
             setEnabled(false);
-            if (leaf) {
-                setDisabledIcon(getLeafIcon());
-            } else if (expanded) {
-                setDisabledIcon(getOpenIcon());
-            } else {
-                setDisabledIcon(getClosedIcon());
-            }
-        }
-        else {
+            LookAndFeel laf = UIManager.getLookAndFeel();
+            Icon disabledIcon = laf.getDisabledIcon(tree, icon);
+            if (disabledIcon != null) icon = disabledIcon;
+            setDisabledIcon(icon);
+        } else {
             setEnabled(true);
-            if (leaf) {
-                setIcon(getLeafIcon());
-            } else if (expanded) {
-                setIcon(getOpenIcon());
-            } else {
-                setIcon(getClosedIcon());
-            }
+            setIcon(icon);
         }
         setComponentOrientation(tree.getComponentOrientation());
 
@@ -413,7 +427,7 @@ public class DefaultTreeCellRenderer extends JLabel implements TreeCellRenderer
         Color bColor;
 
         if (isDropCell) {
-            bColor = UIManager.getColor("Tree.dropCellBackground");
+            bColor = DefaultLookup.getColor(this, ui, "Tree.dropCellBackground");
             if (bColor == null) {
                 bColor = getBackgroundSelectionColor();
             }
@@ -427,9 +441,7 @@ public class DefaultTreeCellRenderer extends JLabel implements TreeCellRenderer
         }
 
         int imageOffset = -1;
-        if(bColor != null) {
-            Icon currentI = getIcon();
-
+        if (bColor != null && fillBackground) {
             imageOffset = getLabelStart();
             g.setColor(bColor);
             if(getComponentOrientation().isLeftToRight()) {

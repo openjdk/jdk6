@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 # include "incls/_precompiled.incl"
@@ -638,7 +638,7 @@ void JvmtiClassFileReconstituter::copy_bytecodes(methodHandle mh,
 
     // length of bytecode (mnemonic + operands)
     address bcp = bs.bcp();
-    int len = bs.next_bcp() - bcp;
+    int     len = bs.instruction_size();
     assert(len > 0, "length must be > 0");
 
     // copy the bytecodes
@@ -659,15 +659,21 @@ void JvmtiClassFileReconstituter::copy_bytecodes(methodHandle mh,
       case Bytecodes::_invokevirtual   :  // fall through
       case Bytecodes::_invokespecial   :  // fall through
       case Bytecodes::_invokestatic    :  // fall through
+      case Bytecodes::_invokedynamic   :  // fall through
       case Bytecodes::_invokeinterface :
         assert(len == 3 || (code == Bytecodes::_invokeinterface && len ==5),
                "sanity check");
+        int cpci = Bytes::get_native_u2(bcp+1);
+        bool is_invokedynamic = (EnableInvokeDynamic && code == Bytecodes::_invokedynamic);
+        if (is_invokedynamic)
+          cpci = Bytes::get_native_u4(bcp+1);
         // cache cannot be pre-fetched since some classes won't have it yet
         ConstantPoolCacheEntry* entry =
-          mh->constants()->cache()->entry_at(Bytes::get_native_u2(bcp+1));
+          mh->constants()->cache()->main_entry_at(cpci);
         int i = entry->constant_pool_index();
         assert(i < mh->constants()->length(), "sanity check");
         Bytes::put_Java_u2((address)(p+1), (u2)i);     // java byte ordering
+        if (is_invokedynamic)  *(p+3) = *(p+4) = 0;
         break;
       }
     }

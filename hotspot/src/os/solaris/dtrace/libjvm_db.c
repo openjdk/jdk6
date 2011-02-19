@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -130,7 +130,7 @@ typedef struct Nmethod_t {
   int32_t  scopes_data_beg;     /* _scopes_data_offset */
   int32_t  scopes_data_end;
   int32_t  oops_beg;            /* _oops_offset */
-  int32_t  oops_len;            /* _oops_length */
+  int32_t  oops_end;
   int32_t  scopes_pcs_beg;      /* _scopes_pcs_offset */
   int32_t  scopes_pcs_end;
 
@@ -146,13 +146,17 @@ struct jvm_agent {
   uint64_t BufferBlob_vtbl;
   uint64_t RuntimeStub_vtbl;
 
+  uint64_t Use_Compressed_Oops_address;
   uint64_t Universe_methodKlassObj_address;
+  uint64_t Universe_narrow_oop_base_address;
+  uint64_t Universe_narrow_oop_shift_address;
   uint64_t CodeCache_heap_address;
-  uint64_t Universe_heap_base_address;
 
   /* Volatiles */
+  uint8_t  Use_Compressed_Oops;
   uint64_t Universe_methodKlassObj;
-  uint64_t Universe_heap_base;
+  uint64_t Universe_narrow_oop_base;
+  uint32_t Universe_narrow_oop_shift;
   uint64_t CodeCache_low;
   uint64_t CodeCache_high;
   uint64_t CodeCache_segmap_low;
@@ -279,8 +283,11 @@ static int parse_vmstructs(jvm_agent_t* J) {
       if (strcmp("_methodKlassObj", vmp->fieldName) == 0) {
         J->Universe_methodKlassObj_address = vmp->address;
       }
-      if (strcmp("_heap_base", vmp->fieldName) == 0) {
-        J->Universe_heap_base_address = vmp->address;
+      if (strcmp("_narrow_oop._base", vmp->fieldName) == 0) {
+        J->Universe_narrow_oop_base_address = vmp->address;
+      }
+      if (strcmp("_narrow_oop._shift", vmp->fieldName) == 0) {
+        J->Universe_narrow_oop_shift_address = vmp->address;
       }
     }
     CHECK_FAIL(err);
@@ -298,14 +305,39 @@ static int parse_vmstructs(jvm_agent_t* J) {
   return -1;
 }
 
+static int find_symbol(jvm_agent_t* J, const char *name, uint64_t* valuep) {
+  psaddr_t sym_addr;
+  int err;
+
+  err = ps_pglobal_lookup(J->P, LIBJVM_SO, name, &sym_addr);
+  if (err != PS_OK) goto fail;
+  *valuep = sym_addr;
+  return PS_OK;
+
+ fail:
+  return err;
+}
+
 static int read_volatiles(jvm_agent_t* J) {
   uint64_t ptr;
   int err;
 
+  err = find_symbol(J, "UseCompressedOops", &J->Use_Compressed_Oops_address);
+  if (err == PS_OK) {
+    err = ps_pread(J->P,  J->Use_Compressed_Oops_address, &J->Use_Compressed_Oops, sizeof(uint8_t));
+    CHECK_FAIL(err);
+  } else {
+    J->Use_Compressed_Oops = 0;
+  }
+
   err = read_pointer(J, J->Universe_methodKlassObj_address, &J->Universe_methodKlassObj);
   CHECK_FAIL(err);
-  err = read_pointer(J, J->Universe_heap_base_address, &J->Universe_heap_base);
+
+  err = read_pointer(J, J->Universe_narrow_oop_base_address, &J->Universe_narrow_oop_base);
   CHECK_FAIL(err);
+  err = ps_pread(J->P,  J->Universe_narrow_oop_shift_address, &J->Universe_narrow_oop_shift, sizeof(uint32_t));
+  CHECK_FAIL(err);
+
   err = read_pointer(J, J->CodeCache_heap_address + OFFSET_CodeHeap_memory +
                      OFFSET_VirtualSpace_low, &J->CodeCache_low);
   CHECK_FAIL(err);
@@ -372,19 +404,6 @@ static int find_start(jvm_agent_t* J, uint64_t ptr, uint64_t *startp) {
 
  fail:
   return -1;
-}
-
-static int find_symbol(jvm_agent_t* J, const char *name, uint64_t* valuep) {
-  psaddr_t sym_addr;
-  int err;
-
-  err = ps_pglobal_lookup(J->P, LIBJVM_SO, name, &sym_addr);
-  if (err != PS_OK) goto fail;
-  *valuep = sym_addr;
-  return PS_OK;
-
- fail:
-  return err;
 }
 
 static int find_jlong_constant(jvm_agent_t* J, const char *name, uint64_t* valuep) {
@@ -458,14 +477,14 @@ void Jagent_destroy(jvm_agent_t *J) {
 static int is_methodOop(jvm_agent_t* J, uint64_t methodOopPtr) {
   uint64_t klass;
   int err;
-  // If heap_base is nonnull, this was a compressed oop.
-  if (J->Universe_heap_base != NULL) {
+  // If UseCompressedOops, this was a compressed oop.
+  if (J->Use_Compressed_Oops != 0) {
     uint32_t cklass;
     err = read_compressed_pointer(J, methodOopPtr + OFFSET_oopDesc_metadata,
           &cklass);
     // decode heap oop, same as oop.inline.hpp
-    klass = (uint64_t)((uintptr_t)J->Universe_heap_base +
-            ((uintptr_t)cklass << 3));
+    klass = (uint64_t)((uintptr_t)J->Universe_narrow_oop_base +
+            ((uintptr_t)cklass << J->Universe_narrow_oop_shift));
   } else {
     err = read_pointer(J, methodOopPtr + OFFSET_oopDesc_metadata, &klass);
   }
@@ -578,9 +597,9 @@ static int nmethod_info(Nmethod_t *N)
   CHECK_FAIL(err);
 
   /* Oops */
-  err = ps_pread(J->P, nm + OFFSET_CodeBlob_oops_offset, &N->oops_beg, SZ32);
+  err = ps_pread(J->P, nm + OFFSET_nmethod_oops_offset, &N->oops_beg, SZ32);
   CHECK_FAIL(err);
-  err = ps_pread(J->P, nm + OFFSET_CodeBlob_oops_length, &N->oops_len, SZ32);
+  err = ps_pread(J->P, nm + OFFSET_nmethod_scopes_data_offset, &N->oops_end, SZ32);
   CHECK_FAIL(err);
 
   /* scopes_pcs */
@@ -605,8 +624,8 @@ static int nmethod_info(Nmethod_t *N)
       fprintf(stderr, "\t nmethod_info: orig_pc_offset: %#x \n",
                        N->orig_pc_offset);
 
-      fprintf(stderr, "\t nmethod_info: oops_beg: %#x, oops_len: %#x\n",
-                       N->oops_beg, N->oops_len);
+      fprintf(stderr, "\t nmethod_info: oops_beg: %#x, oops_end: %#x\n",
+                       N->oops_beg, N->oops_end);
 
       fprintf(stderr, "\t nmethod_info: scopes_data_beg: %#x, scopes_data_end: %#x\n",
                        N->scopes_data_beg, N->scopes_data_end);
@@ -918,54 +937,56 @@ scope_desc_at(Nmethod_t *N, int32_t decode_offset, Vframe_t *vf)
   return err;
 }
 
-static int
-scopeDesc_chain(Nmethod_t *N)
-{
+static int scopeDesc_chain(Nmethod_t *N) {
   int32_t decode_offset = 0;
   int32_t err;
 
-  if (debug > 2)
-      fprintf(stderr, "\t scopeDesc_chain: BEGIN\n");
+  if (debug > 2) {
+    fprintf(stderr, "\t scopeDesc_chain: BEGIN\n");
+  }
 
   err = ps_pread(N->J->P, N->pc_desc + OFFSET_PcDesc_scope_decode_offset,
                  &decode_offset, SZ32);
   CHECK_FAIL(err);
 
   while (decode_offset > 0) {
-      if (debug > 2)
-          fprintf(stderr, "\t scopeDesc_chain: decode_offset: %#x\n", decode_offset);
+    Vframe_t *vf = &N->vframes[N->vf_cnt];
 
-      Vframe_t *vf = &N->vframes[N->vf_cnt];
+    if (debug > 2) {
+      fprintf(stderr, "\t scopeDesc_chain: decode_offset: %#x\n", decode_offset);
+    }
 
-      err = scope_desc_at(N, decode_offset, vf);
+    err = scope_desc_at(N, decode_offset, vf);
+    CHECK_FAIL(err);
+
+    if (vf->methodIdx > ((N->oops_end - N->oops_beg) / POINTER_SIZE)) {
+      fprintf(stderr, "\t scopeDesc_chain: (methodIdx > oops length) !\n");
+      return -1;
+    }
+    err = read_pointer(N->J, N->nm + N->oops_beg + (vf->methodIdx-1)*POINTER_SIZE,
+                       &vf->methodOop);
+    CHECK_FAIL(err);
+
+    if (vf->methodOop) {
+      N->vf_cnt++;
+      err = line_number_from_bci(N->J, vf);
       CHECK_FAIL(err);
-
-      if (vf->methodIdx > N->oops_len) {
-          fprintf(stderr, "\t scopeDesc_chain: (methodIdx > oops_len) !\n");
-          return -1;
+      if (debug > 2) {
+        fprintf(stderr, "\t scopeDesc_chain: methodOop: %#8llx, line: %ld\n",
+                vf->methodOop, vf->line);
       }
-      err = read_pointer(N->J, N->nm + N->oops_beg + (vf->methodIdx-1)*POINTER_SIZE,
-                               &vf->methodOop);
-      CHECK_FAIL(err);
-
-      if (vf->methodOop) {
-          N->vf_cnt++;
-          err = line_number_from_bci(N->J, vf);
-          CHECK_FAIL(err);
-          if (debug > 2) {
-              fprintf(stderr, "\t scopeDesc_chain: methodOop: %#8llx, line: %ld\n",
-                              vf->methodOop, vf->line);
-          }
-      }
-      decode_offset = vf->sender_decode_offset;
+    }
+    decode_offset = vf->sender_decode_offset;
   }
-  if (debug > 2)
-      fprintf(stderr, "\t scopeDesc_chain: END \n\n");
+  if (debug > 2) {
+    fprintf(stderr, "\t scopeDesc_chain: END \n\n");
+  }
   return PS_OK;
 
  fail:
-  if (debug)
-      fprintf(stderr, "\t scopeDesc_chain: FAIL \n\n");
+  if (debug) {
+    fprintf(stderr, "\t scopeDesc_chain: FAIL \n\n");
+  }
   return err;
 }
 

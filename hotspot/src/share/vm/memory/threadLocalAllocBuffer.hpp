@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -111,7 +111,22 @@ public:
 
   // Allocate size HeapWords. The memory is NOT initialized to zero.
   inline HeapWord* allocate(size_t size);
-  static size_t alignment_reserve()              { return align_object_size(typeArrayOopDesc::header_size(T_INT)); }
+
+  // Reserve space at the end of TLAB
+  static size_t end_reserve() {
+    int reserve_size = typeArrayOopDesc::header_size(T_INT);
+    if (AllocatePrefetchStyle == 3) {
+      // BIS is used to prefetch - we need a space for it.
+      // +1 for rounding up to next cache line +1 to be safe
+      int lines = AllocatePrefetchLines + 2;
+      int step_size = AllocatePrefetchStepSize;
+      int distance = AllocatePrefetchDistance;
+      int prefetch_end = (distance + step_size*lines)/(int)HeapWordSize;
+      reserve_size = MAX2(reserve_size, prefetch_end);
+    }
+    return reserve_size;
+  }
+  static size_t alignment_reserve()              { return align_object_size(end_reserve()); }
   static size_t alignment_reserve_in_bytes()     { return alignment_reserve() * HeapWordSize; }
 
   // Return tlab size or remaining space in eden such that the

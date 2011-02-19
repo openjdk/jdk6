@@ -1,5 +1,5 @@
 /*
- * Copyright 2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 /*
@@ -37,6 +37,31 @@ public class AddTests {
 
     private static Set<RoundingMode> nonExactRoundingModes =
         EnumSet.complementOf(EnumSet.of(RoundingMode.UNNECESSARY));
+
+    /**
+     * Test for some simple additions, particularly, it will test
+     * the overflow case.
+     */
+    private static int simpleTests() {
+        int failures = 0;
+
+        BigDecimal[] bd1 = {
+            new BigDecimal(new BigInteger("7812404666936930160"), 11),
+            new BigDecimal(new BigInteger("7812404666936930160"), 12),
+            new BigDecimal(new BigInteger("7812404666936930160"), 13),
+        };
+        BigDecimal bd2 = new BigDecimal(new BigInteger("2790000"), 1);
+        BigDecimal[] expectedResult = {
+            new BigDecimal("78403046.66936930160"),
+            new BigDecimal("8091404.666936930160"),
+            new BigDecimal("1060240.4666936930160"),
+        };
+        for (int i = 0; i < bd1.length; i++) {
+            if (!bd1[i].add(bd2).equals(expectedResult[i]))
+                failures++;
+        }
+        return failures;
+    }
 
     /**
      * Test for extreme value of scale and rounding precision that

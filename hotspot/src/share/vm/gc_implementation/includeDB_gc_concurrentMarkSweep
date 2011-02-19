@@ -1,5 +1,5 @@
 //
-// Copyright 2004-2008 Sun Microsystems, Inc.  All Rights Reserved.
+// Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
 // DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 //
 // This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
 // 2 along with this work; if not, write to the Free Software Foundation,
 // Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 //
-// Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-// CA 95054 USA or visit www.sun.com if you need additional information or
-// have any questions.
+// Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+// or visit www.oracle.com if you need additional information or have any
+// questions.
 //  
 //
 
@@ -28,10 +28,13 @@ binaryTreeDictionary.cpp                allocationStats.hpp
 binaryTreeDictionary.cpp                binaryTreeDictionary.hpp
 binaryTreeDictionary.cpp                globals.hpp
 binaryTreeDictionary.cpp                ostream.hpp
+binaryTreeDictionary.cpp                space.inline.hpp
 binaryTreeDictionary.cpp                spaceDecorator.hpp
 
 binaryTreeDictionary.hpp                freeBlockDictionary.hpp
 binaryTreeDictionary.hpp                freeList.hpp
+
+blockOffsetTable.inline.hpp             concurrentMarkSweepGeneration.hpp
 
 cmsAdaptiveSizePolicy.cpp		cmsAdaptiveSizePolicy.hpp
 cmsAdaptiveSizePolicy.cpp		defNewGeneration.hpp
@@ -84,7 +87,7 @@ cmsOopClosures.hpp                      genOopClosures.hpp
 cmsOopClosures.inline.hpp               cmsOopClosures.hpp
 cmsOopClosures.inline.hpp               concurrentMarkSweepGeneration.hpp
 
-cmsPermGen.cpp                          blockOffsetTable.hpp
+cmsPermGen.cpp                          blockOffsetTable.inline.hpp
 cmsPermGen.cpp                          cSpaceCounters.hpp
 cmsPermGen.cpp                          cmsPermGen.hpp
 cmsPermGen.cpp                          collectedHeap.inline.hpp
@@ -120,7 +123,9 @@ compactibleFreeListSpace.cpp            universe.inline.hpp
 compactibleFreeListSpace.cpp            vmThread.hpp
 
 compactibleFreeListSpace.hpp            binaryTreeDictionary.hpp
+compactibleFreeListSpace.hpp            blockOffsetTable.inline.hpp
 compactibleFreeListSpace.hpp            freeList.hpp
+compactibleFreeListSpace.hpp            promotionInfo.hpp
 compactibleFreeListSpace.hpp            space.hpp
 
 compactingPermGenGen.cpp                concurrentMarkSweepGeneration.inline.hpp
@@ -144,8 +149,10 @@ concurrentMarkSweepGeneration.cpp       genOopClosures.inline.hpp
 concurrentMarkSweepGeneration.cpp       globals_extension.hpp
 concurrentMarkSweepGeneration.cpp       handles.inline.hpp
 concurrentMarkSweepGeneration.cpp       isGCActiveMark.hpp
+concurrentMarkSweepGeneration.cpp       iterator.hpp
 concurrentMarkSweepGeneration.cpp       java.hpp
 concurrentMarkSweepGeneration.cpp       jvmtiExport.hpp
+concurrentMarkSweepGeneration.cpp       memoryService.hpp
 concurrentMarkSweepGeneration.cpp       oop.inline.hpp
 concurrentMarkSweepGeneration.cpp       parNewGeneration.hpp
 concurrentMarkSweepGeneration.cpp       referencePolicy.hpp
@@ -162,7 +169,9 @@ concurrentMarkSweepGeneration.hpp       gSpaceCounters.hpp
 concurrentMarkSweepGeneration.hpp       gcStats.hpp
 concurrentMarkSweepGeneration.hpp       generation.hpp
 concurrentMarkSweepGeneration.hpp       generationCounters.hpp
+concurrentMarkSweepGeneration.hpp       memoryService.hpp
 concurrentMarkSweepGeneration.hpp       mutexLocker.hpp
+concurrentMarkSweepGeneration.hpp       stack.inline.hpp
 concurrentMarkSweepGeneration.hpp       taskqueue.hpp
 concurrentMarkSweepGeneration.hpp       virtualspace.hpp
 concurrentMarkSweepGeneration.hpp       yieldingWorkgroup.hpp
@@ -219,8 +228,17 @@ freeList.cpp                            freeList.hpp
 freeList.cpp                            globals.hpp
 freeList.cpp                            mutex.hpp
 freeList.cpp                            sharedHeap.hpp
+freeList.cpp                            vmThread.hpp
 
 freeList.hpp                            allocationStats.hpp
+
+promotionInfo.cpp                       compactibleFreeListSpace.hpp
+promotionInfo.cpp                       markOop.inline.hpp
+promotionInfo.cpp                       oop.inline.hpp
+promotionInfo.cpp                       promotionInfo.hpp
+
+promotionInfo.hpp                       allocation.hpp
+promotionInfo.hpp                       freeChunk.hpp
 
 vmCMSOperations.cpp			concurrentMarkSweepGeneration.inline.hpp
 vmCMSOperations.cpp			concurrentMarkSweepThread.hpp

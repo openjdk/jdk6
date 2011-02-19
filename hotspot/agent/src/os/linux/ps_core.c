@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -238,8 +238,8 @@ struct FileMapHeader {
   // Ignore the rest of the FileMapHeader. We don't need those fields here.
 };
 
-static bool read_int(struct ps_prochandle* ph, uintptr_t addr, int* pvalue) {
-   int i;
+static bool read_jboolean(struct ps_prochandle* ph, uintptr_t addr, jboolean* pvalue) {
+   jboolean i;
    if (ps_pdread(ph, (psaddr_t) addr, &i, sizeof(i)) == PS_OK) {
       *pvalue = i;
       return true;
@@ -295,7 +295,7 @@ static bool init_classsharing_workaround(struct ps_prochandle* ph) {
          int fd = -1, m = 0;
          uintptr_t base = 0, useSharedSpacesAddr = 0;
          uintptr_t sharedArchivePathAddrAddr = 0, sharedArchivePathAddr = 0;
-         int useSharedSpaces = 0;
+         jboolean useSharedSpaces = 0;
          map_info* mi = 0;
 
          memset(classes_jsa, 0, sizeof(classes_jsa));
@@ -306,12 +306,15 @@ static bool init_classsharing_workaround(struct ps_prochandle* ph) {
             return false;
          }
 
-         if (read_int(ph, useSharedSpacesAddr, &useSharedSpaces) != true) {
+         // Hotspot vm types are not exported to build this library. So
+         // using equivalent type jboolean to read the value of
+         // UseSharedSpaces which is same as hotspot type "bool".
+         if (read_jboolean(ph, useSharedSpacesAddr, &useSharedSpaces) != true) {
             print_debug("can't read the value of 'UseSharedSpaces' flag\n");
             return false;
          }
 
-         if (useSharedSpaces == 0) {
+         if ((int)useSharedSpaces == 0) {
             print_debug("UseSharedSpaces is false, assuming -Xshare:off!\n");
             return true;
          }
@@ -881,9 +884,12 @@ static bool read_shared_lib_info(struct ps_prochandle* ph) {
       }
 
       // read name of the shared object
-      if (read_string(ph, (uintptr_t) lib_name_addr, lib_name, sizeof(lib_name)) != true) {
+      lib_name[0] = '\0';
+      if (lib_name_addr != 0 &&
+          read_string(ph, (uintptr_t) lib_name_addr, lib_name, sizeof(lib_name)) != true) {
          print_debug("can't read shared object name\n");
-         return false;
+         // don't let failure to read the name stop opening the file.  If something is really wrong
+         // it will fail later.
       }
 
       if (lib_name[0] != '\0') {

@@ -1,5 +1,5 @@
 #
-# Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #  
 #
 
@@ -46,29 +46,35 @@ C_COMPILER_REV := \
 $(shell $(CC) -V 2>&1 | sed -n 's/^.*[ ,\t]C[ ,\t]\([1-9]\.[0-9][0-9]*\).*/\1/p')
 
 # Pick which compiler is validated
-ifeq ($(JDK_MINOR_VERSION),6)
+ifeq ($(JRE_RELEASE_VER),1.6.0)
   # Validated compiler for JDK6 is SS11 (5.8)
-  VALIDATED_COMPILER_REV   := 5.8
-  VALIDATED_C_COMPILER_REV := 5.8
+  VALIDATED_COMPILER_REVS   := 5.8
+  VALIDATED_C_COMPILER_REVS := 5.8
 else
-  # Validated compiler for JDK7 is SS12 (5.9)
-  VALIDATED_COMPILER_REV   := 5.9
-  VALIDATED_C_COMPILER_REV := 5.9
+  # Validated compilers for JDK7 are SS12 (5.9) or SS12 update 1 (5.10)
+  VALIDATED_COMPILER_REVS   := 5.9 5.10
+  VALIDATED_C_COMPILER_REVS := 5.9 5.10
 endif
 
-# Warning messages about not using the above validated version
-ENFORCE_COMPILER_REV${ENFORCE_COMPILER_REV} := ${VALIDATED_COMPILER_REV}
-ifneq (${COMPILER_REV},${ENFORCE_COMPILER_REV})
-dummy_target_to_enforce_compiler_rev:=\
-$(shell echo >&2 WARNING: You are using CC version ${COMPILER_REV} \
-and should be using version ${ENFORCE_COMPILER_REV}. Set ENFORCE_COMPILER_REV=${COMPILER_REV} to avoid this warning.)
+# Warning messages about not using the above validated versions
+ENFORCE_COMPILER_REV${ENFORCE_COMPILER_REV} := $(strip ${VALIDATED_COMPILER_REVS})
+ifeq ($(filter ${ENFORCE_COMPILER_REV},${COMPILER_REV}),)
+PRINTABLE_CC_REVS := $(subst $(shell echo ' '), or ,${ENFORCE_COMPILER_REV})
+dummy_var_to_enforce_compiler_rev := $(shell \
+	echo >&2 WARNING: You are using CC version ${COMPILER_REV} and \
+	should be using version ${PRINTABLE_CC_REVS}.; \
+	echo >&2 Set ENFORCE_COMPILER_REV=${COMPILER_REV} to avoid this \
+	warning.)
 endif
 
-ENFORCE_C_COMPILER_REV${ENFORCE_C_COMPILER_REV} := ${VALIDATED_C_COMPILER_REV}
-ifneq (${C_COMPILER_REV},${ENFORCE_C_COMPILER_REV})
-dummy_target_to_enforce_c_compiler_rev:=\
-$(shell echo >&2 WARNING: You are using cc version ${C_COMPILER_REV} \
-and should be using version ${ENFORCE_C_COMPILER_REV}. Set ENFORCE_C_COMPILER_REV=${C_COMPILER_REV} to avoid this warning.)
+ENFORCE_C_COMPILER_REV${ENFORCE_C_COMPILER_REV} := $(strip ${VALIDATED_C_COMPILER_REVS})
+ifeq ($(filter ${ENFORCE_C_COMPILER_REV},${C_COMPILER_REV}),)
+PRINTABLE_C_REVS := $(subst $(shell echo ' '), or ,${ENFORCE_C_COMPILER_REV})
+dummy_var_to_enforce_c_compiler_rev := $(shell \
+	echo >&2 WARNING: You are using cc version ${C_COMPILER_REV} and \
+	should be using version ${PRINTABLE_C_REVS}.; \
+	echo >&2 Set ENFORCE_C_COMPILER_REV=${C_COMPILER_REV} to avoid this \
+	warning.)
 endif
 
 COMPILER_REV_NUMERIC := $(shell echo $(COMPILER_REV) | awk -F. '{ print $$1 * 100 + $$2 }')
@@ -101,18 +107,9 @@ CFLAGS += ${SOLARIS_7_OR_LATER}
 
 # New architecture options started in SS12 (5.9), we need both styles to build.
 #   The older arch options for SS11 (5.8) or older and also for /usr/ccs/bin/as.
-#   Note: SS12 default for 32bit sparc is now the same as v8plus, so the
-#         settings below have changed all SS12 32bit sparc builds to be v8plus.
-#         The older SS11 (5.8) settings have remained as they always have been.
-ifeq ($(TYPE),COMPILER2)
-  ARCHFLAG_OLD/sparc   = -xarch=v8plus
-else
-  ifeq ($(TYPE),TIERED)
-    ARCHFLAG_OLD/sparc = -xarch=v8plus
-  else
-    ARCHFLAG_OLD/sparc = -xarch=v8
-  endif
-endif
+#   Note: default for 32bit sparc is now the same as v8plus, so the
+#         settings below have changed all 32bit sparc builds to be v8plus.
+ARCHFLAG_OLD/sparc   = -xarch=v8plus
 ARCHFLAG_NEW/sparc   = -m32 -xarch=sparc
 ARCHFLAG_OLD/sparcv9 = -xarch=v9
 ARCHFLAG_NEW/sparcv9 = -m64 -xarch=sparc
@@ -147,6 +144,22 @@ ISA_DIR/amd64=/amd64
 OPT_CFLAGS/SLOWER=-xO3
 OPT_CFLAGS/O2=-xO2
 OPT_CFLAGS/NOOPT=-xO1
+
+#################################################
+# Begin current (>=5.9) Forte compiler options #
+#################################################
+
+ifeq ($(shell expr $(COMPILER_REV_NUMERIC) \>= 509), 1)
+ifeq ($(Platform_arch), x86)
+OPT_CFLAGS/NO_TAIL_CALL_OPT  = -Wu,-O~yz
+OPT_CCFLAGS/NO_TAIL_CALL_OPT = -Qoption ube -O~yz
+OPT_CFLAGS/stubGenerator_x86_32.o = $(OPT_CFLAGS) -xspace
+OPT_CFLAGS/stubGenerator_x86_64.o = $(OPT_CFLAGS) -xspace
+endif # Platform_arch == x86
+ifeq ("${Platform_arch}", "sparc")
+OPT_CFLAGS/stubGenerator_sparc.o = $(OPT_CFLAGS) -xspace
+endif
+endif # COMPILER_REV_NUMERIC >= 509
 
 #################################################
 # Begin current (>=5.6) Forte compiler options #
@@ -190,10 +203,7 @@ endif # sparc
 
 ifeq ("${Platform_arch_model}", "x86_32")
 
-OPT_CFLAGS=-xtarget=pentium $(EXTRA_OPT_CFLAGS)
-
-# UBE (CC 5.5) has bug 4923569 with -xO4
-OPT_CFLAGS+=-xO3
+OPT_CFLAGS=-xtarget=pentium -xO4 $(EXTRA_OPT_CFLAGS)
 
 endif # 32bit x86
 
@@ -290,8 +300,6 @@ else
 OPT_CFLAGS=-xO4 $(EXTRA_OPT_CFLAGS)
 endif
 
-CFLAGS += $(GAMMADIR)/src/os_cpu/solaris_sparc/vm/solaris_sparc.il
-
 endif # sparc
 
 ifeq ("${Platform_arch_model}", "x86_32")
@@ -302,12 +310,13 @@ OPT_CFLAGS=-xtarget=pentium $(EXTRA_OPT_CFLAGS)
 # [phh] Is this still true for 6.1?
 OPT_CFLAGS+=-xO3
 
-CFLAGS += $(GAMMADIR)/src/os_cpu/solaris_x86/vm/solaris_x86_32.il
-
 endif # 32bit x86
 
 # no more exceptions
 CFLAGS/NOEX=-noex
+
+# Inline functions
+CFLAGS += $(GAMMADIR)/src/os_cpu/solaris_${Platform_arch}/vm/solaris_${Platform_arch_model}.il
 
 # Reduce code bloat by reverting back to 5.0 behavior for static initializers
 CFLAGS += -Qoption ccfe -one_static_init
@@ -320,6 +329,15 @@ PICFLAG/DEFAULT = $(PICFLAG)
 #PICFLAG/BETTER  = -pic
 PICFLAG/BETTER  = $(PICFLAG/DEFAULT)
 PICFLAG/BYFILE  = $(PICFLAG/$@)$(PICFLAG/DEFAULT$(PICFLAG/$@))
+
+# Use $(MAPFLAG:FILENAME=real_file_name) to specify a map file.
+MAPFLAG = -M FILENAME
+
+# Use $(SONAMEFLAG:SONAME=soname) to specify the intrinsic name of a shared obj
+SONAMEFLAG = -h SONAME
+
+# Build shared library
+SHARED_FLAG = -G
 
 # Would be better if these weren't needed, since we link with CC, but
 # at present removing them causes run-time errors
@@ -462,7 +480,7 @@ FASTDEBUG_CFLAGS = -g0
 # The -g0 setting allows the C++ frontend to inline, which is a big win.
 
 # Special global options for SS12
-ifeq ($(COMPILER_REV_NUMERIC),509)
+ifeq ($(shell expr $(COMPILER_REV_NUMERIC) \>= 509), 1)
   # There appears to be multiple issues with the new Dwarf2 debug format, so
   #   we tell the compiler to use the older 'stabs' debug format all the time.
   #   Note that this needs to be used in optimized compiles too to be 100%.

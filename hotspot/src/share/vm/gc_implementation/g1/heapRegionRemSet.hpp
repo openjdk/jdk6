@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -116,9 +116,9 @@ public:
 
   // For now.  Could "expand" some tables in the future, so that this made
   // sense.
-  void add_reference(oop* from, int tid);
+  void add_reference(OopOrNarrowOopStar from, int tid);
 
-  void add_reference(oop* from) {
+  void add_reference(OopOrNarrowOopStar from) {
     return add_reference(from, 0);
   }
 
@@ -140,8 +140,8 @@ public:
   static size_t static_mem_size();
   static size_t fl_mem_size();
 
-  bool contains_reference(oop* from) const;
-  bool contains_reference_locked(oop* from) const;
+  bool contains_reference(OopOrNarrowOopStar from) const;
+  bool contains_reference_locked(OopOrNarrowOopStar from) const;
 
   void clear();
 
@@ -177,27 +177,19 @@ private:
   G1BlockOffsetSharedArray* _bosa;
   G1BlockOffsetSharedArray* bosa() const { return _bosa; }
 
-  static bool _par_traversal;
-
   OtherRegionsTable _other_regions;
 
-  // One set bit for every region that has an entry for this one.
-  BitMap _outgoing_region_map;
-
-  // Clear entries for the current region in any rem sets named in
-  // the _outgoing_region_map.
-  void clear_outgoing_entries();
-
   enum ParIterState { Unclaimed, Claimed, Complete };
-  ParIterState _iter_state;
+  volatile ParIterState _iter_state;
+  volatile jlong _iter_claimed;
 
   // Unused unless G1RecordHRRSOops is true.
 
   static const int MaxRecorded = 1000000;
-  static oop**        _recorded_oops;
-  static HeapWord**   _recorded_cards;
-  static HeapRegion** _recorded_regions;
-  static int          _n_recorded;
+  static OopOrNarrowOopStar* _recorded_oops;
+  static HeapWord**          _recorded_cards;
+  static HeapRegion**        _recorded_regions;
+  static int                 _n_recorded;
 
   static const int MaxRecordedEvents = 1000;
   static Event*       _recorded_events;
@@ -211,8 +203,7 @@ public:
                    HeapRegion* hr);
 
   static int num_par_rem_sets();
-  static bool par_traversal() { return _par_traversal; }
-  static void set_par_traversal(bool b);
+  static void setup_remset_size();
 
   HeapRegion* hr() const {
     return _other_regions.hr();
@@ -235,19 +226,15 @@ public:
 
   /* Used in the sequential case.  Returns "true" iff this addition causes
      the size limit to be reached. */
-  void add_reference(oop* from) {
+  void add_reference(OopOrNarrowOopStar from) {
     _other_regions.add_reference(from);
   }
 
   /* Used in the parallel case.  Returns "true" iff this addition causes
      the size limit to be reached. */
-  void add_reference(oop* from, int tid) {
+  void add_reference(OopOrNarrowOopStar from, int tid) {
     _other_regions.add_reference(from, tid);
   }
-
-  // Records the fact that the current region contains an outgoing
-  // reference into "to_hr".
-  void add_outgoing_reference(HeapRegion* to_hr);
 
   // Removes any entries shown by the given bitmaps to contain only dead
   // objects.
@@ -275,6 +262,19 @@ public:
   void set_iter_complete();
   // Returns "true" iff the region's iteration is complete.
   bool iter_is_complete();
+
+  // Support for claiming blocks of cards during iteration
+  void set_iter_claimed(size_t x) { _iter_claimed = (jlong)x; }
+  size_t iter_claimed() const { return (size_t)_iter_claimed; }
+  // Claim the next block of cards
+  size_t iter_claimed_next(size_t step) {
+    size_t current, next;
+    do {
+      current = iter_claimed();
+      next = current + step;
+    } while (Atomic::cmpxchg((jlong)next, &_iter_claimed, (jlong)current) != (jlong)current);
+    return current;
+  }
 
   // Initialize the given iterator to iterate over this rem set.
   void init_iterator(HeapRegionRemSetIterator* iter) const;
@@ -305,7 +305,7 @@ public:
     return OtherRegionsTable::fl_mem_size();
   }
 
-  bool contains_reference(oop* from) const {
+  bool contains_reference(OopOrNarrowOopStar from) const {
     return _other_regions.contains_reference(from);
   }
   void print() const;
@@ -333,7 +333,7 @@ public:
   }
 #endif
 
-  static void record(HeapRegion* hr, oop* f);
+  static void record(HeapRegion* hr, OopOrNarrowOopStar f);
   static void print_recorded();
   static void record_event(Event evnt);
 

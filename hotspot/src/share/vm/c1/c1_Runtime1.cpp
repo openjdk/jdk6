@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -60,7 +60,6 @@ void StubAssembler::set_num_rt_args(int args) {
 
 // Implementation of Runtime1
 
-bool      Runtime1::_is_initialized = false;
 CodeBlob* Runtime1::_blobs[Runtime1::number_of_ids];
 const char *Runtime1::_blob_names[] = {
   RUNTIME1_STUBS(STUB_NAME, LAST_STUB_NAME)
@@ -89,8 +88,6 @@ int Runtime1::_throw_array_store_exception_count = 0;
 int Runtime1::_throw_count = 0;
 #endif
 
-BufferBlob* Runtime1::_buffer_blob  = NULL;
-
 // Simple helper to see if the caller of a runtime stub which
 // entered the VM has been deoptimized
 
@@ -110,50 +107,21 @@ static void deopt_caller() {
     RegisterMap reg_map(thread, false);
     frame runtime_frame = thread->last_frame();
     frame caller_frame = runtime_frame.sender(&reg_map);
-    VM_DeoptimizeFrame deopt(thread, caller_frame.id());
-    VMThread::execute(&deopt);
+    // bypass VM_DeoptimizeFrame and deoptimize the frame directly
+    Deoptimization::deoptimize_frame(thread, caller_frame.id());
     assert(caller_is_deopted(), "Must be deoptimized");
   }
 }
 
 
-BufferBlob* Runtime1::get_buffer_blob() {
-  // Allocate code buffer space only once
-  BufferBlob* blob = _buffer_blob;
-  if (blob == NULL) {
-    // setup CodeBuffer.  Preallocate a BufferBlob of size
-    // NMethodSizeLimit plus some extra space for constants.
-    int code_buffer_size = desired_max_code_buffer_size() + desired_max_constant_size();
-    blob = BufferBlob::create("Compiler1 temporary CodeBuffer",
-                              code_buffer_size);
-    guarantee(blob != NULL, "must create initial code buffer");
-    _buffer_blob = blob;
-  }
-  return _buffer_blob;
-}
-
-void Runtime1::setup_code_buffer(CodeBuffer* code, int call_stub_estimate) {
-  // Preinitialize the consts section to some large size:
-  int locs_buffer_size = 20 * (relocInfo::length_limit + sizeof(relocInfo));
-  char* locs_buffer = NEW_RESOURCE_ARRAY(char, locs_buffer_size);
-  code->insts()->initialize_shared_locs((relocInfo*)locs_buffer,
-                                        locs_buffer_size / sizeof(relocInfo));
-  code->initialize_consts_size(desired_max_constant_size());
-  // Call stubs + deopt/exception handler
-  code->initialize_stubs_size((call_stub_estimate * LIR_Assembler::call_stub_size) +
-                              LIR_Assembler::exception_handler_size +
-                              LIR_Assembler::deopt_handler_size);
-}
-
-
-void Runtime1::generate_blob_for(StubID id) {
+void Runtime1::generate_blob_for(BufferBlob* buffer_blob, StubID id) {
   assert(0 <= id && id < number_of_ids, "illegal stub id");
   ResourceMark rm;
   // create code buffer for code storage
-  CodeBuffer code(get_buffer_blob()->instructions_begin(),
-                  get_buffer_blob()->instructions_size());
+  CodeBuffer code(buffer_blob->instructions_begin(),
+                  buffer_blob->instructions_size());
 
-  setup_code_buffer(&code, 0);
+  Compilation::setup_code_buffer(&code, 0);
 
   // create assembler for code generation
   StubAssembler* sasm = new StubAssembler(&code, name_for(id), id);
@@ -176,7 +144,7 @@ void Runtime1::generate_blob_for(StubID id) {
 #ifndef TIERED
     case counter_overflow_id: // Not generated outside the tiered world
 #endif
-#ifdef SPARC
+#if defined(SPARC) || defined(PPC)
     case handle_exception_nofpu_id:  // Unused on sparc
 #endif
       break;
@@ -204,35 +172,28 @@ void Runtime1::generate_blob_for(StubID id) {
 }
 
 
-void Runtime1::initialize() {
-  // Warning: If we have more than one compilation running in parallel, we
-  //          need a lock here with the current setup (lazy initialization).
-  if (!is_initialized()) {
-    _is_initialized = true;
-
-    // platform-dependent initialization
-    initialize_pd();
-    // generate stubs
-    for (int id = 0; id < number_of_ids; id++) generate_blob_for((StubID)id);
-    // printing
+void Runtime1::initialize(BufferBlob* blob) {
+  // platform-dependent initialization
+  initialize_pd();
+  // generate stubs
+  for (int id = 0; id < number_of_ids; id++) generate_blob_for(blob, (StubID)id);
+  // printing
 #ifndef PRODUCT
-    if (PrintSimpleStubs) {
-      ResourceMark rm;
-      for (int id = 0; id < number_of_ids; id++) {
-        _blobs[id]->print();
-        if (_blobs[id]->oop_maps() != NULL) {
-          _blobs[id]->oop_maps()->print();
-        }
+  if (PrintSimpleStubs) {
+    ResourceMark rm;
+    for (int id = 0; id < number_of_ids; id++) {
+      _blobs[id]->print();
+      if (_blobs[id]->oop_maps() != NULL) {
+        _blobs[id]->oop_maps()->print();
       }
     }
-#endif
   }
+#endif
 }
 
 
 CodeBlob* Runtime1::blob_for(StubID id) {
   assert(0 <= id && id < number_of_ids, "illegal stub id");
-  if (!is_initialized()) initialize();
   return _blobs[id];
 }
 
@@ -279,7 +240,8 @@ const char* Runtime1::name_for_address(address entry) {
 
 #undef FUNCTION_CASE
 
-  return "<unknown function>";
+  // Soft float adds more runtime names.
+  return pd_name_for_address(entry);
 }
 
 
@@ -354,7 +316,7 @@ JRT_END
 
 
 JRT_ENTRY(void, Runtime1::post_jvmti_exception_throw(JavaThread* thread))
-  if (JvmtiExport::can_post_exceptions()) {
+  if (JvmtiExport::can_post_on_exceptions()) {
     vframeStream vfst(thread, true);
     address bcp = vfst.method()->bcp_from(vfst.bci());
     JvmtiExport::post_exception_throw(thread, vfst.method(), bcp, thread->exception_oop());
@@ -425,7 +387,7 @@ JRT_ENTRY_NO_ASYNC(static address, exception_handler_for_pc_helper(JavaThread* t
   assert(exception.not_null(), "NULL exceptions should be handled by throw_exception");
   assert(exception->is_oop(), "just checking");
   // Check that exception is a subclass of Throwable, otherwise we have a VerifyError
-  if (!(exception->is_a(SystemDictionary::throwable_klass()))) {
+  if (!(exception->is_a(SystemDictionary::Throwable_klass()))) {
     if (ExitVMOnVerifyError) vm_exit(-1);
     ShouldNotReachHere();
   }
@@ -437,7 +399,7 @@ JRT_ENTRY_NO_ASYNC(static address, exception_handler_for_pc_helper(JavaThread* t
   bool guard_pages_enabled = thread->stack_yellow_zone_enabled();
   if (!guard_pages_enabled) guard_pages_enabled = thread->reguard_stack();
 
-  if (JvmtiExport::can_post_exceptions()) {
+  if (JvmtiExport::can_post_on_exceptions()) {
     // To ensure correct notification of exception catches and throws
     // we have to deoptimize here.  If we attempted to notify the
     // catches and throws during this exception lookup it's possible
@@ -640,7 +602,7 @@ JRT_END
 
 
 static klassOop resolve_field_return_klass(methodHandle caller, int bci, TRAPS) {
-  Bytecode_field* field_access = Bytecode_field_at(caller(), caller->bcp_from(bci));
+  Bytecode_field* field_access = Bytecode_field_at(caller, bci);
   // This can be static or non-static field access
   Bytecodes::Code code       = field_access->code();
 
@@ -760,7 +722,7 @@ JRT_ENTRY(void, Runtime1::patch_code(JavaThread* thread, Runtime1::StubID stub_i
   Handle load_klass(THREAD, NULL);                // oop needed by load_klass_patching code
   if (stub_id == Runtime1::access_field_patching_id) {
 
-    Bytecode_field* field_access = Bytecode_field_at(caller_method(), caller_method->bcp_from(bci));
+    Bytecode_field* field_access = Bytecode_field_at(caller_method, bci);
     FieldAccessInfo result; // initialize class if needed
     Bytecodes::Code code = field_access->code();
     constantPoolHandle constants(THREAD, caller_method->constants());
@@ -820,11 +782,9 @@ JRT_ENTRY(void, Runtime1::patch_code(JavaThread* thread, Runtime1::StubID stub_i
       case Bytecodes::_ldc:
       case Bytecodes::_ldc_w:
         {
-          Bytecode_loadconstant* cc = Bytecode_loadconstant_at(caller_method(),
-                                                               caller_method->bcp_from(bci));
-          klassOop resolved = caller_method->constants()->klass_at(cc->index(), CHECK);
-          // ldc wants the java mirror.
-          k = resolved->klass_part()->java_mirror();
+          Bytecode_loadconstant* cc = Bytecode_loadconstant_at(caller_method, bci);
+          k = cc->resolve_constant(CHECK);
+          assert(k != NULL && !k->is_klass(), "must be class mirror or other Java constant");
         }
         break;
       default: Unimplemented();
@@ -855,6 +815,15 @@ JRT_ENTRY(void, Runtime1::patch_code(JavaThread* thread, Runtime1::StubID stub_i
     // Return to the now deoptimized frame.
   }
 
+  // If we are patching in a non-perm oop, make sure the nmethod
+  // is on the right list.
+  if (ScavengeRootsInCode && load_klass.not_null() && load_klass->is_scavengable()) {
+    MutexLockerEx ml_code (CodeCache_lock, Mutex::_no_safepoint_check_flag);
+    nmethod* nm = CodeCache::find_nmethod(caller_frame.pc());
+    guarantee(nm != NULL, "only nmethods can contain non-perm oops");
+    if (!nm->on_scavenge_root_list())
+      CodeCache::add_scavenge_root_nmethod(nm);
+  }
 
   // Now copy code back
 
@@ -928,7 +897,10 @@ JRT_ENTRY(void, Runtime1::patch_code(JavaThread* thread, Runtime1::StubID stub_i
           } else {
             // patch the instruction <move reg, klass>
             NativeMovConstReg* n_copy = nativeMovConstReg_at(copy_buff);
-            assert(n_copy->data() == 0, "illegal init value");
+
+            assert(n_copy->data() == 0 ||
+                   n_copy->data() == (int)Universe::non_oop_word(),
+                   "illegal init value");
             assert(load_klass() != NULL, "klass not set");
             n_copy->set_data((intx) (load_klass()));
 
@@ -936,7 +908,7 @@ JRT_ENTRY(void, Runtime1::patch_code(JavaThread* thread, Runtime1::StubID stub_i
               Disassembler::decode(copy_buff, copy_buff + *byte_count, tty);
             }
 
-#ifdef SPARC
+#if defined(SPARC) || defined(PPC)
             // Update the oop location in the nmethod with the proper
             // oop.  When the code was generated, a NULL was stuffed
             // in the oop table and that table needs to be update to
@@ -966,6 +938,14 @@ JRT_ENTRY(void, Runtime1::patch_code(JavaThread* thread, Runtime1::StubID stub_i
         if (do_patch) {
           // replace instructions
           // first replace the tail, then the call
+#ifdef ARM
+          if(stub_id == Runtime1::load_klass_patching_id && !VM_Version::supports_movw()) {
+            copy_buff -= *byte_count;
+            NativeMovConstReg* n_copy2 = nativeMovConstReg_at(copy_buff);
+            n_copy2->set_data((intx) (load_klass()), instr_pc);
+          }
+#endif
+
           for (int i = NativeCall::instruction_size; i < *byte_count; i++) {
             address ptr = copy_buff + i;
             int a_byte = (*ptr) & 0xFF;
@@ -992,6 +972,12 @@ JRT_ENTRY(void, Runtime1::patch_code(JavaThread* thread, Runtime1::StubID stub_i
             RelocIterator iter2(nm, instr_pc2, instr_pc2 + 1);
             relocInfo::change_reloc_info_for_address(&iter2, (address) instr_pc2,
                                                      relocInfo::none, relocInfo::oop_type);
+#endif
+#ifdef PPC
+          { address instr_pc2 = instr_pc + NativeMovConstReg::lo_offset;
+            RelocIterator iter2(nm, instr_pc2, instr_pc2 + 1);
+            relocInfo::change_reloc_info_for_address(&iter2, (address) instr_pc2, relocInfo::none, relocInfo::oop_type);
+          }
 #endif
           }
 
@@ -1075,6 +1061,7 @@ enum {
 };
 
 
+// Below length is the # elements copied.
 template <class T> int obj_arraycopy_work(oopDesc* src, T* src_addr,
                                           oopDesc* dst, T* dst_addr,
                                           int length) {
@@ -1083,22 +1070,22 @@ template <class T> int obj_arraycopy_work(oopDesc* src, T* src_addr,
   // barrier. The assert will fail if this is not the case.
   // Note that we use the non-virtual inlineable variant of write_ref_array.
   BarrierSet* bs = Universe::heap()->barrier_set();
-  assert(bs->has_write_ref_array_opt(),
-         "Barrier set must have ref array opt");
+  assert(bs->has_write_ref_array_opt(), "Barrier set must have ref array opt");
+  assert(bs->has_write_ref_array_pre_opt(), "For pre-barrier as well.");
   if (src == dst) {
     // same object, no check
+    bs->write_ref_array_pre(dst_addr, length);
     Copy::conjoint_oops_atomic(src_addr, dst_addr, length);
-    bs->write_ref_array(MemRegion((HeapWord*)dst_addr,
-                                  (HeapWord*)(dst_addr + length)));
+    bs->write_ref_array((HeapWord*)dst_addr, length);
     return ac_ok;
   } else {
     klassOop bound = objArrayKlass::cast(dst->klass())->element_klass();
     klassOop stype = objArrayKlass::cast(src->klass())->element_klass();
     if (stype == bound || Klass::cast(stype)->is_subtype_of(bound)) {
       // Elements are guaranteed to be subtypes, so no check necessary
+      bs->write_ref_array_pre(dst_addr, length);
       Copy::conjoint_oops_atomic(src_addr, dst_addr, length);
-      bs->write_ref_array(MemRegion((HeapWord*)dst_addr,
-                                    (HeapWord*)(dst_addr + length)));
+      bs->write_ref_array((HeapWord*)dst_addr, length);
       return ac_ok;
     }
   }
@@ -1153,7 +1140,7 @@ JRT_LEAF(void, Runtime1::primitive_arraycopy(HeapWord* src, HeapWord* dst, int l
   if (length == 0) return;
   // Not guaranteed to be word atomic, but that doesn't matter
   // for anything but an oop array, which is covered by oop_arraycopy.
-  Copy::conjoint_bytes(src, dst, length);
+  Copy::conjoint_jbytes(src, dst, length);
 JRT_END
 
 JRT_LEAF(void, Runtime1::oop_arraycopy(HeapWord* src, HeapWord* dst, int num))
@@ -1162,9 +1149,16 @@ JRT_LEAF(void, Runtime1::oop_arraycopy(HeapWord* src, HeapWord* dst, int num))
 #endif
 
   if (num == 0) return;
-  Copy::conjoint_oops_atomic((oop*) src, (oop*) dst, num);
   BarrierSet* bs = Universe::heap()->barrier_set();
-  bs->write_ref_array(MemRegion(dst, dst + num));
+  assert(bs->has_write_ref_array_opt(), "Barrier set must have ref array opt");
+  assert(bs->has_write_ref_array_pre_opt(), "For pre-barrier as well.");
+  if (UseCompressedOops) {
+    bs->write_ref_array_pre((narrowOop*)dst, num);
+  } else {
+    bs->write_ref_array_pre((oop*)dst, num);
+  }
+  Copy::conjoint_oops_atomic((oop*) src, (oop*) dst, num);
+  bs->write_ref_array(dst, num);
 JRT_END
 
 

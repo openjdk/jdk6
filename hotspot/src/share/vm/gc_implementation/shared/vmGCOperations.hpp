@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -86,11 +86,20 @@ class VM_GC_Operation: public VM_Operation {
 
     _gc_locked = false;
 
-    if (full) {
-      _full_gc_count_before = full_gc_count_before;
-    }
+    _full_gc_count_before = full_gc_count_before;
+    // In ParallelScavengeHeap::mem_allocate() collections can be
+    // executed within a loop and _all_soft_refs_clear can be set
+    // true after they have been cleared by a collection and another
+    // collection started so that _all_soft_refs_clear can be true
+    // when this collection is started.  Don't assert that
+    // _all_soft_refs_clear have to be false here even though
+    // mutators have run.  Soft refs will be cleared again in this
+    // collection.
   }
-  ~VM_GC_Operation() {}
+  ~VM_GC_Operation() {
+    CollectedHeap* ch = Universe::heap();
+    ch->collector_policy()->set_all_soft_refs_clear(false);
+  }
 
   // Acquire the reference synchronization lock
   virtual bool doit_prologue();
@@ -112,13 +121,16 @@ class VM_GC_HeapInspection: public VM_GC_Operation {
  private:
   outputStream* _out;
   bool _full_gc;
+  bool _need_prologue;
  public:
-  VM_GC_HeapInspection(outputStream* out, bool request_full_gc) :
+  VM_GC_HeapInspection(outputStream* out, bool request_full_gc,
+                       bool need_prologue) :
     VM_GC_Operation(0 /* total collections,      dummy, ignored */,
                     0 /* total full collections, dummy, ignored */,
                     request_full_gc) {
     _out = out;
     _full_gc = request_full_gc;
+    _need_prologue = need_prologue;
   }
 
   ~VM_GC_HeapInspection() {}

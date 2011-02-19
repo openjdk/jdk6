@@ -1,5 +1,5 @@
 #
-# Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 1999, 2009, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #  
 #
 
@@ -48,6 +48,8 @@ MakeDepsSources=\
         $(WorkSpace)\src\share\tools\MakeDeps\WinGammaPlatform.java \
         $(WorkSpace)\src\share\tools\MakeDeps\WinGammaPlatformVC6.java \
         $(WorkSpace)\src\share\tools\MakeDeps\WinGammaPlatformVC7.java \
+        $(WorkSpace)\src\share\tools\MakeDeps\WinGammaPlatformVC8.java \
+        $(WorkSpace)\src\share\tools\MakeDeps\WinGammaPlatformVC9.java \
         $(WorkSpace)\src\share\tools\MakeDeps\Util.java \
         $(WorkSpace)\src\share\tools\MakeDeps\BuildConfig.java \
         $(WorkSpace)\src\share\tools\MakeDeps\ArgsParser.java
@@ -121,7 +123,7 @@ MakeDepsIDEOptions=\
         -additionalFile includeDB_gc_shared \
         -additionalFile includeDB_gc_serial \
         -additionalGeneratedFile $(HOTSPOTBUILDSPACE)\%f\%b vm.def \
-        -prelink  "" "Generating vm.def..." "cd $(HOTSPOTBUILDSPACE)\%f\%b	$(HOTSPOTMKSHOME)\sh $(HOTSPOTWORKSPACE)\make\windows\build_vm_def.sh" \
+        -prelink  "" "Generating vm.def..." "cd $(HOTSPOTBUILDSPACE)\%f\%b	set HOTSPOTMKSHOME=$(HOTSPOTMKSHOME)	$(HOTSPOTMKSHOME)\sh $(HOTSPOTWORKSPACE)\make\windows\build_vm_def.sh $(LINK_VER)" \
        $(MakeDepsIncludesPRIVATE)
 
 # Add in build-specific options

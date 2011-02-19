@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,12 +16,23 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
+#ifdef ASSERT
+inline void BitMap::verify_index(idx_t index) const {
+  assert(index < _size, "BitMap index out of bounds");
+}
+
+inline void BitMap::verify_range(idx_t beg_index, idx_t end_index) const {
+  assert(beg_index <= end_index, "BitMap range error");
+  // Note that [0,0) and [size,size) are both valid ranges.
+  if (end_index != _size) verify_index(end_index);
+}
+#endif // #ifdef ASSERT
 
 inline void BitMap::set_bit(idx_t bit) {
   verify_index(bit);

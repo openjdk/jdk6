@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -68,7 +68,7 @@ methodOop methodKlass::allocate(constMethodHandle xconst,
   m->set_constants(NULL);
   m->set_max_stack(0);
   m->set_max_locals(0);
-  m->clear_intrinsic_id_cache();
+  m->set_intrinsic_id(vmIntrinsics::_none);
   m->set_method_data(NULL);
   m->set_interpreter_throwout_count(0);
   m->set_vtable_index(methodOopDesc::garbage_vtable_index);
@@ -184,10 +184,6 @@ int methodKlass::oop_adjust_pointers(oop obj) {
 }
 
 #ifndef SERIALGC
-void methodKlass::oop_copy_contents(PSPromotionManager* pm, oop obj) {
-  assert(obj->is_method(), "should be method");
-}
-
 void methodKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
   assert(obj->is_method(), "should be method");
 }
@@ -236,8 +232,10 @@ void methodKlass::oop_print_on(oop obj, outputStream* st) {
   assert(obj->is_method(), "must be method");
   Klass::oop_print_on(obj, st);
   methodOop m = methodOop(obj);
+  // get the effect of PrintOopAddress, always, for methods:
+  st->print_cr(" - this oop:          "INTPTR_FORMAT, (intptr_t)m);
   st->print   (" - method holder:     ");    m->method_holder()->print_value_on(st); st->cr();
-  st->print   (" - constants:         " INTPTR_FORMAT, " ", (address)m->constants());
+  st->print   (" - constants:         "INTPTR_FORMAT" ", (address)m->constants());
   m->constants()->print_value_on(st); st->cr();
   st->print   (" - access:            0x%x  ", m->access_flags().as_int()); m->access_flags().print_on(st); st->cr();
   st->print   (" - name:              ");    m->name()->print_value_on(st); st->cr();
@@ -246,10 +244,19 @@ void methodKlass::oop_print_on(oop obj, outputStream* st) {
   st->print_cr(" - max locals:        %d",   m->max_locals());
   st->print_cr(" - size of params:    %d",   m->size_of_parameters());
   st->print_cr(" - method size:       %d",   m->method_size());
+  if (m->intrinsic_id() != vmIntrinsics::_none)
+    st->print_cr(" - intrinsic id:      %d %s", m->intrinsic_id(), vmIntrinsics::name_at(m->intrinsic_id()));
+  if (m->highest_tier_compile() != CompLevel_none)
+    st->print_cr(" - highest tier:      %d", m->highest_tier_compile());
   st->print_cr(" - vtable index:      %d",   m->_vtable_index);
+  st->print_cr(" - i2i entry:         " INTPTR_FORMAT, m->interpreter_entry());
+  st->print_cr(" - adapter:           " INTPTR_FORMAT, m->adapter());
+  st->print_cr(" - compiled entry     " INTPTR_FORMAT, m->from_compiled_entry());
   st->print_cr(" - code size:         %d",   m->code_size());
-  st->print_cr(" - code start:        " INTPTR_FORMAT, m->code_base());
-  st->print_cr(" - code end (excl):   " INTPTR_FORMAT, m->code_base() + m->code_size());
+  if (m->code_size() != 0) {
+    st->print_cr(" - code start:        " INTPTR_FORMAT, m->code_base());
+    st->print_cr(" - code end (excl):   " INTPTR_FORMAT, m->code_base() + m->code_size());
+  }
   if (m->method_data() != NULL) {
     st->print_cr(" - method data:       " INTPTR_FORMAT, (address)m->method_data());
   }
@@ -293,8 +300,17 @@ void methodKlass::oop_print_on(oop obj, outputStream* st) {
     m->code()->print_value_on(st);
     st->cr();
   }
+  if (m->is_method_handle_invoke()) {
+    st->print_cr(" - invoke method type: " INTPTR_FORMAT, (address) m->method_handle_type());
+    // m is classified as native, but it does not have an interesting
+    // native_function or signature handler
+  } else if (m->is_native()) {
+    st->print_cr(" - native function:   " INTPTR_FORMAT, m->native_function());
+    st->print_cr(" - signature handler: " INTPTR_FORMAT, m->signature_handler());
+  }
 }
 
+#endif //PRODUCT
 
 void methodKlass::oop_print_value_on(oop obj, outputStream* st) {
   assert(obj->is_method(), "must be method");
@@ -309,8 +325,6 @@ void methodKlass::oop_print_value_on(oop obj, outputStream* st) {
   if (WizardMode) st->print("[%d,%d]", m->size_of_parameters(), m->max_locals());
   if (WizardMode && m->code() != NULL) st->print(" ((nmethod*)%p)", m->code());
 }
-
-#endif // PRODUCT
 
 const char* methodKlass::internal_name() const {
   return "{method}";

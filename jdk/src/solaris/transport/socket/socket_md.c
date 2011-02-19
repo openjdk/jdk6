@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 #include <stdlib.h>
@@ -45,8 +45,8 @@
 #include "sysSocket.h"
 
 int
-dbgsysListen(int fd, INT32 count) {
-    return listen(fd, count);
+dbgsysListen(int fd, int backlog) {
+    return listen(fd, backlog);
 }
 
 int
@@ -131,13 +131,13 @@ dbgsysBind(int fd, struct sockaddr *name, int namelen) {
     return bind(fd, name, namelen);
 }
 
-UINT32
+uint32_t
 dbgsysInetAddr(const char* cp) {
-    return (UINT32)inet_addr(cp);
+    return (uint32_t)inet_addr(cp);
 }
 
-UINT32
-dbgsysHostToNetworkLong(UINT32 hostlong) {
+uint32_t
+dbgsysHostToNetworkLong(uint32_t hostlong) {
     return htonl(hostlong);
 }
 
@@ -151,8 +151,8 @@ dbgsysGetSocketName(int fd, struct sockaddr *name, int *namelen) {
     return getsockname(fd, name, namelen);
 }
 
-UINT32
-dbgsysNetworkToHostLong(UINT32 netlong) {
+uint32_t
+dbgsysNetworkToHostLong(uint32_t netlong) {
     return ntohl(netlong);
 }
 
@@ -163,10 +163,10 @@ dbgsysSetSocketOption(int fd, jint cmd, jboolean on, jvalue value)
     if (cmd == TCP_NODELAY) {
         struct protoent *proto = getprotobyname("TCP");
         int tcp_level = (proto == 0 ? IPPROTO_TCP: proto->p_proto);
-        INT32 onl = (INT32)on;
+        uint32_t onl = (uint32_t)on;
 
         if (setsockopt(fd, tcp_level, TCP_NODELAY,
-                       (char *)&onl, sizeof(INT32)) < 0) {
+                       (char *)&onl, sizeof(uint32_t)) < 0) {
                 return SYS_ERR;
         }
     } else if (cmd == SO_LINGER) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -91,10 +91,18 @@ class objArrayKlass : public arrayKlass {
 
   // Garbage collection
   void oop_follow_contents(oop obj);
+  inline void oop_follow_contents(oop obj, int index);
+  template <class T> inline void objarray_follow_contents(oop obj, int index);
+
   int  oop_adjust_pointers(oop obj);
 
   // Parallel Scavenge and Parallel Old
   PARALLEL_GC_DECLS
+#ifndef SERIALGC
+  inline void oop_follow_contents(ParCompactionManager* cm, oop obj, int index);
+  template <class T> inline void
+    objarray_follow_contents(ParCompactionManager* cm, oop obj, int index);
+#endif // !SERIALGC
 
   // Iterators
   int oop_oop_iterate(oop obj, OopClosure* blk) {
@@ -119,18 +127,16 @@ class objArrayKlass : public arrayKlass {
  private:
    static klassOop array_klass_impl   (objArrayKlassHandle this_oop, bool or_null, int n, TRAPS);
 
-#ifndef PRODUCT
  public:
   // Printing
-  void oop_print_on      (oop obj, outputStream* st);
   void oop_print_value_on(oop obj, outputStream* st);
-#endif
+#ifndef PRODUCT
+  void oop_print_on      (oop obj, outputStream* st);
+#endif //PRODUCT
 
- public:
   // Verification
   const char* internal_name() const;
   void oop_verify_on(oop obj, outputStream* st);
   void oop_verify_old_oop(oop obj, oop* p, bool allow_dirty);
   void oop_verify_old_oop(oop obj, narrowOop* p, bool allow_dirty);
-
 };

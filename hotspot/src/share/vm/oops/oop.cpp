@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -29,22 +29,39 @@ bool always_do_update_barrier = false;
 
 BarrierSet* oopDesc::_bs = NULL;
 
-#ifdef PRODUCT
-void oopDesc::print_on(outputStream* st) const {}
-void oopDesc::print_value_on(outputStream* st) const {}
-void oopDesc::print_address_on(outputStream* st) const {}
-char* oopDesc::print_value_string() { return NULL; }
-char* oopDesc::print_string() { return NULL; }
-void oopDesc::print()         {}
-void oopDesc::print_value()   {}
-void oopDesc::print_address() {}
-#else
 void oopDesc::print_on(outputStream* st) const {
   if (this == NULL) {
     st->print_cr("NULL");
   } else {
     blueprint()->oop_print_on(oop(this), st);
   }
+}
+
+void oopDesc::print_address_on(outputStream* st) const {
+  if (PrintOopAddress) {
+    st->print("{"INTPTR_FORMAT"}", this);
+  }
+}
+
+void oopDesc::print()         { print_on(tty);         }
+
+void oopDesc::print_address() { print_address_on(tty); }
+
+char* oopDesc::print_string() {
+  stringStream st;
+  print_on(&st);
+  return st.as_string();
+}
+
+void oopDesc::print_value() {
+  print_value_on(tty);
+}
+
+char* oopDesc::print_value_string() {
+  char buf[100];
+  stringStream st(buf, sizeof(buf));
+  print_value_on(&st);
+  return st.as_string();
 }
 
 void oopDesc::print_value_on(outputStream* st) const {
@@ -57,41 +74,12 @@ void oopDesc::print_value_on(outputStream* st) const {
 #ifdef ASSERT
   } else if (!Universe::heap()->is_in(obj) || !Universe::heap()->is_in(klass())) {
     st->print("### BAD OOP %p ###", (address)obj);
-#endif
+#endif //ASSERT
   } else {
     blueprint()->oop_print_value_on(obj, st);
   }
 }
 
-void oopDesc::print_address_on(outputStream* st) const {
-  if (PrintOopAddress) {
-    st->print("{");
-    if (PrintOopAddress) {
-      st->print(INTPTR_FORMAT, this);
-    }
-    st->print("}");
-  }
-}
-
-void oopDesc::print()         { print_on(tty);         }
-
-void oopDesc::print_value()   { print_value_on(tty);   }
-
-void oopDesc::print_address() { print_address_on(tty); }
-
-char* oopDesc::print_string() {
-  stringStream* st = new stringStream();
-  print_on(st);
-  return st->as_string();
-}
-
-char* oopDesc::print_value_string() {
-  stringStream* st = new stringStream();
-  print_value_on(st);
-  return st->as_string();
-}
-
-#endif // PRODUCT
 
 void oopDesc::verify_on(outputStream* st) {
   if (this != NULL) {

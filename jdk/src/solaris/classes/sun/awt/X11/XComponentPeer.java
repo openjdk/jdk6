@@ -1,12 +1,12 @@
 /*
- * Copyright 2002-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2002, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package sun.awt.X11;
 
@@ -261,7 +261,9 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
      * Called when component receives focus
      */
     public void focusGained(FocusEvent e) {
-        focusLog.log(Level.FINE, "{0}", new Object[] {e});
+        if (focusLog.isLoggable(Level.FINER)) {
+            focusLog.log(Level.FINER, "{0}", new Object[] {String.valueOf(e)});
+        }
         bHasFocus = true;
     }
 
@@ -269,7 +271,9 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
      * Called when component loses focus
      */
     public void focusLost(FocusEvent e) {
-        focusLog.log(Level.FINE, "{0}", new Object[] {e});
+        if (focusLog.isLoggable(Level.FINE)) {
+            focusLog.log(Level.FINE, "{0}", new Object[] {String.valueOf(e)});
+        }
         bHasFocus = false;
     }
 
@@ -511,7 +515,10 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
      * @see java.awt.peer.ComponentPeer
      */
     public void setEnabled(boolean value) {
-        enableLog.log(Level.FINE, "{0}ing {1}", new Object[] {(value?"Enabl":"Disabl"), this});
+        if (enableLog.isLoggable(Level.FINE)) {
+            enableLog.log(Level.FINE, "{0}ing {1}",
+                          new Object[] {(value?"Enabl":"Disabl"), String.valueOf(this)});
+        }
         boolean repaintNeeded = (enabled != value);
         enabled = value;
         if (target instanceof Container) {
@@ -1346,7 +1353,10 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
      * ButtonPress, ButtonRelease, KeyPress, KeyRelease, EnterNotify, LeaveNotify, MotionNotify
      */
     protected boolean isEventDisabled(XEvent e) {
-        enableLog.log(Level.FINEST, "Component is {1}, checking for disabled event {0}", new Object[] {e, (isEnabled()?"enabled":"disable")});
+        if (enableLog.isLoggable(Level.FINEST)) {
+            enableLog.log(Level.FINEST, "Component is {1}, checking for disabled event {0}",
+                          new Object[] {String.valueOf(e), (isEnabled()?"enabled":"disable")});
+        }
         if (!isEnabled()) {
             switch (e.get_type()) {
               case ButtonPress:
@@ -1356,7 +1366,9 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
               case EnterNotify:
               case LeaveNotify:
               case MotionNotify:
-                  enableLog.log(Level.FINER, "Event {0} is disable", new Object[] {e});
+                  if (enableLog.isLoggable(Level.FINER)) {
+                      enableLog.log(Level.FINER, "Event {0} is disable", new Object[] {String.valueOf(e)});
+                  }
                   return true;
             }
         }

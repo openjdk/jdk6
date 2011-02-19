@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -355,6 +355,11 @@ class CMSStats VALUE_OBJ_CLASS_SPEC {
                                              unsigned int new_duty_cycle);
   unsigned int icms_update_duty_cycle_impl();
 
+  // In support of adjusting of cms trigger ratios based on history
+  // of concurrent mode failure.
+  double cms_free_adjustment_factor(size_t free) const;
+  void   adjust_cms_free_adjustment_factor(bool fail, size_t free);
+
  public:
   CMSStats(ConcurrentMarkSweepGeneration* cms_gen,
            unsigned int alpha = CMSExpAvgFactor);
@@ -502,6 +507,7 @@ class CMSCollector: public CHeapObj {
   friend class VM_CMS_Operation;
   friend class VM_CMS_Initial_Mark;
   friend class VM_CMS_Final_Remark;
+  friend class TraceCMSMemoryManagerStats;
 
  private:
   jlong _time_of_last_gc;
@@ -517,8 +523,8 @@ class CMSCollector: public CHeapObj {
   // The following array-pair keeps track of mark words
   // displaced for accomodating overflow list above.
   // This code will likely be revisited under RFE#4922830.
-  GrowableArray<oop>*     _preserved_oop_stack;
-  GrowableArray<markOop>* _preserved_mark_stack;
+  Stack<oop>     _preserved_oop_stack;
+  Stack<markOop> _preserved_mark_stack;
 
   int*             _hash_seed;
 
@@ -545,6 +551,11 @@ class CMSCollector: public CHeapObj {
   bool unloaded_classes_last_cycle() const {
     return concurrent_cycles_since_last_unload() == 0;
   }
+  // Root scanning options for perm gen
+  int _roots_scanning_options;
+  int roots_scanning_options() const      { return _roots_scanning_options; }
+  void add_root_scanning_option(int o)    { _roots_scanning_options |= o;   }
+  void remove_root_scanning_option(int o) { _roots_scanning_options &= ~o;  }
 
   // Verification support
   CMSBitMap     _verification_mark_bm;
@@ -560,13 +571,12 @@ class CMSCollector: public CHeapObj {
   ConcurrentMarkSweepPolicy* _collector_policy;
   ConcurrentMarkSweepPolicy* collector_policy() { return _collector_policy; }
 
-  // Check whether the gc time limit has been
-  // exceeded and set the size policy flag
-  // appropriately.
-  void check_gc_time_limit();
   // XXX Move these to CMSStats ??? FIX ME !!!
-  elapsedTimer _sweep_timer;
-  AdaptivePaddedAverage _sweep_estimate;
+  elapsedTimer _inter_sweep_timer;   // time between sweeps
+  elapsedTimer _intra_sweep_timer;   // time _in_ sweeps
+  // padded decaying average estimates of the above
+  AdaptivePaddedAverage _inter_sweep_estimate;
+  AdaptivePaddedAverage _intra_sweep_estimate;
 
  protected:
   ConcurrentMarkSweepGeneration* _cmsGen;  // old gen (CMS)
@@ -595,7 +605,7 @@ class CMSCollector: public CHeapObj {
   size_t        _ser_kac_preclean_ovflw;
   size_t        _ser_kac_ovflw;
   size_t        _par_kac_ovflw;
-  NOT_PRODUCT(size_t _num_par_pushes;)
+  NOT_PRODUCT(ssize_t _num_par_pushes;)
 
   // ("Weak") Reference processing support
   ReferenceProcessor*            _ref_processor;
@@ -620,6 +630,7 @@ class CMSCollector: public CHeapObj {
   // . _collectorState <= Idling ==  post-sweep && pre-mark
   // . _collectorState in (Idling, Sweeping) == {initial,final}marking ||
   //                                            precleaning || abortablePrecleanb
+ public:
   enum CollectorState {
     Resizing            = 0,
     Resetting           = 1,
@@ -631,6 +642,7 @@ class CMSCollector: public CHeapObj {
     FinalMarking        = 7,
     Sweeping            = 8
   };
+ protected:
   static CollectorState _collectorState;
 
   // State related to prologue/epilogue invocation for my generations
@@ -650,7 +662,7 @@ class CMSCollector: public CHeapObj {
 
   int    _numYields;
   size_t _numDirtyCards;
-  uint   _sweepCount;
+  size_t _sweep_count;
   // number of full gc's since the last concurrent gc.
   uint   _full_gcs_since_conc_gc;
 
@@ -718,11 +730,6 @@ class CMSCollector: public CHeapObj {
   NOT_PRODUCT(int _overflow_counter;)
   NOT_PRODUCT(bool simulate_overflow();)       // sequential
   NOT_PRODUCT(bool par_simulate_overflow();)   // MT version
-
-  int _roots_scanning_options;
-  int roots_scanning_options() const      { return _roots_scanning_options; }
-  void add_root_scanning_option(int o)    { _roots_scanning_options |= o;   }
-  void remove_root_scanning_option(int o) { _roots_scanning_options &= ~o;  }
 
   // CMS work methods
   void checkpointRootsInitialWork(bool asynch); // initial checkpoint work
@@ -905,7 +912,7 @@ class CMSCollector: public CHeapObj {
 
   // Check that the currently executing thread is the expected
   // one (foreground collector or background collector).
-  void check_correct_thread_executing()        PRODUCT_RETURN;
+  static void check_correct_thread_executing() PRODUCT_RETURN;
   // XXXPERM void print_statistics()           PRODUCT_RETURN;
 
   bool is_cms_reachable(HeapWord* addr);
@@ -930,8 +937,8 @@ class CMSCollector: public CHeapObj {
   static void set_foregroundGCShouldWait(bool v) { _foregroundGCShouldWait = v; }
   static bool foregroundGCIsActive() { return _foregroundGCIsActive; }
   static void set_foregroundGCIsActive(bool v) { _foregroundGCIsActive = v; }
-  uint  sweepCount() const             { return _sweepCount; }
-  void incrementSweepCount()           { _sweepCount++; }
+  size_t sweep_count() const             { return _sweep_count; }
+  void   increment_sweep_count()         { _sweep_count++; }
 
   // Timers/stats for gc scheduling and incremental mode pacing.
   CMSStats& stats() { return _stats; }
@@ -1003,10 +1010,10 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
 
   // Non-product stat counters
   NOT_PRODUCT(
-    int _numObjectsPromoted;
-    int _numWordsPromoted;
-    int _numObjectsAllocated;
-    int _numWordsAllocated;
+    size_t _numObjectsPromoted;
+    size_t _numWordsPromoted;
+    size_t _numObjectsAllocated;
+    size_t _numWordsAllocated;
   )
 
   // Used for sizing decisions
@@ -1165,6 +1172,11 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
   virtual bool promotion_attempt_is_safe(size_t promotion_in_bytes,
     bool younger_handles_promotion_failure) const;
 
+  // Inform this (non-young) generation that a promotion failure was
+  // encountered during a collection of a younger generation that
+  // promotes into this generation.
+  virtual void promotion_failure_occurred();
+
   bool should_collect(bool full, size_t size, bool tlab);
   virtual bool should_concurrent_collect() const;
   virtual bool is_too_full() const;
@@ -1212,6 +1224,7 @@ class ConcurrentMarkSweepGeneration: public CardGeneration {
   // More iteration support
   virtual void oop_iterate(MemRegion mr, OopClosure* cl);
   virtual void oop_iterate(OopClosure* cl);
+  virtual void safe_object_iterate(ObjectClosure* cl);
   virtual void object_iterate(ObjectClosure* cl);
 
   // Need to declare the full complement of closures, whether we'll
@@ -1789,12 +1802,13 @@ class CMSParDrainMarkingStackClosure: public VoidClosure {
  public:
   CMSParDrainMarkingStackClosure(CMSCollector* collector,
                                  MemRegion span, CMSBitMap* bit_map,
+                                 CMSMarkStack* revisit_stack,
                                  OopTaskQueue* work_queue):
     _collector(collector),
     _span(span),
     _bit_map(bit_map),
     _work_queue(work_queue),
-    _mark_and_push(collector, span, bit_map, work_queue) { }
+    _mark_and_push(collector, span, bit_map, revisit_stack, work_queue) { }
 
  public:
   void trim_queue(uint max);
@@ -1845,3 +1859,11 @@ public:
     _dead_bit_map(dead_bit_map) {}
   size_t do_blk(HeapWord* addr);
 };
+
+class TraceCMSMemoryManagerStats : public TraceMemoryManagerStats {
+
+ public:
+  TraceCMSMemoryManagerStats(CMSCollector::CollectorState phase);
+  TraceCMSMemoryManagerStats();
+};
+

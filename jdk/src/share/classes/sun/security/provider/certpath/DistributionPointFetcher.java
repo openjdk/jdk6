@@ -1,12 +1,12 @@
 /*
- * Copyright 2002-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.security.provider.certpath;
@@ -32,7 +32,7 @@ import java.security.*;
 import java.security.cert.*;
 import javax.security.auth.x500.X500Principal;
 
-import sun.security.action.GetPropertyAction;
+import sun.security.action.GetBooleanAction;
 import sun.security.util.Debug;
 import sun.security.x509.*;
 
@@ -61,28 +61,8 @@ class DistributionPointFetcher {
      * extension shall be enabled. Currently disabled by default for
      * compatibility and legal reasons.
      */
-    private final static boolean USE_CRLDP =
-        getBooleanProperty("com.sun.security.enableCRLDP", false);
-
-    /**
-     * Return the value of the boolean System property propName.
-     */
-    public static boolean getBooleanProperty(String propName,
-            boolean defaultValue) {
-        // if set, require value of either true or false
-        String b = AccessController.doPrivileged(
-                new GetPropertyAction(propName));
-        if (b == null) {
-            return defaultValue;
-        } else if (b.equalsIgnoreCase("false")) {
-            return false;
-        } else if (b.equalsIgnoreCase("true")) {
-            return true;
-        } else {
-            throw new RuntimeException("Value of " + propName
-            + " must either be 'true' or 'false'");
-        }
-    }
+    private final static boolean USE_CRLDP = AccessController.doPrivileged
+        (new GetBooleanAction("com.sun.security.enableCRLDP"));
 
     // singleton instance
     private static final DistributionPointFetcher INSTANCE =
@@ -307,6 +287,16 @@ class DistributionPointFetcher {
             crlImpl.getIssuingDistributionPointExtension();
         X500Name certIssuer = (X500Name) certImpl.getIssuerDN();
         X500Name crlIssuer = (X500Name) crlImpl.getIssuerDN();
+
+        // check the crl signature algorithm
+        try {
+            AlgorithmChecker.check(crl);
+        } catch (CertPathValidatorException cpve) {
+            if (debug != null) {
+                debug.println("CRL signature algorithm check failed: " + cpve);
+            }
+            return false;
+        }
 
         // if crlIssuer is set, verify that it matches the issuer of the
         // CRL and the CRL contains an IDP extension with the indirectCRL

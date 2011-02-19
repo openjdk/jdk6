@@ -1,12 +1,12 @@
 #
-# Copyright 1998-2007 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License version 2 only, as
-# published by the Free Software Foundation.  Sun designates this
+# published by the Free Software Foundation.  Oracle designates this
 # particular file as subject to the "Classpath" exception as provided
-# by Sun in the LICENSE file that accompanied this code.
+# by Oracle in the LICENSE file that accompanied this code.
 #
 # This code is distributed in the hope that it will be useful, but WITHOUT
 # ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,25 +18,33 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 
 BUILDDIR  = ../../..
 PACKAGE   = javax.swing.plaf
 PRODUCT   = com
 SWING_SRC = $(SHARE_SRC)/classes/javax/swing
+
 include $(BUILDDIR)/common/Defs.gmk
+LANGUAGE_VERSION = -source 6
+CLASS_VERSION = -target 6
 
 #
 # Files
 #
 include FILES.gmk
 AUTO_FILES_JAVA_DIRS = javax/swing/plaf sun/swing com/sun/java/swing/plaf
+
 ifeq ($(PLATFORM), windows)
     # Don't build GTK L&F on Windows
     AUTO_JAVA_PRUNE = gtk
+endif
+
+ifdef DISABLE_NIMBUS
+    AUTO_JAVA_PRUNE += nimbus
 endif
 
 MISC_FILES = $(MISC_SWING_FILES)
@@ -44,6 +52,7 @@ ifneq ($(PLATFORM), windows)
     # Only include GTK icons on Solaris/Linux
     MISC_FILES += $(MISC_SWING_FILES_UNIX)
 endif
+
 
 FILES_java = $(FILES_SWING_java)
 
@@ -69,11 +78,6 @@ endif
 #
 build: $(LOGO_ICONS) $(MISC_SWING_FILES_MOTIF_GIF) $(MISC_SWING_FILES_MOTIF_PNG) other_files
 
-clean:: classes.clean
-
-#
-# Include
-#
 include $(BUILDDIR)/common/Classes.gmk
 
 ifndef OPENJDK

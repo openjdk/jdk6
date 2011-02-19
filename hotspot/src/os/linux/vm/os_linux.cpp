@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,11 +16,13 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
+
+# define __STDC_FORMAT_MACROS
 
 // do not include  precompiled  header file
 # include "incls/_os_linux.cpp.incl"
@@ -28,6 +30,8 @@
 // put OS-includes here
 # include <sys/types.h>
 # include <sys/mman.h>
+# include <sys/stat.h>
+# include <sys/select.h>
 # include <pthread.h>
 # include <signal.h>
 # include <errno.h>
@@ -53,6 +57,8 @@
 # include <sys/ipc.h>
 # include <sys/shm.h>
 # include <link.h>
+# include <stdint.h>
+# include <inttypes.h>
 
 #define MAX_PATH    (2 * K)
 
@@ -176,12 +182,18 @@ bool os::have_special_privileges() {
 #endif
 
 // Cpu architecture string
-#if   defined(IA64)
+#if   defined(ZERO)
+static char cpu_arch[] = ZERO_LIBARCH;
+#elif defined(IA64)
 static char cpu_arch[] = "ia64";
 #elif defined(IA32)
 static char cpu_arch[] = "i386";
 #elif defined(AMD64)
 static char cpu_arch[] = "amd64";
+#elif defined(ARM)
+static char cpu_arch[] = "arm";
+#elif defined(PPC)
+static char cpu_arch[] = "ppc";
 #elif defined(SPARC)
 #  ifdef _LP64
 static char cpu_arch[] = "sparcv9";
@@ -221,8 +233,8 @@ static const char *unstable_chroot_error = "/proc file system not found.\n"
                      "environment on Linux when /proc filesystem is not mounted.";
 
 void os::Linux::initialize_system_info() {
-  _processor_count = sysconf(_SC_NPROCESSORS_CONF);
-  if (_processor_count == 1) {
+  set_processor_count(sysconf(_SC_NPROCESSORS_CONF));
+  if (processor_count() == 1) {
     pid_t pid = os::Linux::gettid();
     char fname[32];
     jio_snprintf(fname, sizeof(fname), "/proc/%d", pid);
@@ -234,7 +246,7 @@ void os::Linux::initialize_system_info() {
     }
   }
   _physical_memory = (julong)sysconf(_SC_PHYS_PAGES) * (julong)sysconf(_SC_PAGESIZE);
-  assert(_processor_count > 0, "linux error");
+  assert(processor_count() > 0, "linux error");
 }
 
 void os::init_system_properties_values() {
@@ -279,7 +291,11 @@ void os::init_system_properties_values() {
  *        ...
  *        7: The default directories, normally /lib and /usr/lib.
  */
+#if defined(AMD64) || defined(_LP64) && (defined(SPARC) || defined(PPC) || defined(S390))
+#define DEFAULT_LIBPATH "/usr/lib64:/lib64:/lib:/usr/lib"
+#else
 #define DEFAULT_LIBPATH "/lib:/usr/lib"
+#endif
 
 #define EXTENSIONS_DIR  "/lib/ext"
 #define ENDORSED_DIR    "/lib/endorsed"
@@ -1127,8 +1143,8 @@ void os::Linux::capture_initial_stack(size_t max_size) {
     long it_real;
     uintptr_t start;
     uintptr_t vsize;
-    uintptr_t rss;
-    unsigned long rsslim;
+    intptr_t rss;
+    uintptr_t rsslim;
     uintptr_t scodes;
     uintptr_t ecode;
     int i;
@@ -1158,12 +1174,12 @@ void os::Linux::capture_initial_stack(size_t max_size) {
         // Skip blank chars
         do s++; while (isspace(*s));
 
-        /*                                     1   1   1   1   1   1   1   1   1   1   2   2   2   2   2   2   2   2   2 */
-        /*              3  4  5  6  7  8   9   0   1   2   3   4   5   6   7   8   9   0   1   2   3   4   5   6   7   8 */
-        i = sscanf(s, "%c %d %d %d %d %d %lu %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld "
-                   UINTX_FORMAT UINTX_FORMAT UINTX_FORMAT
-                   " %lu "
-                   UINTX_FORMAT UINTX_FORMAT UINTX_FORMAT,
+#define _UFM UINTX_FORMAT
+#define _DFM INTX_FORMAT
+
+        /*                                     1   1   1   1   1   1   1   1   1   1   2   2    2    2    2    2    2    2    2 */
+        /*              3  4  5  6  7  8   9   0   1   2   3   4   5   6   7   8   9   0   1    2    3    4    5    6    7    8 */
+        i = sscanf(s, "%c %d %d %d %d %d %lu %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld " _UFM _UFM _DFM _UFM _UFM _UFM _UFM,
              &state,          /* 3  %c  */
              &ppid,           /* 4  %d  */
              &pgrp,           /* 5  %d  */
@@ -1183,14 +1199,17 @@ void os::Linux::capture_initial_stack(size_t max_size) {
              &nice,           /* 19 %ld  */
              &junk,           /* 20 %ld  */
              &it_real,        /* 21 %ld  */
-             &start,          /* 22 UINTX_FORMAT  */
-             &vsize,          /* 23 UINTX_FORMAT  */
-             &rss,            /* 24 UINTX_FORMAT  */
-             &rsslim,         /* 25 %lu  */
-             &scodes,         /* 26 UINTX_FORMAT  */
-             &ecode,          /* 27 UINTX_FORMAT  */
-             &stack_start);   /* 28 UINTX_FORMAT  */
+             &start,          /* 22 UINTX_FORMAT */
+             &vsize,          /* 23 UINTX_FORMAT */
+             &rss,            /* 24 INTX_FORMAT  */
+             &rsslim,         /* 25 UINTX_FORMAT */
+             &scodes,         /* 26 UINTX_FORMAT */
+             &ecode,          /* 27 UINTX_FORMAT */
+             &stack_start);   /* 28 UINTX_FORMAT */
       }
+
+#undef _UFM
+#undef _DFM
 
       if (i != 28 - 2) {
          assert(false, "Bad conversion from /proc/self/stat");
@@ -1326,13 +1345,15 @@ void os::Linux::clock_init() {
 
 #if defined(IA32) || defined(AMD64)
 #define SYS_clock_getres IA32_ONLY(266)  AMD64_ONLY(229)
-#else
-#error Value of SYS_clock_getres not known on this platform
-#endif
-
-#endif
-
 #define sys_clock_getres(x,y)  ::syscall(SYS_clock_getres, x, y)
+#else
+#warning "SYS_clock_getres not defined for this platform, disabling fast_thread_cpu_time"
+#define sys_clock_getres(x,y)  -1
+#endif
+
+#else
+#define sys_clock_getres(x,y)  ::syscall(SYS_clock_getres, x, y)
+#endif
 
 void os::Linux::fast_thread_clock_init() {
   if (!UseLinuxPosixThreadCPUClocks) {
@@ -1512,7 +1533,9 @@ int os::current_process_id() {
 
 const char* os::dll_file_extension() { return ".so"; }
 
-const char* os::get_temp_directory() { return "/tmp/"; }
+// This must be hard coded because it's the system's temporary
+// directory not the java application's temp directory, ala java.io.tmpdir.
+const char* os::get_temp_directory() { return "/tmp"; }
 
 static bool file_exists(const char* filename) {
   struct stat statbuf;
@@ -1739,7 +1762,14 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
     {EM_SPARC32PLUS, EM_SPARC,   ELFCLASS32, ELFDATA2MSB, (char*)"Sparc 32"},
     {EM_SPARCV9,     EM_SPARCV9, ELFCLASS64, ELFDATA2MSB, (char*)"Sparc v9 64"},
     {EM_PPC,         EM_PPC,     ELFCLASS32, ELFDATA2MSB, (char*)"Power PC 32"},
-    {EM_PPC64,       EM_PPC64,   ELFCLASS64, ELFDATA2MSB, (char*)"Power PC 64"}
+    {EM_PPC64,       EM_PPC64,   ELFCLASS64, ELFDATA2MSB, (char*)"Power PC 64"},
+    {EM_ARM,         EM_ARM,     ELFCLASS32,   ELFDATA2LSB, (char*)"ARM"},
+    {EM_S390,        EM_S390,    ELFCLASSNONE, ELFDATA2MSB, (char*)"IBM System/390"},
+    {EM_ALPHA,       EM_ALPHA,   ELFCLASS64, ELFDATA2LSB, (char*)"Alpha"},
+    {EM_MIPS_RS3_LE, EM_MIPS_RS3_LE, ELFCLASS32, ELFDATA2LSB, (char*)"MIPSel"},
+    {EM_MIPS,        EM_MIPS,    ELFCLASS32, ELFDATA2MSB, (char*)"MIPS"},
+    {EM_PARISC,      EM_PARISC,  ELFCLASS32, ELFDATA2MSB, (char*)"PARISC"},
+    {EM_68K,         EM_68K,     ELFCLASS32, ELFDATA2MSB, (char*)"M68k"}
   };
 
   #if  (defined IA32)
@@ -1756,9 +1786,23 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
     static  Elf32_Half running_arch_code=EM_PPC64;
   #elif  (defined __powerpc__)
     static  Elf32_Half running_arch_code=EM_PPC;
+  #elif  (defined ARM)
+    static  Elf32_Half running_arch_code=EM_ARM;
+  #elif  (defined S390)
+    static  Elf32_Half running_arch_code=EM_S390;
+  #elif  (defined ALPHA)
+    static  Elf32_Half running_arch_code=EM_ALPHA;
+  #elif  (defined MIPSEL)
+    static  Elf32_Half running_arch_code=EM_MIPS_RS3_LE;
+  #elif  (defined PARISC)
+    static  Elf32_Half running_arch_code=EM_PARISC;
+  #elif  (defined MIPS)
+    static  Elf32_Half running_arch_code=EM_MIPS;
+  #elif  (defined M68K)
+    static  Elf32_Half running_arch_code=EM_68K;
   #else
     #error Method os::dll_load requires that one of following is defined:\
-         IA32, AMD64, IA64, __sparc, __powerpc__
+         IA32, AMD64, IA64, __sparc, __powerpc__, ARM, S390, ALPHA, MIPS, MIPSEL, PARISC, M68K
   #endif
 
   // Identify compatability class for VM's architecture and library's architecture
@@ -1790,10 +1834,12 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
     return NULL;
   }
 
+#ifndef S390
   if (lib_arch.elf_class != arch_array[running_arch_index].elf_class) {
     ::snprintf(diag_msg_buf, diag_msg_max_length-1," (Possible cause: architecture word width mismatch)");
     return NULL;
   }
+#endif // !S390
 
   if (lib_arch.compat_class != arch_array[running_arch_index].compat_class) {
     if ( lib_arch.name!=NULL ) {
@@ -1869,7 +1915,9 @@ void os::print_os_info(outputStream* st) {
       !_print_ascii_file("/etc/SuSE-release", st) &&
       !_print_ascii_file("/etc/turbolinux-release", st) &&
       !_print_ascii_file("/etc/gentoo-release", st) &&
-      !_print_ascii_file("/etc/debian_version", st)) {
+      !_print_ascii_file("/etc/debian_version", st) &&
+      !_print_ascii_file("/etc/ltib-release", st) &&
+      !_print_ascii_file("/etc/angstrom-version", st)) {
       st->print("Linux");
   }
   st->cr();
@@ -1934,6 +1982,11 @@ void os::print_os_info(outputStream* st) {
   double loadavg[3];
   os::loadavg(loadavg, 3);
   st->print("%0.02f %0.02f %0.02f", loadavg[0], loadavg[1], loadavg[2]);
+  st->cr();
+
+  // meminfo
+  st->print("\n/proc/meminfo:\n");
+  _print_ascii_file("/proc/meminfo", st);
   st->cr();
 }
 
@@ -2043,9 +2096,9 @@ void os::print_signal_handlers(outputStream* st, char* buf, size_t buflen) {
 static char saved_jvm_path[MAXPATHLEN] = {0};
 
 // Find the full path to the current module, libjvm.so or libjvm_g.so
-void os::jvm_path(char *buf, jint len) {
+void os::jvm_path(char *buf, jint buflen) {
   // Error checking.
-  if (len < MAXPATHLEN) {
+  if (buflen < MAXPATHLEN) {
     assert(false, "must use a large-enough buffer");
     buf[0] = '\0';
     return;
@@ -2061,7 +2114,8 @@ void os::jvm_path(char *buf, jint len) {
                 CAST_FROM_FN_PTR(address, os::jvm_path),
                 dli_fname, sizeof(dli_fname), NULL);
   assert(ret != 0, "cannot locate libjvm");
-  if (realpath(dli_fname, buf) == NULL)
+  char *rp = realpath(dli_fname, buf);
+  if (rp == NULL)
     return;
 
   if (strcmp(Arguments::sun_java_launcher(), "gamma") == 0) {
@@ -2081,24 +2135,39 @@ void os::jvm_path(char *buf, jint len) {
       // Look for JAVA_HOME in the environment.
       char* java_home_var = ::getenv("JAVA_HOME");
       if (java_home_var != NULL && java_home_var[0] != 0) {
+        char* jrelib_p;
+        int len;
+
         // Check the current module name "libjvm.so" or "libjvm_g.so".
         p = strrchr(buf, '/');
         assert(strstr(p, "/libjvm") == p, "invalid library name");
         p = strstr(p, "_g") ? "_g" : "";
 
-        if (realpath(java_home_var, buf) == NULL)
+        rp = realpath(java_home_var, buf);
+        if (rp == NULL)
           return;
-        sprintf(buf + strlen(buf), "/jre/lib/%s", cpu_arch);
+
+        // determine if this is a legacy image or modules image
+        // modules image doesn't have "jre" subdirectory
+        len = strlen(buf);
+        jrelib_p = buf + len;
+        snprintf(jrelib_p, buflen-len, "/jre/lib/%s", cpu_arch);
+        if (0 != access(buf, F_OK)) {
+          snprintf(jrelib_p, buflen-len, "/lib/%s", cpu_arch);
+        }
+
         if (0 == access(buf, F_OK)) {
           // Use current module name "libjvm[_g].so" instead of
           // "libjvm"debug_only("_g")".so" since for fastdebug version
           // we should have "libjvm.so" but debug_only("_g") adds "_g"!
           // It is used when we are choosing the HPI library's name
           // "libhpi[_g].so" in hpi::initialize_get_interface().
-          sprintf(buf + strlen(buf), "/hotspot/libjvm%s.so", p);
+          len = strlen(buf);
+          snprintf(buf + len, buflen-len, "/hotspot/libjvm%s.so", p);
         } else {
           // Go back to path of .so
-          if (realpath(dli_fname, buf) == NULL)
+          rp = realpath(dli_fname, buf);
+          if (rp == NULL)
             return;
         }
       }
@@ -2269,10 +2338,11 @@ void linux_wrap_code(char* base, size_t size) {
     return;
   }
 
-  char buf[40];
+  char buf[PATH_MAX+1];
   int num = Atomic::add(1, &cnt);
 
-  sprintf(buf, "/tmp/hs-vm-%d-%d", os::current_process_id(), num);
+  snprintf(buf, sizeof(buf), "%s/hs-vm-%d-%d",
+           os::get_temp_directory(), os::current_process_id(), num);
   unlink(buf);
 
   int fd = open(buf, O_CREAT | O_RDWR, S_IRWXU);
@@ -2295,21 +2365,23 @@ void linux_wrap_code(char* base, size_t size) {
 //       All it does is to check if there are enough free pages
 //       left at the time of mmap(). This could be a potential
 //       problem.
-bool os::commit_memory(char* addr, size_t size) {
-  uintptr_t res = (uintptr_t) ::mmap(addr, size,
-                                   PROT_READ|PROT_WRITE|PROT_EXEC,
+bool os::commit_memory(char* addr, size_t size, bool exec) {
+  int prot = exec ? PROT_READ|PROT_WRITE|PROT_EXEC : PROT_READ|PROT_WRITE;
+  uintptr_t res = (uintptr_t) ::mmap(addr, size, prot,
                                    MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0);
   return res != (uintptr_t) MAP_FAILED;
 }
 
-bool os::commit_memory(char* addr, size_t size, size_t alignment_hint) {
-  return commit_memory(addr, size);
+bool os::commit_memory(char* addr, size_t size, size_t alignment_hint,
+                       bool exec) {
+  return commit_memory(addr, size, exec);
 }
 
 void os::realign_memory(char *addr, size_t bytes, size_t alignment_hint) { }
 
 void os::free_memory(char *addr, size_t bytes) {
-  uncommit_memory(addr, bytes);
+  ::mmap(addr, bytes, PROT_READ | PROT_WRITE,
+         MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0);
 }
 
 void os::numa_make_global(char *addr, size_t bytes) {
@@ -2356,6 +2428,19 @@ char *os::scan_pages(char *start, char* end, page_info* page_expected, page_info
 extern "C" void numa_warn(int number, char *where, ...) { }
 extern "C" void numa_error(char *where) { }
 
+
+// If we are running with libnuma version > 2, then we should
+// be trying to use symbols with versions 1.1
+// If we are running with earlier version, which did not have symbol versions,
+// we should use the base version.
+void* os::Linux::libnuma_dlsym(void* handle, const char *name) {
+  void *f = dlvsym(handle, name, "libnuma_1.1");
+  if (f == NULL) {
+    f = dlsym(handle, name);
+  }
+  return f;
+}
+
 bool os::Linux::libnuma_init() {
   // sched_getcpu() should be in libc.
   set_sched_getcpu(CAST_TO_FN_PTR(sched_getcpu_func_t,
@@ -2365,19 +2450,19 @@ bool os::Linux::libnuma_init() {
     void *handle = dlopen("libnuma.so.1", RTLD_LAZY);
     if (handle != NULL) {
       set_numa_node_to_cpus(CAST_TO_FN_PTR(numa_node_to_cpus_func_t,
-                                           dlsym(handle, "numa_node_to_cpus")));
+                                           libnuma_dlsym(handle, "numa_node_to_cpus")));
       set_numa_max_node(CAST_TO_FN_PTR(numa_max_node_func_t,
-                                       dlsym(handle, "numa_max_node")));
+                                       libnuma_dlsym(handle, "numa_max_node")));
       set_numa_available(CAST_TO_FN_PTR(numa_available_func_t,
-                                        dlsym(handle, "numa_available")));
+                                        libnuma_dlsym(handle, "numa_available")));
       set_numa_tonode_memory(CAST_TO_FN_PTR(numa_tonode_memory_func_t,
-                                            dlsym(handle, "numa_tonode_memory")));
+                                            libnuma_dlsym(handle, "numa_tonode_memory")));
       set_numa_interleave_memory(CAST_TO_FN_PTR(numa_interleave_memory_func_t,
-                                            dlsym(handle, "numa_interleave_memory")));
+                                            libnuma_dlsym(handle, "numa_interleave_memory")));
 
 
       if (numa_available() != -1) {
-        set_numa_all_nodes((unsigned long*)dlsym(handle, "numa_all_nodes"));
+        set_numa_all_nodes((unsigned long*)libnuma_dlsym(handle, "numa_all_nodes"));
         // Create a cpu -> node mapping
         _cpu_to_node = new (ResourceObj::C_HEAP) GrowableArray<int>(0, true);
         rebuild_cpu_to_node_map();
@@ -2443,10 +2528,103 @@ os::Linux::numa_interleave_memory_func_t os::Linux::_numa_interleave_memory;
 unsigned long* os::Linux::_numa_all_nodes;
 
 bool os::uncommit_memory(char* addr, size_t size) {
-  return ::mmap(addr, size,
-                PROT_READ|PROT_WRITE|PROT_EXEC,
-                MAP_PRIVATE|MAP_FIXED|MAP_NORESERVE|MAP_ANONYMOUS, -1, 0)
-    != MAP_FAILED;
+  uintptr_t res = (uintptr_t) ::mmap(addr, size, PROT_NONE,
+                MAP_PRIVATE|MAP_FIXED|MAP_NORESERVE|MAP_ANONYMOUS, -1, 0);
+  return res  != (uintptr_t) MAP_FAILED;
+}
+
+// Linux uses a growable mapping for the stack, and if the mapping for
+// the stack guard pages is not removed when we detach a thread the
+// stack cannot grow beyond the pages where the stack guard was
+// mapped.  If at some point later in the process the stack expands to
+// that point, the Linux kernel cannot expand the stack any further
+// because the guard pages are in the way, and a segfault occurs.
+//
+// However, it's essential not to split the stack region by unmapping
+// a region (leaving a hole) that's already part of the stack mapping,
+// so if the stack mapping has already grown beyond the guard pages at
+// the time we create them, we have to truncate the stack mapping.
+// So, we need to know the extent of the stack mapping when
+// create_stack_guard_pages() is called.
+
+// Find the bounds of the stack mapping.  Return true for success.
+//
+// We only need this for stacks that are growable: at the time of
+// writing thread stacks don't use growable mappings (i.e. those
+// creeated with MAP_GROWSDOWN), and aren't marked "[stack]", so this
+// only applies to the main thread.
+static bool
+get_stack_bounds(uintptr_t *bottom, uintptr_t *top)
+{
+  FILE *f = fopen("/proc/self/maps", "r");
+  if (f == NULL)
+    return false;
+
+  while (!feof(f)) {
+    size_t dummy;
+    char *str = NULL;
+    ssize_t len = getline(&str, &dummy, f);
+    if (len == -1) {
+      fclose(f);
+      return false;
+    }
+
+    if (len > 0 && str[len-1] == '\n') {
+      str[len-1] = 0;
+      len--;
+    }
+
+    static const char *stack_str = "[stack]";
+    if (len > (ssize_t)strlen(stack_str)
+       && (strcmp(str + len - strlen(stack_str), stack_str) == 0)) {
+      if (sscanf(str, "%" SCNxPTR "-%" SCNxPTR, bottom, top) == 2) {
+        uintptr_t sp = (uintptr_t)__builtin_frame_address(0);
+        if (sp >= *bottom && sp <= *top) {
+          free(str);
+          fclose(f);
+          return true;
+        }
+      }
+    }
+    free(str);
+  }
+  fclose(f);
+  return false;
+}
+
+// If the (growable) stack mapping already extends beyond the point
+// where we're going to put our guard pages, truncate the mapping at
+// that point by munmap()ping it.  This ensures that when we later
+// munmap() the guard pages we don't leave a hole in the stack
+// mapping. This only affects the main/initial thread, but guard
+// against future OS changes
+bool os::create_stack_guard_pages(char* addr, size_t size) {
+  uintptr_t stack_extent, stack_base;
+  bool chk_bounds = NOT_DEBUG(os::Linux::is_initial_thread()) DEBUG_ONLY(true);
+  if (chk_bounds && get_stack_bounds(&stack_extent, &stack_base)) {
+      assert(os::Linux::is_initial_thread(),
+           "growable stack in non-initial thread");
+    if (stack_extent < (uintptr_t)addr)
+      ::munmap((void*)stack_extent, (uintptr_t)addr - stack_extent);
+  }
+
+  return os::commit_memory(addr, size);
+}
+
+// If this is a growable mapping, remove the guard pages entirely by
+// munmap()ping them.  If not, just call uncommit_memory(). This only
+// affects the main/initial thread, but guard against future OS changes
+bool os::remove_stack_guard_pages(char* addr, size_t size) {
+  uintptr_t stack_extent, stack_base;
+  bool chk_bounds = NOT_DEBUG(os::Linux::is_initial_thread()) DEBUG_ONLY(true);
+  if (chk_bounds && get_stack_bounds(&stack_extent, &stack_base)) {
+      assert(os::Linux::is_initial_thread(),
+           "growable stack in non-initial thread");
+
+    return ::munmap(addr, size) == 0;
+  }
+
+  return os::uncommit_memory(addr, size);
 }
 
 static address _highest_vm_reserved_address = NULL;
@@ -2467,7 +2645,9 @@ static char* anon_mmap(char* requested_addr, size_t bytes, bool fixed) {
     flags |= MAP_FIXED;
   }
 
-  addr = (char*)::mmap(requested_addr, bytes, PROT_READ|PROT_WRITE|PROT_EXEC,
+  // Map uncommitted pages PROT_READ and PROT_WRITE, change access
+  // to PROT_EXEC if executable when we commit the page.
+  addr = (char*)::mmap(requested_addr, bytes, PROT_READ|PROT_WRITE,
                        flags, -1, 0);
 
   if (addr != MAP_FAILED) {
@@ -2566,7 +2746,10 @@ bool os::large_page_init() {
     // format has been changed), we'll use the largest page size supported by
     // the processor.
 
-    _large_page_size = IA32_ONLY(4 * M) AMD64_ONLY(2 * M) IA64_ONLY(256 * M) SPARC_ONLY(4 * M);
+#ifndef ZERO
+    _large_page_size = IA32_ONLY(4 * M) AMD64_ONLY(2 * M) IA64_ONLY(256 * M) SPARC_ONLY(4 * M)
+                       ARM_ONLY(2 * M) PPC_ONLY(4 * M);
+#endif // ZERO
 
     FILE *fp = fopen("/proc/meminfo", "r");
     if (fp) {
@@ -2608,7 +2791,9 @@ bool os::large_page_init() {
 #define SHM_HUGETLB 04000
 #endif
 
-char* os::reserve_memory_special(size_t bytes) {
+char* os::reserve_memory_special(size_t bytes, char* req_addr, bool exec) {
+  // "exec" is passed in but not used.  Creating the shared image for
+  // the code cache doesn't have an SHM_X executable permission to check.
   assert(UseLargePages, "only for large pages");
 
   key_t key = IPC_PRIVATE;
@@ -2646,7 +2831,7 @@ char* os::reserve_memory_special(size_t bytes) {
   }
 
   // attach to the region
-  addr = (char*)shmat(shmid, NULL, 0);
+  addr = (char*)shmat(shmid, req_addr, 0);
   int err = errno;
 
   // Remove shmid. If shmat() is successful, the actual shared memory segment
@@ -3353,7 +3538,8 @@ void os::Linux::set_signal_handler(int sig, bool set_installed) {
       // libjsig also interposes the sigaction() call below and saves the
       // old sigaction on it own.
     } else {
-      fatal2("Encountered unexpected pre-existing sigaction handler %#lx for signal %d.", (long)oldhand, sig);
+      fatal(err_msg("Encountered unexpected pre-existing sigaction handler "
+                    "%#lx for signal %d.", (long)oldhand, sig));
     }
   }
 
@@ -3675,7 +3861,8 @@ void os::init(void) {
 
   Linux::set_page_size(sysconf(_SC_PAGESIZE));
   if (Linux::page_size() == -1) {
-    fatal1("os_linux.cpp: os::init: sysconf failed (%s)", strerror(errno));
+    fatal(err_msg("os_linux.cpp: os::init: sysconf failed (%s)",
+                  strerror(errno)));
   }
   init_page_sizes((size_t) Linux::page_size());
 
@@ -3824,6 +4011,9 @@ jint os::init_2(void)
   return JNI_OK;
 }
 
+// this is called at the end of vm_initialization
+void os::init_3(void) { }
+
 // Mark the polling page as unreadable
 void os::make_polling_page_unreadable(void) {
   if( !guard_memory((char*)_polling_page, Linux::page_size()) )
@@ -3904,7 +4094,6 @@ int os::Linux::safe_cond_timedwait(pthread_cond_t *_cond, pthread_mutex_t *_mute
 ////////////////////////////////////////////////////////////////////////////////
 // debug support
 
-#ifndef PRODUCT
 static address same_page(address x, address y) {
   int page_bits = -os::vm_page_size();
   if ((intptr_t(x) & page_bits) == (intptr_t(y) & page_bits))
@@ -3915,26 +4104,26 @@ static address same_page(address x, address y) {
     return (address)(intptr_t(y) & page_bits);
 }
 
-bool os::find(address addr) {
+bool os::find(address addr, outputStream* st) {
   Dl_info dlinfo;
   memset(&dlinfo, 0, sizeof(dlinfo));
   if (dladdr(addr, &dlinfo)) {
-    tty->print(PTR_FORMAT ": ", addr);
+    st->print(PTR_FORMAT ": ", addr);
     if (dlinfo.dli_sname != NULL) {
-      tty->print("%s+%#x", dlinfo.dli_sname,
+      st->print("%s+%#x", dlinfo.dli_sname,
                  addr - (intptr_t)dlinfo.dli_saddr);
     } else if (dlinfo.dli_fname) {
-      tty->print("<offset %#x>", addr - (intptr_t)dlinfo.dli_fbase);
+      st->print("<offset %#x>", addr - (intptr_t)dlinfo.dli_fbase);
     } else {
-      tty->print("<absolute address>");
+      st->print("<absolute address>");
     }
     if (dlinfo.dli_fname) {
-      tty->print(" in %s", dlinfo.dli_fname);
+      st->print(" in %s", dlinfo.dli_fname);
     }
     if (dlinfo.dli_fbase) {
-      tty->print(" at " PTR_FORMAT, dlinfo.dli_fbase);
+      st->print(" at " PTR_FORMAT, dlinfo.dli_fbase);
     }
-    tty->cr();
+    st->cr();
 
     if (Verbose) {
       // decode some bytes around the PC
@@ -3947,14 +4136,12 @@ bool os::find(address addr) {
       if (dladdr(end, &dlinfo2) && dlinfo2.dli_saddr != dlinfo.dli_saddr
           && end > dlinfo2.dli_saddr && dlinfo2.dli_saddr > begin)
         end = (address) dlinfo2.dli_saddr;
-      Disassembler::decode(begin, end);
+      Disassembler::decode(begin, end, st);
     }
     return true;
   }
   return false;
 }
-
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 // misc
@@ -4164,6 +4351,7 @@ static jlong slow_thread_cpu_time(Thread *thread, bool user_sys_cpu_time) {
   int count;
   long sys_time, user_time;
   char string[64];
+  char cdummy;
   int idummy;
   long ldummy;
   FILE *fp;
@@ -4224,11 +4412,11 @@ static jlong slow_thread_cpu_time(Thread *thread, bool user_sys_cpu_time) {
   // Skip blank chars
   do s++; while (isspace(*s));
 
-  count = sscanf(s,"%*c %d %d %d %d %d %lu %lu %lu %lu %lu %lu %lu",
-                 &idummy, &idummy, &idummy, &idummy, &idummy,
+  count = sscanf(s,"%c %d %d %d %d %d %lu %lu %lu %lu %lu %lu %lu",
+                 &cdummy, &idummy, &idummy, &idummy, &idummy, &idummy,
                  &ldummy, &ldummy, &ldummy, &ldummy, &ldummy,
                  &user_time, &sys_time);
-  if ( count != 12 ) return -1;
+  if ( count != 13 ) return -1;
   if (user_sys_cpu_time) {
     return ((jlong)sys_time + (jlong)user_time) * (1000000000 / clock_tics_per_sec);
   } else {
@@ -4634,6 +4822,7 @@ void Parker::park(bool isAbsolute, jlong time) {
   // Return immediately if a permit is available.
   if (_counter > 0) {
       _counter = 0 ;
+      OrderAccess::fence();
       return ;
   }
 
@@ -4676,6 +4865,7 @@ void Parker::park(bool isAbsolute, jlong time) {
     _counter = 0;
     status = pthread_mutex_unlock(_mutex);
     assert (status == 0, "invariant") ;
+    OrderAccess::fence();
     return;
   }
 
@@ -4716,6 +4906,7 @@ void Parker::park(bool isAbsolute, jlong time) {
     jt->java_suspend_self();
   }
 
+  OrderAccess::fence();
 }
 
 void Parker::unpark() {
@@ -4820,3 +5011,43 @@ int os::fork_and_exec(char* cmd) {
     }
   }
 }
+
+// is_headless_jre()
+//
+// Test for the existence of libmawt in motif21 or xawt directories
+// in order to report if we are running in a headless jre
+//
+bool os::is_headless_jre() {
+    struct stat statbuf;
+    char buf[MAXPATHLEN];
+    char libmawtpath[MAXPATHLEN];
+    const char *xawtstr  = "/xawt/libmawt.so";
+    const char *motifstr = "/motif21/libmawt.so";
+    char *p;
+
+    // Get path to libjvm.so
+    os::jvm_path(buf, sizeof(buf));
+
+    // Get rid of libjvm.so
+    p = strrchr(buf, '/');
+    if (p == NULL) return false;
+    else *p = '\0';
+
+    // Get rid of client or server
+    p = strrchr(buf, '/');
+    if (p == NULL) return false;
+    else *p = '\0';
+
+    // check xawt/libmawt.so
+    strcpy(libmawtpath, buf);
+    strcat(libmawtpath, xawtstr);
+    if (::stat(libmawtpath, &statbuf) == 0) return false;
+
+    // check motif21/libmawt.so
+    strcpy(libmawtpath, buf);
+    strcat(libmawtpath, motifstr);
+    if (::stat(libmawtpath, &statbuf) == 0) return false;
+
+    return true;
+}
+

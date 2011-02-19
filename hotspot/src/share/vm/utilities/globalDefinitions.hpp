@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -72,6 +72,9 @@ extern int LogBytesPerHeapOop;                // Oop within a java object
 extern int LogBitsPerHeapOop;
 extern int BytesPerHeapOop;
 extern int BitsPerHeapOop;
+
+// Oop encoding heap max
+extern uint64_t OopEncodingHeapMax;
 
 const int BitsPerJavaInteger = 32;
 const int BitsPerJavaLong    = 64;
@@ -138,6 +141,10 @@ const size_t K                  = 1024;
 const size_t M                  = K*K;
 const size_t G                  = M*K;
 const size_t HWperKB            = K / sizeof(HeapWord);
+
+const size_t LOG_K              = 10;
+const size_t LOG_M              = 2 * LOG_K;
+const size_t LOG_G              = 2 * LOG_M;
 
 const jint min_jint = (jint)1 << (sizeof(jint)*BitsPerByte-1); // 0x80000000 == smallest jint
 const jint max_jint = (juint)min_jint - 1;                     // 0x7FFFFFFF == largest jint
@@ -288,12 +295,12 @@ const int max_method_code_size = 64*K - 1;  // JVM spec, 2nd ed. section 4.8.1 (
 // Minimum is max(BytesPerLong, BytesPerDouble, BytesPerOop) / HeapWordSize, so jlong, jdouble and
 // reference fields can be naturally aligned.
 
-const int MinObjAlignment            = HeapWordsPerLong;
-const int MinObjAlignmentInBytes     = MinObjAlignment * HeapWordSize;
-const int MinObjAlignmentInBytesMask = MinObjAlignmentInBytes - 1;
+extern int MinObjAlignment;
+extern int MinObjAlignmentInBytes;
+extern int MinObjAlignmentInBytesMask;
 
-const int LogMinObjAlignment         = LogHeapWordsPerLong;
-const int LogMinObjAlignmentInBytes  = LogMinObjAlignment + LogHeapWordSize;
+extern int LogMinObjAlignment;
+extern int LogMinObjAlignmentInBytes;
 
 // Machine dependent stuff
 
@@ -328,18 +335,45 @@ inline intptr_t align_object_size(intptr_t size) {
   return align_size_up(size, MinObjAlignment);
 }
 
-// Pad out certain offsets to jlong alignment, in HeapWord units.
+inline bool is_object_aligned(intptr_t addr) {
+  return addr == align_object_size(addr);
+}
 
-#define align_object_offset_(offset) align_size_up_(offset, HeapWordsPerLong)
+// Pad out certain offsets to jlong alignment, in HeapWord units.
 
 inline intptr_t align_object_offset(intptr_t offset) {
   return align_size_up(offset, HeapWordsPerLong);
 }
 
-inline bool is_object_aligned(intptr_t offset) {
-  return offset == align_object_offset(offset);
-}
+// The expected size in bytes of a cache line, used to pad data structures.
+#define DEFAULT_CACHE_LINE_SIZE 64
 
+// Bytes needed to pad type to avoid cache-line sharing; alignment should be the
+// expected cache line size (a power of two).  The first addend avoids sharing
+// when the start address is not a multiple of alignment; the second maintains
+// alignment of starting addresses that happen to be a multiple.
+#define PADDING_SIZE(type, alignment)                           \
+  ((alignment) + align_size_up_(sizeof(type), alignment))
+
+// Templates to create a subclass padded to avoid cache line sharing.  These are
+// effective only when applied to derived-most (leaf) classes.
+
+// When no args are passed to the base ctor.
+template <class T, size_t alignment = DEFAULT_CACHE_LINE_SIZE>
+class Padded: public T {
+private:
+  char _pad_buf_[PADDING_SIZE(T, alignment)];
+};
+
+// When either 0 or 1 args may be passed to the base ctor.
+template <class T, typename Arg1T, size_t alignment = DEFAULT_CACHE_LINE_SIZE>
+class Padded01: public T {
+public:
+  Padded01(): T() { }
+  Padded01(Arg1T arg1): T(arg1) { }
+private:
+  char _pad_buf_[PADDING_SIZE(T, alignment)];
+};
 
 //----------------------------------------------------------------------------------------------------
 // Utility macros for compilers
@@ -406,6 +440,15 @@ enum BasicType {
 
 inline bool is_java_primitive(BasicType t) {
   return T_BOOLEAN <= t && t <= T_LONG;
+}
+
+inline bool is_subword_type(BasicType t) {
+  // these guys are processed exactly like T_INT in calling sequences:
+  return (t == T_BOOLEAN || t == T_CHAR || t == T_BYTE || t == T_SHORT);
+}
+
+inline bool is_signed_subword_type(BasicType t) {
+  return (t == T_BYTE || t == T_SHORT);
 }
 
 // Convert a char from a classfile signature to a BasicType
@@ -486,7 +529,7 @@ extern int _type2aelembytes[T_CONFLICT+1]; // maps a BasicType to nof bytes used
 #ifdef ASSERT
 extern int type2aelembytes(BasicType t, bool allow_address = false); // asserts
 #else
-inline int type2aelembytes(BasicType t) { return _type2aelembytes[t]; }
+inline int type2aelembytes(BasicType t, bool allow_address = false) { return _type2aelembytes[t]; }
 #endif
 
 
@@ -563,8 +606,8 @@ class JavaValue {
 
 enum TosState {         // describes the tos cache contents
   btos = 0,             // byte, bool tos cached
-  ctos = 1,             // short, char tos cached
-  stos = 2,             // short, char tos cached
+  ctos = 1,             // char tos cached
+  stos = 2,             // short tos cached
   itos = 3,             // int tos cached
   ltos = 4,             // long tos cached
   ftos = 5,             // float tos cached
@@ -579,7 +622,7 @@ enum TosState {         // describes the tos cache contents
 inline TosState as_TosState(BasicType type) {
   switch (type) {
     case T_BYTE   : return btos;
-    case T_BOOLEAN: return btos;
+    case T_BOOLEAN: return btos; // FIXME: Add ztos
     case T_CHAR   : return ctos;
     case T_SHORT  : return stos;
     case T_INT    : return itos;
@@ -589,8 +632,25 @@ inline TosState as_TosState(BasicType type) {
     case T_VOID   : return vtos;
     case T_ARRAY  : // fall through
     case T_OBJECT : return atos;
+    default       : return ilgl; // fixes the -Wall -Werror under gcc 4.5
   }
   return ilgl;
+}
+
+inline BasicType as_BasicType(TosState state) {
+  switch (state) {
+    //case ztos: return T_BOOLEAN;//FIXME
+    case btos : return T_BYTE;
+    case ctos : return T_CHAR;
+    case stos : return T_SHORT;
+    case itos : return T_INT;
+    case ltos : return T_LONG;
+    case ftos : return T_FLOAT;
+    case dtos : return T_DOUBLE;
+    case atos : return T_OBJECT;
+    case vtos : return T_VOID;
+  }
+  return T_ILLEGAL;
 }
 
 
@@ -798,6 +858,8 @@ const int      badCodeHeapFreeVal = 0xDD;                   // value used to zap
 #define       badHeapWord       (::badHeapWordVal)
 #define       badJNIHandle      ((oop)::badJNIHandleVal)
 
+// Default TaskQueue size is 16K (32-bit) or 128K (64-bit)
+#define TASKQUEUE_SIZE (NOT_LP64(1<<14) LP64_ONLY(1<<17))
 
 //----------------------------------------------------------------------------------------------------
 // Utility functions for bitfield manipulations
@@ -881,7 +943,7 @@ inline int log2_intptr(intptr_t x) {
     i++; p *= 2;
   }
   // p = 2^(i+1) && x < p (i.e., 2^i <= x < 2^(i+1))
-  // (if p = 0 then overflow occured and i = 31)
+  // (if p = 0 then overflow occurred and i = 31)
   return i;
 }
 
@@ -895,7 +957,7 @@ inline int log2_long(jlong x) {
     i++; p *= 2;
   }
   // p = 2^(i+1) && x < p (i.e., 2^i <= x < 2^(i+1))
-  // (if p = 0 then overflow occured and i = 63)
+  // (if p = 0 then overflow occurred and i = 63)
   return i;
 }
 

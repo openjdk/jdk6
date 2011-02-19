@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -462,7 +462,7 @@ class Range : public CompilationResourceObj {
  public:
   Range(int from, int to, Range* next);
 
-  static void      initialize();
+  static void      initialize(Arena* arena);
   static Range*    end()                         { return _end; }
 
   int              from() const                  { return _from; }
@@ -529,7 +529,7 @@ class Interval : public CompilationResourceObj {
  public:
   Interval(int reg_num);
 
-  static void      initialize();
+  static void      initialize(Arena* arena);
   static Interval* end()                         { return _end; }
 
   // accessors

@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 
@@ -273,7 +273,7 @@ class XWM implements MWMConstants, XUtilConstants {
             winmgr_running = false;
             substruct.set_event_mask(XlibWrapper.SubstructureRedirectMask);
 
-            XToolkit.WITH_XERROR_HANDLER(DetectWMHandler);
+            XToolkit.WITH_XERROR_HANDLER(detectWMHandler);
             XlibWrapper.XChangeWindowAttributes(XToolkit.getDisplay(),
                                                 XToolkit.getDefaultRootWindow(),
                                                 XlibWrapper.CWEventMask,
@@ -318,7 +318,7 @@ class XWM implements MWMConstants, XUtilConstants {
             new WindowPropertyGetter(window, XA_ENLIGHTENMENT_COMMS, 0, 14, false,
                                      XAtom.XA_STRING);
         try {
-            int status = getter.execute(XToolkit.IgnoreBadWindowHandler);
+            int status = getter.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
             if (status != XlibWrapper.Success || getter.getData() == 0) {
                 return 0;
             }
@@ -398,7 +398,10 @@ class XWM implements MWMConstants, XUtilConstants {
     static boolean isCDE() {
 
         if (!XA_DT_SM_WINDOW_INFO.isInterned()) {
-            log.log(Level.FINER, "{0} is not interned", new Object[] {XA_DT_SM_WINDOW_INFO});
+            if (log.isLoggable(Level.FINER)) {
+                log.log(Level.FINER, "{0} is not interned",
+                        new Object[] {String.valueOf(XA_DT_SM_WINDOW_INFO)});
+            }
             return false;
         }
 
@@ -429,14 +432,17 @@ class XWM implements MWMConstants, XUtilConstants {
 
             /* Now check that this window has _DT_SM_STATE_INFO (ignore contents) */
             if (!XA_DT_SM_STATE_INFO.isInterned()) {
-                log.log(Level.FINER, "{0} is not interned", new Object[] {XA_DT_SM_STATE_INFO});
+                if (log.isLoggable(Level.FINER)) {
+                    log.log(Level.FINER, "{0} is not interned",
+                            new Object[] {String.valueOf(XA_DT_SM_STATE_INFO)});
+                }
                 return false;
             }
             WindowPropertyGetter getter2 =
                 new WindowPropertyGetter(wmwin, XA_DT_SM_STATE_INFO, 0, 1,
                                          false, XA_DT_SM_STATE_INFO);
             try {
-                status = getter2.execute(XToolkit.IgnoreBadWindowHandler);
+                status = getter2.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
 
                 if (status != XlibWrapper.Success || getter2.getData() == 0) {
@@ -568,21 +574,6 @@ class XWM implements MWMConstants, XUtilConstants {
     }
 
     /*
-     * Temporary error handler that ensures that we know if
-     * XChangeProperty succeeded or not.
-     */
-    static XToolkit.XErrorHandler VerifyChangePropertyHandler = new XToolkit.XErrorHandler() {
-            public int handleError(long display, XErrorEvent err) {
-                XToolkit.XERROR_SAVE(err);
-                if (err.get_request_code() == XlibWrapper.X_ChangeProperty) {
-                    return 0;
-                } else {
-                    return XToolkit.SAVED_ERROR_HANDLER(display, err);
-                }
-            }
-        };
-
-    /*
      * Prepare IceWM check.
      *
      * The only way to detect IceWM, seems to be by setting
@@ -608,13 +599,16 @@ class XWM implements MWMConstants, XUtilConstants {
          */
 
         if (!XA_ICEWM_WINOPTHINT.isInterned()) {
-            log.log(Level.FINER, "{0} is not interned", new Object[] {XA_ICEWM_WINOPTHINT});
+            if (log.isLoggable(Level.FINER)) {
+                log.log(Level.FINER, "{0} is not interned",
+                        new Object[] {String.valueOf(XA_ICEWM_WINOPTHINT)});
+            }
             return false;
         }
 
         XToolkit.awtLock();
         try {
-            XToolkit.WITH_XERROR_HANDLER(VerifyChangePropertyHandler);
+            XToolkit.WITH_XERROR_HANDLER(XErrorHandler.VerifyChangePropertyHandler.getInstance());
             XlibWrapper.XChangePropertyS(XToolkit.getDisplay(), XToolkit.getDefaultRootWindow(),
                                          XA_ICEWM_WINOPTHINT.getAtom(),
                                          XA_ICEWM_WINOPTHINT.getAtom(),
@@ -641,7 +635,10 @@ class XWM implements MWMConstants, XUtilConstants {
      */
     static boolean isIceWM() {
         if (!XA_ICEWM_WINOPTHINT.isInterned()) {
-            log.log(Level.FINER, "{0} is not interned", new Object[] {XA_ICEWM_WINOPTHINT});
+            if (log.isLoggable(Level.FINER)) {
+                log.log(Level.FINER, "{0} is not interned",
+                        new Object[] {String.valueOf(XA_ICEWM_WINOPTHINT)});
+            }
             return false;
         }
 
@@ -679,20 +676,19 @@ class XWM implements MWMConstants, XUtilConstants {
      * Temporary error handler that checks if selecting for
      * SubstructureRedirect failed.
      */
-    static boolean winmgr_running = false;
-    static XToolkit.XErrorHandler DetectWMHandler = new XToolkit.XErrorHandler() {
-            public int handleError(long display, XErrorEvent err) {
-                XToolkit.XERROR_SAVE(err);
-                if (err.get_request_code() == XlibWrapper.X_ChangeWindowAttributes
-                    && err.get_error_code() == XlibWrapper.BadAccess)
-                {
-                    winmgr_running = true;
-                    return 0;
-                } else {
-                    return XToolkit.SAVED_ERROR_HANDLER(display, err);
-                }
+    private static boolean winmgr_running = false;
+    private static XErrorHandler detectWMHandler = new XErrorHandler.XBaseErrorHandler() {
+        @Override
+        public int handleError(long display, XErrorEvent err) {
+            if ((err.get_request_code() == XProtocolConstants.X_ChangeWindowAttributes) &&
+                (err.get_error_code() == XConstants.BadAccess))
+            {
+                winmgr_running = true;
+                return 0;
             }
-        };
+            return super.handleError(display, err);
+        }
+    };
 
     /*
      * Make an educated guess about running window manager.
@@ -1376,8 +1372,9 @@ class XWM implements MWMConstants, XUtilConstants {
         XNETProtocol net_protocol = getWM().getNETProtocol();
         if (net_protocol != null && net_protocol.active()) {
             Insets insets = getInsetsFromProp(window, XA_NET_FRAME_EXTENTS);
-            insLog.log(Level.FINE, "_NET_FRAME_EXTENTS: {0}", insets);
-
+            if (insLog.isLoggable(Level.FINE)) {
+                insLog.log(Level.FINE, "_NET_FRAME_EXTENTS: {0}", String.valueOf(insets));
+            }
             if (insets != null) {
                 return insets;
             }
@@ -1515,7 +1512,9 @@ class XWM implements MWMConstants, XUtilConstants {
          *       [mwm, e!, kwin, fvwm2 ... ]
          */
         Insets correctWM = XWM.getInsetsFromExtents(window);
-        insLog.log(Level.FINER, "Got insets from property: {0}", correctWM);
+        if (insLog.isLoggable(Level.FINER)) {
+            insLog.log(Level.FINER, "Got insets from property: {0}", String.valueOf(correctWM));
+        }
 
         if (correctWM == null) {
             correctWM = new Insets(0,0,0,0);
@@ -1576,7 +1575,10 @@ class XWM implements MWMConstants, XUtilConstants {
                   }
                   case XWM.OTHER_WM:
                   default: {                /* this is very similar to the E! case above */
-                      insLog.log(Level.FINEST, "Getting correct insets for OTHER_WM/default, parent: {0}", parent);
+                      if (insLog.isLoggable(Level.FINEST)) {
+                          insLog.log(Level.FINEST, "Getting correct insets for OTHER_WM/default, parent: {0}",
+                                                   String.valueOf(parent));
+                      }
                       syncTopLevelPos(parent, lwinAttr);
                       int status = XlibWrapper.XGetWindowAttributes(XToolkit.getDisplay(),
                                                                     window, lwinAttr.pData);
@@ -1603,8 +1605,11 @@ class XWM implements MWMConstants, XUtilConstants {
                           && lwinAttr.get_width()+2*lwinAttr.get_border_width() == pattr.get_width()
                           && lwinAttr.get_height()+2*lwinAttr.get_border_width() == pattr.get_height())
                       {
-                          insLog.log(Level.FINEST, "Double reparenting detected, pattr({2})={0}, lwinAttr({3})={1}",
-                                     new Object[] {lwinAttr, pattr, parent, window});
+                          if (insLog.isLoggable(Level.FINEST)) {
+                              insLog.log(Level.FINEST, "Double reparenting detected, pattr({2})={0}, lwinAttr({3})={1}",
+                                         new Object[] {String.valueOf(lwinAttr), String.valueOf(pattr),
+                                                       String.valueOf(parent), String.valueOf(window)});
+                          }
                           lwinAttr.set_x(pattr.get_x());
                           lwinAttr.set_y(pattr.get_y());
                           lwinAttr.set_border_width(lwinAttr.get_border_width()+pattr.get_border_width());
@@ -1631,8 +1636,11 @@ class XWM implements MWMConstants, XUtilConstants {
                        * widths and inner/outer distinction, so for the time
                        * being, just ignore it.
                        */
-                      insLog.log(Level.FINEST, "Attrs before calculation: pattr({2})={0}, lwinAttr({3})={1}",
-                                 new Object[] {lwinAttr, pattr, parent, window});
+                      if (insLog.isLoggable(Level.FINEST)) {
+                          insLog.log(Level.FINEST, "Attrs before calculation: pattr({2})={0}, lwinAttr({3})={1}",
+                                     new Object[] {String.valueOf(lwinAttr), String.valueOf(pattr),
+                                                   String.valueOf(parent), String.valueOf(window)});
+                      }
                       correctWM = new Insets(lwinAttr.get_y() + lwinAttr.get_border_width(),
                                              lwinAttr.get_x() + lwinAttr.get_border_width(),
                                              pattr.get_height() - (lwinAttr.get_y() + lwinAttr.get_height() + 2*lwinAttr.get_border_width()),

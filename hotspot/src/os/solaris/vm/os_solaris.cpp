@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -457,7 +457,7 @@ static volatile int max_hrtime_lock = LOCK_FREE;     // Update counter with LSB 
 
 
 void os::Solaris::initialize_system_info() {
-  _processor_count = sysconf(_SC_NPROCESSORS_CONF);
+  set_processor_count(sysconf(_SC_NPROCESSORS_CONF));
   _processors_online = sysconf (_SC_NPROCESSORS_ONLN);
   _physical_memory = (julong)sysconf(_SC_PHYS_PAGES) * (julong)sysconf(_SC_PAGESIZE);
 }
@@ -673,15 +673,6 @@ bool os::have_special_privileges() {
     init = true;
   }
   return privileges;
-}
-
-
-static char* get_property(char* name, char* buffer, int buffer_size) {
-  if (os::getenv(name, buffer, buffer_size)) {
-    return buffer;
-  }
-  static char empty[] = "";
-  return empty;
 }
 
 
@@ -1576,7 +1567,8 @@ int os::allocate_thread_local_storage() {
   //           treat %g2 as a caller-save register, preserving it in a %lN.
   thread_key_t tk;
   if (thr_keycreate( &tk, NULL ) )
-    fatal1("os::allocate_thread_local_storage: thr_keycreate failed (%s)", strerror(errno));
+    fatal(err_msg("os::allocate_thread_local_storage: thr_keycreate failed "
+                  "(%s)", strerror(errno)));
   return int(tk);
 }
 
@@ -1594,7 +1586,8 @@ void os::thread_local_storage_at_put(int index, void* value) {
     if (errno == ENOMEM) {
        vm_exit_out_of_memory(SMALLINT, "thr_setspecific: out of swap space");
     } else {
-      fatal1("os::thread_local_storage_at_put: thr_setspecific failed (%s)", strerror(errno));
+      fatal(err_msg("os::thread_local_storage_at_put: thr_setspecific failed "
+                    "(%s)", strerror(errno)));
     }
   } else {
       ThreadLocalStorage::set_thread_in_slot ((Thread *) value) ;
@@ -1643,7 +1636,8 @@ inline hrtime_t oldgetTimeNanos() {
 inline hrtime_t getTimeNanos() {
   if (VM_Version::supports_cx8()) {
     const hrtime_t now = gethrtime();
-    const hrtime_t prev = max_hrtime;
+    // Use atomic long load since 32-bit x86 uses 2 registers to keep long.
+    const hrtime_t prev = Atomic::load((volatile jlong*)&max_hrtime);
     if (now <= prev)  return prev;   // same or retrograde time;
     const hrtime_t obsv = Atomic::cmpxchg(now, (volatile jlong*)&max_hrtime, prev);
     assert(obsv >= prev, "invariant");   // Monotonicity
@@ -1746,7 +1740,7 @@ jlong getTimeMillis() {
 jlong os::javaTimeMillis() {
   timeval t;
   if (gettimeofday( &t, NULL) == -1)
-    fatal1("os::javaTimeMillis: gettimeofday (%s)", strerror(errno));
+    fatal(err_msg("os::javaTimeMillis: gettimeofday (%s)", strerror(errno)));
   return jlong(t.tv_sec) * 1000  +  jlong(t.tv_usec) / 1000;
 }
 
@@ -1825,7 +1819,9 @@ void os::set_error_file(const char *logfile) {}
 
 const char* os::dll_file_extension() { return ".so"; }
 
-const char* os::get_temp_directory() { return "/tmp/"; }
+// This must be hard coded because it's the system's temporary
+// directory not the java application's temp directory, ala java.io.tmpdir.
+const char* os::get_temp_directory() { return "/tmp"; }
 
 static bool file_exists(const char* filename) {
   struct stat statbuf;
@@ -2054,7 +2050,8 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
     {EM_SPARC32PLUS, EM_SPARC,   ELFCLASS32, ELFDATA2MSB, (char*)"Sparc 32"},
     {EM_SPARCV9,     EM_SPARCV9, ELFCLASS64, ELFDATA2MSB, (char*)"Sparc v9 64"},
     {EM_PPC,         EM_PPC,     ELFCLASS32, ELFDATA2MSB, (char*)"Power PC 32"},
-    {EM_PPC64,       EM_PPC64,   ELFCLASS64, ELFDATA2MSB, (char*)"Power PC 64"}
+    {EM_PPC64,       EM_PPC64,   ELFCLASS64, ELFDATA2MSB, (char*)"Power PC 64"},
+    {EM_ARM,         EM_ARM,     ELFCLASS32, ELFDATA2LSB, (char*)"ARM 32"}
   };
 
   #if  (defined IA32)
@@ -2071,9 +2068,11 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
     static  Elf32_Half running_arch_code=EM_PPC64;
   #elif  (defined __powerpc__)
     static  Elf32_Half running_arch_code=EM_PPC;
+  #elif (defined ARM)
+    static  Elf32_Half running_arch_code=EM_ARM;
   #else
     #error Method os::dll_load requires that one of following is defined:\
-         IA32, AMD64, IA64, __sparc, __powerpc__
+         IA32, AMD64, IA64, __sparc, __powerpc__, ARM, ARM
   #endif
 
   // Identify compatability class for VM's architecture and library's architecture
@@ -2438,6 +2437,8 @@ void os::jvm_path(char *buf, jint buflen) {
       char* java_home_var = ::getenv("JAVA_HOME");
       if (java_home_var != NULL && java_home_var[0] != 0) {
         char cpu_arch[12];
+        char* jrelib_p;
+        int   len;
         sysinfo(SI_ARCHITECTURE, cpu_arch, sizeof(cpu_arch));
 #ifdef _LP64
         // If we are on sparc running a 64-bit vm, look in jre/lib/sparcv9.
@@ -2453,14 +2454,23 @@ void os::jvm_path(char *buf, jint buflen) {
         p = strstr(p, "_g") ? "_g" : "";
 
         realpath(java_home_var, buf);
-        sprintf(buf + strlen(buf), "/jre/lib/%s", cpu_arch);
+        // determine if this is a legacy image or modules image
+        // modules image doesn't have "jre" subdirectory
+        len = strlen(buf);
+        jrelib_p = buf + len;
+        snprintf(jrelib_p, buflen-len, "/jre/lib/%s", cpu_arch);
+        if (0 != access(buf, F_OK)) {
+          snprintf(jrelib_p, buflen-len, "/lib/%s", cpu_arch);
+        }
+
         if (0 == access(buf, F_OK)) {
           // Use current module name "libjvm[_g].so" instead of
           // "libjvm"debug_only("_g")".so" since for fastdebug version
           // we should have "libjvm.so" but debug_only("_g") adds "_g"!
           // It is used when we are choosing the HPI library's name
           // "libhpi[_g].so" in hpi::initialize_get_interface().
-          sprintf(buf + strlen(buf), "/hotspot/libjvm%s.so", p);
+          len = strlen(buf);
+          snprintf(buf + len, buflen-len, "/hotspot/libjvm%s.so", p);
         } else {
           // Go back to path of .so
           realpath((char *)dlinfo.dli_fname, buf);
@@ -2653,15 +2663,16 @@ int os::vm_allocation_granularity() {
   return page_size;
 }
 
-bool os::commit_memory(char* addr, size_t bytes) {
+bool os::commit_memory(char* addr, size_t bytes, bool exec) {
+  int prot = exec ? PROT_READ|PROT_WRITE|PROT_EXEC : PROT_READ|PROT_WRITE;
   size_t size = bytes;
   return
-     NULL != Solaris::mmap_chunk(addr, size, MAP_PRIVATE|MAP_FIXED,
-                                 PROT_READ | PROT_WRITE | PROT_EXEC);
+     NULL != Solaris::mmap_chunk(addr, size, MAP_PRIVATE|MAP_FIXED, prot);
 }
 
-bool os::commit_memory(char* addr, size_t bytes, size_t alignment_hint) {
-  if (commit_memory(addr, bytes)) {
+bool os::commit_memory(char* addr, size_t bytes, size_t alignment_hint,
+                       bool exec) {
+  if (commit_memory(addr, bytes, exec)) {
     if (UseMPSS && alignment_hint > (size_t)vm_page_size()) {
       // If the large page size has been set and the VM
       // is using large pages, use the large page size
@@ -2694,6 +2705,14 @@ void os::free_memory(char* addr, size_t bytes) {
     debug_only(warning("MADV_FREE failed."));
     return;
   }
+}
+
+bool os::create_stack_guard_pages(char* addr, size_t size) {
+  return os::commit_memory(addr, size);
+}
+
+bool os::remove_stack_guard_pages(char* addr, size_t size) {
+  return os::uncommit_memory(addr, size);
 }
 
 // Change the page size in a given range.
@@ -3132,7 +3151,8 @@ bool os::Solaris::ism_sanity_check(bool warn, size_t * page_size) {
   // ISM is only recommended on old Solaris where there is no MPSS support.
   // Simply choose a conservative value as default.
   *page_size = LargePageSizeInBytes ? LargePageSizeInBytes :
-               SPARC_ONLY(4 * M) IA32_ONLY(4 * M) AMD64_ONLY(2 * M);
+               SPARC_ONLY(4 * M) IA32_ONLY(4 * M) AMD64_ONLY(2 * M)
+               ARM_ONLY(2 * M);
 
   // ISM is available on all supported Solaris versions
   return true;
@@ -3250,7 +3270,9 @@ bool os::Solaris::set_mpss_range(caddr_t start, size_t bytes, size_t align) {
   return true;
 }
 
-char* os::reserve_memory_special(size_t bytes) {
+char* os::reserve_memory_special(size_t bytes, char* addr, bool exec) {
+  // "exec" is passed in but not used.  Creating the shared image for
+  // the code cache doesn't have an SHM_X executable permission to check.
   assert(UseLargePages && UseISM, "only for ISM large pages");
 
   size_t size = bytes;
@@ -4227,7 +4249,8 @@ void os::Solaris::set_signal_handler(int sig, bool set_installed, bool oktochain
       // libjsig also interposes the sigaction() call below and saves the
       // old sigaction on it own.
     } else {
-      fatal2("Encountered unexpected pre-existing sigaction handler %#lx for signal %d.", (long)oldhand, sig);
+      fatal(err_msg("Encountered unexpected pre-existing sigaction handler "
+                    "%#lx for signal %d.", (long)oldhand, sig));
     }
   }
 
@@ -4481,6 +4504,9 @@ int_fnP_thread_t_i os::Solaris::_thr_setmutator;
 int_fnP_thread_t os::Solaris::_thr_suspend_mutator;
 int_fnP_thread_t os::Solaris::_thr_continue_mutator;
 
+// (Static) wrapper for getisax(2) call.
+os::Solaris::getisax_func_t os::Solaris::_getisax = 0;
+
 // (Static) wrappers for the liblgrp API
 os::Solaris::lgrp_home_func_t os::Solaris::_lgrp_home;
 os::Solaris::lgrp_init_func_t os::Solaris::_lgrp_init;
@@ -4495,16 +4521,19 @@ os::Solaris::lgrp_cookie_t os::Solaris::_lgrp_cookie = 0;
 // (Static) wrapper for meminfo() call.
 os::Solaris::meminfo_func_t os::Solaris::_meminfo = 0;
 
-static address resolve_symbol(const char *name) {
-  address addr;
-
-  addr = (address) dlsym(RTLD_DEFAULT, name);
+static address resolve_symbol_lazy(const char* name) {
+  address addr = (address) dlsym(RTLD_DEFAULT, name);
   if(addr == NULL) {
     // RTLD_DEFAULT was not defined on some early versions of 2.5.1
     addr = (address) dlsym(RTLD_NEXT, name);
-    if(addr == NULL) {
-      fatal(dlerror());
-    }
+  }
+  return addr;
+}
+
+static address resolve_symbol(const char* name) {
+  address addr = resolve_symbol_lazy(name);
+  if(addr == NULL) {
+    fatal(dlerror());
   }
   return addr;
 }
@@ -4703,13 +4732,24 @@ bool os::Solaris::liblgrp_init() {
 }
 
 void os::Solaris::misc_sym_init() {
-  address func = (address)dlsym(RTLD_DEFAULT, "meminfo");
-  if(func == NULL) {
-    func = (address) dlsym(RTLD_NEXT, "meminfo");
+  address func;
+
+  // getisax
+  func = resolve_symbol_lazy("getisax");
+  if (func != NULL) {
+    os::Solaris::_getisax = CAST_TO_FN_PTR(getisax_func_t, func);
   }
+
+  // meminfo
+  func = resolve_symbol_lazy("meminfo");
   if (func != NULL) {
     os::Solaris::set_meminfo(CAST_TO_FN_PTR(meminfo_func_t, func));
   }
+}
+
+uint_t os::Solaris::getisax(uint32_t* array, uint_t n) {
+  assert(_getisax != NULL, "_getisax not set");
+  return _getisax(array, n);
 }
 
 // Symbol doesn't exist in Solaris 8 pset.h
@@ -4741,14 +4781,19 @@ void os::init(void) {
 
   page_size = sysconf(_SC_PAGESIZE);
   if (page_size == -1)
-    fatal1("os_solaris.cpp: os::init: sysconf failed (%s)", strerror(errno));
+    fatal(err_msg("os_solaris.cpp: os::init: sysconf failed (%s)",
+                  strerror(errno)));
   init_page_sizes((size_t) page_size);
 
   Solaris::initialize_system_info();
 
+  // Initialize misc. symbols as soon as possible, so we can use them
+  // if we need them.
+  Solaris::misc_sym_init();
+
   int fd = open("/dev/zero", O_RDWR);
   if (fd < 0) {
-    fatal1("os::init: cannot open /dev/zero (%s)", strerror(errno));
+    fatal(err_msg("os::init: cannot open /dev/zero (%s)", strerror(errno)));
   } else {
     Solaris::set_dev_zero_fd(fd);
 
@@ -4887,7 +4932,6 @@ jint os::init_2(void) {
     }
   }
 
-  Solaris::misc_sym_init();
   Solaris::signal_sets_init();
   Solaris::init_signal_mem();
   Solaris::install_signal_handlers();
@@ -4966,6 +5010,9 @@ jint os::init_2(void) {
   return JNI_OK;
 }
 
+void os::init_3(void) {
+  return;
+}
 
 // Mark the polling page as unreadable
 void os::make_polling_page_unreadable(void) {
@@ -5371,7 +5418,6 @@ int os::loadavg(double loadavg[], int nelem) {
 }
 
 //---------------------------------------------------------------------------------
-#ifndef PRODUCT
 
 static address same_page(address x, address y) {
   intptr_t page_bits = -os::vm_page_size();
@@ -5383,28 +5429,28 @@ static address same_page(address x, address y) {
     return (address)(intptr_t(y) & page_bits);
 }
 
-bool os::find(address addr) {
+bool os::find(address addr, outputStream* st) {
   Dl_info dlinfo;
   memset(&dlinfo, 0, sizeof(dlinfo));
   if (dladdr(addr, &dlinfo)) {
 #ifdef _LP64
-    tty->print("0x%016lx: ", addr);
+    st->print("0x%016lx: ", addr);
 #else
-    tty->print("0x%08x: ", addr);
+    st->print("0x%08x: ", addr);
 #endif
     if (dlinfo.dli_sname != NULL)
-      tty->print("%s+%#lx", dlinfo.dli_sname, addr-(intptr_t)dlinfo.dli_saddr);
+      st->print("%s+%#lx", dlinfo.dli_sname, addr-(intptr_t)dlinfo.dli_saddr);
     else if (dlinfo.dli_fname)
-      tty->print("<offset %#lx>", addr-(intptr_t)dlinfo.dli_fbase);
+      st->print("<offset %#lx>", addr-(intptr_t)dlinfo.dli_fbase);
     else
-      tty->print("<absolute address>");
-    if (dlinfo.dli_fname)  tty->print(" in %s", dlinfo.dli_fname);
+      st->print("<absolute address>");
+    if (dlinfo.dli_fname)  st->print(" in %s", dlinfo.dli_fname);
 #ifdef _LP64
-    if (dlinfo.dli_fbase)  tty->print(" at 0x%016lx", dlinfo.dli_fbase);
+    if (dlinfo.dli_fbase)  st->print(" at 0x%016lx", dlinfo.dli_fbase);
 #else
-    if (dlinfo.dli_fbase)  tty->print(" at 0x%08x", dlinfo.dli_fbase);
+    if (dlinfo.dli_fbase)  st->print(" at 0x%08x", dlinfo.dli_fbase);
 #endif
-    tty->cr();
+    st->cr();
 
     if (Verbose) {
       // decode some bytes around the PC
@@ -5417,15 +5463,12 @@ bool os::find(address addr) {
       if (dladdr(end, &dlinfo2) && dlinfo2.dli_saddr != dlinfo.dli_saddr
           && end > dlinfo2.dli_saddr && dlinfo2.dli_saddr > begin)
         end = (address) dlinfo2.dli_saddr;
-      Disassembler::decode(begin, end);
+      Disassembler::decode(begin, end, st);
     }
     return true;
   }
   return false;
 }
-
-#endif
-
 
 // Following function has been added to support HotSparc's libjvm.so running
 // under Solaris production JDK 1.2.2 / 1.3.0.  These came from
@@ -5779,6 +5822,7 @@ void Parker::park(bool isAbsolute, jlong time) {
   // Return immediately if a permit is available.
   if (_counter > 0) {
       _counter = 0 ;
+      OrderAccess::fence();
       return ;
   }
 
@@ -5822,6 +5866,7 @@ void Parker::park(bool isAbsolute, jlong time) {
     _counter = 0;
     status = os::Solaris::mutex_unlock(_mutex);
     assert (status == 0, "invariant") ;
+    OrderAccess::fence();
     return;
   }
 
@@ -5867,7 +5912,7 @@ void Parker::park(bool isAbsolute, jlong time) {
   if (jt->handle_special_suspend_equivalent_condition()) {
     jt->java_suspend_self();
   }
-
+  OrderAccess::fence();
 }
 
 void Parker::unpark() {
@@ -5953,3 +5998,44 @@ int os::fork_and_exec(char* cmd) {
     }
   }
 }
+
+// is_headless_jre()
+//
+// Test for the existence of libmawt in motif21 or xawt directories
+// in order to report if we are running in a headless jre
+//
+bool os::is_headless_jre() {
+    struct stat statbuf;
+    char buf[MAXPATHLEN];
+    char libmawtpath[MAXPATHLEN];
+    const char *xawtstr  = "/xawt/libmawt.so";
+    const char *motifstr = "/motif21/libmawt.so";
+    char *p;
+
+    // Get path to libjvm.so
+    os::jvm_path(buf, sizeof(buf));
+
+    // Get rid of libjvm.so
+    p = strrchr(buf, '/');
+    if (p == NULL) return false;
+    else *p = '\0';
+
+    // Get rid of client or server
+    p = strrchr(buf, '/');
+    if (p == NULL) return false;
+    else *p = '\0';
+
+    // check xawt/libmawt.so
+    strcpy(libmawtpath, buf);
+    strcat(libmawtpath, xawtstr);
+    if (::stat(libmawtpath, &statbuf) == 0) return false;
+
+    // check motif21/libmawt.so
+    strcpy(libmawtpath, buf);
+    strcat(libmawtpath, motifstr);
+    if (::stat(libmawtpath, &statbuf) == 0) return false;
+
+    return true;
+}
+
+

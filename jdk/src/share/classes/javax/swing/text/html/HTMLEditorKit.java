@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,11 +18,13 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package javax.swing.text.html;
+
+import sun.awt.AppContext;
 
 import java.lang.reflect.Method;
 import java.awt.*;
@@ -369,7 +371,11 @@ public class HTMLEditorKit extends StyledEditorKit implements Accessible {
      * if desired.
      */
     public void setStyleSheet(StyleSheet s) {
-        defaultStyles = s;
+        if (s == null) {
+            AppContext.getAppContext().remove(DEFAULT_STYLES_KEY);
+        } else {
+            AppContext.getAppContext().put(DEFAULT_STYLES_KEY, s);
+        }
     }
 
     /**
@@ -379,8 +385,12 @@ public class HTMLEditorKit extends StyledEditorKit implements Accessible {
      * instances.
      */
     public StyleSheet getStyleSheet() {
+        AppContext appContext = AppContext.getAppContext();
+        StyleSheet defaultStyles = (StyleSheet) appContext.get(DEFAULT_STYLES_KEY);
+
         if (defaultStyles == null) {
             defaultStyles = new StyleSheet();
+            appContext.put(DEFAULT_STYLES_KEY, defaultStyles);
             try {
                 InputStream is = HTMLEditorKit.getResourceAsStream(DEFAULT_CSS);
                 Reader r = new BufferedReader(
@@ -620,7 +630,7 @@ public class HTMLEditorKit extends StyledEditorKit implements Accessible {
     private static final ViewFactory defaultFactory = new HTMLFactory();
 
     MutableAttributeSet input;
-    private static StyleSheet defaultStyles = null;
+    private static final Object DEFAULT_STYLES_KEY = new Object();
     private LinkController linkHandler = new LinkController();
     private static Parser defaultParser = null;
     private Cursor defaultCursor = DefaultCursor;

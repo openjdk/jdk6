@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -64,12 +64,12 @@ void PSYoungGen::initialize_work() {
   }
 
   if (UseNUMA) {
-    _eden_space = new MutableNUMASpace();
+    _eden_space = new MutableNUMASpace(virtual_space()->alignment());
   } else {
-    _eden_space = new MutableSpace();
+    _eden_space = new MutableSpace(virtual_space()->alignment());
   }
-  _from_space = new MutableSpace();
-  _to_space   = new MutableSpace();
+  _from_space = new MutableSpace(virtual_space()->alignment());
+  _to_space   = new MutableSpace(virtual_space()->alignment());
 
   if (_eden_space == NULL || _from_space == NULL || _to_space == NULL) {
     vm_exit_during_initialization("Could not allocate a young gen space");
@@ -521,7 +521,7 @@ void PSYoungGen::resize_spaces(size_t requested_eden_size,
     }
 
     eden_end = eden_start + eden_size;
-    assert(eden_end >= eden_start, "addition overflowed")
+    assert(eden_end >= eden_start, "addition overflowed");
 
     // To may resize into from space as long as it is clear of live data.
     // From space must remain page aligned, though, so we need to do some
@@ -605,7 +605,7 @@ void PSYoungGen::resize_spaces(size_t requested_eden_size,
                        pointer_delta(to_start, eden_start, sizeof(char)));
     }
     eden_end = eden_start + eden_size;
-    assert(eden_end >= eden_start, "addition overflowed")
+    assert(eden_end >= eden_start, "addition overflowed");
 
     // Could choose to not let eden shrink
     // to_start = MAX2(to_start, eden_end);

@@ -1,12 +1,12 @@
 /*
- * Copyright 2002-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2002, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.management.remote.rmi;
@@ -1264,6 +1264,7 @@ public class RMIConnectionImpl implements RMIConnection, Unreferenced {
      *
      * @return a String representation of this object.
      **/
+    @Override
     public String toString() {
         return super.toString() + ": connectionId=" + connectionId;
     }
@@ -1517,6 +1518,21 @@ public class RMIConnectionImpl implements RMIConnection, Unreferenced {
         }
     }
 
+    private static class SetCcl implements PrivilegedExceptionAction<ClassLoader> {
+        private final ClassLoader classLoader;
+
+        SetCcl(ClassLoader classLoader) {
+            this.classLoader = classLoader;
+        }
+
+        public ClassLoader run() {
+            Thread currentThread = Thread.currentThread();
+            ClassLoader old = currentThread.getContextClassLoader();
+            currentThread.setContextClassLoader(classLoader);
+            return old;
+        }
+    }
+
     private static <T> T unwrap(final MarshalledObject mo,
                                 final ClassLoader cl,
                                 final Class<T> wrappedClass)
@@ -1525,22 +1541,14 @@ public class RMIConnectionImpl implements RMIConnection, Unreferenced {
             return null;
         }
         try {
-            return AccessController.doPrivileged(
-                new PrivilegedExceptionAction<T>() {
-                    public T run()
-                            throws IOException {
-                        final ClassLoader old =
-                            Thread.currentThread().getContextClassLoader();
-                        Thread.currentThread().setContextClassLoader(cl);
-                        try {
-                            return wrappedClass.cast(mo.get());
-                        } catch (ClassNotFoundException cnfe) {
-                            throw new UnmarshalException(cnfe.toString(), cnfe);
-                        } finally {
-                            Thread.currentThread().setContextClassLoader(old);
-                        }
-                    }
-                });
+            final ClassLoader old = AccessController.doPrivileged(new SetCcl(cl));
+            try {
+                return wrappedClass.cast(mo.get());
+            } catch (ClassNotFoundException cnfe) {
+                throw new UnmarshalException(cnfe.toString(), cnfe);
+            } finally {
+                AccessController.doPrivileged(new SetCcl(old));
+            }
         } catch (PrivilegedActionException pe) {
             Exception e = extractException(pe);
             if (e instanceof IOException) {
@@ -1564,14 +1572,14 @@ public class RMIConnectionImpl implements RMIConnection, Unreferenced {
             return null;
         }
         try {
-            return AccessController.doPrivileged(
-                   new PrivilegedExceptionAction<T>() {
-                       public T run()
-                           throws IOException {
-                           return unwrap(mo, new OrderClassLoaders(cl1, cl2),
-                                         wrappedClass);
-                       }
-                   });
+            ClassLoader orderCL = AccessController.doPrivileged(
+                new PrivilegedExceptionAction<ClassLoader>() {
+                    public ClassLoader run() throws Exception {
+                        return new OrderClassLoaders(cl1, cl2);
+                    }
+                }
+            );
+            return unwrap(mo, orderCL, wrappedClass);
         } catch (PrivilegedActionException pe) {
             Exception e = extractException(pe);
             if (e instanceof IOException) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -30,13 +30,12 @@
 // no virtual functions allowed
 
 // store into oop with store check
-template <class T> void oop_store(T* p, oop v);
-template <class T> void oop_store(volatile T* p, oop v);
+template <class T> inline void oop_store(T* p, oop v);
+template <class T> inline void oop_store(volatile T* p, oop v);
 
 // store into oop without store check
-template <class T> void oop_store_without_check(T* p, oop v);
-template <class T> void oop_store_without_check(volatile T* p, oop v);
-
+template <class T> inline void oop_store_without_check(T* p, oop v);
+template <class T> inline void oop_store_without_check(volatile T* p, oop v);
 
 extern bool always_do_update_barrier;
 
@@ -108,6 +107,13 @@ class oopDesc {
   // installation of their klass pointer.
   bool is_parsable();
 
+  // Some perm gen objects that have been allocated and initialized
+  // can be changed by the VM when not at a safe point (class rededfinition
+  // is an example).  Such objects should not be examined by the
+  // concurrent processing of a garbage collector if is_conc_safe()
+  // returns false.
+  bool is_conc_safe();
+
   // type test operations (inlined in oop.inline.h)
   bool is_instance()           const;
   bool is_instanceRef()        const;
@@ -142,10 +148,6 @@ class oopDesc {
  public:
   // Need this as public for garbage collection.
   template <class T> T* obj_field_addr(int offset) const;
-
-  // Oop encoding heap max
-  static const uint64_t OopEncodingHeapMax =
-              (uint64_t(max_juint) + 1) << LogMinObjAlignmentInBytes;
 
   static bool is_null(oop obj);
   static bool is_null(narrowOop obj);
@@ -256,6 +258,9 @@ class oopDesc {
   jdouble double_field_acquire(int offset) const;
   void release_double_field_put(int offset, jdouble contents);
 
+  address address_field_acquire(int offset) const;
+  void release_address_field_put(int offset, address contents);
+
   // printing functions for VM debugging
   void print_on(outputStream* st) const;         // First level print
   void print_value_on(outputStream* st) const;   // Second level print.
@@ -301,7 +306,6 @@ class oopDesc {
 
 #ifndef SERIALGC
   // Parallel Scavenge
-  void copy_contents(PSPromotionManager* pm);
   void push_contents(PSPromotionManager* pm);
 
   // Parallel Old
@@ -320,6 +324,7 @@ class oopDesc {
 
   bool is_perm() const;
   bool is_perm_or_null() const;
+  bool is_scavengable() const;
   bool is_shared() const;
   bool is_shared_readonly() const;
   bool is_shared_readwrite() const;

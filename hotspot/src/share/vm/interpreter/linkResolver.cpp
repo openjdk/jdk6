@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -55,7 +55,7 @@ void CallInfo::set_interface(KlassHandle resolved_klass, KlassHandle selected_kl
   // we should pick the vtable index from the resolved method.
   // Other than that case, there is no valid vtable index to specify.
   int vtable_index = methodOopDesc::invalid_vtable_index;
-  if (resolved_method->method_holder() == SystemDictionary::object_klass()) {
+  if (resolved_method->method_holder() == SystemDictionary::Object_klass()) {
     assert(resolved_method->vtable_index() == selected_method->vtable_index(), "sanity check");
     vtable_index = resolved_method->vtable_index();
   }
@@ -67,6 +67,15 @@ void CallInfo::set_virtual(KlassHandle resolved_klass, KlassHandle selected_klas
   set_common(resolved_klass, selected_klass, resolved_method, selected_method, vtable_index, CHECK);
 }
 
+void CallInfo::set_dynamic(methodHandle resolved_method, TRAPS) {
+  assert(resolved_method->is_method_handle_invoke(), "");
+  KlassHandle resolved_klass = SystemDictionaryHandles::MethodHandle_klass();
+  assert(resolved_klass == resolved_method->method_holder(), "");
+  int vtable_index = methodOopDesc::nonvirtual_vtable_index;
+  assert(resolved_method->vtable_index() == vtable_index, "");
+  set_common(resolved_klass, KlassHandle(), resolved_method, resolved_method, vtable_index, CHECK);
+}
+
 void CallInfo::set_common(KlassHandle resolved_klass, KlassHandle selected_klass, methodHandle resolved_method, methodHandle selected_method, int vtable_index, TRAPS) {
   assert(resolved_method->signature() == selected_method->signature(), "signatures must correspond");
   _resolved_klass  = resolved_klass;
@@ -75,11 +84,23 @@ void CallInfo::set_common(KlassHandle resolved_klass, KlassHandle selected_klass
   _selected_method = selected_method;
   _vtable_index    = vtable_index;
   if (CompilationPolicy::mustBeCompiled(selected_method)) {
+    // This path is unusual, mostly used by the '-Xcomp' stress test mode.
+
     // Note: with several active threads, the mustBeCompiled may be true
     //       while canBeCompiled is false; remove assert
     // assert(CompilationPolicy::canBeCompiled(selected_method), "cannot compile");
     if (THREAD->is_Compiler_thread()) {
       // don't force compilation, resolve was on behalf of compiler
+      return;
+    }
+    if (instanceKlass::cast(selected_method->method_holder())->is_not_initialized()) {
+      // 'is_not_initialized' means not only '!is_initialized', but also that
+      // initialization has not been started yet ('!being_initialized')
+      // Do not force compilation of methods in uninitialized classes.
+      // Note that doing this would throw an assert later,
+      // in CompileBroker::compile_method.
+      // We sometimes use the link resolver to do reflective lookups
+      // even before classes are initialized.
       return;
     }
     CompileBroker::compile_method(selected_method, InvocationEntryBci,
@@ -126,6 +147,15 @@ void LinkResolver::resolve_klass_no_update(KlassHandle& result, constantPoolHand
 
 void LinkResolver::lookup_method_in_klasses(methodHandle& result, KlassHandle klass, symbolHandle name, symbolHandle signature, TRAPS) {
   methodOop result_oop = klass->uncached_lookup_method(name(), signature());
+  if (EnableMethodHandles && result_oop != NULL) {
+    switch (result_oop->intrinsic_id()) {
+    case vmIntrinsics::_invokeExact:
+    case vmIntrinsics::_invokeGeneric:
+    case vmIntrinsics::_invokeDynamic:
+      // Do not link directly to these.  The VM must produce a synthetic one using lookup_implicit_method.
+      return;
+    }
+  }
   result = methodHandle(THREAD, result_oop);
 }
 
@@ -151,6 +181,35 @@ void LinkResolver::lookup_method_in_interfaces(methodHandle& result, KlassHandle
   result = methodHandle(THREAD, ik->lookup_method_in_all_interfaces(name(), signature()));
 }
 
+void LinkResolver::lookup_implicit_method(methodHandle& result,
+                                          KlassHandle klass, symbolHandle name, symbolHandle signature,
+                                          KlassHandle current_klass,
+                                          TRAPS) {
+  if (EnableMethodHandles &&
+      klass() == SystemDictionary::MethodHandle_klass() &&
+      methodOopDesc::is_method_handle_invoke_name(name())) {
+    if (!MethodHandles::enabled()) {
+      // Make sure the Java part of the runtime has been booted up.
+      klassOop natives = SystemDictionary::MethodHandleNatives_klass();
+      if (natives == NULL || instanceKlass::cast(natives)->is_not_initialized()) {
+        SystemDictionary::resolve_or_fail(vmSymbolHandles::sun_dyn_MethodHandleNatives(),
+                                          Handle(),
+                                          Handle(),
+                                          true,
+                                          CHECK);
+      }
+    }
+    methodOop result_oop = SystemDictionary::find_method_handle_invoke(name,
+                                                                       signature,
+                                                                       current_klass,
+                                                                       CHECK);
+    if (result_oop != NULL) {
+      assert(result_oop->is_method_handle_invoke() && result_oop->signature() == signature(), "consistent");
+      result = methodHandle(THREAD, result_oop);
+    }
+  }
+}
+
 void LinkResolver::check_method_accessability(KlassHandle ref_klass,
                                               KlassHandle resolved_klass,
                                               KlassHandle sel_klass,
@@ -167,7 +226,7 @@ void LinkResolver::check_method_accessability(KlassHandle ref_klass,
   // We'll check for the method name first, as that's most likely
   // to be false (so we'll short-circuit out of these tests).
   if (sel_method->name() == vmSymbols::clone_name() &&
-      sel_klass() == SystemDictionary::object_klass() &&
+      sel_klass() == SystemDictionary::Object_klass() &&
       resolved_klass->oop_is_array()) {
     // We need to change "protected" to "public".
     assert(flags.is_protected(), "clone not protected?");
@@ -209,6 +268,18 @@ void LinkResolver::resolve_method(methodHandle& resolved_method, KlassHandle& re
   resolve_method(resolved_method, resolved_klass, method_name, method_signature, current_klass, true, CHECK);
 }
 
+void LinkResolver::resolve_dynamic_method(methodHandle& resolved_method, KlassHandle& resolved_klass, constantPoolHandle pool, int index, TRAPS) {
+  // The class is java.dyn.MethodHandle
+  resolved_klass = SystemDictionaryHandles::MethodHandle_klass();
+
+  symbolHandle method_name = vmSymbolHandles::invokeExact_name();
+
+  symbolHandle method_signature(THREAD, pool->signature_ref_at(index));
+  KlassHandle  current_klass   (THREAD, pool->pool_holder());
+
+  resolve_method(resolved_method, resolved_klass, method_name, method_signature, current_klass, true, CHECK);
+}
+
 void LinkResolver::resolve_interface_method(methodHandle& resolved_method, KlassHandle& resolved_klass, constantPoolHandle pool, int index, TRAPS) {
 
   // resolve klass
@@ -238,6 +309,11 @@ void LinkResolver::resolve_method(methodHandle& resolved_method, KlassHandle res
   if (resolved_method.is_null()) { // not found in the class hierarchy
     // 3. lookup method in all the interfaces implemented by the resolved klass
     lookup_method_in_interfaces(resolved_method, resolved_klass, method_name, method_signature, CHECK);
+
+    if (resolved_method.is_null()) {
+      // JSR 292:  see if this is an implicitly generated method MethodHandle.invoke(*...)
+      lookup_implicit_method(resolved_method, resolved_klass, method_name, method_signature, current_klass, CHECK);
+    }
 
     if (resolved_method.is_null()) {
       // 4. method lookup failed
@@ -928,6 +1004,7 @@ void LinkResolver::resolve_invoke(CallInfo& result, Handle recv, constantPoolHan
     case Bytecodes::_invokestatic   : resolve_invokestatic   (result,       pool, index, CHECK); break;
     case Bytecodes::_invokespecial  : resolve_invokespecial  (result,       pool, index, CHECK); break;
     case Bytecodes::_invokevirtual  : resolve_invokevirtual  (result, recv, pool, index, CHECK); break;
+    case Bytecodes::_invokedynamic  : resolve_invokedynamic  (result,       pool, index, CHECK); break;
     case Bytecodes::_invokeinterface: resolve_invokeinterface(result, recv, pool, index, CHECK); break;
   }
   return;
@@ -987,6 +1064,28 @@ void LinkResolver::resolve_invokeinterface(CallInfo& result, Handle recv, consta
   resolve_pool(resolved_klass, method_name,  method_signature, current_klass, pool, index, CHECK);
   KlassHandle recvrKlass (THREAD, recv.is_null() ? (klassOop)NULL : recv->klass());
   resolve_interface_call(result, recv, recvrKlass, resolved_klass, method_name, method_signature, current_klass, true, true, CHECK);
+}
+
+
+void LinkResolver::resolve_invokedynamic(CallInfo& result, constantPoolHandle pool, int raw_index, TRAPS) {
+  assert(EnableInvokeDynamic, "");
+
+  // This guy is reached from InterpreterRuntime::resolve_invokedynamic.
+
+  // At this point, we only need the signature, and can ignore the name.
+  symbolHandle method_signature(THREAD, pool->signature_ref_at(raw_index));  // raw_index works directly
+  symbolHandle method_name = vmSymbolHandles::invokeExact_name();
+  KlassHandle resolved_klass = SystemDictionaryHandles::MethodHandle_klass();
+
+  // JSR 292:  this must be an implicitly generated method MethodHandle.invokeExact(*...)
+  // The extra MH receiver will be inserted into the stack on every call.
+  methodHandle resolved_method;
+  KlassHandle current_klass(THREAD, pool->pool_holder());
+  lookup_implicit_method(resolved_method, resolved_klass, method_name, method_signature, current_klass, CHECK);
+  if (resolved_method.is_null()) {
+    THROW(vmSymbols::java_lang_InternalError());
+  }
+  result.set_dynamic(resolved_method, CHECK);
 }
 
 //------------------------------------------------------------------------------------------------------------------------

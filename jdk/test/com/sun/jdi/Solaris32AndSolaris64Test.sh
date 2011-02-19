@@ -1,7 +1,7 @@
 #!/bin/ksh -p
 
 #
-# Copyright 2001-2006 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 2001, 2008, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -18,14 +18,14 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 
 #
 #   @test       Solaris32AndSolaris64Test.sh
-#   @bug        4478312 4780570 4913748
+#   @bug        4478312 4780570 4913748 6730273
 #   @summary    Test debugging with mixed 32/64bit VMs.
 #   @author     Tim Bell
 #   Based on test/java/awt/TEMPLATE/AutomaticShellTest.sh
@@ -164,10 +164,10 @@ fi
 if [ -n "${STANDALONE}" ] ; then 
    #if running standalone, compile the support files
    ${TESTJAVA}/bin/javac -d ${TESTCLASSES} \
-            -classpath "$TESTJAVA/lib/tools.jar${PATHSEP}." \
+            -classpath "$TESTJAVA/lib/tools.jar${PATHSEP}${TESTSRC}" \
             TestScaffold.java VMConnection.java TargetListener.java TargetAdapter.java
    ${TESTJAVA}/bin/javac -d ${TESTCLASSES} \
-            -classpath "$TESTJAVA/lib/tools.jar${PATHSEP}." -g \
+            -classpath "$TESTJAVA/lib/tools.jar${PATHSEP}${TESTSRC}" -g \
             FetchLocals.java DataModelTest.java
 fi
 
@@ -177,8 +177,14 @@ filename=$TESTCLASSES/@debuggeeVMOptions
 if [ ! -r ${filename} ] ; then
     filename=$TESTCLASSES/../@debuggeeVMOptions
 fi
+# Remove -d32, -d64 if present, and remove -XX:[+-]UseCompressedOops 
+# if present since it is illegal in 32 bit mode.
 if [ -r ${filename} ] ; then
-    DEBUGGEEFLAGS=`cat ${filename} | sed -e 's/-d32//g' -e 's/-d64//g'`
+    DEBUGGEEFLAGS=`cat ${filename} | sed \
+                        -e 's/-d32//g' \
+                        -e 's/-d64//g' \
+                        -e 's/-XX:.UseCompressedOops//g' \
+                        `
 fi
 
 #

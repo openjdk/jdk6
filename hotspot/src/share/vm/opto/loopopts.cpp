@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -47,7 +47,7 @@ Node *PhaseIdealLoop::split_thru_phi( Node *n, Node *region, int policy ) {
     int offset = t_oop->offset();
     phi = new (C,region->req()) PhiNode(region, type, NULL, iid, index, offset);
   } else {
-    phi = new (C,region->req()) PhiNode(region, type);
+    phi = PhiNode::make_blank(region, n);
   }
   uint old_unique = C->unique();
   for( uint i = 1; i < region->req(); i++ ) {
@@ -97,7 +97,7 @@ Node *PhaseIdealLoop::split_thru_phi( Node *n, Node *region, int policy ) {
       // (Note: This tweaking with igvn only works because x is a new node.)
       _igvn.set_type(x, t);
       // If x is a TypeNode, capture any more-precise type permanently into Node
-      // othewise it will be not updated during igvn->transform since
+      // otherwise it will be not updated during igvn->transform since
       // igvn->type(x) is set to x->Value() already.
       x->raise_bottom_type(t);
       Node *y = x->Identity(&_igvn);
@@ -346,13 +346,15 @@ Node *PhaseIdealLoop::remix_address_expressions( Node *n ) {
 
     // Yes!  Reshape address expression!
     Node *inv_scale = new (C, 3) LShiftINode( add_invar, scale );
-    register_new_node( inv_scale, add_invar_ctrl );
+    Node *inv_scale_ctrl =
+      dom_depth(add_invar_ctrl) > dom_depth(scale_ctrl) ?
+      add_invar_ctrl : scale_ctrl;
+    register_new_node( inv_scale, inv_scale_ctrl );
     Node *var_scale = new (C, 3) LShiftINode( add_var, scale );
     register_new_node( var_scale, n_ctrl );
     Node *var_add = new (C, 3) AddINode( var_scale, inv_scale );
     register_new_node( var_add, n_ctrl );
-    _igvn.hash_delete( n );
-    _igvn.subsume_node( n, var_add );
+    _igvn.replace_node( n, var_add );
     return var_add;
   }
 
@@ -387,8 +389,7 @@ Node *PhaseIdealLoop::remix_address_expressions( Node *n ) {
           register_new_node( add1, n_loop->_head->in(LoopNode::EntryControl) );
           Node *add2 = new (C, 4) AddPNode( n->in(1), add1, n->in(2)->in(3) );
           register_new_node( add2, n_ctrl );
-          _igvn.hash_delete( n );
-          _igvn.subsume_node( n, add2 );
+          _igvn.replace_node( n, add2 );
           return add2;
         }
       }
@@ -409,8 +410,7 @@ Node *PhaseIdealLoop::remix_address_expressions( Node *n ) {
           register_new_node( add1, n_loop->_head->in(LoopNode::EntryControl) );
           Node *add2 = new (C, 4) AddPNode( n->in(1), add1, V );
           register_new_node( add2, n_ctrl );
-          _igvn.hash_delete( n );
-          _igvn.subsume_node( n, add2 );
+          _igvn.replace_node( n, add2 );
           return add2;
         }
       }
@@ -552,8 +552,7 @@ Node *PhaseIdealLoop::conditional_move( Node *region ) {
     }
     Node *cmov = CMoveNode::make( C, cmov_ctrl, iff->in(1), phi->in(1+flip), phi->in(2-flip), _igvn.type(phi) );
     register_new_node( cmov, cmov_ctrl );
-    _igvn.hash_delete(phi);
-    _igvn.subsume_node( phi, cmov );
+    _igvn.replace_node( phi, cmov );
 #ifndef PRODUCT
     if( VerifyLoopOptimizations ) verify();
 #endif
@@ -639,8 +638,7 @@ Node *PhaseIdealLoop::split_if_with_blocks_pre( Node *n ) {
 
   // Found a Phi to split thru!
   // Replace 'n' with the new phi
-  _igvn.hash_delete(n);
-  _igvn.subsume_node( n, phi );
+  _igvn.replace_node( n, phi );
   // Moved a load around the loop, 'en-registering' something.
   if( n_blk->Opcode() == Op_Loop && n->is_Load() &&
       !phi->in(LoopNode::LoopBackControl)->is_Load() )
@@ -667,7 +665,6 @@ static bool merge_point_too_heavy(Compile* C, Node* region) {
   }
 }
 
-#ifdef _LP64
 static bool merge_point_safe(Node* region) {
   // 4799512: Stop split_if_with_blocks from splitting a block with a ConvI2LNode
   // having a PhiNode input. This sidesteps the dangerous case where the split
@@ -676,20 +673,25 @@ static bool merge_point_safe(Node* region) {
   // uses.
   // A better fix for this problem can be found in the BugTraq entry, but
   // expediency for Mantis demands this hack.
+  // 6855164: If the merge point has a FastLockNode with a PhiNode input, we stop
+  // split_if_with_blocks from splitting a block because we could not move around
+  // the FastLockNode.
   for (DUIterator_Fast imax, i = region->fast_outs(imax); i < imax; i++) {
     Node* n = region->fast_out(i);
     if (n->is_Phi()) {
       for (DUIterator_Fast jmax, j = n->fast_outs(jmax); j < jmax; j++) {
         Node* m = n->fast_out(j);
-        if (m->Opcode() == Op_ConvI2L) {
+        if (m->is_FastLock())
           return false;
-        }
+#ifdef _LP64
+        if (m->Opcode() == Op_ConvI2L)
+          return false;
+#endif
       }
     }
   }
   return true;
 }
-#endif
 
 
 //------------------------------place_near_use---------------------------------
@@ -771,12 +773,10 @@ void PhaseIdealLoop::split_if_with_blocks_post( Node *n ) {
       if( get_loop(n_ctrl->in(j)) != n_loop )
         return;
 
-#ifdef _LP64
     // Check for safety of the merge point.
     if( !merge_point_safe(n_ctrl) ) {
       return;
     }
-#endif
 
     // Split compare 'n' through the merge point if it is profitable
     Node *phi = split_thru_phi( n, n_ctrl, policy );
@@ -784,13 +784,11 @@ void PhaseIdealLoop::split_if_with_blocks_post( Node *n ) {
 
     // Found a Phi to split thru!
     // Replace 'n' with the new phi
-    _igvn.hash_delete(n);
-    _igvn.subsume_node( n, phi );
+    _igvn.replace_node( n, phi );
 
     // Now split the bool up thru the phi
     Node *bolphi = split_thru_phi( bol, n_ctrl, -1 );
-    _igvn.hash_delete(bol);
-    _igvn.subsume_node( bol, bolphi );
+    _igvn.replace_node( bol, bolphi );
     assert( iff->in(1) == bolphi, "" );
     if( bolphi->Value(&_igvn)->singleton() )
       return;
@@ -798,8 +796,7 @@ void PhaseIdealLoop::split_if_with_blocks_post( Node *n ) {
     // Conditional-move?  Must split up now
     if( !iff->is_If() ) {
       Node *cmovphi = split_thru_phi( iff, n_ctrl, -1 );
-      _igvn.hash_delete(iff);
-      _igvn.subsume_node( iff, cmovphi );
+      _igvn.replace_node( iff, cmovphi );
       return;
     }
 
@@ -879,7 +876,7 @@ void PhaseIdealLoop::split_if_with_blocks_post( Node *n ) {
             Node *x_ctrl = NULL;
             if( u->is_Phi() ) {
               // Replace all uses of normal nodes.  Replace Phi uses
-              // individually, so the seperate Nodes can sink down
+              // individually, so the separate Nodes can sink down
               // different paths.
               uint k = 1;
               while( u->in(k) != n ) k++;
@@ -945,9 +942,7 @@ void PhaseIdealLoop::split_if_with_blocks_post( Node *n ) {
   if( n_op == Op_Opaque2 &&
       n->in(1) != NULL &&
       get_loop(get_ctrl(n)) == get_loop(get_ctrl(n->in(1))) ) {
-    _igvn.add_users_to_worklist(n);
-    _igvn.hash_delete(n);
-    _igvn.subsume_node( n, n->in(1) );
+    _igvn.replace_node( n, n->in(1) );
   }
 }
 
@@ -1420,7 +1415,7 @@ void PhaseIdealLoop::clone_loop( IdealLoopTree *loop, Node_List &old_new, int dd
           // IGVN does CSE).
           Node *hit = _igvn.hash_find_insert(use);
           if( hit )             // Go ahead and re-hash for hits.
-            _igvn.subsume_node( use, hit );
+            _igvn.replace_node( use, hit );
         }
 
         // If 'use' was in the loop-exit block, it now needs to be sunk

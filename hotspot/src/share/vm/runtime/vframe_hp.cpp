@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -190,7 +190,7 @@ GrowableArray<MonitorInfo*>* compiledVFrame::monitors() const {
     // Casting away const
     frame& fr = (frame&) _fr;
     MonitorInfo* info = new MonitorInfo(fr.compiled_synchronized_native_monitor_owner(nm),
-                                        fr.compiled_synchronized_native_monitor(nm), false);
+                                        fr.compiled_synchronized_native_monitor(nm), false, false);
     monitors->push(info);
     return monitors;
   }
@@ -201,8 +201,20 @@ GrowableArray<MonitorInfo*>* compiledVFrame::monitors() const {
   GrowableArray<MonitorInfo*>* result = new GrowableArray<MonitorInfo*>(monitors->length());
   for (int index = 0; index < monitors->length(); index++) {
     MonitorValue* mv = monitors->at(index);
-    StackValue *owner_sv = create_stack_value(mv->owner()); // it is an oop
-    result->push(new MonitorInfo(owner_sv->get_obj()(), resolve_monitor_lock(mv->basic_lock()), mv->eliminated()));
+    ScopeValue*   ov = mv->owner();
+    StackValue *owner_sv = create_stack_value(ov); // it is an oop
+    if (ov->is_object() && owner_sv->obj_is_scalar_replaced()) { // The owner object was scalar replaced
+      assert(mv->eliminated(), "monitor should be eliminated for scalar replaced object");
+      // Put klass for scalar replaced object.
+      ScopeValue* kv = ((ObjectValue *)ov)->klass();
+      assert(kv->is_constant_oop(), "klass should be oop constant for scalar replaced object");
+      KlassHandle k(((ConstantOopReadValue*)kv)->value()());
+      result->push(new MonitorInfo(k->as_klassOop(), resolve_monitor_lock(mv->basic_lock()),
+                                   mv->eliminated(), true));
+    } else {
+      result->push(new MonitorInfo(owner_sv->get_obj()(), resolve_monitor_lock(mv->basic_lock()),
+                                   mv->eliminated(), false));
+    }
   }
   return result;
 }
@@ -264,6 +276,15 @@ int compiledVFrame::raw_bci() const {
   return scope()->bci();
 }
 
+bool compiledVFrame::should_reexecute() const {
+  if (scope() == NULL) {
+    // native nmethods have no scope the method/bci is implied
+    nmethod* nm = code();
+    assert(nm->is_native_method(), "must be native");
+    return false;
+  }
+  return scope()->should_reexecute();
+}
 
 vframe* compiledVFrame::sender() const {
   const frame f = fr();

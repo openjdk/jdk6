@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,13 +16,13 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 /* @test
- * @bug 6306165
+ * @bug 6306165 6432567
  * @summary Check that a bad handshake doesn't cause a debuggee to abort
  *
  * @build VMConnection BadHandshakeTest Exit0
@@ -38,6 +38,7 @@ import java.net.Socket;
 import java.net.InetAddress;
 import com.sun.jdi.Bootstrap;
 import com.sun.jdi.VirtualMachine;
+import com.sun.jdi.event.*;
 import com.sun.jdi.connect.Connector;
 import com.sun.jdi.connect.AttachingConnector;
 import java.util.Map;
@@ -46,7 +47,7 @@ import java.util.Iterator;
 
 public class BadHandshakeTest {
 
-    static Object locker = new Object();
+    static volatile boolean ready = false;
 
     /*
      * Helper class to redirect process output/error
@@ -73,9 +74,7 @@ public class BadHandshakeTest {
                     // The first thing that will get read is
                     //    Listening for transport dt_socket at address: xxxxx
                     // which shows the debuggee is ready to accept connections.
-                    synchronized(locker) {
-                        locker.notify();
-                    }
+                    ready = true;
                     if (n < 0) {
                         break;
                     }
@@ -111,8 +110,11 @@ public class BadHandshakeTest {
         String exe =   System.getProperty("java.home")
                      + File.separator + "bin" + File.separator;
         String arch = System.getProperty("os.arch");
-        if (arch.equals("sparcv9")) {
+        String osname = System.getProperty("os.name");
+        if (osname.equals("SunOS") && arch.equals("sparcv9")) {
             exe += "sparcv9/java";
+        } else if (osname.equals("SunOS") && arch.equals("amd64")) {
+            exe += "amd64/java";
         } else {
             exe += "java";
         }
@@ -149,8 +151,12 @@ public class BadHandshakeTest {
         Process process = launch(address, "Exit0");
 
         // wait for the debugge to be ready
-        synchronized(locker) {
-            locker.wait();
+        while (!ready) {
+            try {
+                Thread.sleep(1000);
+            } catch(Exception ee) {
+                throw ee;
+            }
         }
 
         // Connect to the debuggee and handshake with garbage
@@ -170,6 +176,17 @@ public class BadHandshakeTest {
             (Connector.IntegerArgument)conn_args.get("port");
         port_arg.setValue(port);
         VirtualMachine vm = conn.attach(conn_args);
+
+        // The first event is always a VMStartEvent, and it is always in
+        // an EventSet by itself.  Wait for it.
+        EventSet evtSet = vm.eventQueue().remove();
+        for (Event event: evtSet) {
+            if (event instanceof VMStartEvent) {
+                break;
+            }
+            throw new RuntimeException("Test failed - debuggee did not start properly");
+        }
+
         vm.eventRequestManager().deleteAllBreakpoints();
         vm.resume();
 

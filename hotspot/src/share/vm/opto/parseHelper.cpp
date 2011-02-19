@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -197,6 +197,43 @@ void Parse::array_store_check() {
 }
 
 
+void Parse::emit_guard_for_new(ciInstanceKlass* klass) {
+  // Emit guarded new
+  //   if (klass->_init_thread != current_thread ||
+  //       klass->_init_state != being_initialized)
+  //      uncommon_trap
+  Node* cur_thread = _gvn.transform( new (C, 1) ThreadLocalNode() );
+  Node* merge = new (C, 3) RegionNode(3);
+  _gvn.set_type(merge, Type::CONTROL);
+  Node* kls = makecon(TypeKlassPtr::make(klass));
+
+  Node* init_thread_offset = _gvn.MakeConX(instanceKlass::init_thread_offset_in_bytes() + klassOopDesc::klass_part_offset_in_bytes());
+  Node* adr_node = basic_plus_adr(kls, kls, init_thread_offset);
+  Node* init_thread = make_load(NULL, adr_node, TypeRawPtr::BOTTOM, T_ADDRESS);
+  Node *tst   = Bool( CmpP( init_thread, cur_thread), BoolTest::eq);
+  IfNode* iff = create_and_map_if(control(), tst, PROB_ALWAYS, COUNT_UNKNOWN);
+  set_control(IfTrue(iff));
+  merge->set_req(1, IfFalse(iff));
+
+  Node* init_state_offset = _gvn.MakeConX(instanceKlass::init_state_offset_in_bytes() + klassOopDesc::klass_part_offset_in_bytes());
+  adr_node = basic_plus_adr(kls, kls, init_state_offset);
+  Node* init_state = make_load(NULL, adr_node, TypeInt::INT, T_INT);
+  Node* being_init = _gvn.intcon(instanceKlass::being_initialized);
+  tst   = Bool( CmpI( init_state, being_init), BoolTest::eq);
+  iff = create_and_map_if(control(), tst, PROB_ALWAYS, COUNT_UNKNOWN);
+  set_control(IfTrue(iff));
+  merge->set_req(2, IfFalse(iff));
+
+  PreserveJVMState pjvms(this);
+  record_for_igvn(merge);
+  set_control(merge);
+
+  uncommon_trap(Deoptimization::Reason_uninitialized,
+                Deoptimization::Action_reinterpret,
+                klass);
+}
+
+
 //------------------------------do_new-----------------------------------------
 void Parse::do_new() {
   kill_dead_locals();
@@ -206,7 +243,7 @@ void Parse::do_new() {
   assert(will_link, "_new: typeflow responsibility");
 
   // Should initialize, or throw an InstantiationError?
-  if (!klass->is_initialized() ||
+  if (!klass->is_initialized() && !klass->is_being_initialized() ||
       klass->is_abstract() || klass->is_interface() ||
       klass->name() == ciSymbol::java_lang_Class() ||
       iter().is_unresolved_klass()) {
@@ -215,12 +252,23 @@ void Parse::do_new() {
                   klass);
     return;
   }
+  if (klass->is_being_initialized()) {
+    emit_guard_for_new(klass);
+  }
 
   Node* kls = makecon(TypeKlassPtr::make(klass));
   Node* obj = new_instance(kls);
 
   // Push resultant oop onto stack
   push(obj);
+
+  // Keep track of whether opportunities exist for StringBuilder
+  // optimizations.
+  if (OptimizeStringConcat &&
+      (klass == C->env()->StringBuilder_klass() ||
+       klass == C->env()->StringBuffer_klass())) {
+    C->set_has_stringbuilder(true);
+  }
 }
 
 #ifndef PRODUCT
@@ -406,15 +454,15 @@ void Parse::profile_not_taken_branch(bool force_update) {
 void Parse::profile_call(Node* receiver) {
   if (!method_data_update()) return;
 
-  profile_generic_call();
-
   switch (bc()) {
   case Bytecodes::_invokevirtual:
   case Bytecodes::_invokeinterface:
     profile_receiver_type(receiver);
     break;
   case Bytecodes::_invokestatic:
+  case Bytecodes::_invokedynamic:
   case Bytecodes::_invokespecial:
+    profile_generic_call();
     break;
   default: fatal("unexpected call bytecode");
   }
@@ -435,13 +483,16 @@ void Parse::profile_generic_call() {
 void Parse::profile_receiver_type(Node* receiver) {
   assert(method_data_update(), "must be generating profile code");
 
-  // Skip if we aren't tracking receivers
-  if (TypeProfileWidth < 1) return;
-
   ciMethodData* md = method()->method_data();
   assert(md != NULL, "expected valid ciMethodData");
   ciProfileData* data = md->bci_to_data(bci());
   assert(data->is_ReceiverTypeData(), "need ReceiverTypeData here");
+
+  // Skip if we aren't tracking receivers
+  if (TypeProfileWidth < 1) {
+    increment_md_counter_at(md, data, CounterData::count_offset());
+    return;
+  }
   ciReceiverTypeData* rdata = (ciReceiverTypeData*)data->as_ReceiverTypeData();
 
   Node* method_data = method_data_addressing(md, rdata, in_ByteSize(0));

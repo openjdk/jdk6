@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.awt.X11;
@@ -96,7 +96,7 @@ class XDnDDragSourceProtocol extends XDragSourceProtocol {
                 action_count++;
             }
 
-            XToolkit.WITH_XERROR_HANDLER(XWM.VerifyChangePropertyHandler);
+            XToolkit.WITH_XERROR_HANDLER(XErrorHandler.VerifyChangePropertyHandler.getInstance());
             XDnDConstants.XA_XdndActionList.setAtomData(window,
                                                         XAtom.XA_ATOM,
                                                         data, action_count);
@@ -117,7 +117,7 @@ class XDnDDragSourceProtocol extends XDragSourceProtocol {
         try {
             Native.put(data, formats);
 
-            XToolkit.WITH_XERROR_HANDLER(XWM.VerifyChangePropertyHandler);
+            XToolkit.WITH_XERROR_HANDLER(XErrorHandler.VerifyChangePropertyHandler.getInstance());
             XDnDConstants.XA_XdndTypeList.setAtomData(window,
                                                       XAtom.XA_ATOM,
                                                       data, formats.length);
@@ -195,7 +195,7 @@ class XDnDDragSourceProtocol extends XDragSourceProtocol {
             new WindowPropertyGetter(window, XDnDConstants.XA_XdndAware, 0, 1,
                                      false, XlibWrapper.AnyPropertyType);
 
-        int status = wpg1.execute(XToolkit.IgnoreBadWindowHandler);
+        int status = wpg1.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
         if (status == XlibWrapper.Success &&
             wpg1.getData() != 0 && wpg1.getActualType() == XAtom.XA_ATOM) {
@@ -215,7 +215,7 @@ class XDnDDragSourceProtocol extends XDragSourceProtocol {
                                              0, 1, false, XAtom.XA_WINDOW);
 
                 try {
-                    status = wpg2.execute(XToolkit.IgnoreBadWindowHandler);
+                    status = wpg2.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
                     if (status == XlibWrapper.Success &&
                         wpg2.getData() != 0 &&
@@ -233,7 +233,7 @@ class XDnDDragSourceProtocol extends XDragSourceProtocol {
                                                  0, 1, false, XAtom.XA_WINDOW);
 
                     try {
-                        status = wpg3.execute(XToolkit.IgnoreBadWindowHandler);
+                        status = wpg3.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
                         if (status != XlibWrapper.Success ||
                             wpg3.getData() == 0 ||
@@ -249,7 +249,7 @@ class XDnDDragSourceProtocol extends XDragSourceProtocol {
                                                          XlibWrapper.AnyPropertyType);
 
                             try {
-                                status = wpg4.execute(XToolkit.IgnoreBadWindowHandler);
+                                status = wpg4.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
                                 if (status != XlibWrapper.Success ||
                                     wpg4.getData() == 0 ||

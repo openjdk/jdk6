@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 
@@ -31,14 +31,12 @@ import sun.swing.DefaultLookup;
 import sun.swing.UIAction;
 import javax.swing.*;
 import javax.swing.border.Border;
-import javax.swing.event.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.peer.ComponentPeer;
 import java.awt.peer.LightweightPeer;
 import java.beans.*;
 import java.util.*;
-import javax.swing.plaf.ActionMapUIResource;
 import javax.swing.plaf.SplitPaneUI;
 import javax.swing.plaf.ComponentUI;
 import javax.swing.plaf.UIResource;
@@ -106,13 +104,13 @@ public class BasicSplitPaneUI extends SplitPaneUI
      * Keys to use for forward focus traversal when the JComponent is
      * managing focus.
      */
-    private static Set managingFocusForwardTraversalKeys;
+    private Set managingFocusForwardTraversalKeys;
 
     /**
      * Keys to use for backward focus traversal when the JComponent is
      * managing focus.
      */
-    private static Set managingFocusBackwardTraversalKeys;
+    private Set managingFocusBackwardTraversalKeys;
 
 
     /**
@@ -347,8 +345,9 @@ public class BasicSplitPaneUI extends SplitPaneUI
         // This plus 2 here is to provide backwards consistancy. Previously,
         // the old size did not include the 2 pixel border around the divider,
         // it now does.
-        LookAndFeel.installProperty(splitPane, "dividerSize",
-                                    UIManager.get("SplitPane.dividerSize"));
+        Integer dividerSize = (Integer)UIManager.get("SplitPane.dividerSize");
+        if (divider == null) dividerSize = 10;
+        LookAndFeel.installProperty(splitPane, "dividerSize", dividerSize);
 
         divider.setDividerSize(splitPane.getDividerSize());
         dividerSize = divider.getDividerSize();
@@ -674,7 +673,7 @@ public class BasicSplitPaneUI extends SplitPaneUI
      * @return increment via keyboard methods.
      */
     int getKeyboardMoveIncrement() {
-        return KEYBOARD_DIVIDER_MOVE_OFFSET;
+        return 3;
     }
 
     /**

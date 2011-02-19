@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,13 +16,13 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
-// This file contains the platform-independant parts
+// This file contains the platform-independent parts
 // of the abstract interpreter and the abstract interpreter generator.
 
 // Organization of the interpreter(s). There exists two different interpreters in hotpot
@@ -61,6 +61,7 @@ class AbstractInterpreter: AllStatic {
     empty,                                                      // empty method (code: _return)
     accessor,                                                   // accessor method (code: _aload_0, _getfield, _(a|i)return)
     abstract,                                                   // abstract method (throws an AbstractMethodException)
+    method_handle,                                              // java.dyn.MethodHandles::invoke
     java_lang_math_sin,                                         // implementation of java.lang.Math.sin   (x)
     java_lang_math_cos,                                         // implementation of java.lang.Math.cos   (x)
     java_lang_math_tan,                                         // implementation of java.lang.Math.tan   (x)
@@ -91,8 +92,6 @@ class AbstractInterpreter: AllStatic {
 
   static address    _rethrow_exception_entry;                   // rethrows an activation in previous frame
 
-
-
   friend class      AbstractInterpreterGenerator;
   friend class              InterpreterGenerator;
   friend class      InterpreterMacroAssembler;
@@ -110,6 +109,8 @@ class AbstractInterpreter: AllStatic {
 
   static void       print_method_kind(MethodKind kind)          PRODUCT_RETURN;
 
+  static bool       can_be_compiled(methodHandle m);
+
   // Runtime support
 
   // length = invoke bytecode length (to advance to next bytecode)
@@ -123,11 +124,15 @@ class AbstractInterpreter: AllStatic {
   static int        size_top_interpreter_activation(methodOop method);
 
   // Deoptimization support
-  static address    continuation_for(methodOop method,
-                                     address bcp,
-                                     int callee_parameters,
-                                     bool is_top_frame,
-                                     bool& use_next_mdp);
+  // Compute the entry address for continuation after
+  static address deopt_continue_after_entry(methodOop method,
+                                            address bcp,
+                                            int callee_parameters,
+                                            bool is_top_frame);
+  // Compute the entry address for reexecution
+  static address deopt_reexecute_entry(methodOop method, address bcp);
+  // Deoptimization should reexecute this bytecode
+  static bool    bytecode_should_reexecute(Bytecodes::Code code);
 
   // share implementation of size_activation and layout_activation:
   static int        size_activation(methodOop method,
@@ -162,62 +167,70 @@ class AbstractInterpreter: AllStatic {
   // Debugging/printing
   static void       print();                                    // prints the interpreter code
 
-  // Support for Tagged Stacks
-  //
-  // Tags are stored on the Java Expression stack above the value:
-  //
-  //  tag
-  //  value
-  //
-  // For double values:
-  //
-  //  tag2
-  //  high word
-  //  tag1
-  //  low word
-
  public:
-  static int stackElementWords()   { return TaggedStackInterpreter ? 2 : 1; }
-  static int stackElementSize()    { return stackElementWords()*wordSize; }
-  static int logStackElementSize() { return
-                 TaggedStackInterpreter? LogBytesPerWord+1 : LogBytesPerWord; }
-
-  // Tag is at pointer, value is one below for a stack growing down
-  // (or above for stack growing up)
-  static int  value_offset_in_bytes()  {
-    return TaggedStackInterpreter ?
-      frame::interpreter_frame_expression_stack_direction() * wordSize : 0;
-  }
-  static int  tag_offset_in_bytes()    {
-    assert(TaggedStackInterpreter, "should not call this");
-    return 0;
-  }
-
-  // Tagged Locals
-  // Locals are stored relative to Llocals:
-  //
-  // tag    <- Llocals[n]
-  // value
-  //
-  // Category 2 types are indexed as:
-  //
-  // tag    <- Llocals[-n]
-  // high word
-  // tag    <- Llocals[-n+1]
-  // low word
-  //
+  // Interpreter helpers
+  const static int stackElementWords   = 1;
+  const static int stackElementSize    = stackElementWords * wordSize;
+  const static int logStackElementSize = LogBytesPerWord;
 
   // Local values relative to locals[n]
   static int  local_offset_in_bytes(int n) {
-    return ((frame::interpreter_frame_expression_stack_direction() * n) *
-            stackElementSize()) + value_offset_in_bytes();
-  }
-  static int  local_tag_offset_in_bytes(int n) {
-    assert(TaggedStackInterpreter, "should not call this");
-    return ((frame::interpreter_frame_expression_stack_direction() * n) *
-            stackElementSize()) + tag_offset_in_bytes();
+    return ((frame::interpreter_frame_expression_stack_direction() * n) * stackElementSize);
   }
 
+  // access to stacked values according to type:
+  static oop* oop_addr_in_slot(intptr_t* slot_addr) {
+    return (oop*) slot_addr;
+  }
+  static jint* int_addr_in_slot(intptr_t* slot_addr) {
+    if ((int) sizeof(jint) < wordSize && !Bytes::is_Java_byte_ordering_different())
+      // big-endian LP64
+      return (jint*)(slot_addr + 1) - 1;
+    else
+      return (jint*) slot_addr;
+  }
+  static jlong long_in_slot(intptr_t* slot_addr) {
+    if (sizeof(intptr_t) >= sizeof(jlong)) {
+      return *(jlong*) slot_addr;
+    } else {
+      return Bytes::get_native_u8((address)slot_addr);
+    }
+  }
+  static void set_long_in_slot(intptr_t* slot_addr, jlong value) {
+    if (sizeof(intptr_t) >= sizeof(jlong)) {
+      *(jlong*) slot_addr = value;
+    } else {
+      Bytes::put_native_u8((address)slot_addr, value);
+    }
+  }
+  static void get_jvalue_in_slot(intptr_t* slot_addr, BasicType type, jvalue* value) {
+    switch (type) {
+    case T_BOOLEAN: value->z = *int_addr_in_slot(slot_addr);            break;
+    case T_CHAR:    value->c = *int_addr_in_slot(slot_addr);            break;
+    case T_BYTE:    value->b = *int_addr_in_slot(slot_addr);            break;
+    case T_SHORT:   value->s = *int_addr_in_slot(slot_addr);            break;
+    case T_INT:     value->i = *int_addr_in_slot(slot_addr);            break;
+    case T_LONG:    value->j = long_in_slot(slot_addr);                 break;
+    case T_FLOAT:   value->f = *(jfloat*)int_addr_in_slot(slot_addr);   break;
+    case T_DOUBLE:  value->d = jdouble_cast(long_in_slot(slot_addr));   break;
+    case T_OBJECT:  value->l = (jobject)*oop_addr_in_slot(slot_addr);   break;
+    default:        ShouldNotReachHere();
+    }
+  }
+  static void set_jvalue_in_slot(intptr_t* slot_addr, BasicType type, jvalue* value) {
+    switch (type) {
+    case T_BOOLEAN: *int_addr_in_slot(slot_addr) = (value->z != 0);     break;
+    case T_CHAR:    *int_addr_in_slot(slot_addr) = value->c;            break;
+    case T_BYTE:    *int_addr_in_slot(slot_addr) = value->b;            break;
+    case T_SHORT:   *int_addr_in_slot(slot_addr) = value->s;            break;
+    case T_INT:     *int_addr_in_slot(slot_addr) = value->i;            break;
+    case T_LONG:    set_long_in_slot(slot_addr, value->j);              break;
+    case T_FLOAT:   *(jfloat*)int_addr_in_slot(slot_addr) = value->f;   break;
+    case T_DOUBLE:  set_long_in_slot(slot_addr, jlong_cast(value->d));  break;
+    case T_OBJECT:  *oop_addr_in_slot(slot_addr) = (oop) value->l;      break;
+    default:        ShouldNotReachHere();
+    }
+  }
 };
 
 //------------------------------------------------------------------------------------------------------------------------

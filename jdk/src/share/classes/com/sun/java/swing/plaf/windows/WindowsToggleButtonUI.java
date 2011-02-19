@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,12 +18,14 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package com.sun.java.swing.plaf.windows;
+
+import sun.awt.AppContext;
 
 import javax.swing.plaf.basic.*;
 import javax.swing.border.*;
@@ -49,18 +51,25 @@ import java.beans.PropertyChangeEvent;
  */
 public class WindowsToggleButtonUI extends BasicToggleButtonUI
 {
-    protected static int dashedRectGapX;
-    protected static int dashedRectGapY;
-    protected static int dashedRectGapWidth;
-    protected static int dashedRectGapHeight;
+    protected int dashedRectGapX;
+    protected int dashedRectGapY;
+    protected int dashedRectGapWidth;
+    protected int dashedRectGapHeight;
 
     protected Color focusColor;
 
-    private final static WindowsToggleButtonUI windowsToggleButtonUI = new WindowsToggleButtonUI();
+    private static final Object WINDOWS_TOGGLE_BUTTON_UI_KEY = new Object();
 
     private boolean defaults_initialized = false;
 
     public static ComponentUI createUI(JComponent b) {
+        AppContext appContext = AppContext.getAppContext();
+        WindowsToggleButtonUI windowsToggleButtonUI = 
+                (WindowsToggleButtonUI) appContext.get(WINDOWS_TOGGLE_BUTTON_UI_KEY);
+        if (windowsToggleButtonUI == null) {
+            windowsToggleButtonUI = new WindowsToggleButtonUI();
+            appContext.put(WINDOWS_TOGGLE_BUTTON_UI_KEY, windowsToggleButtonUI);
+        }
         return windowsToggleButtonUI;
     }
 

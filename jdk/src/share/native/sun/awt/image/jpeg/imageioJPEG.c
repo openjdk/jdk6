@@ -1,12 +1,12 @@
 /*
- * Copyright 2000-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 /*
@@ -258,6 +258,7 @@ static void clearStreamBuffer(streamBufferPtr sb) {
 
 typedef struct pixelBufferStruct {
     jobject hpixelObject;   // Usually a DataBuffer bank as a byte array
+    unsigned int byteBufferLength;
     union pixptr {
         INT32         *ip;  // Pinned buffer pointer, as 32-bit ints
         unsigned char *bp;  // Pinned buffer pointer, as bytes
@@ -270,6 +271,7 @@ typedef struct pixelBufferStruct {
  */
 static void initPixelBuffer(pixelBufferPtr pb) {
     pb->hpixelObject = NULL;
+    pb->byteBufferLength = 0;
     pb->buf.ip = NULL;
 }
 
@@ -279,13 +281,13 @@ static void initPixelBuffer(pixelBufferPtr pb) {
  */
 static int setPixelBuffer(JNIEnv *env, pixelBufferPtr pb, jobject obj) {
     pb->hpixelObject = (*env)->NewGlobalRef(env, obj);
-
     if (pb->hpixelObject == NULL) {
         JNU_ThrowByName( env,
                          "java/lang/OutOfMemoryError",
                          "Setting Pixel Buffer");
         return NOT_OK;
     }
+    pb->byteBufferLength = (*env)->GetArrayLength(env, pb->hpixelObject);
     return OK;
 }
 
@@ -302,6 +304,7 @@ static void resetPixelBuffer(JNIEnv *env, pixelBufferPtr pb) {
         unpinPixelBuffer(env, pb);
         (*env)->DeleteGlobalRef(env, pb->hpixelObject);
         pb->hpixelObject = NULL;
+        pb->byteBufferLength = 0;
     }
 }
 
@@ -685,6 +688,10 @@ static int setQTables(JNIEnv *env,
 #ifdef DEBUG
     printf("in setQTables, qlen = %d, write is %d\n", qlen, write);
 #endif
+    if (qlen > NUM_QUANT_TBLS) {
+        /* Ignore extra qunterization tables. */
+        qlen = NUM_QUANT_TBLS;
+    }
     for (i = 0; i < qlen; i++) {
         table = (*env)->GetObjectArrayElement(env, qtables, i);
         qdata = (*env)->GetObjectField(env, table, JPEGQTable_tableID);
@@ -736,6 +743,11 @@ static void setHuffTable(JNIEnv *env,
     hlensBody = (*env)->GetShortArrayElements(env,
                                               huffLens,
                                               NULL);
+    if (hlensLen > 16) {
+        /* Ignore extra elements of bits array. Only 16 elements can be
+           stored. 0-th element is not used. (see jpeglib.h, line 107)  */
+        hlensLen = 16;
+    }
     for (i = 1; i <= hlensLen; i++) {
         huff_ptr->bits[i] = (UINT8)hlensBody[i-1];
     }
@@ -752,6 +764,11 @@ static void setHuffTable(JNIEnv *env,
                                               huffValues,
                                               NULL);
 
+    if (hvalsLen > 256) {
+        /* Ignore extra elements of hufval array. Only 256 elements
+           can be stored. (see jpeglib.h, line 109)                  */
+        hlensLen = 256;
+    }
     for (i = 0; i < hvalsLen; i++) {
         huff_ptr->huffval[i] = (UINT8)hvalsBody[i];
     }
@@ -772,6 +789,11 @@ static int setHTables(JNIEnv *env,
     j_compress_ptr comp;
     j_decompress_ptr decomp;
     jsize hlen = (*env)->GetArrayLength(env, DCHuffmanTables);
+
+    if (hlen > NUM_HUFF_TBLS) {
+        /* Ignore extra DC huffman tables. */
+        hlen = NUM_HUFF_TBLS;
+    }
     for (i = 0; i < hlen; i++) {
         if (cinfo->is_decompressor) {
             decomp = (j_decompress_ptr) cinfo;
@@ -793,6 +815,10 @@ static int setHTables(JNIEnv *env,
         huff_ptr->sent_table = !write;
     }
     hlen = (*env)->GetArrayLength(env, ACHuffmanTables);
+    if (hlen > NUM_HUFF_TBLS) {
+        /* Ignore extra AC huffman tables. */
+        hlen = NUM_HUFF_TBLS;
+    }
     for (i = 0; i < hlen; i++) {
         if (cinfo->is_decompressor) {
             decomp = (j_decompress_ptr) cinfo;
@@ -1783,6 +1809,7 @@ Java_com_sun_imageio_plugins_jpeg_JPEGImageReader_readImage
     boolean orderedBands = TRUE;
     imageIODataPtr data = (imageIODataPtr) ptr;
     j_decompress_ptr cinfo;
+    unsigned int numBytes;
 
     /* verify the inputs */
 
@@ -1812,6 +1839,13 @@ Java_com_sun_imageio_plugins_jpeg_JPEGImageReader_readImage
         JNU_ThrowByName(env, "javax/imageio/IIOException",
                         "Invalid argument to native readImage");
         return JNI_FALSE;
+    }
+
+    if (stepX > cinfo->image_width) {
+        stepX = cinfo->image_width;
+    }
+    if (stepY > cinfo->image_height) {
+        stepY = cinfo->image_height;
     }
 
     /*
@@ -2000,15 +2034,22 @@ Java_com_sun_imageio_plugins_jpeg_JPEGImageReader_readImage
                 // scanline buffer into the raster.
                 in = scanLinePtr + (sourceXStart * cinfo->num_components);
                 if (pixelLimit > in) {
-                    memcpy(out, in, pixelLimit - in);
+                    numBytes = pixelLimit - in;
+                    if (numBytes > data->pixelBuf.byteBufferLength) {
+                        numBytes = data->pixelBuf.byteBufferLength;
+                    }
+                    memcpy(out, in, numBytes);
                 }
             } else {
+                numBytes = numBands;
                 for (in = scanLinePtr+sourceXStart*cinfo->num_components;
-                     in < pixelLimit;
+                     in < pixelLimit  &&
+                       numBytes <= data->pixelBuf.byteBufferLength;
                      in += pixelStride) {
                     for (i = 0; i < numBands; i++) {
                         *out++ = *(in+bands[i]);
                     }
+                    numBytes += numBands;
                 }
             }
 
@@ -2578,7 +2619,8 @@ Java_com_sun_imageio_plugins_jpeg_JPEGImageWriter_writeImage
     JSAMPROW scanLinePtr;
     int i, j;
     int pixelStride;
-    unsigned char *in, *out, *pixelLimit;
+    unsigned char *in, *out, *pixelLimit, *scanLineLimit;
+    unsigned int scanLineSize, pixelBufferSize;
     int targetLine;
     pixelBufferPtr pb;
     sun_jpeg_error_ptr jerr;
@@ -2614,17 +2656,23 @@ Java_com_sun_imageio_plugins_jpeg_JPEGImageWriter_writeImage
 
     }
 
+    scanLineSize = destWidth * numBands;
     if ((inCs < 0) || (inCs > JCS_YCCK) ||
         (outCs < 0) || (outCs > JCS_YCCK) ||
         (numBands < 1) || (numBands > MAX_BANDS) ||
         (srcWidth < 0) ||
         (destWidth < 0) || (destWidth > srcWidth) ||
         (destHeight < 0) ||
-        (stepX < 0) || (stepY < 0))
+        (stepX < 0) || (stepY < 0) ||
+        ((scanLineSize / numBands) < destWidth))  /* destWidth causes an integer overflow */
     {
         JNU_ThrowByName(env, "javax/imageio/IIOException",
                         "Invalid argument to native writeImage");
         return JNI_FALSE;
+    }
+
+    if (stepX > srcWidth) {
+        stepX = srcWidth;
     }
 
     bandSize = (*env)->GetIntArrayElements(env, bandSizes, NULL);
@@ -2666,7 +2714,7 @@ Java_com_sun_imageio_plugins_jpeg_JPEGImageWriter_writeImage
     }
 
     // Allocate a 1-scanline buffer
-    scanLinePtr = (JSAMPROW)malloc(destWidth*numBands);
+    scanLinePtr = (JSAMPROW)malloc(scanLineSize);
     if (scanLinePtr == NULL) {
         RELEASE_ARRAYS(env, data, (const JOCTET *)(dest->next_output_byte));
         JNU_ThrowByName( env,
@@ -2674,6 +2722,7 @@ Java_com_sun_imageio_plugins_jpeg_JPEGImageWriter_writeImage
                          "Writing JPEG Stream");
         return data->abortFlag;
     }
+    scanLineLimit = scanLinePtr + scanLineSize;
 
     /* Establish the setjmp return context for sun_jpeg_error_exit to use. */
     jerr = (sun_jpeg_error_ptr) cinfo->err;
@@ -2822,6 +2871,8 @@ Java_com_sun_imageio_plugins_jpeg_JPEGImageWriter_writeImage
     }
 
     targetLine = 0;
+    pixelBufferSize = srcWidth * numBands;
+    pixelStride = numBands * stepX;
 
     // for each line in destHeight
     while ((data->abortFlag == JNI_FALSE)
@@ -2842,10 +2893,10 @@ Java_com_sun_imageio_plugins_jpeg_JPEGImageWriter_writeImage
 
         in = data->pixelBuf.buf.bp;
         out = scanLinePtr;
-        pixelLimit = in + srcWidth*numBands;
-        pixelStride = numBands*stepX;
+        pixelLimit = in + ((pixelBufferSize > data->pixelBuf.byteBufferLength) ?
+                           data->pixelBuf.byteBufferLength : pixelBufferSize);
         if (mustScale) {
-            for (; in < pixelLimit; in += pixelStride) {
+          for (; (in < pixelLimit) && (out < scanLineLimit); in += pixelStride) {
                 for (i = 0; i < numBands; i++) {
                     *out++ = data->scale[i][*(in+i)];
 #ifdef DEBUG
@@ -2861,11 +2912,11 @@ Java_com_sun_imageio_plugins_jpeg_JPEGImageWriter_writeImage
 #endif
             }
         } else {
-            for (; in < pixelLimit; in += pixelStride) {
+          for (; (in < pixelLimit) && (out < scanLineLimit); in += pixelStride) {
                 for (i = 0; i < numBands; i++) {
                     *out++ = *(in+i);
                 }
-            }
+          }
         }
         // write it out
         jpeg_write_scanlines(cinfo, (JSAMPARRAY)&scanLinePtr, 1);

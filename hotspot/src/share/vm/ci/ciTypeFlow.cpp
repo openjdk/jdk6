@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -541,7 +541,7 @@ void ciTypeFlow::StateVector::do_aaload(ciBytecodeStream* str) {
     // is report a value that will meet correctly with any downstream
     // reference types on paths that will truly be executed.  This null type
     // meets with any reference type to yield that same reference type.
-    // (The compiler will generate an unconditonal exception here.)
+    // (The compiler will generate an unconditional exception here.)
     push(null_type());
     return;
   }
@@ -635,8 +635,15 @@ void ciTypeFlow::StateVector::do_invoke(ciBytecodeStream* str,
   ciMethod* method = str->get_method(will_link);
   if (!will_link) {
     // We weren't able to find the method.
-    ciKlass* unloaded_holder = method->holder();
-    trap(str, unloaded_holder, str->get_method_holder_index());
+    if (str->cur_bc() == Bytecodes::_invokedynamic) {
+      trap(str, NULL,
+           Deoptimization::make_trap_request
+           (Deoptimization::Reason_uninitialized,
+            Deoptimization::Action_reinterpret));
+    } else {
+      ciKlass* unloaded_holder = method->holder();
+      trap(str, unloaded_holder, str->get_method_holder_index());
+    }
   } else {
     ciSignature* signature = method->signature();
     ciSignatureStream sigstr(signature);
@@ -705,10 +712,8 @@ void ciTypeFlow::StateVector::do_ldc(ciBytecodeStream* str) {
     ciObject* obj = con.as_object();
     if (obj->is_null_object()) {
       push_null();
-    } else if (obj->is_klass()) {
-      // The type of ldc <class> is java.lang.Class
-      push_object(outer()->env()->Class_klass());
     } else {
+      assert(!obj->is_klass(), "must be java_mirror of klass");
       push_object(obj->klass());
     }
   } else {
@@ -1292,8 +1297,8 @@ bool ciTypeFlow::StateVector::apply_one_bytecode(ciBytecodeStream* str) {
   case Bytecodes::_invokeinterface: do_invoke(str, true);           break;
   case Bytecodes::_invokespecial:   do_invoke(str, true);           break;
   case Bytecodes::_invokestatic:    do_invoke(str, false);          break;
-
   case Bytecodes::_invokevirtual:   do_invoke(str, true);           break;
+  case Bytecodes::_invokedynamic:   do_invoke(str, false);          break;
 
   case Bytecodes::_istore:   store_local_int(str->get_index());     break;
   case Bytecodes::_istore_0: store_local_int(0);                    break;
@@ -2125,6 +2130,7 @@ bool ciTypeFlow::can_trap(ciBytecodeStream& str) {
   if (!Bytecodes::can_trap(str.cur_bc()))  return false;
 
   switch (str.cur_bc()) {
+    // %%% FIXME: ldc of Class can generate an exception
     case Bytecodes::_ldc:
     case Bytecodes::_ldc_w:
     case Bytecodes::_ldc2_w:
@@ -2486,8 +2492,13 @@ void ciTypeFlow::build_loop_tree(Block* blk) {
         // Assume irreducible entries need more data flow
         add_to_work_list(succ);
       }
-      lp = lp->parent();
-      assert(lp != NULL, "nested loop must have parent by now");
+      Loop* plp = lp->parent();
+      if (plp == NULL) {
+        // This only happens for some irreducible cases.  The parent
+        // will be updated during a later pass.
+        break;
+      }
+      lp = plp;
     }
 
     // Merge loop tree branch for all successors.
@@ -2580,7 +2591,7 @@ void ciTypeFlow::df_flow_types(Block* start,
                                StateVector* temp_vector,
                                JsrSet* temp_set) {
   int dft_len = 100;
-  GrowableArray<Block*> stk(arena(), dft_len, 0, NULL);
+  GrowableArray<Block*> stk(dft_len);
 
   ciBlock* dummy = _methodBlocks->make_dummy_block();
   JsrSet* root_set = new JsrSet(NULL, 0);

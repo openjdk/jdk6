@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -96,14 +96,14 @@ forward_to_block_containing_addr_const(HeapWord* q, HeapWord* n,
     while (n <= addr) {
       q = n;
       oop obj = oop(q);
-      if (obj->klass() == NULL) return q;
+      if (obj->klass_or_null() == NULL) return q;
       n += obj->size();
     }
   } else {
     while (n <= addr) {
       q = n;
       oop obj = oop(q);
-      if (obj->klass() == NULL) return q;
+      if (obj->klass_or_null() == NULL) return q;
       n += _sp->block_size(q);
     }
   }
@@ -115,7 +115,7 @@ forward_to_block_containing_addr_const(HeapWord* q, HeapWord* n,
 inline HeapWord*
 G1BlockOffsetArray::forward_to_block_containing_addr(HeapWord* q,
                                                      const void* addr) {
-  if (oop(q)->klass() == NULL) return q;
+  if (oop(q)->klass_or_null() == NULL) return q;
   HeapWord* n = q + _sp->block_size(q);
   // In the normal case, where the query "addr" is a card boundary, and the
   // offset table chunks are the same size as cards, the block starting at

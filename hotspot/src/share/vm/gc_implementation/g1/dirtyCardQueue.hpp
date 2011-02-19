@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -84,11 +84,12 @@ class DirtyCardQueueSet: public PtrQueueSet {
   jint _processed_buffers_rs_thread;
 
 public:
-  DirtyCardQueueSet();
+  DirtyCardQueueSet(bool notify_when_complete = true);
 
   void initialize(Monitor* cbl_mon, Mutex* fl_lock,
-                  int max_completed_queue = 0,
-                  Mutex* lock = NULL, PtrQueueSet* fl_owner = NULL);
+                  int process_completed_threshold,
+                  int max_completed_queue,
+                  Mutex* lock, PtrQueueSet* fl_owner = NULL);
 
   // The number of parallel ids that can be claimed to allow collector or
   // mutator threads to do card-processing work.
@@ -120,12 +121,27 @@ public:
   // is returned to the completed buffer set, and this call returns false.
   bool apply_closure_to_completed_buffer(int worker_i = 0,
                                          int stop_at = 0,
-                                         bool with_CAS = false);
-  bool apply_closure_to_completed_buffer_helper(int worker_i,
-                                                CompletedBufferNode* nd);
+                                         bool during_pause = false);
 
-  CompletedBufferNode* get_completed_buffer_CAS();
-  CompletedBufferNode* get_completed_buffer_lock(int stop_at);
+  // If there exists some completed buffer, pop it, then apply the
+  // specified closure to all its elements, nulling out those elements
+  // processed.  If all elements are processed, returns "true".  If no
+  // completed buffers exist, returns false.  If a completed buffer exists,
+  // but is only partially completed before a "yield" happens, the
+  // partially completed buffer (with its processed elements set to NULL)
+  // is returned to the completed buffer set, and this call returns false.
+  bool apply_closure_to_completed_buffer(CardTableEntryClosure* cl,
+                                         int worker_i = 0,
+                                         int stop_at = 0,
+                                         bool during_pause = false);
+
+  // Helper routine for the above.
+  bool apply_closure_to_completed_buffer_helper(CardTableEntryClosure* cl,
+                                                int worker_i,
+                                                BufferNode* nd);
+
+  BufferNode* get_completed_buffer(int stop_at);
+
   // Applies the current closure to all completed buffers,
   // non-consumptively.
   void apply_closure_to_all_completed_buffers();
@@ -133,6 +149,9 @@ public:
   DirtyCardQueue* shared_dirty_card_queue() {
     return &_shared_dirty_card_queue;
   }
+
+  // Deallocate any completed log buffers
+  void clear();
 
   // If a full collection is happening, reset partial logs, and ignore
   // completed ones: the full collection will make them all irrelevant.

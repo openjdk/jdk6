@@ -1,12 +1,12 @@
 /*
- * Copyright 2000-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.security.provider.certpath;
@@ -70,6 +70,7 @@ class ForwardBuilder extends Builder {
     TrustAnchor trustAnchor;
     private Comparator<X509Certificate> comparator;
     private boolean searchAllCertStores = true;
+    private boolean onlyEECert = false;
 
     /**
      * Initialize the builder with the input parameters.
@@ -77,7 +78,8 @@ class ForwardBuilder extends Builder {
      * @param params the parameter set used to build a certification path
      */
     ForwardBuilder(PKIXBuilderParameters buildParams,
-        X500Principal targetSubjectDN, boolean searchAllCertStores)
+        X500Principal targetSubjectDN, boolean searchAllCertStores,
+        boolean onlyEECert)
     {
         super(buildParams, targetSubjectDN);
 
@@ -96,6 +98,7 @@ class ForwardBuilder extends Builder {
         }
         comparator = new PKIXCertComparator(trustedSubjectDNs);
         this.searchAllCertStores = searchAllCertStores;
+        this.onlyEECert = onlyEECert;
     }
 
     /**
@@ -676,6 +679,11 @@ class ForwardBuilder extends Builder {
         /* we don't perform any validation of the trusted cert */
         if (!isTrustedCert) {
             /*
+             * check that the signature algorithm is not disabled.
+             */
+            AlgorithmChecker.check(cert);
+
+            /*
              * Check CRITICAL private extensions for user checkers that
              * support forward checking (forwardCheckers) and remove
              * ones we know how to check.
@@ -822,8 +830,8 @@ class ForwardBuilder extends Builder {
             /* Check revocation if it is enabled */
             if (buildParams.isRevocationEnabled()) {
                 try {
-                    CrlRevocationChecker crlChecker =
-                        new CrlRevocationChecker(anchor, buildParams);
+                    CrlRevocationChecker crlChecker = new CrlRevocationChecker
+                        (anchor, buildParams, null, onlyEECert);
                     crlChecker.check(cert, anchor.getCAPublicKey(), true);
                 } catch (CertPathValidatorException cpve) {
                     if (debug != null) {

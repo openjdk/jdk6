@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package com.sun.tools.jdi;
@@ -158,7 +158,7 @@ public abstract class MethodImpl extends TypeComponentImpl
 
     Type argumentType(int index) throws ClassNotLoadedException {
         ReferenceTypeImpl enclosing = (ReferenceTypeImpl)declaringType();
-        String signature = (String)argumentSignatures().get(index);
+        String signature = argumentSignatures().get(index);
         return enclosing.findType(signature);
     }
 
@@ -263,10 +263,10 @@ public abstract class MethodImpl extends TypeComponentImpl
             return argumentType(index);
         }
         public String typeName(){
-            return (String)argumentTypeNames().get(index);
+            return argumentTypeNames().get(index);
         }
         public String signature() {
-            return (String)argumentSignatures().get(index);
+            return argumentSignatures().get(index);
         }
         public Type findType(String signature) throws ClassNotLoadedException {
             return MethodImpl.this.findType(signature);
@@ -307,7 +307,7 @@ public abstract class MethodImpl extends TypeComponentImpl
             arguments.add(argArray);
             return;
         }
-        Value nthArgValue = (Value)arguments.get(paramCount - 1);
+        Value nthArgValue = arguments.get(paramCount - 1);
         if (nthArgValue == null) {
             return;
         }
@@ -371,7 +371,7 @@ public abstract class MethodImpl extends TypeComponentImpl
         }
 
         for (int i = 0; i < argSize; i++) {
-            Value value = (Value)arguments.get(i);
+            Value value = arguments.get(i);
             value = ValueImpl.prepareForAssignment(value,
                                                    new ArgumentContainer(i));
             arguments.set(i, value);
@@ -386,11 +386,11 @@ public abstract class MethodImpl extends TypeComponentImpl
         sb.append(name());
         sb.append("(");
         boolean first = true;
-        for (Iterator it = argumentTypeNames().iterator(); it.hasNext();) {
+        for (String name : argumentTypeNames()) {
             if (!first) {
                 sb.append(", ");
             }
-            sb.append((String)it.next());
+            sb.append(name);
             first = false;
         }
         sb.append(")");

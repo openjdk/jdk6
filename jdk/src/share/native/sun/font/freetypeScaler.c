@@ -1,12 +1,12 @@
 /*
- * Copyright (c) 2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 #include "jni.h"
@@ -102,8 +102,20 @@ Java_sun_font_FreetypeFontScaler_initIDs(
 }
 
 static void freeNativeResources(JNIEnv *env, FTScalerInfo* scalerInfo) {
+    void *stream;
+
     if (scalerInfo == NULL)
         return;
+
+    //apparently Done_Face will only close the stream
+    // but will not relase the memory of stream structure.
+    // We need to free it explicitly to avoid leak.
+    //Direct access to the stream field might be not ideal solution as
+    // it is considred to be "private".
+    //Alternatively we could have stored pointer to the structure
+    // in the scalerInfo but this will increase size of the structure
+    // for no good reason
+    stream = scalerInfo->face->stream;
 
     FT_Done_Face(scalerInfo->face);
     FT_Done_FreeType(scalerInfo->library);
@@ -115,6 +127,10 @@ static void freeNativeResources(JNIEnv *env, FTScalerInfo* scalerInfo) {
     if (scalerInfo->fontData != NULL) {
         free(scalerInfo->fontData);
     }
+
+   if (stream != NULL) {
+        free(stream);
+   }
 
     free(scalerInfo);
 }
@@ -368,7 +384,7 @@ Java_sun_font_FreetypeFontScaler_createScalerContextNative(
         //text can not be smaller than 1 point
         ptsz = 1.0;
     }
-    context->ptsz = (((int) ptsz) << 6);
+    context->ptsz = (int)(ptsz * 64);
     context->transform.xx =  FloatToFTFixed((float)dmat[0]/ptsz);
     context->transform.yx = -FloatToFTFixed((float)dmat[1]/ptsz);
     context->transform.xy = -FloatToFTFixed((float)dmat[2]/ptsz);
@@ -474,22 +490,23 @@ Java_sun_font_FreetypeFontScaler_getFontMetricsNative(
 
     /* ascent */
     ax = 0;
-    ay = -(jfloat) FT26Dot6ToFloat(
-                       scalerInfo->face->size->metrics.ascender +
-                       bmodifier/2);
+    ay = -(jfloat) FT26Dot6ToFloat(FT_MulFix(
+                       ((jlong) scalerInfo->face->ascender + bmodifier/2),
+                       (jlong) scalerInfo->face->size->metrics.y_scale));
     /* descent */
     dx = 0;
-    dy = -(jfloat) FT26Dot6ToFloat(
-                       scalerInfo->face->size->metrics.descender +
-                       bmodifier/2);
+    dy = -(jfloat) FT26Dot6ToFloat(FT_MulFix(
+                       ((jlong) scalerInfo->face->descender + bmodifier/2),
+                       (jlong) scalerInfo->face->size->metrics.y_scale));
     /* baseline */
     bx = by = 0;
 
     /* leading */
     lx = 0;
-    ly = (jfloat) FT26Dot6ToFloat(
-                      scalerInfo->face->size->metrics.height +
-                      bmodifier) + ay - dy;
+    ly = (jfloat) FT26Dot6ToFloat(FT_MulFix(
+                      (jlong) scalerInfo->face->height + bmodifier,
+                      (jlong) scalerInfo->face->size->metrics.y_scale))
+                  + ay - dy;
     /* max advance */
     mx = (jfloat) FT26Dot6ToFloat(
                      scalerInfo->face->size->metrics.max_advance +
@@ -772,22 +789,31 @@ Java_sun_font_FreetypeFontScaler_getGlyphImageNative(
     glyphInfo->topLeftX  = (float)  ftglyph->bitmap_left;
     glyphInfo->topLeftY  = (float) -ftglyph->bitmap_top;
 
-    if (context->aaType == TEXT_AA_LCD_HRGB ||
-        context->aaType == TEXT_AA_LCD_HBGR) {
+    if (ftglyph->bitmap.pixel_mode ==  FT_PIXEL_MODE_LCD) {
         glyphInfo->width = width/3;
-    } else if (context->aaType == TEXT_AA_LCD_VRGB ||
-               context->aaType == TEXT_AA_LCD_VBGR) {
+    } else if (ftglyph->bitmap.pixel_mode ==  FT_PIXEL_MODE_LCD_V) {
         glyphInfo->height = glyphInfo->height/3;
     }
 
     if (context->fmType == TEXT_FM_ON) {
-        glyphInfo->advanceX = FT26Dot6ToFloat(ftglyph->advance.x);
-        glyphInfo->advanceY = FT26Dot6ToFloat(-ftglyph->advance.y);
-    } else {
+        double advh = FTFixedToFloat(ftglyph->linearHoriAdvance);
         glyphInfo->advanceX =
-           (float) ROUND(FT26Dot6ToFloat(ftglyph->advance.x));
+            (float) (advh * FTFixedToFloat(context->transform.xx));
         glyphInfo->advanceY =
-           (float) ROUND(FT26Dot6ToFloat(-ftglyph->advance.y));
+            (float) (advh * FTFixedToFloat(context->transform.xy));
+    } else {
+        if (!ftglyph->advance.y) {
+            glyphInfo->advanceX =
+                (float) ROUND(FT26Dot6ToFloat(ftglyph->advance.x));
+            glyphInfo->advanceY = 0;
+        } else if (!ftglyph->advance.x) {
+            glyphInfo->advanceX = 0;
+            glyphInfo->advanceY =
+                (float) ROUND(FT26Dot6ToFloat(-ftglyph->advance.y));
+        } else {
+            glyphInfo->advanceX = FT26Dot6ToFloat(ftglyph->advance.x);
+            glyphInfo->advanceY = FT26Dot6ToFloat(-ftglyph->advance.y);
+        }
     }
 
     if (imageSize == 0) {
@@ -993,7 +1019,7 @@ static FT_Outline* getFTOutline(JNIEnv* env, jobject font2D,
 
     FT_Outline_Translate(&ftglyph->outline,
                          FloatToF26Dot6(xpos),
-                         FloatToF26Dot6(ypos));
+                         -FloatToF26Dot6(ypos));
 
     return &ftglyph->outline;
 }
@@ -1291,7 +1317,7 @@ Java_sun_font_FreetypeFontScaler_getGlyphOutlineBoundsNative(
                                    sunFontIDs.rect2DFloatClass,
                                    sunFontIDs.rect2DFloatCtr4,
                                    F26Dot6ToFloat(bbox.xMin),
-                                   F26Dot6ToFloat(bbox.yMax),
+                                   F26Dot6ToFloat(-bbox.yMax),
                                    F26Dot6ToFloat(bbox.xMax-bbox.xMin),
                                    F26Dot6ToFloat(bbox.yMax-bbox.yMin));
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -390,15 +390,10 @@ JVM_FindClassFromClassLoader(JNIEnv *env, const char *name, jboolean init,
                              jobject loader, jboolean throwError);
 
 /*
- * Find a class from a boot class loader. Throw ClassNotFoundException
- * or NoClassDefFoundError depending on the value of the last
- * argument. This is the same as FindClassFromClassLoader but provided
- * as a convenience method exported correctly on all platforms for
- * JSR 277 launcher class loading.
+ * Find a class from a boot class loader. Returns NULL if class not found.
  */
 JNIEXPORT jclass JNICALL
-JVM_FindClassFromBootLoader(JNIEnv *env, const char *name,
-                            jboolean throwError);
+JVM_FindClassFromBootLoader(JNIEnv *env, const char *name);
 
 /*
  * Find a class from a given class.
@@ -421,6 +416,17 @@ JNIEXPORT jclass JNICALL
 JVM_DefineClassWithSource(JNIEnv *env, const char *name, jobject loader,
                           const jbyte *buf, jsize len, jobject pd,
                           const char *source);
+
+/* Define a class with a source with conditional verification (added HSX 14)
+ * -Xverify:all will verify anyway, -Xverify:none will not verify,
+ * -Xverify:remote (default) will obey this conditional
+ * i.e. true = should_verify_class
+ */
+JNIEXPORT jclass JNICALL
+JVM_DefineClassWithSourceCond(JNIEnv *env, const char *name,
+                              jobject loader, const jbyte *buf,
+                              jsize len, jobject pd, const char *source,
+                              jboolean verify);
 
 /* Define a class with a source (MLVM) */
 JNIEXPORT jclass JNICALL
@@ -1038,7 +1044,23 @@ enum {
     JVM_CONSTANT_Fieldref,
     JVM_CONSTANT_Methodref,
     JVM_CONSTANT_InterfaceMethodref,
-    JVM_CONSTANT_NameAndType
+    JVM_CONSTANT_NameAndType,
+    JVM_CONSTANT_MethodHandle           = 15,  // JSR 292
+    JVM_CONSTANT_MethodType             = 16,  // JSR 292
+    JVM_CONSTANT_InvokeDynamic          = 17  // JSR 292
+};
+
+/* JVM_CONSTANT_MethodHandle subtypes */
+enum {
+    JVM_REF_getField                = 1,
+    JVM_REF_getStatic               = 2,
+    JVM_REF_putField                = 3,
+    JVM_REF_putStatic               = 4,
+    JVM_REF_invokeVirtual           = 5,
+    JVM_REF_invokeStatic            = 6,
+    JVM_REF_invokeSpecial           = 7,
+    JVM_REF_newInvokeSpecial        = 8,
+    JVM_REF_invokeInterface         = 9
 };
 
 /* Used in the newarray instruction. */

@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.security.tools;
@@ -951,6 +951,8 @@ public class JarSigner {
             BASE64Encoder encoder = new JarBASE64Encoder();
             Vector<ZipEntry> mfFiles = new Vector<ZipEntry>();
 
+            boolean wasSigned = false;
+
             for (Enumeration<? extends ZipEntry> enum_=zipFile.entries();
                         enum_.hasMoreElements();) {
                 ZipEntry ze = enum_.nextElement();
@@ -959,6 +961,11 @@ public class JarSigner {
                     // Store META-INF files in vector, so they can be written
                     // out first
                     mfFiles.addElement(ze);
+
+                    if (SignatureFileVerifier.isBlockOrSF(
+                            ze.getName().toUpperCase(Locale.ENGLISH))) {
+                        wasSigned = true;
+                    }
 
                     if (signatureRelated(ze.getName())) {
                         // ignore signature-related and manifest files
@@ -987,37 +994,41 @@ public class JarSigner {
             if (mfModified) {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 manifest.write(baos);
-                byte[] newBytes = baos.toByteArray();
-                if (mfRawBytes != null
-                        && oldAttr.equals(manifest.getMainAttributes())) {
+                if (wasSigned) {
+                    byte[] newBytes = baos.toByteArray();
+                    if (mfRawBytes != null
+                            && oldAttr.equals(manifest.getMainAttributes())) {
 
-                    /*
-                     * Note:
-                     *
-                     * The Attributes object is based on HashMap and can handle
-                     * continuation columns. Therefore, even if the contents are
-                     * not changed (in a Map view), the bytes that it write()
-                     * may be different from the original bytes that it read()
-                     * from. Since the signature on the main attributes is based
-                     * on raw bytes, we must retain the exact bytes.
-                     */
+                        /*
+                         * Note:
+                         *
+                         * The Attributes object is based on HashMap and can handle
+                         * continuation columns. Therefore, even if the contents are
+                         * not changed (in a Map view), the bytes that it write()
+                         * may be different from the original bytes that it read()
+                         * from. Since the signature on the main attributes is based
+                         * on raw bytes, we must retain the exact bytes.
+                         */
 
-                    int newPos = findHeaderEnd(newBytes);
-                    int oldPos = findHeaderEnd(mfRawBytes);
+                        int newPos = findHeaderEnd(newBytes);
+                        int oldPos = findHeaderEnd(mfRawBytes);
 
-                    if (newPos == oldPos) {
-                        System.arraycopy(mfRawBytes, 0, newBytes, 0, oldPos);
-                    } else {
-                        // cat oldHead newTail > newBytes
-                        byte[] lastBytes = new byte[oldPos +
-                                newBytes.length - newPos];
-                        System.arraycopy(mfRawBytes, 0, lastBytes, 0, oldPos);
-                        System.arraycopy(newBytes, newPos, lastBytes, oldPos,
-                                newBytes.length - newPos);
-                        newBytes = lastBytes;
+                        if (newPos == oldPos) {
+                            System.arraycopy(mfRawBytes, 0, newBytes, 0, oldPos);
+                        } else {
+                            // cat oldHead newTail > newBytes
+                            byte[] lastBytes = new byte[oldPos +
+                                    newBytes.length - newPos];
+                            System.arraycopy(mfRawBytes, 0, lastBytes, 0, oldPos);
+                            System.arraycopy(newBytes, newPos, lastBytes, oldPos,
+                                    newBytes.length - newPos);
+                            newBytes = lastBytes;
+                        }
                     }
+                    mfRawBytes = newBytes;
+                } else {
+                    mfRawBytes = baos.toByteArray();
                 }
-                mfRawBytes = newBytes;
             }
 
             // Write out the manifest
@@ -1233,18 +1244,31 @@ public class JarSigner {
     }
 
     /**
-     * Find the position of \r\n\r\n inside bs
+     * Find the length of header inside bs. The header is a multiple (>=0)
+     * lines of attributes plus an empty line. The empty line is included
+     * in the header.
      */
     private int findHeaderEnd(byte[] bs) {
-        for (int i=0; i<bs.length-3; i++) {
-            if (bs[i] == '\r' && bs[i+1] == '\n' &&
-                    bs[i+2] == '\r' && bs[i+3] == '\n') {
-               return i;
+        // Initial state true to deal with empty header
+        boolean newline = true;     // just met a newline
+        int len = bs.length;
+        for (int i=0; i<len; i++) {
+            switch (bs[i]) {
+                case '\r':
+                    if (i < len - 1 && bs[i+1] == '\n') i++;
+                    // fallthrough
+                case '\n':
+                    if (newline) return i+1;    //+1 to get length
+                    newline = true;
+                    break;
+                default:
+                    newline = false;
             }
         }
-        // If header end is not found, return 0,
-        // which means no behavior change.
-        return 0;
+        // If header end is not found, it means the MANIFEST.MF has only
+        // the main attributes section and it does not end with 2 newlines.
+        // Returns the whole length so that it can be completely replaced.
+        return len;
     }
 
     /**

@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -235,6 +235,17 @@ address InterpreterGenerator::generate_abstract_entry(void) {
 }
 
 
+// Method handle invoker
+// Dispatch a method of the form java.dyn.MethodHandles::invoke(...)
+address InterpreterGenerator::generate_method_handle_entry(void) {
+  if (!EnableMethodHandles) {
+    return generate_abstract_entry();
+  }
+
+  return MethodHandles::generate_method_handle_interpreter_entry(_masm);
+}
+
+
 //----------------------------------------------------------------------------------------------------
 // Entry points & stack frame layout
 //
@@ -364,6 +375,7 @@ address AbstractInterpreterGenerator::generate_method_entry(AbstractInterpreter:
     case Interpreter::empty                  : entry_point = ((InterpreterGenerator*)this)->generate_empty_entry();        break;
     case Interpreter::accessor               : entry_point = ((InterpreterGenerator*)this)->generate_accessor_entry();     break;
     case Interpreter::abstract               : entry_point = ((InterpreterGenerator*)this)->generate_abstract_entry();     break;
+    case Interpreter::method_handle          : entry_point = ((InterpreterGenerator*)this)->generate_method_handle_entry(); break;
     case Interpreter::java_lang_math_sin     :                                                                             break;
     case Interpreter::java_lang_math_cos     :                                                                             break;
     case Interpreter::java_lang_math_tan     :                                                                             break;
@@ -379,6 +391,11 @@ address AbstractInterpreterGenerator::generate_method_entry(AbstractInterpreter:
   return ((InterpreterGenerator*)this)->generate_normal_entry(synchronized);
 }
 
+
+bool AbstractInterpreter::can_be_compiled(methodHandle m) {
+  // No special entry points that preclude compilation
+  return true;
+}
 
 // This method tells the deoptimizer how big an interpreted frame must be:
 int AbstractInterpreter::size_activation(methodOop method,

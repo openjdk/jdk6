@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -32,12 +32,16 @@ public:
   // Testing
   bool oop_is_constMethod() const { return true; }
   virtual bool oop_is_parsable(oop obj) const;
+  virtual bool oop_is_conc_safe(oop obj) const;
+
 
   // Allocation
   DEFINE_ALLOCATE_PERMANENT(constMethodKlass);
   constMethodOop allocate(int byte_code_size, int compressed_line_number_size,
                           int localvariable_table_length,
-                          int checked_exceptions_length, TRAPS);
+                          int checked_exceptions_length,
+                          bool is_conc_safe,
+                          TRAPS);
   static klassOop create_klass(TRAPS);
 
   // Sizing
@@ -73,15 +77,10 @@ public:
   int oop_oop_iterate(oop obj, OopClosure* blk);
   int oop_oop_iterate_m(oop obj, OopClosure* blk, MemRegion mr);
 
-#ifndef PRODUCT
- public:
   // Printing
-  void oop_print_on      (oop obj, outputStream* st);
   void oop_print_value_on(oop obj, outputStream* st);
+  void oop_print_on      (oop obj, outputStream* st);
 
-#endif
-
- public:
   // Verify operations
   const char* internal_name() const;
   void oop_verify_on(oop obj, outputStream* st);

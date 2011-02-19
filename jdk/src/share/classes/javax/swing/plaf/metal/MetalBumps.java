@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,18 +18,29 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing.plaf.metal;
 
-import java.awt.*;
-import java.awt.image.*;
-import javax.swing.*;
-import java.io.*;
-import java.util.*;
+import sun.awt.AppContext;
+
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GraphicsConfiguration;
+import java.awt.Image;
+import java.awt.Transparency;
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBuffer;
+import java.awt.image.IndexColorModel;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.Icon;
 
 /**
  * Implements the bumps used throughout the Metal Look and Feel.
@@ -49,18 +60,8 @@ class MetalBumps implements Icon {
     protected Color shadowColor;
     protected Color backColor;
 
-    protected static Vector buffers = new Vector();
+    private static final Object METAL_BUMPS = new Object();
     protected BumpBuffer buffer;
-
-    public MetalBumps( Dimension bumpArea ) {
-        this( bumpArea.width, bumpArea.height );
-    }
-
-    public MetalBumps( int width, int height ) {
-        this(width, height, MetalLookAndFeel.getPrimaryControlHighlight(),
-             MetalLookAndFeel.getPrimaryControlDarkShadow(),
-             MetalLookAndFeel.getPrimaryControlShadow());
-    }
 
     /**
      * Creates MetalBumps of the specified size with the specified colors.
@@ -73,29 +74,22 @@ class MetalBumps implements Icon {
         setBumpColors( newTopColor, newShadowColor, newBackColor );
     }
 
-    private BumpBuffer getBuffer(GraphicsConfiguration gc, Color aTopColor,
-                                 Color aShadowColor, Color aBackColor) {
-        if (buffer != null && buffer.hasSameConfiguration(
-                              gc, aTopColor, aShadowColor, aBackColor)) {
-            return buffer;
+    private static BumpBuffer createBuffer(GraphicsConfiguration gc,
+                                           Color topColor, Color shadowColor, Color backColor) {
+        AppContext context = AppContext.getAppContext();
+        List<BumpBuffer> buffers = (List<BumpBuffer>) context.get(METAL_BUMPS);
+        if (buffers == null) {
+            buffers = new ArrayList<BumpBuffer>();
+            context.put(METAL_BUMPS, buffers);
         }
-        BumpBuffer result = null;
-
-        Enumeration elements = buffers.elements();
-
-        while ( elements.hasMoreElements() ) {
-            BumpBuffer aBuffer = (BumpBuffer)elements.nextElement();
-            if ( aBuffer.hasSameConfiguration(gc, aTopColor, aShadowColor,
-                                              aBackColor)) {
-                result = aBuffer;
-                break;
+        for (BumpBuffer buffer : buffers) {
+            if (buffer.hasSameConfiguration(gc, topColor, shadowColor, backColor)) {
+                return buffer;
             }
         }
-        if (result == null) {
-            result = new BumpBuffer(gc, topColor, shadowColor, backColor);
-            buffers.addElement(result);
-        }
-        return result;
+        BumpBuffer buffer = new BumpBuffer(gc, topColor, shadowColor, backColor);
+        buffers.add(buffer);
+        return buffer;
     }
 
     public void setBumpArea( Dimension bumpArea ) {
@@ -123,10 +117,12 @@ class MetalBumps implements Icon {
                                      (GraphicsConfiguration)((Graphics2D)g).
                                      getDeviceConfiguration() : null;
 
-        buffer = getBuffer(gc, topColor, shadowColor, backColor);
+        if ((buffer == null) || !buffer.hasSameConfiguration(gc, topColor, shadowColor, backColor)) {
+            buffer = createBuffer(gc, topColor, shadowColor, backColor);
+        }
 
-        int bufferWidth = buffer.getImageSize().width;
-        int bufferHeight = buffer.getImageSize().height;
+        int bufferWidth = BumpBuffer.IMAGE_SIZE;
+        int bufferHeight = BumpBuffer.IMAGE_SIZE;
         int iconWidth = getIconWidth();
         int iconHeight = getIconHeight();
         int x2 = x + iconWidth;
@@ -159,7 +155,6 @@ class MetalBumps implements Icon {
 class BumpBuffer {
 
     static final int IMAGE_SIZE = 64;
-    static Dimension imageSize = new Dimension( IMAGE_SIZE, IMAGE_SIZE );
 
     transient Image image;
     Color topColor;
@@ -199,10 +194,6 @@ class BumpBuffer {
      */
     public Image getImage() {
         return image;
-    }
-
-    public Dimension getImageSize() {
-        return imageSize;
     }
 
     /**

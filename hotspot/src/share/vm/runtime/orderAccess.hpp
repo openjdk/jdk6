@@ -1,5 +1,5 @@
 /*
- * Copyright 2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -31,7 +31,7 @@
 // at runtime.
 //
 // In the following, the terms 'previous', 'subsequent', 'before',
-// 'after', 'preceeding' and 'succeeding' refer to program order.  The
+// 'after', 'preceding' and 'succeeding' refer to program order.  The
 // terms 'down' and 'below' refer to forward load or store motion
 // relative to program order, while 'up' and 'above' refer to backward
 // motion.
@@ -166,6 +166,12 @@
 // and release must include a sequence point, usually via a volatile memory
 // access.  Other ways to guarantee a sequence point are, e.g., use of
 // indirect calls and linux's __asm__ volatile.
+// Note: as of 6973570, we have replaced the originally static "dummy" field
+// (see above) by a volatile store to the stack. All of the versions of the
+// compilers that we currently use (SunStudio, gcc and VC++) respect the
+// semantics of volatile here. If you build HotSpot using other
+// compilers, you may need to verify that no compiler reordering occurs
+// across the sequence point respresented by the volatile access.
 //
 //
 //                os::is_MP Considered Redundant
@@ -297,7 +303,9 @@ class OrderAccess : AllStatic {
   static void     release_store_ptr_fence(volatile intptr_t* p, intptr_t v);
   static void     release_store_ptr_fence(volatile void*     p, void*    v);
 
-  // In order to force a memory access, implementations may
-  // need a volatile externally visible dummy variable.
-  static volatile intptr_t dummy;
+ private:
+  // This is a helper that invokes the StubRoutines::fence_entry()
+  // routine if it exists, It should only be used by platforms that
+  // don't another way to do the inline eassembly.
+  static void StubRoutines_fence();
 };

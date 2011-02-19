@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -78,7 +78,7 @@ void PSVirtualSpace::release() {
   _special = false;
 }
 
-bool PSVirtualSpace::expand_by(size_t bytes, bool pre_touch) {
+bool PSVirtualSpace::expand_by(size_t bytes) {
   assert(is_aligned(bytes), "arg not aligned");
   DEBUG_ONLY(PSVirtualSpaceVerifier this_verifier(this));
 
@@ -90,15 +90,6 @@ bool PSVirtualSpace::expand_by(size_t bytes, bool pre_touch) {
   bool result = special() || os::commit_memory(base_addr, bytes, alignment());
   if (result) {
     _committed_high_addr += bytes;
-  }
-
-  if (pre_touch || AlwaysPreTouch) {
-    for (char* curr = base_addr;
-         curr < _committed_high_addr;
-         curr += os::vm_page_size()) {
-      char tmp = *curr;
-      *curr = 0;
-    }
   }
 
   return result;
@@ -255,7 +246,7 @@ PSVirtualSpaceHighToLow::PSVirtualSpaceHighToLow(ReservedSpace rs) {
   DEBUG_ONLY(verify());
 }
 
-bool PSVirtualSpaceHighToLow::expand_by(size_t bytes, bool pre_touch) {
+bool PSVirtualSpaceHighToLow::expand_by(size_t bytes) {
   assert(is_aligned(bytes), "arg not aligned");
   DEBUG_ONLY(PSVirtualSpaceVerifier this_verifier(this));
 
@@ -267,15 +258,6 @@ bool PSVirtualSpaceHighToLow::expand_by(size_t bytes, bool pre_touch) {
   bool result = special() || os::commit_memory(base_addr, bytes, alignment());
   if (result) {
     _committed_low_addr -= bytes;
-  }
-
-  if (pre_touch || AlwaysPreTouch) {
-    for (char* curr = base_addr;
-         curr < _committed_high_addr;
-         curr += os::vm_page_size()) {
-      char tmp = *curr;
-      *curr = 0;
-    }
   }
 
   return result;

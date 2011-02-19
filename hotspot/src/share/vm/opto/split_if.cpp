@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -187,10 +187,20 @@ bool PhaseIdealLoop::split_up( Node *n, Node *blk1, Node *blk2 ) {
   }
 #endif
 
+  // ConvI2L may have type information on it which becomes invalid if
+  // it moves up in the graph so change any clones so widen the type
+  // to TypeLong::INT when pushing it up.
+  const Type* rtype = NULL;
+  if (n->Opcode() == Op_ConvI2L && n->bottom_type() != TypeLong::INT) {
+    rtype = TypeLong::INT;
+  }
+
   // Now actually split-up this guy.  One copy per control path merging.
   Node *phi = PhiNode::make_blank(blk1, n);
   for( uint j = 1; j < blk1->req(); j++ ) {
     Node *x = n->clone();
+    // Widen the type of the ConvI2L when pushing up.
+    if (rtype != NULL) x->as_Type()->set_type(rtype);
     if( n->in(0) && n->in(0) == blk1 )
       x->set_req( 0, blk1->in(j) );
     for( uint i = 1; i < n->req(); i++ ) {
@@ -207,8 +217,7 @@ bool PhaseIdealLoop::split_up( Node *n, Node *blk1, Node *blk2 ) {
   register_new_node(phi, blk1);
 
   // Remove cloned-up value from optimizer; use phi instead
-  _igvn.hash_delete(n);
-  _igvn.subsume_node( n, phi );
+  _igvn.replace_node( n, phi );
 
   // (There used to be a self-recursive call to split_up() here,
   // but it is not needed.  All necessary forward walking is done
@@ -219,6 +228,7 @@ bool PhaseIdealLoop::split_up( Node *n, Node *blk1, Node *blk2 ) {
 
 //------------------------------register_new_node------------------------------
 void PhaseIdealLoop::register_new_node( Node *n, Node *blk ) {
+  assert(!n->is_CFG(), "must be data node");
   _igvn.register_new_node_with_optimizer(n);
   set_ctrl(n, blk);
   IdealLoopTree *loop = get_loop(blk);
@@ -318,7 +328,7 @@ Node *PhaseIdealLoop::find_use_block( Node *use, Node *def, Node *old_false, Nod
 
   if( use->is_Phi() ) {         // Phi uses in prior block
     // Grab the first Phi use; there may be many.
-    // Each will be handled as a seperate iteration of
+    // Each will be handled as a separate iteration of
     // the "while( phi->outcnt() )" loop.
     uint j;
     for( j = 1; j < use->req(); j++ )
@@ -341,8 +351,7 @@ Node *PhaseIdealLoop::find_use_block( Node *use, Node *def, Node *old_false, Nod
   }
 
   if (use_blk == NULL) {        // He's dead, Jim
-    _igvn.hash_delete(use);
-    _igvn.subsume_node(use, C->top());
+    _igvn.replace_node(use, C->top());
   }
 
   return use_blk;

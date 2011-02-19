@@ -1,5 +1,5 @@
 /*
- * Copyright 2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 /*
@@ -27,7 +27,6 @@
  * @summary Re-test IPv6 (and specifically MulticastSocket) with latest Linux & USAGI code
  */
 import java.net.*;
-import java.util.concurrent.*;
 import java.util.*;
 
 
@@ -70,7 +69,8 @@ public class SetOutgoingIf {
         //
         List<NetworkInterface> nics = new ArrayList<NetworkInterface>();
         for (NetworkInterface nic : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-            if (!nic.isLoopback())
+            // we should use only network interfaces with multicast support which are in "up" state
+            if (!nic.isLoopback() && nic.supportsMulticast() && nic.isUp())
                 nics.add(nic);
         }
         if (nics.size() <= 1) {
@@ -172,7 +172,7 @@ class Sender implements Runnable {
                 mcastsock.send(packet2);
                 mcastsock.send(packet3);
 
-                Thread.currentThread().sleep(1000);   // sleep 1 second
+                Thread.sleep(1000);   // sleep 1 second
             }
         } catch (Exception e) {
             throw new RuntimeException(e);

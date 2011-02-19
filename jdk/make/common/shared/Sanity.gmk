@@ -1,12 +1,12 @@
 #
-# Copyright 2005-2007 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License version 2 only, as
-# published by the Free Software Foundation.  Sun designates this
+# published by the Free Software Foundation.  Oracle designates this
 # particular file as subject to the "Classpath" exception as provided
-# by Sun in the LICENSE file that accompanied this code.
+# by Oracle in the LICENSE file that accompanied this code.
 #
 # This code is distributed in the hope that it will be useful, but WITHOUT
 # ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 
 #
@@ -138,7 +138,6 @@ include $(JDK_MAKE_SHARED_DIR)/Sanity-Settings.gmk
 	sane-classpath \
 	sane-java_home \
 	sane-fonts \
-	sane-binary-plugs \
 	sane-variant \
 	sane-ld_library_path \
 	sane-ld_library_path_64 \
@@ -465,23 +464,6 @@ ifndef OPENJDK
 	   "" >> $(ERROR_FILE); \
 	fi \
 	fi
-endif
-
-######################################################
-# If building OPENJDK check pre-built binaries are
-# available for binary plug source components.
-######################################################
-ifdef OPENJDK
-sane-binary-plugs:
-ifeq ($(IMPORT_BINARY_PLUGS),true)
-	@if [ ! -d "$(BINARY_PLUGS_PATH)" ]; then \
-	  $(ECHO) "ERROR: Can't locate pre-built libraries. \n" \
-	    "      Please check your access to \n" \
-	    "          $(BINARY_PLUGS_PATH) \n" \
-	    "      and/or check your value of ALT_BINARY_PLUGS_PATH. \n" \
-	   "" >> $(ERROR_FILE); \
-	fi
-endif
 endif
 
 ######################################################
@@ -1086,6 +1068,7 @@ endif
 # Check for existence of misc Hotspot imported files
 ######################################################
 HOTSPOT_INCLUDE_FILE_LIST  = jvmti.h
+HOTSPOT_INCLUDE_FILE_LIST  += jvmticmlr.h
 #HOTSPOT_INCLUDE_FILE_LIST += jni.h jni_md.h
 #HOTSPOT_INCLUDE_FILE_LIST += jvm.h jvm_md.h
 #HOTSPOT_INCLUDE_FILE_LIST += jmm.h
@@ -1453,63 +1436,6 @@ sane-settings:: sane-alsa-versioncheck
 	@$(ECHO)  >> $(MESSAGE_FILE)
 	@$(ECHO) $(ALL_SETTINGS)  >> $(MESSAGE_FILE)
 	@$(ECHO)  >> $(MESSAGE_FILE)
-
-######################################################
-# Check for existence of DEPLOY_MSSDK on windows
-######################################################
-sane-mssdk_path:
-ifeq ($(PLATFORM), windows)
-	@if [ -z "$(DEPLOY_MSSDK)" ]; then \
-	  $(ECHO) "WARNING: Your DEPLOY_MSSDK setting is empty.\n" \
-	    "        It is recommended to set ALT_DEPLOY_MSSDK.\n" \
-	    "" >> $(WARNING_FILE) ; \
-	fi
-	@if [ ! -r "$(DEPLOY_MSSDK)" ]; then \
-	  $(ECHO) "ERROR: You do not have a valid DEPLOY_MSSDK setting. \n" \
-	    "      Please check your access to \n" \
-	    "          $(DEPLOY_MSSDK) \n" \
-	    "      and/or check your value of ALT_DEPLOY_MSSDK. \n" \
-	    "" >> $(ERROR_FILE) ; \
-	fi
-endif
-
-######################################################
-# Check for existence of INSTALL_MSSDK on windows
-######################################################
-sane-install-mssdk_path:
-ifeq ($(PLATFORM), windows)
-	@if [ -z "$(INSTALL_MSSDK)" ]; then \
-	  $(ECHO) "WARNING: Your INSTALL_MSSDK setting is empty.\n" \
-	    "        It is recommended to set ALT_INSTALL_MSSDK.\n" \
-	    "" >> $(WARNING_FILE) ; \
-	fi
-	@if [ ! -r "$(INSTALL_MSSDK)" ]; then \
-	  $(ECHO) "ERROR: You do not have a valid INSTALL_MSSDK setting. \n" \
-	    "      Please check your access to \n" \
-	    "          $(INSTALL_MSSDK) \n" \
-	    "      and/or check your value of ALT_INSTALL_MSSDK. \n" \
-	    "" >> $(ERROR_FILE) ; \
-	fi
-endif
-
-######################################################
-# Check for existence of INSTALL_MSIVAL2 on windows
-######################################################
-sane-install-msival2_path:
-ifeq ($(PLATFORM), windows)
-	@if [ -z "$(INSTALL_MSIVAL2)" ]; then \
-	  $(ECHO) "WARNING: Your INSTALL_MSIVAL2 setting is empty.\n" \
-	    "        It is recommended to set ALT_INSTALL_MSIVAL2.\n" \
-	    "" >> $(WARNING_FILE) ; \
-	fi
-	@if [ ! -r "$(INSTALL_MSIVAL2)" ]; then \
-	  $(ECHO) "ERROR: You do not have a valid INSTALL_MSIVAL2 setting. \n" \
-	    "      Please check your access to \n" \
-	    "          $(INSTALL_MSIVAL2) \n" \
-	    "      and/or check your value of ALT_INSTALL_MSIVAL2. \n" \
-	    "" >> $(ERROR_FILE) ; \
-	fi
-endif
 
 ######################################################
 # Check the Solaris GNU c++ compiler for solaris plugin

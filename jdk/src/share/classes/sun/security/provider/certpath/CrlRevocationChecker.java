@@ -1,12 +1,12 @@
 /*
- * Copyright 2000-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.security.provider.certpath;
@@ -80,6 +80,7 @@ class CrlRevocationChecker extends PKIXCertPathChecker {
         { false, false, false, false, false, false, true };
     private static final boolean[] ALL_REASONS =
         {true, true, true, true, true, true, true, true, true};
+    private boolean mOnlyEECert = false;
 
     /**
      * Creates a <code>CrlRevocationChecker</code>.
@@ -110,6 +111,13 @@ class CrlRevocationChecker extends PKIXCertPathChecker {
     CrlRevocationChecker(TrustAnchor anchor, PKIXParameters params,
         Collection<X509Certificate> certs) throws CertPathValidatorException
     {
+        this(anchor, params, certs, false);
+    }
+
+    CrlRevocationChecker(TrustAnchor anchor, PKIXParameters params,
+        Collection<X509Certificate> certs, boolean onlyEECert)
+        throws CertPathValidatorException
+    {
         mAnchor = anchor;
         mParams = params;
         mStores = new ArrayList<CertStore>(params.getCertStores());
@@ -129,6 +137,7 @@ class CrlRevocationChecker extends PKIXCertPathChecker {
         }
         Date testDate = params.getDate();
         mCurrentTime = (testDate != null ? testDate : new Date());
+        mOnlyEECert = onlyEECert;
         init(false);
     }
 
@@ -258,6 +267,13 @@ class CrlRevocationChecker extends PKIXCertPathChecker {
         if (debug != null) {
             debug.println("CrlRevocationChecker.verifyRevocationStatus()" +
                 " ---checking " + msg + "...");
+        }
+
+        if (mOnlyEECert && currCert.getBasicConstraints() != -1) {
+            if (debug != null) {
+                debug.println("Skipping revocation check, not end entity cert");
+            }
+            return;
         }
 
         // reject circular dependencies - RFC 3280 is not explicit on how

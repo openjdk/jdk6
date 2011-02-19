@@ -1,7 +1,7 @@
 #!/bin/sh
 
 #
-# Copyright 2005-2006 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -18,9 +18,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 
 
@@ -35,24 +35,25 @@
 . ${TESTSRC}/../common/CommonSetup.sh
 . ${TESTSRC}/../common/ApplicationSetup.sh
 
-# Start application (send output to shutdown.port)
+# Start application and use PORTFILE for coordination
 PORTFILE="${TESTCLASSES}"/shutdown.port
-startApplication \
-    -classpath "${TESTCLASSES}" SimpleApplication "${PORTFILE}"
+startApplication SimpleApplication "${PORTFILE}"
+
+# all return statuses are checked in this test
+set +e
 
 failed=0
 
 # -histo[:live] option
-${JMAP} -histo $pid
+${JMAP} -histo $appJavaPid
 if [ $? != 0 ]; then failed=1; fi
 
-${JMAP} -histo:live $pid
+${JMAP} -histo:live $appJavaPid
 if [ $? != 0 ]; then failed=1; fi
 
 # -dump option
-p=`expr $pid`
-DUMPFILE="java_pid${p}.hprof"
-${JMAP} -dump:format=b,file=${DUMPFILE} $pid
+DUMPFILE="java_pid${appJavaPid}.hprof"
+${JMAP} -dump:format=b,file=${DUMPFILE} $appJavaPid
 if [ $? != 0 ]; then failed=1; fi
 
 # check that heap dump is parsable
@@ -63,7 +64,7 @@ if [ $? != 0 ]; then failed=1; fi
 rm ${DUMPFILE}
 
 # -dump:live option
-${JMAP} -dump:live,format=b,file=${DUMPFILE} $pid
+${JMAP} -dump:live,format=b,file=${DUMPFILE} $appJavaPid
 if [ $? != 0 ]; then failed=1; fi
 
 # check that heap dump is parsable
@@ -71,9 +72,11 @@ ${JHAT} -parseonly true ${DUMPFILE}
 if [ $? != 0 ]; then failed=1; fi
 
 # dump file is large so remove it
-rm ${DUMPFILE}
+rm -f ${DUMPFILE}
 
-stopApplication ShutdownSimpleApplication "${PORTFILE}"
+set -e
+
+stopApplication "${PORTFILE}"
+waitForApplication
 
 exit $failed
-

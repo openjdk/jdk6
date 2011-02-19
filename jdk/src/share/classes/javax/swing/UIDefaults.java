@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing;
@@ -52,6 +52,7 @@ import java.security.AccessControlContext;
 import java.security.PrivilegedAction;
 
 import sun.reflect.misc.MethodUtil;
+import sun.reflect.misc.ReflectUtil;
 import sun.util.CoreResourceBundleControl;
 
 /**
@@ -1079,6 +1080,9 @@ public class UIDefaults extends Hashtable<Object,Object>
             // In order to pick up the security policy in effect at the
             // time of creation we use a doPrivileged with the
             // AccessControlContext that was in place when this was created.
+            if (acc == null && System.getSecurityManager() != null) {
+                throw new SecurityException("null AccessControlContext");
+            } 
             return AccessController.doPrivileged(new PrivilegedAction() {
                 public Object run() {
                     try {
@@ -1094,7 +1098,9 @@ public class UIDefaults extends Hashtable<Object,Object>
                                 cl = ClassLoader.getSystemClassLoader();
                             }
                         }
+                        ReflectUtil.checkPackageAccess(className);
                         c = Class.forName(className, true, (ClassLoader)cl);
+                        checkAccess(c.getModifiers());
                         if (methodName != null) {
                             Class[] types = getClassArray(args);
                             Method m = c.getMethod(methodName, types);
@@ -1102,6 +1108,7 @@ public class UIDefaults extends Hashtable<Object,Object>
                         } else {
                             Class[] types = getClassArray(args);
                             Constructor constructor = c.getConstructor(types);
+                            checkAccess(constructor.getModifiers());
                             return constructor.newInstance(args);
                         }
                     } catch(Exception e) {
@@ -1115,8 +1122,15 @@ public class UIDefaults extends Hashtable<Object,Object>
                 }
             }, acc);
         }
+        
+        private void checkAccess(int modifiers) {
+            if(System.getSecurityManager() != null && 
+                    !Modifier.isPublic(modifiers)) {
+                throw new SecurityException("Resource is not accessible");
+            }
+        }
 
-        /*
+        /* 
          * Coerce the array of class types provided into one which
          * looks the way the Reflection APIs expect.  This is done
          * by substituting primitive types for their Object counterparts,

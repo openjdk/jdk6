@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -28,10 +28,10 @@ class CardTableRS;
 class CardTableModRefBS;
 class DefNewGeneration;
 
-template<class E> class GenericTaskQueue;
-typedef GenericTaskQueue<oop> OopTaskQueue;
-template<class E> class GenericTaskQueueSet;
-typedef GenericTaskQueueSet<oop> OopTaskQueueSet;
+template<class E, unsigned int N> class GenericTaskQueue;
+typedef GenericTaskQueue<oop, TASKQUEUE_SIZE> OopTaskQueue;
+template<class T> class GenericTaskQueueSet;
+typedef GenericTaskQueueSet<OopTaskQueue> OopTaskQueueSet;
 
 // Closure for iterating roots from a particular generation
 // Note: all classes deriving from this MUST call this do_barrier
@@ -57,7 +57,7 @@ class OopsInGenClosure : public OopClosure {
   template <class T> void do_barrier(T* p);
 
   // Version for use by closures that may be called in parallel code.
-  void par_do_barrier(oop* p);
+  template <class T> void par_do_barrier(T* p);
 
  public:
   OopsInGenClosure() : OopClosure(NULL),

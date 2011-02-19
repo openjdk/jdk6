@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,17 +18,19 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 
 package javax.net;
 
 import java.io.IOException;
-import java.net.*;
-
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 
 /**
  * This class creates sockets.  It may be subclassed by other factories,
@@ -113,7 +115,17 @@ public abstract class SocketFactory
      * @see java.net.Socket#Socket()
      */
     public Socket createSocket() throws IOException {
-        throw new SocketException("Unconnected sockets not implemented");
+        //
+        // bug 6771432:
+        // The Exception is used by HttpsClient to signal that
+        // unconnected sockets have not been implemented.
+        //
+        UnsupportedOperationException uop = new
+                UnsupportedOperationException();
+        SocketException se =  new SocketException(
+                "Unconnected sockets not implemented");
+        se.initCause(uop);
+        throw se;
     }
 
 

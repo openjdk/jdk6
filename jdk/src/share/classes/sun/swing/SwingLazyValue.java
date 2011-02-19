@@ -1,12 +1,12 @@
 /*
- * Copyright 2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,14 +18,17 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package sun.swing;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.lang.reflect.AccessibleObject;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import javax.swing.UIDefaults;
 
 /**
@@ -66,13 +69,15 @@ public class SwingLazyValue implements UIDefaults.LazyValue {
             if (methodName != null) {
                 Class[] types = getClassArray(args);
                 Method m = c.getMethod(methodName, types);
+                makeAccessible(m);
                 return m.invoke(c, args);
             } else {
                 Class[] types = getClassArray(args);
                 Constructor constructor = c.getConstructor(types);
+                makeAccessible(constructor);
                 return constructor.newInstance(args);
             }
-        } catch(Exception e) {
+        } catch (Exception e) {
             // Ideally we would throw an exception, unfortunately
             // often times there are errors as an initial look and
             // feel is loaded before one can be switched. Perhaps a
@@ -80,6 +85,15 @@ public class SwingLazyValue implements UIDefaults.LazyValue {
             // the exception would be thrown.
         }
         return null;
+    }
+
+    private void makeAccessible(final AccessibleObject object) {
+        AccessController.doPrivileged(new PrivilegedAction<Void>() {
+            public Void run() {
+                object.setAccessible(true);
+                return null;
+            }
+        });
     }
 
     private Class[] getClassArray(Object[] args) {

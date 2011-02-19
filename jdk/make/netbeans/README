@@ -91,7 +91,6 @@ Configuring
 
         make.options=\
             ALT_BOOTDIR=/home/me/bin/jdk1.6.0 \
-            ALT_BINARY_PLUGS_PATH=/home/me/bin/openjdk-binary-plugs \
             ALT_JDK_IMPORT_PATH=/home/me/bin/jdk1.7.0
 
         The trailing '\' are important, so that make gets the above as a
@@ -205,8 +204,8 @@ Provided NetBeans projects
         note that pretty much regardless of your hardware, this *will* take
         a long time, and use *lots* of disk space (more than 3GB). The
         results of the build are in
-        *install-dir*/control/build/*platform*-*arch* and
-        *install-dir*/control/build/*platform*-*arch*-fastdebug.
+        *install-dir*/build/*platform*-*arch* and
+        *install-dir*/build/*platform*-*arch*-fastdebug.
 
         Consult the project's README file for details.
 

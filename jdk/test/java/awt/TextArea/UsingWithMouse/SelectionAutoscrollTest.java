@@ -1,5 +1,5 @@
 /*
- * Copyright 2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 /*
@@ -56,6 +56,7 @@ public class SelectionAutoscrollTest extends Applet {
     TextArea textArea;
     Robot robot;
     final int desiredSelectionEnd = ('z'-'a'+1)*2;  // 52
+    final static int SCROLL_DELAY = 10; // ms
 
     public void start () {
         createObjects();
@@ -126,6 +127,8 @@ public class SelectionAutoscrollTest extends Applet {
 
             moveMouseBelowTextArea( tremble%2!=0 );
             Util.waitForIdle( robot );
+            // it is needed to add some small delay on Gnome
+            waitUntilScrollIsPerformed(robot);
         }
 
         robot.mouseRelease( MouseEvent.BUTTON1_MASK );
@@ -141,9 +144,19 @@ public class SelectionAutoscrollTest extends Applet {
     void moveMouseBelowTextArea( boolean shift ) {
         Dimension d = textArea.getSize();
         Point l = textArea.getLocationOnScreen();
+        int x = (int)(l.x+d.width*.5);
         int y = (int)(l.y+d.height*1.5);
         if( shift ) y+=15;
-        robot.mouseMove( (int)(l.x+d.width*.5), y );
+        robot.mouseMove( x, y );
+    }
+
+    void waitUntilScrollIsPerformed(Robot robot) {
+        try {
+            Thread.sleep( SCROLL_DELAY );
+        }
+        catch( Exception e ) {
+            throw new RuntimeException( e );
+        }
     }
 
     void checkResults() {

@@ -1,12 +1,12 @@
 /*
- * Copyright 2000-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.security.provider.certpath;
@@ -28,8 +28,6 @@ package sun.security.provider.certpath;
 import java.io.IOException;
 import java.security.AccessController;
 import java.security.InvalidAlgorithmParameterException;
-import java.security.PrivilegedAction;
-import java.security.Security;
 import java.security.cert.CertPath;
 import java.security.cert.CertPathParameters;
 import java.security.cert.CertPathValidatorException;
@@ -49,6 +47,7 @@ import java.util.Date;
 import java.util.Set;
 import java.util.HashSet;
 import javax.security.auth.x500.X500Principal;
+import sun.security.action.GetBooleanSecurityPropertyAction;
 import sun.security.util.Debug;
 
 /**
@@ -67,6 +66,8 @@ public class PKIXCertPathValidator extends CertPathValidatorSpi {
     private List<PKIXCertPathChecker> userCheckers;
     private String sigProvider;
     private BasicChecker basicChecker;
+    private boolean ocspEnabled = false;
+    private boolean onlyEECert = false;
 
     /**
      * Default constructor.
@@ -250,6 +251,16 @@ public class PKIXCertPathValidator extends CertPathValidatorSpi {
 
         userCheckers = pkixParam.getCertPathCheckers();
         sigProvider = pkixParam.getSigProvider();
+
+        if (pkixParam.isRevocationEnabled()) {
+            // Examine OCSP security property
+            ocspEnabled = AccessController.doPrivileged(
+                new GetBooleanSecurityPropertyAction
+                    (OCSPChecker.OCSP_ENABLE_PROP));
+            onlyEECert = AccessController.doPrivileged(
+                new GetBooleanSecurityPropertyAction
+                    ("com.sun.security.onlyCheckRevocationOfEECert"));
+        }
     }
 
     /**
@@ -268,6 +279,7 @@ public class PKIXCertPathValidator extends CertPathValidatorSpi {
         int certPathLen = certList.size();
 
         basicChecker = new BasicChecker(anchor, testDate, sigProvider, false);
+        AlgorithmChecker algorithmChecker= AlgorithmChecker.getInstance();
         KeyChecker keyChecker = new KeyChecker(certPathLen,
             pkixParam.getTargetCertConstraints());
         ConstraintsChecker constraintsChecker =
@@ -282,6 +294,7 @@ public class PKIXCertPathValidator extends CertPathValidatorSpi {
                               rootNode);
 
         // add standard checkers that we will be using
+        certPathCheckers.add(algorithmChecker);
         certPathCheckers.add(keyChecker);
         certPathCheckers.add(constraintsChecker);
         certPathCheckers.add(policyChecker);
@@ -290,25 +303,16 @@ public class PKIXCertPathValidator extends CertPathValidatorSpi {
         // only add a revocationChecker if revocation is enabled
         if (pkixParam.isRevocationEnabled()) {
 
-            // Examine OCSP security property
-            String ocspProperty = AccessController.doPrivileged(
-                new PrivilegedAction<String>() {
-                    public String run() {
-                        return
-                            Security.getProperty(OCSPChecker.OCSP_ENABLE_PROP);
-                    }
-                });
-
             // Use OCSP if it has been enabled
-            if ("true".equalsIgnoreCase(ocspProperty)) {
+            if (ocspEnabled) {
                 OCSPChecker ocspChecker =
-                    new OCSPChecker(cpOriginal, pkixParam);
+                    new OCSPChecker(cpOriginal, pkixParam, onlyEECert);
                 certPathCheckers.add(ocspChecker);
             }
 
             // Always use CRLs
-            CrlRevocationChecker revocationChecker =
-                new CrlRevocationChecker(anchor, pkixParam, certList);
+            CrlRevocationChecker revocationChecker = new
+                CrlRevocationChecker(anchor, pkixParam, certList, onlyEECert);
             certPathCheckers.add(revocationChecker);
         }
 

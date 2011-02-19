@@ -1,12 +1,12 @@
 /*
- * Copyright 2000-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package java.awt;
 
@@ -379,7 +379,7 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
                     // should receive focus first
                     if (focusLog.isLoggable(Level.FINER)) {
                         focusLog.log(Level.FINER, "tempLost {0}, toFocus {1}",
-                                     new Object[]{tempLost, toFocus});
+                                     new Object[]{String.valueOf(tempLost), String.valueOf(toFocus)});
                     }
                     if (tempLost != null) {
                         tempLost.requestFocusInWindow(CausedFocusEvent.Cause.ACTIVATION);
@@ -447,7 +447,8 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
                 Component newFocusOwner = fe.getComponent();
                 if (oldFocusOwner == newFocusOwner) {
                     if (focusLog.isLoggable(Level.FINE)) {
-                        focusLog.log(Level.FINE, "Skipping {0} because focus owner is the same", new Object[] {e});
+                        focusLog.log(Level.FINE, "Skipping {0} because focus owner is the same",
+                                                 new Object[] {String.valueOf(e)});
                     }
                     // We can't just drop the event - there could be
                     // type-ahead markers associated with it.
@@ -554,16 +555,20 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
                 FocusEvent fe = (FocusEvent)e;
                 Component currentFocusOwner = getGlobalFocusOwner();
                 if (currentFocusOwner == null) {
-                    if (focusLog.isLoggable(Level.FINE)) focusLog.log(Level.FINE, "Skipping {0} because focus owner is null",
-                                                                        new Object[] {e});
+                    if (focusLog.isLoggable(Level.FINE)) {
+                        focusLog.log(Level.FINE, "Skipping {0} because focus owner is null",
+                                                 new Object[] {String.valueOf(e)});
+                    }
                     break;
                 }
                 // Ignore cases where a Component loses focus to itself.
                 // If we make a mistake because of retargeting, then the
                 // FOCUS_GAINED handler will correct it.
                 if (currentFocusOwner == fe.getOppositeComponent()) {
-                    if (focusLog.isLoggable(Level.FINE)) focusLog.log(Level.FINE, "Skipping {0} because current focus owner is equal to opposite",
-                                                                      new Object[] {e});
+                    if (focusLog.isLoggable(Level.FINE)) {
+                        focusLog.log(Level.FINE, "Skipping {0} because current focus owner is equal to opposite",
+                                                 new Object[] {String.valueOf(e)});
+                    }
                     break;
                 }
 
@@ -631,9 +636,11 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
                 Window losingFocusWindow = we.getWindow();
                 Window activeWindow = getGlobalActiveWindow();
                 Window oppositeWindow = we.getOppositeWindow();
-                if (focusLog.isLoggable(Level.FINE)) focusLog.log(Level.FINE, "Active {0}, Current focused {1}, losing focus {2} opposite {3}",
-                                                                  new Object[] {activeWindow, currentFocusedWindow,
-                                                                                losingFocusWindow, oppositeWindow});
+                if (focusLog.isLoggable(Level.FINE)) {
+                    focusLog.log(Level.FINE, "Active {0}, Current focused {1}, losing focus {2} opposite {3}",
+                                             new Object[] {String.valueOf(activeWindow), String.valueOf(currentFocusedWindow),
+                                                           String.valueOf(losingFocusWindow), String.valueOf(oppositeWindow)});
+                }
                 if (currentFocusedWindow == null) {
                     break;
                 }
@@ -818,7 +825,10 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
                         }
                     }
                     if (ke != null) {
-                        focusLog.log(Level.FINER, "Pumping approved event {0}", new Object[] {ke});
+                        if (focusLog.isLoggable(Level.FINER)) {
+                            focusLog.log(Level.FINER, "Pumping approved event {0}",
+                                                      new Object[] {String.valueOf(ke)});
+                        }
                         enqueuedKeyEvents.removeFirst();
                     }
                 }
@@ -840,7 +850,7 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
                     Iterator iter = typeAheadMarkers.iterator();
                     while (iter.hasNext()) {
                         TypeAheadMarker marker = (TypeAheadMarker)iter.next();
-                        focusLog.log(Level.FINEST, "    {0}", marker);
+                        focusLog.log(Level.FINEST, "    {0}", String.valueOf(marker));
                     }
                 }
             }
@@ -868,7 +878,10 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
                         // The fix is rolled out.
 
                         if (ke.getWhen() > marker.after) {
-                            focusLog.log(Level.FINER, "Storing event {0} because of marker {1}", new Object[] {ke, marker});
+                            if (focusLog.isLoggable(Level.FINER)) {
+                                focusLog.log(Level.FINER, "Storing event {0} because of marker {1}",
+                                                          new Object[] {String.valueOf(ke), String.valueOf(marker)});
+                            }
                             enqueuedKeyEvents.addLast(ke);
                             return true;
                         }
@@ -880,7 +893,10 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
             }
 
             case FocusEvent.FOCUS_GAINED:
-                focusLog.log(Level.FINEST, "Markers before FOCUS_GAINED on {0}", new Object[] {target});
+                if (focusLog.isLoggable(Level.FINEST)) {
+                    focusLog.log(Level.FINEST, "Markers before FOCUS_GAINED on {0}",
+                                 new Object[] {String.valueOf(target)});
+                }
                 dumpMarkers();
                 // Search the marker list for the first marker tied to
                 // the Component which just gained focus. Then remove
@@ -909,7 +925,9 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
                         }
                     } else {
                         // Exception condition - event without marker
-                        focusLog.log(Level.FINER, "Event without marker {0}", e);
+                        if (focusLog.isLoggable(Level.FINER)) {
+                            focusLog.log(Level.FINER, "Event without marker {0}", String.valueOf(e));
+                        }
                     }
                 }
                 focusLog.log(Level.FINEST, "Markers after FOCUS_GAINED");
@@ -1146,8 +1164,10 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
             return;
         }
 
-        focusLog.log(Level.FINER, "Enqueue at {0} for {1}",
-                     new Object[] {after, untilFocused});
+        if (focusLog.isLoggable(Level.FINER)) {
+            focusLog.log(Level.FINER, "Enqueue at {0} for {1}",
+                         new Object[] {after, String.valueOf(untilFocused)});
+        }
 
         int insertionIndex = 0,
             i = typeAheadMarkers.size();
@@ -1186,8 +1206,10 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
             return;
         }
 
-        focusLog.log(Level.FINER, "Dequeue at {0} for {1}",
-                     new Object[] {after, untilFocused});
+        if (focusLog.isLoggable(Level.FINER)) {
+            focusLog.log(Level.FINER, "Dequeue at {0} for {1}",
+                         new Object[] {after, String.valueOf(untilFocused)});
+        }
 
         TypeAheadMarker marker;
         ListIterator iter = typeAheadMarkers.listIterator

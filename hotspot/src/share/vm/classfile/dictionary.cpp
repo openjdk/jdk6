@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -127,7 +127,7 @@ void DictionaryEntry::add_protection_domain(oop protection_domain) {
 
 
 bool Dictionary::do_unloading(BoolObjectClosure* is_alive) {
-  assert(SafepointSynchronize::is_at_safepoint(), "must be at safepoint")
+  assert(SafepointSynchronize::is_at_safepoint(), "must be at safepoint");
   bool class_was_unloaded = false;
   int  index = 0; // Defined here for portability! Do not move
 
@@ -546,6 +546,64 @@ void Dictionary::reorder_dictionary() {
     p->set_hash(hash);
     p->set_next(bucket(index));
     set_entry(index, p);
+  }
+}
+
+SymbolPropertyTable::SymbolPropertyTable(int table_size)
+  : Hashtable(table_size, sizeof(SymbolPropertyEntry))
+{
+}
+SymbolPropertyTable::SymbolPropertyTable(int table_size, HashtableBucket* t,
+                                         int number_of_entries)
+  : Hashtable(table_size, sizeof(SymbolPropertyEntry), t, number_of_entries)
+{
+}
+
+
+SymbolPropertyEntry* SymbolPropertyTable::find_entry(int index, unsigned int hash,
+                                                     symbolHandle sym,
+                                                     intptr_t sym_mode) {
+  assert(index == index_for(sym, sym_mode), "incorrect index?");
+  for (SymbolPropertyEntry* p = bucket(index); p != NULL; p = p->next()) {
+    if (p->hash() == hash && p->symbol() == sym() && p->symbol_mode() == sym_mode) {
+      return p;
+    }
+  }
+  return NULL;
+}
+
+
+SymbolPropertyEntry* SymbolPropertyTable::add_entry(int index, unsigned int hash,
+                                                    symbolHandle sym, intptr_t sym_mode) {
+  assert_locked_or_safepoint(SystemDictionary_lock);
+  assert(index == index_for(sym, sym_mode), "incorrect index?");
+  assert(find_entry(index, hash, sym, sym_mode) == NULL, "no double entry");
+
+  SymbolPropertyEntry* p = new_entry(hash, sym(), sym_mode);
+  Hashtable::add_entry(index, p);
+  return p;
+}
+
+
+void SymbolPropertyTable::oops_do(OopClosure* f) {
+  for (int index = 0; index < table_size(); index++) {
+    for (SymbolPropertyEntry* p = bucket(index); p != NULL; p = p->next()) {
+      f->do_oop((oop*) p->symbol_addr());
+      if (p->property_oop() != NULL) {
+        f->do_oop(p->property_oop_addr());
+      }
+    }
+  }
+}
+
+void SymbolPropertyTable::methods_do(void f(methodOop)) {
+  for (int index = 0; index < table_size(); index++) {
+    for (SymbolPropertyEntry* p = bucket(index); p != NULL; p = p->next()) {
+      oop prop = p->property_oop();
+      if (prop != NULL && prop->is_method()) {
+        f((methodOop)prop);
+      }
+    }
   }
 }
 

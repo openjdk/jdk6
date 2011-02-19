@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.awt.X11;
@@ -102,7 +102,7 @@ class MotifDnDDropTargetProtocol extends XDropTargetProtocol {
                                      XlibWrapper.AnyPropertyType);
 
         try {
-            status = wpg.execute(XToolkit.IgnoreBadWindowHandler);
+            status = wpg.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
             /*
              * DragICCI.h:
@@ -162,7 +162,7 @@ class MotifDnDDropTargetProtocol extends XDropTargetProtocol {
                 unsafe.putInt(data + 12, dataSize);
             }
 
-            XToolkit.WITH_XERROR_HANDLER(XWM.VerifyChangePropertyHandler);
+            XToolkit.WITH_XERROR_HANDLER(XErrorHandler.VerifyChangePropertyHandler.getInstance());
             XlibWrapper.XChangeProperty(XToolkit.getDisplay(), embedder,
                                         MotifDnDConstants.XA_MOTIF_DRAG_RECEIVER_INFO.getAtom(),
                                         MotifDnDConstants.XA_MOTIF_DRAG_RECEIVER_INFO.getAtom(),
@@ -204,7 +204,7 @@ class MotifDnDDropTargetProtocol extends XDropTargetProtocol {
                                          XlibWrapper.AnyPropertyType);
 
             try {
-                status = wpg.execute(XToolkit.IgnoreBadWindowHandler);
+                status = wpg.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
                 /*
                  * DragICCI.h:
@@ -236,7 +236,7 @@ class MotifDnDDropTargetProtocol extends XDropTargetProtocol {
 
                     unsafe.putInt(data + 4, tproxy);
 
-                    XToolkit.WITH_XERROR_HANDLER(XWM.VerifyChangePropertyHandler);
+                    XToolkit.WITH_XERROR_HANDLER(XErrorHandler.VerifyChangePropertyHandler.getInstance());
                     XlibWrapper.XChangeProperty(XToolkit.getDisplay(), embedder,
                                                 MotifDnDConstants.XA_MOTIF_DRAG_RECEIVER_INFO.getAtom(),
                                                 MotifDnDConstants.XA_MOTIF_DRAG_RECEIVER_INFO.getAtom(),
@@ -276,7 +276,7 @@ class MotifDnDDropTargetProtocol extends XDropTargetProtocol {
                                      XlibWrapper.AnyPropertyType);
 
         try {
-            status = wpg.execute(XToolkit.IgnoreBadWindowHandler);
+            status = wpg.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
             /*
              * DragICCI.h:
@@ -325,7 +325,7 @@ class MotifDnDDropTargetProtocol extends XDropTargetProtocol {
                                      XlibWrapper.AnyPropertyType);
 
         try {
-            int status = wpg.execute(XToolkit.IgnoreBadWindowHandler);
+            int status = wpg.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
             if (status == (int)XlibWrapper.Success && wpg.getData() != 0 &&
                 wpg.getActualType() != 0 && wpg.getActualFormat() == 8 &&
@@ -375,7 +375,7 @@ class MotifDnDDropTargetProtocol extends XDropTargetProtocol {
                                          MotifDnDConstants.XA_MOTIF_DRAG_INITIATOR_INFO.getAtom());
 
             try {
-                int status = wpg.execute(XToolkit.IgnoreBadWindowHandler);
+                int status = wpg.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
                 if (status == XlibWrapper.Success && wpg.getData() != 0 &&
                     wpg.getActualType() ==
@@ -412,7 +412,7 @@ class MotifDnDDropTargetProtocol extends XDropTargetProtocol {
          */
         XWindowAttributes wattr = new XWindowAttributes();
         try {
-            XToolkit.WITH_XERROR_HANDLER(XToolkit.IgnoreBadWindowHandler);
+            XToolkit.WITH_XERROR_HANDLER(XErrorHandler.IgnoreBadWindowHandler.getInstance());
             int status = XlibWrapper.XGetWindowAttributes(XToolkit.getDisplay(),
                                                           source_win, wattr.pData);
 
@@ -429,7 +429,7 @@ class MotifDnDDropTargetProtocol extends XDropTargetProtocol {
             wattr.dispose();
         }
 
-        XToolkit.WITH_XERROR_HANDLER(XToolkit.IgnoreBadWindowHandler);
+        XToolkit.WITH_XERROR_HANDLER(XErrorHandler.IgnoreBadWindowHandler.getInstance());
         XlibWrapper.XSelectInput(XToolkit.getDisplay(), source_win,
                                  source_win_mask |
                                  XlibWrapper.StructureNotifyMask);
@@ -1020,7 +1020,7 @@ class MotifDnDDropTargetProtocol extends XDropTargetProtocol {
         if (sourceWindow != 0) {
             XToolkit.awtLock();
             try {
-                XToolkit.WITH_XERROR_HANDLER(XToolkit.IgnoreBadWindowHandler);
+                XToolkit.WITH_XERROR_HANDLER(XErrorHandler.IgnoreBadWindowHandler.getInstance());
                 XlibWrapper.XSelectInput(XToolkit.getDisplay(), sourceWindow,
                                          sourceWindowMask);
                 XToolkit.RESTORE_XERROR_HANDLER();

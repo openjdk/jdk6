@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -33,11 +33,8 @@ class ParEvacuateFollowersClosure;
 // but they must be here to allow ParScanClosure::do_oop_work to be defined
 // in genOopClosures.inline.hpp.
 
-typedef OopTaskQueue       ObjToScanQueue;
-typedef OopTaskQueueSet    ObjToScanQueueSet;
-
-// Enable this to get push/pop/steal stats.
-const int PAR_STATS_ENABLED = 0;
+typedef Padded<OopTaskQueue> ObjToScanQueue;
+typedef GenericTaskQueueSet<ObjToScanQueue> ObjToScanQueueSet;
 
 class ParKeepAliveClosure: public DefNewGeneration::KeepAliveClosure {
  private:
@@ -55,7 +52,7 @@ class ParScanThreadState {
   friend class ParScanThreadStateSet;
  private:
   ObjToScanQueue *_work_queue;
-  GrowableArray<oop>* _overflow_stack;
+  Stack<oop>* const _overflow_stack;
 
   ParGCAllocBuffer _to_space_alloc_buffer;
 
@@ -94,8 +91,14 @@ class ParScanThreadState {
 
   bool _to_space_full;
 
-  int _pushes, _pops, _steals, _steal_attempts, _term_attempts;
-  int _overflow_pushes, _overflow_refills, _overflow_refill_objs;
+#if TASKQUEUE_STATS
+  size_t _term_attempts;
+  size_t _overflow_refills;
+  size_t _overflow_refill_objs;
+#endif // TASKQUEUE_STATS
+
+  // Stats for promotion failure
+  size_t _promotion_failure_size;
 
   // Timing numbers.
   double _start;
@@ -117,7 +120,7 @@ class ParScanThreadState {
   ParScanThreadState(Space* to_space_, ParNewGeneration* gen_,
                      Generation* old_gen_, int thread_num_,
                      ObjToScanQueueSet* work_queue_set_,
-                     GrowableArray<oop>** overflow_stack_set_,
+                     Stack<oop>* overflow_stacks_,
                      size_t desired_plab_sz_,
                      ParallelTaskTerminator& term_);
 
@@ -141,7 +144,7 @@ class ParScanThreadState {
   void trim_queues(int max_size);
 
   // Private overflow stack usage
-  GrowableArray<oop>* overflow_stack() { return _overflow_stack; }
+  Stack<oop>* overflow_stack() { return _overflow_stack; }
   bool take_from_overflow_stack();
   void push_on_overflow_stack(oop p);
 
@@ -169,27 +172,29 @@ class ParScanThreadState {
   // Undo the most recent allocation ("obj", of "word_sz").
   void undo_alloc_in_to_space(HeapWord* obj, size_t word_sz);
 
-  int pushes() { return _pushes; }
-  int pops()   { return _pops; }
-  int steals() { return _steals; }
-  int steal_attempts() { return _steal_attempts; }
-  int term_attempts()  { return _term_attempts; }
-  int overflow_pushes() { return _overflow_pushes; }
-  int overflow_refills() { return _overflow_refills; }
-  int overflow_refill_objs() { return _overflow_refill_objs; }
-
-  void note_push()  { if (PAR_STATS_ENABLED) _pushes++; }
-  void note_pop()   { if (PAR_STATS_ENABLED) _pops++; }
-  void note_steal() { if (PAR_STATS_ENABLED) _steals++; }
-  void note_steal_attempt() { if (PAR_STATS_ENABLED) _steal_attempts++; }
-  void note_term_attempt()  { if (PAR_STATS_ENABLED) _term_attempts++; }
-  void note_overflow_push() { if (PAR_STATS_ENABLED) _overflow_pushes++; }
-  void note_overflow_refill(int objs) {
-    if (PAR_STATS_ENABLED) {
-      _overflow_refills++;
-      _overflow_refill_objs += objs;
+  // Promotion failure stats
+  size_t promotion_failure_size() { return promotion_failure_size(); }
+  void log_promotion_failure(size_t sz) {
+    if (_promotion_failure_size == 0) {
+      _promotion_failure_size = sz;
     }
   }
+  void print_and_clear_promotion_failure_size();
+
+#if TASKQUEUE_STATS
+  TaskQueueStats & taskqueue_stats() const { return _work_queue->stats; }
+
+  size_t term_attempts() const             { return _term_attempts; }
+  size_t overflow_refills() const          { return _overflow_refills; }
+  size_t overflow_refill_objs() const      { return _overflow_refill_objs; }
+
+  void note_term_attempt()                 { ++_term_attempts; }
+  void note_overflow_refill(size_t objs)   {
+    ++_overflow_refills; _overflow_refill_objs += objs;
+  }
+
+  void reset_stats();
+#endif // TASKQUEUE_STATS
 
   void start_strong_roots() {
     _start_strong_roots = os::elapsedTime();
@@ -197,17 +202,17 @@ class ParScanThreadState {
   void end_strong_roots() {
     _strong_roots_time += (os::elapsedTime() - _start_strong_roots);
   }
-  double strong_roots_time() { return _strong_roots_time; }
+  double strong_roots_time() const { return _strong_roots_time; }
   void start_term_time() {
-    note_term_attempt();
+    TASKQUEUE_STATS_ONLY(note_term_attempt());
     _start_term = os::elapsedTime();
   }
   void end_term_time() {
     _term_time += (os::elapsedTime() - _start_term);
   }
-  double term_time() { return _term_time; }
+  double term_time() const { return _term_time; }
 
-  double elapsed() {
+  double elapsed_time() const {
     return os::elapsedTime() - _start;
   }
 };
@@ -289,19 +294,14 @@ class ParNewGeneration: public DefNewGeneration {
   friend class ParNewRefProcTask;
   friend class ParNewRefProcTaskExecutor;
   friend class ParScanThreadStateSet;
+  friend class ParEvacuateFollowersClosure;
 
  private:
-  // XXX use a global constant instead of 64!
-  struct ObjToScanQueuePadded {
-        ObjToScanQueue work_queue;
-        char pad[64 - sizeof(ObjToScanQueue)];  // prevent false sharing
-  };
-
   // The per-worker-thread work queues
   ObjToScanQueueSet* _task_queues;
 
   // Per-worker-thread local overflow stacks
-  GrowableArray<oop>** _overflow_stacks;
+  Stack<oop>* _overflow_stacks;
 
   // Desired size of survivor space plab's
   PLABStats _plab_stats;
@@ -310,6 +310,7 @@ class ParNewGeneration: public DefNewGeneration {
   // klass-pointers (klass information already copied to the forwarded
   // image.)  Manipulated with CAS.
   oop _overflow_list;
+  NOT_PRODUCT(ssize_t _num_par_pushes;)
 
   // If true, older generation does not support promotion undo, so avoid.
   static bool _avoid_promotion_undo;
@@ -397,8 +398,8 @@ class ParNewGeneration: public DefNewGeneration {
   void push_on_overflow_list(oop from_space_obj, ParScanThreadState* par_scan_state);
 
   // If the global overflow list is non-empty, move some tasks from it
-  // onto "work_q" (which must be empty).  No more than 1/4 of the
-  // max_elems of "work_q" are moved.
+  // onto "work_q" (which need not be empty).  No more than 1/4 of the
+  // available space on "work_q" is used.
   bool take_from_overflow_list(ParScanThreadState* par_scan_state);
   bool take_from_overflow_list_work(ParScanThreadState* par_scan_state);
 

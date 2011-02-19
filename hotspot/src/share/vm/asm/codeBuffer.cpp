@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -123,8 +123,16 @@ CodeBuffer::~CodeBuffer() {
     // addresses constructed before expansions will not be confused.
     cb->free_blob();
   }
+
+  // free any overflow storage
+  delete _overflow_arena;
+
 #ifdef ASSERT
+  // Save allocation type to execute assert in ~ResourceObj()
+  // which is called after this destructor.
+  ResourceObj::allocation_type at = _default_oop_recorder.get_allocation_type();
   Copy::fill_to_bytes(this, sizeof(*this), badResourceValue);
+  ResourceObj::set_allocation_type((address)(&_default_oop_recorder), at);
 #endif
 }
 
@@ -400,7 +408,7 @@ void CodeSection::expand_locs(int new_capacity) {
       locs_start = REALLOC_RESOURCE_ARRAY(relocInfo, _locs_start, old_capacity, new_capacity);
     } else {
       locs_start = NEW_RESOURCE_ARRAY(relocInfo, new_capacity);
-      Copy::conjoint_bytes(_locs_start, locs_start, old_capacity * sizeof(relocInfo));
+      Copy::conjoint_jbytes(_locs_start, locs_start, old_capacity * sizeof(relocInfo));
       _locs_own = true;
     }
     _locs_start    = locs_start;
@@ -577,7 +585,7 @@ csize_t CodeBuffer::copy_relocations_to(CodeBlob* dest) const {
                              (HeapWord*)(buf+buf_offset),
                              (lsize + HeapWordSize-1) / HeapWordSize);
       } else {
-        Copy::conjoint_bytes(lstart, buf+buf_offset, lsize);
+        Copy::conjoint_jbytes(lstart, buf+buf_offset, lsize);
       }
     }
     buf_offset += lsize;

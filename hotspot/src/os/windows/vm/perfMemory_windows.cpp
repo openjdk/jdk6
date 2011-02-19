@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -149,11 +149,11 @@ static char* get_user_tmp_dir(const char* user) {
 
   const char* tmpdir = os::get_temp_directory();
   const char* perfdir = PERFDATA_NAME;
-  size_t nbytes = strlen(tmpdir) + strlen(perfdir) + strlen(user) + 2;
+  size_t nbytes = strlen(tmpdir) + strlen(perfdir) + strlen(user) + 3;
   char* dirname = NEW_C_HEAP_ARRAY(char, nbytes);
 
   // construct the path name to user specific tmp directory
-  _snprintf(dirname, nbytes, "%s%s_%s", tmpdir, perfdir, user);
+  _snprintf(dirname, nbytes, "%s\\%s_%s", tmpdir, perfdir, user);
 
   return dirname;
 }
@@ -195,7 +195,7 @@ static int filename_to_pid(const char* filename) {
 // check if the given path is considered a secure directory for
 // the backing store files. Returns true if the directory exists
 // and is considered a secure location. Returns false if the path
-// is a symbolic link or if an error occured.
+// is a symbolic link or if an error occurred.
 //
 static bool is_directory_secure(const char* path) {
 
@@ -318,8 +318,9 @@ static char* get_user_name_slow(int vmid) {
     }
 
     char* usrdir_name = NEW_C_HEAP_ARRAY(char,
-                              strlen(tmpdirname) + strlen(dentry->d_name) + 1);
+                              strlen(tmpdirname) + strlen(dentry->d_name) + 2);
     strcpy(usrdir_name, tmpdirname);
+    strcat(usrdir_name, "\\");
     strcat(usrdir_name, dentry->d_name);
 
     DIR* subdirp = os::opendir(usrdir_name);
@@ -994,7 +995,7 @@ static bool add_allow_aces(PSECURITY_DESCRIPTOR pSD,
     return false;
   }
 
-  // if running on windows 2000 or later, set the automatic inheritence
+  // if running on windows 2000 or later, set the automatic inheritance
   // control flags.
   SetSecurityDescriptorControlFnPtr _SetSecurityDescriptorControl;
   _SetSecurityDescriptorControl = (SetSecurityDescriptorControlFnPtr)
@@ -1002,7 +1003,7 @@ static bool add_allow_aces(PSECURITY_DESCRIPTOR pSD,
                       "SetSecurityDescriptorControl");
 
   if (_SetSecurityDescriptorControl != NULL) {
-    // We do not want to further propogate inherited DACLs, so making them
+    // We do not want to further propagate inherited DACLs, so making them
     // protected prevents that.
     if (!_SetSecurityDescriptorControl(pSD, SE_DACL_PROTECTED,
                                             SE_DACL_PROTECTED)) {

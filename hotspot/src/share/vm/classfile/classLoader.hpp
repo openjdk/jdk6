@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -149,9 +149,26 @@ class ClassLoader: AllStatic {
   static PerfCounter* _perf_accumulated_time;
   static PerfCounter* _perf_classes_inited;
   static PerfCounter* _perf_class_init_time;
+  static PerfCounter* _perf_class_init_selftime;
+  static PerfCounter* _perf_classes_verified;
   static PerfCounter* _perf_class_verify_time;
+  static PerfCounter* _perf_class_verify_selftime;
   static PerfCounter* _perf_classes_linked;
   static PerfCounter* _perf_class_link_time;
+  static PerfCounter* _perf_class_link_selftime;
+  static PerfCounter* _perf_class_parse_time;
+  static PerfCounter* _perf_class_parse_selftime;
+  static PerfCounter* _perf_sys_class_lookup_time;
+  static PerfCounter* _perf_shared_classload_time;
+  static PerfCounter* _perf_sys_classload_time;
+  static PerfCounter* _perf_app_classload_time;
+  static PerfCounter* _perf_app_classload_selftime;
+  static PerfCounter* _perf_app_classload_count;
+  static PerfCounter* _perf_define_appclasses;
+  static PerfCounter* _perf_define_appclass_time;
+  static PerfCounter* _perf_define_appclass_selftime;
+  static PerfCounter* _perf_app_classfile_bytes_read;
+  static PerfCounter* _perf_sys_classfile_bytes_read;
 
   static PerfCounter* _sync_systemLoaderLockContentionRate;
   static PerfCounter* _sync_nonSystemLoaderLockContentionRate;
@@ -196,12 +213,29 @@ class ClassLoader: AllStatic {
   static void print_bootclasspath();
 
   // Timing
-  static PerfCounter* perf_accumulated_time()  { return _perf_accumulated_time; }
-  static PerfCounter* perf_classes_inited()    { return _perf_classes_inited; }
-  static PerfCounter* perf_class_init_time()   { return _perf_class_init_time; }
-  static PerfCounter* perf_class_verify_time() { return _perf_class_verify_time; }
-  static PerfCounter* perf_classes_linked()    { return _perf_classes_linked; }
-  static PerfCounter* perf_class_link_time() { return _perf_class_link_time; }
+  static PerfCounter* perf_accumulated_time()         { return _perf_accumulated_time; }
+  static PerfCounter* perf_classes_inited()           { return _perf_classes_inited; }
+  static PerfCounter* perf_class_init_time()          { return _perf_class_init_time; }
+  static PerfCounter* perf_class_init_selftime()      { return _perf_class_init_selftime; }
+  static PerfCounter* perf_classes_verified()         { return _perf_classes_verified; }
+  static PerfCounter* perf_class_verify_time()        { return _perf_class_verify_time; }
+  static PerfCounter* perf_class_verify_selftime()    { return _perf_class_verify_selftime; }
+  static PerfCounter* perf_classes_linked()           { return _perf_classes_linked; }
+  static PerfCounter* perf_class_link_time()          { return _perf_class_link_time; }
+  static PerfCounter* perf_class_link_selftime()      { return _perf_class_link_selftime; }
+  static PerfCounter* perf_class_parse_time()         { return _perf_class_parse_time; }
+  static PerfCounter* perf_class_parse_selftime()     { return _perf_class_parse_selftime; }
+  static PerfCounter* perf_sys_class_lookup_time()    { return _perf_sys_class_lookup_time; }
+  static PerfCounter* perf_shared_classload_time()    { return _perf_shared_classload_time; }
+  static PerfCounter* perf_sys_classload_time()       { return _perf_sys_classload_time; }
+  static PerfCounter* perf_app_classload_time()       { return _perf_app_classload_time; }
+  static PerfCounter* perf_app_classload_selftime()   { return _perf_app_classload_selftime; }
+  static PerfCounter* perf_app_classload_count()      { return _perf_app_classload_count; }
+  static PerfCounter* perf_define_appclasses()        { return _perf_define_appclasses; }
+  static PerfCounter* perf_define_appclass_time()     { return _perf_define_appclass_time; }
+  static PerfCounter* perf_define_appclass_selftime() { return _perf_define_appclass_selftime; }
+  static PerfCounter* perf_app_classfile_bytes_read() { return _perf_app_classfile_bytes_read; }
+  static PerfCounter* perf_sys_classfile_bytes_read() { return _perf_sys_classfile_bytes_read; }
 
   // Record how often system loader lock object is contended
   static PerfCounter* sync_systemLoaderLockContentionRate() {
@@ -306,4 +340,65 @@ class ClassLoader: AllStatic {
   static void compile_the_world_in(char* name, Handle loader, TRAPS);
   static int  compile_the_world_counter() { return _compile_the_world_counter; }
 #endif //PRODUCT
+};
+
+// PerfClassTraceTime is used to measure time for class loading related events.
+// This class tracks cumulative time and exclusive time for specific event types.
+// During the execution of one event, other event types (e.g. class loading and
+// resolution) as well as recursive calls of the same event type could happen.
+// Only one elapsed timer (cumulative) and one thread-local self timer (exclusive)
+// (i.e. only one event type) are active at a time even multiple PerfClassTraceTime
+// instances have been created as multiple events are happening.
+class PerfClassTraceTime {
+ public:
+  enum {
+    CLASS_LOAD   = 0,
+    PARSE_CLASS  = 1,
+    CLASS_LINK   = 2,
+    CLASS_VERIFY = 3,
+    CLASS_CLINIT = 4,
+    DEFINE_CLASS = 5,
+    EVENT_TYPE_COUNT = 6
+  };
+ protected:
+  // _t tracks time from initialization to destruction of this timer instance
+  // including time for all other event types, and recursive calls of this type.
+  // When a timer is called recursively, the elapsedTimer _t would not be used.
+  elapsedTimer     _t;
+  PerfLongCounter* _timep;
+  PerfLongCounter* _selftimep;
+  PerfLongCounter* _eventp;
+  // pointer to thread-local recursion counter and timer array
+  // The thread_local timers track cumulative time for specific event types
+  // exclusive of time for other event types, but including recursive calls
+  // of the same type.
+  int*             _recursion_counters;
+  elapsedTimer*    _timers;
+  int              _event_type;
+  int              _prev_active_event;
+
+ public:
+
+  inline PerfClassTraceTime(PerfLongCounter* timep,     /* counter incremented with inclusive time */
+                            PerfLongCounter* selftimep, /* counter incremented with exclusive time */
+                            PerfLongCounter* eventp,    /* event counter */
+                            int* recursion_counters,    /* thread-local recursion counter array */
+                            elapsedTimer* timers,       /* thread-local timer array */
+                            int type                    /* event type */ ) :
+      _timep(timep), _selftimep(selftimep), _eventp(eventp), _recursion_counters(recursion_counters), _timers(timers), _event_type(type) {
+    initialize();
+  }
+
+  inline PerfClassTraceTime(PerfLongCounter* timep,     /* counter incremented with inclusive time */
+                            elapsedTimer* timers,       /* thread-local timer array */
+                            int type                    /* event type */ ) :
+      _timep(timep), _selftimep(NULL), _eventp(NULL), _recursion_counters(NULL), _timers(timers), _event_type(type) {
+    initialize();
+  }
+
+  inline void suspend() { _t.stop(); _timers[_event_type].stop(); }
+  inline void resume()  { _t.start(); _timers[_event_type].start(); }
+
+  ~PerfClassTraceTime();
+  void initialize();
 };

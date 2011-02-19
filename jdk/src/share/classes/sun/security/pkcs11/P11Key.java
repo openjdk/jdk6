@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,14 +18,15 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.security.pkcs11;
 
 import java.io.*;
+import java.lang.ref.*;
 import java.math.BigInteger;
 import java.util.*;
 
@@ -43,6 +44,8 @@ import sun.security.internal.interfaces.TlsMasterSecret;
 
 import sun.security.pkcs11.wrapper.*;
 import static sun.security.pkcs11.wrapper.PKCS11Constants.*;
+
+import sun.security.util.DerValue;
 
 /**
  * Key implementation classes.
@@ -67,9 +70,6 @@ abstract class P11Key implements Key {
     // type of key, one of (PUBLIC, PRIVATE, SECRET)
     final String type;
 
-    // session in which the key was created, relevant for session objects
-    final Session session;
-
     // token instance
     final Token token;
 
@@ -85,10 +85,12 @@ abstract class P11Key implements Key {
     // flags indicating whether the key is a token object, sensitive, extractable
     final boolean tokenObject, sensitive, extractable;
 
+    // phantom reference notification clean up for session keys
+    private final SessionKeyRef sessionKeyRef;
+
     P11Key(String type, Session session, long keyID, String algorithm,
             int keyLength, CK_ATTRIBUTE[] attributes) {
         this.type = type;
-        this.session = session;
         this.token = session.token;
         this.keyID = keyID;
         this.algorithm = algorithm;
@@ -111,7 +113,9 @@ abstract class P11Key implements Key {
         this.sensitive = sensitive;
         this.extractable = extractable;
         if (tokenObject == false) {
-            session.addObject();
+            sessionKeyRef = new SessionKeyRef(this, keyID, session);
+        } else {
+            sessionKeyRef = null;
         }
     }
 
@@ -233,24 +237,6 @@ abstract class P11Key implements Key {
             throw new ProviderException(e);
         } finally {
             token.releaseSession(tempSession);
-        }
-    }
-
-    protected void finalize() throws Throwable {
-        if (tokenObject || (token.isValid() == false)) {
-            super.finalize();
-            return;
-        }
-        Session newSession = null;
-        try {
-            newSession = token.getOpSession();
-            token.p11.C_DestroyObject(newSession.id(), keyID);
-        } catch (PKCS11Exception e) {
-            // ignore
-        } finally {
-            token.releaseSession(newSession);
-            session.removeObject();
-            super.finalize();
         }
     }
 
@@ -1016,8 +1002,16 @@ abstract class P11Key implements Key {
             try {
                 params = P11ECKeyFactory.decodeParameters
                             (attributes[1].getByteArray());
+                DerValue wECPoint = new DerValue(attributes[0].getByteArray());
+                if (wECPoint.getTag() != DerValue.tag_OctetString)
+                    throw new IOException("Unexpected tag: " +
+                        wECPoint.getTag());
+                params = P11ECKeyFactory.decodeParameters
+                            (attributes[1].getByteArray());
                 w = P11ECKeyFactory.decodePoint
-                            (attributes[0].getByteArray(), params.getCurve());
+                    (wECPoint.getDataBytes(), params.getCurve());
+
+
             } catch (Exception e) {
                 throw new RuntimeException("Could not parse key values", e);
             }
@@ -1055,5 +1049,68 @@ abstract class P11Key implements Key {
                 + "\n  parameters: " + params;
         }
     }
+}
 
+/*
+ * NOTE: Must use PhantomReference here and not WeakReference
+ * otherwise the key maybe cleared before other objects which
+ * still use these keys during finalization such as SSLSocket.
+ */
+final class SessionKeyRef extends PhantomReference<P11Key>
+    implements Comparable<SessionKeyRef> {
+    private static ReferenceQueue<P11Key> refQueue =
+        new ReferenceQueue<P11Key>();
+    private static Set<SessionKeyRef> refList =
+        Collections.synchronizedSortedSet(new TreeSet<SessionKeyRef>());
+
+    static ReferenceQueue<P11Key> referenceQueue() {
+        return refQueue;
+    }
+
+    private static void drainRefQueueBounded() {
+        while (true) {
+            SessionKeyRef next = (SessionKeyRef) refQueue.poll();
+            if (next == null) break;
+            next.dispose();
+        }
+    }
+
+    // handle to the native key
+    private long keyID;
+    private Session session;
+
+    SessionKeyRef(P11Key key , long keyID, Session session) {
+        super(key, refQueue);
+        this.keyID = keyID;
+        this.session = session;
+        this.session.addObject();
+        refList.add(this);
+        // TBD: run at some interval and not every time?
+        drainRefQueueBounded();
+    }
+
+    private void dispose() {
+        refList.remove(this);
+        if (session.token.isValid()) {
+            Session newSession = null;
+            try {
+                newSession = session.token.getOpSession();
+                session.token.p11.C_DestroyObject(newSession.id(), keyID);
+            } catch (PKCS11Exception e) {
+                // ignore
+            } finally {
+                this.clear();
+                session.token.releaseSession(newSession);
+                session.removeObject();
+            }
+        }
+    }
+
+    public int compareTo(SessionKeyRef other) {
+        if (this.keyID == other.keyID) {
+            return 0;
+        } else {
+            return (this.keyID < other.keyID) ? -1 : 1;
+        }
+    }
 }

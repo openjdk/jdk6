@@ -1,12 +1,12 @@
 /*
- * Copyright 2000-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package java.awt;
 
@@ -586,7 +586,7 @@ public abstract class KeyboardFocusManager
     void setNativeFocusOwner(Component comp) {
         if (focusLog.isLoggable(Level.FINEST)) {
             focusLog.log(Level.FINEST, "Calling peer {0} setCurrentFocusOwner for {1}",
-                         new Object[] {peer, comp});
+                         new Object[] {String.valueOf(peer), String.valueOf(comp)});
         }
         peer.setCurrentFocusOwner(comp);
     }
@@ -2338,20 +2338,20 @@ public abstract class KeyboardFocusManager
         Window nativeFocusedWindow = thisManager.getNativeFocusedWindow();
         if (focusLog.isLoggable(Level.FINER)) {
             focusLog.log(Level.FINER, "SNFH for {0} in {1}",
-                         new Object[] {descendant, heavyweight});
+                         new Object[] {String.valueOf(descendant), String.valueOf(heavyweight)});
         }
         if (focusLog.isLoggable(Level.FINEST)) {
             focusLog.log(Level.FINEST, "0. Current focus owner {0}",
-                         currentFocusOwner);
+                         String.valueOf(currentFocusOwner));
             focusLog.log(Level.FINEST, "0. Native focus owner {0}",
-                         nativeFocusOwner);
+                         String.valueOf(nativeFocusOwner));
             focusLog.log(Level.FINEST, "0. Native focused window {0}",
-                         nativeFocusedWindow);
+                         String.valueOf(nativeFocusedWindow));
         }
         synchronized (heavyweightRequests) {
             HeavyweightFocusRequest hwFocusRequest = getLastHWRequest();
             if (focusLog.isLoggable(Level.FINEST)) {
-                focusLog.log(Level.FINEST, "Request {0}", hwFocusRequest);
+                focusLog.log(Level.FINEST, "Request {0}", String.valueOf(hwFocusRequest));
             }
             if (hwFocusRequest == null &&
                 heavyweight == nativeFocusOwner)
@@ -2360,7 +2360,7 @@ public abstract class KeyboardFocusManager
                     // Redundant request.
                     if (focusLog.isLoggable(Level.FINEST))
                         focusLog.log(Level.FINEST, "1. SNFH_FAILURE for {0}",
-                                     descendant);
+                                     String.valueOf(descendant));
                     return SNFH_FAILURE;
                 }
 
@@ -2393,7 +2393,7 @@ public abstract class KeyboardFocusManager
                 SunToolkit.postEvent(descendant.appContext, newFocusOwnerEvent);
 
                 if (focusLog.isLoggable(Level.FINEST))
-                    focusLog.log(Level.FINEST, "2. SNFH_HANDLED for {0}", descendant);
+                    focusLog.log(Level.FINEST, "2. SNFH_HANDLED for {0}", String.valueOf(descendant));
                 return SNFH_SUCCESS_HANDLED;
             } else if (hwFocusRequest != null &&
                        hwFocusRequest.heavyweight == heavyweight) {
@@ -2900,11 +2900,11 @@ public abstract class KeyboardFocusManager
         KeyboardFocusManager manager = getCurrentKeyboardFocusManager();
         if (focusLog.isLoggable(Level.FINER)) {
             if (event instanceof FocusEvent || event instanceof WindowEvent) {
-                focusLog.log(Level.FINER, ">>> {0}", new Object[] {event});
+                focusLog.log(Level.FINER, ">>> {0}", new Object[] {String.valueOf(event)});
             }
             if (focusLog.isLoggable(Level.FINER) && event instanceof KeyEvent) {
-                focusLog.log(Level.FINER, "    focus owner is {0}", new Object[] {manager.getGlobalFocusOwner()});
-                focusLog.log(Level.FINER, ">>> {0}", new Object[] {event});
+                focusLog.log(Level.FINER, "    focus owner is {0}", new Object[] {String.valueOf(manager.getGlobalFocusOwner())});
+                focusLog.log(Level.FINER, ">>> {0}", new Object[] {String.valueOf(event)});
             }
         }
 

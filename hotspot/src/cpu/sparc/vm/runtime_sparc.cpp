@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -74,8 +74,8 @@ void OptoRuntime::generate_exception_blob() {
   int start = __ offset();
 
   __ verify_thread();
-  __ st_ptr(Oexception,  Address(G2_thread, 0, in_bytes(JavaThread::exception_oop_offset())));
-  __ st_ptr(Oissuing_pc, Address(G2_thread, 0, in_bytes(JavaThread::exception_pc_offset())));
+  __ st_ptr(Oexception,  G2_thread, JavaThread::exception_oop_offset());
+  __ st_ptr(Oissuing_pc, G2_thread, JavaThread::exception_pc_offset());
 
   // This call does all the hard work. It checks if an exception catch
   // exists in the method.
@@ -116,23 +116,28 @@ void OptoRuntime::generate_exception_blob() {
   __ mov(O0, G3_scratch);             // Move handler address to temp
   __ restore();
 
+  // Restore SP from L7 if the exception PC is a MethodHandle call site.
+  __ lduw(Address(G2_thread, JavaThread::is_method_handle_return_offset()), O7);
+  __ tst(O7);
+  __ movcc(Assembler::notZero, false, Assembler::icc, L7_mh_SP_save, SP);
+
   // G3_scratch contains handler address
   // Since this may be the deopt blob we must set O7 to look like we returned
   // from the original pc that threw the exception
 
-  __ ld_ptr(Address(G2_thread, 0, in_bytes(JavaThread::exception_pc_offset())), O7);
+  __ ld_ptr(G2_thread, JavaThread::exception_pc_offset(), O7);
   __ sub(O7, frame::pc_return_offset, O7);
 
 
   assert(Assembler::is_simm13(in_bytes(JavaThread::exception_oop_offset())), "exception offset overflows simm13, following ld instruction cannot be in delay slot");
-  __ ld_ptr(Address(G2_thread, 0, in_bytes(JavaThread::exception_oop_offset())), Oexception); // O0
+  __ ld_ptr(G2_thread, JavaThread::exception_oop_offset(), Oexception); // O0
 #ifdef ASSERT
-  __ st_ptr(G0, Address(G2_thread, 0, in_bytes(JavaThread::exception_handler_pc_offset())));
-  __ st_ptr(G0, Address(G2_thread, 0, in_bytes(JavaThread::exception_pc_offset())));
+  __ st_ptr(G0, G2_thread, JavaThread::exception_handler_pc_offset());
+  __ st_ptr(G0, G2_thread, JavaThread::exception_pc_offset());
 #endif
   __ JMP(G3_scratch, 0);
   // Clear the exception oop so GC no longer processes it as a root.
-  __ delayed()->st_ptr(G0, Address(G2_thread, 0, in_bytes(JavaThread::exception_oop_offset())));
+  __ delayed()->st_ptr(G0, G2_thread, JavaThread::exception_oop_offset());
 
   // -------------
   // make sure all code is generated

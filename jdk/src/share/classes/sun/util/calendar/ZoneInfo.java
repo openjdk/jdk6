@@ -1,12 +1,12 @@
 /*
- * Copyright 2000-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2005, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.util.calendar;
@@ -28,10 +28,12 @@ package sun.util.calendar;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.lang.ref.SoftReference;
+import java.security.AccessController;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.SimpleTimeZone;
 import java.util.TimeZone;
@@ -76,6 +78,14 @@ public class ZoneInfo extends TimeZone {
     // this bit field is reserved for abbreviation support
     private static final long ABBR_MASK = 0xf00L;
     private static final int TRANSITION_NSHIFT = 12;
+
+    // Flag for supporting JDK backward compatible IDs, such as "EST".
+    private static final boolean USE_OLDMAPPING;
+    static {
+      String oldmapping = AccessController.doPrivileged(
+          new sun.security.action.GetPropertyAction("sun.timezone.ids.oldmapping", "false")).toLowerCase(Locale.ROOT);
+      USE_OLDMAPPING = (oldmapping.equals("yes") || oldmapping.equals("true"));
+    }
 
     private static final CalendarSystem gcal = CalendarSystem.getGregorianCalendar();
 
@@ -595,9 +605,21 @@ public class ZoneInfo extends TimeZone {
      * time zone of the ID.
      */
     public static TimeZone getTimeZone(String ID) {
-        ZoneInfo zi = null;
+        String givenID = null;
 
-        zi = ZoneInfoFile.getZoneInfo(ID);
+        /*
+         * If old JDK compatibility is specified, get the old alias
+         * name.
+         */
+        if (USE_OLDMAPPING) {
+            String compatibleID = TzIDOldMapping.MAP.get(ID);
+            if (compatibleID != null) {
+                givenID = ID;
+                ID = compatibleID;
+            }
+        }
+
+        ZoneInfo zi = ZoneInfoFile.getZoneInfo(ID);
         if (zi == null) {
             // if we can't create an object for the ID, try aliases.
             try {
@@ -615,6 +637,10 @@ public class ZoneInfo extends TimeZone {
             } catch (Exception e) {
                 // ignore exceptions
             }
+        }
+
+        if (givenID != null && zi != null) {
+            zi.setID(givenID);
         }
         return zi;
     }

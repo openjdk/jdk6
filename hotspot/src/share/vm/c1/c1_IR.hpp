@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -239,15 +239,21 @@ class IRScopeDebugInfo: public CompilationResourceObj {
   GrowableArray<MonitorValue*>* monitors()    { return _monitors;    }
   IRScopeDebugInfo*             caller()      { return _caller;      }
 
-  void record_debug_info(DebugInformationRecorder* recorder, int pc_offset) {
+  //Whether we should reexecute this bytecode for deopt
+  bool should_reexecute();
+
+  void record_debug_info(DebugInformationRecorder* recorder, int pc_offset, bool topmost, bool is_method_handle_invoke = false) {
     if (caller() != NULL) {
       // Order is significant:  Must record caller first.
-      caller()->record_debug_info(recorder, pc_offset);
+      caller()->record_debug_info(recorder, pc_offset, false/*topmost*/);
     }
     DebugToken* locvals = recorder->create_scope_values(locals());
     DebugToken* expvals = recorder->create_scope_values(expressions());
     DebugToken* monvals = recorder->create_monitor_values(monitors());
-    recorder->describe_scope(pc_offset, scope()->method(), bci(), locvals, expvals, monvals);
+    // reexecute allowed only for the topmost frame
+    bool reexecute = topmost ? should_reexecute() : false;
+    bool return_oop = false; // This flag will be ignored since it used only for C2 with escape analysis.
+    recorder->describe_scope(pc_offset, scope()->method(), bci(), reexecute, is_method_handle_invoke, return_oop, locvals, expvals, monvals);
   }
 };
 
@@ -263,6 +269,7 @@ class CodeEmitInfo: public CompilationResourceObj {
   int               _bci;
   CodeEmitInfo*     _next;
   int               _id;
+  bool              _is_method_handle_invoke;    // true if the associated call site is a MethodHandle call site.
 
   FrameMap*     frame_map() const                { return scope()->compilation()->frame_map(); }
   Compilation*  compilation() const              { return scope()->compilation(); }
@@ -281,7 +288,8 @@ class CodeEmitInfo: public CompilationResourceObj {
     , _stack(NULL)
     , _exception_handlers(NULL)
     , _next(NULL)
-    , _id(-1) {
+    , _id(-1)
+    , _is_method_handle_invoke(false) {
   }
 
   // make a copy
@@ -303,6 +311,9 @@ class CodeEmitInfo: public CompilationResourceObj {
 
   int id() const      { return _id; }
   void set_id(int id) { _id = id; }
+
+  bool     is_method_handle_invoke() const { return _is_method_handle_invoke;     }
+  void set_is_method_handle_invoke(bool x) {        _is_method_handle_invoke = x; }
 };
 
 
@@ -360,8 +371,8 @@ class IR: public CompilationResourceObj {
 // instructions from the instruction list.
 //
 
-class SubstitutionResolver: public BlockClosure {
-  static void substitute(Value* v);
+class SubstitutionResolver: public BlockClosure, ValueVisitor {
+  virtual void visit(Value* v);
 
  public:
   SubstitutionResolver(IR* hir) {

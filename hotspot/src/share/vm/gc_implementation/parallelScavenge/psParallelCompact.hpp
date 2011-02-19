@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -799,8 +799,7 @@ class PSParallelCompact : AllStatic {
     FollowRootClosure(ParCompactionManager* cm) : _compaction_manager(cm) { }
     virtual void do_oop(oop* p);
     virtual void do_oop(narrowOop* p);
-    virtual const bool do_nmethods() const { return true; }
-  };
+ };
 
   class FollowStackClosure: public VoidClosure {
    private:
@@ -817,6 +816,8 @@ class PSParallelCompact : AllStatic {
     AdjustPointerClosure(bool is_root) : _is_root(is_root) { }
     virtual void do_oop(oop* p);
     virtual void do_oop(narrowOop* p);
+    // do not walk from thread stacks to the code cache on this phase
+    virtual void do_code_blob(CodeBlob* cb) const { }
   };
 
   // Closure for verifying update of pointers.  Does not
@@ -900,8 +901,8 @@ class PSParallelCompact : AllStatic {
   // Mark live objects
   static void marking_phase(ParCompactionManager* cm,
                             bool maximum_heap_compaction);
-  static void follow_stack(ParCompactionManager* cm);
-  static void follow_weak_klass_links(ParCompactionManager* cm);
+  static void follow_weak_klass_links();
+  static void follow_mdo_weak_refs();
 
   template <class T> static inline void adjust_pointer(T* p, bool is_root);
   static void adjust_root_pointer(oop* p) { adjust_pointer(p, true); }
@@ -1062,7 +1063,6 @@ class PSParallelCompact : AllStatic {
     MarkAndPushClosure(ParCompactionManager* cm) : _compaction_manager(cm) { }
     virtual void do_oop(oop* p);
     virtual void do_oop(narrowOop* p);
-    virtual const bool do_nmethods() const { return true; }
   };
 
   PSParallelCompact();
@@ -1221,6 +1221,9 @@ class PSParallelCompact : AllStatic {
   // Update subklass/sibling/implementor links at end of marking.
   static void revisit_weak_klass_link(ParCompactionManager* cm, Klass* k);
 
+  // Clear unmarked oops in MDOs at the end of marking.
+  static void revisit_mdo(ParCompactionManager* cm, DataLayout* p);
+
 #ifndef PRODUCT
   // Debugging support.
   static const char* space_names[last_space_id];
@@ -1272,7 +1275,7 @@ inline void PSParallelCompact::follow_root(ParCompactionManager* cm, T* p) {
       }
     }
   }
-  follow_stack(cm);
+  cm->follow_marking_stacks();
 }
 
 template <class T>
@@ -1294,11 +1297,8 @@ inline void PSParallelCompact::mark_and_push(ParCompactionManager* cm, T* p) {
   T heap_oop = oopDesc::load_heap_oop(p);
   if (!oopDesc::is_null(heap_oop)) {
     oop obj = oopDesc::decode_heap_oop_not_null(heap_oop);
-    if (mark_bitmap()->is_unmarked(obj)) {
-      if (mark_obj(obj)) {
-        // This thread marked the object and owns the subsequent processing of it.
-        cm->save_for_scanning(obj);
-      }
+    if (mark_bitmap()->is_unmarked(obj) && mark_obj(obj)) {
+      cm->push(obj);
     }
   }
 }
@@ -1411,6 +1411,8 @@ PSParallelCompact::check_new_location(HeapWord* old_addr, HeapWord* new_addr)
 {
   assert(old_addr >= new_addr || space_id(old_addr) != space_id(new_addr),
          "must move left or to a different space");
+  assert(is_object_aligned((intptr_t)old_addr) && is_object_aligned((intptr_t)new_addr),
+         "checking alignment");
 }
 #endif // ASSERT
 

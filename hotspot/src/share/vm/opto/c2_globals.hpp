@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -26,7 +26,7 @@
 // Defines all globals flags used by the server compiler.
 //
 
-#define C2_FLAGS(develop, develop_pd, product, product_pd, diagnostic, notproduct) \
+#define C2_FLAGS(develop, develop_pd, product, product_pd, diagnostic, experimental, notproduct) \
                                                                             \
   notproduct(intx, CompileZapFirst, 0,                                      \
           "If +ZapDeadCompiledLocals, "                                     \
@@ -51,9 +51,6 @@
   product_pd(intx, InteriorEntryAlignment,                                  \
           "Code alignment for interior entry points "                       \
           "in generated code (in bytes)")                                   \
-                                                                            \
-  product_pd(intx, OptoLoopAlignment,                                       \
-          "Align inner loops to zero relative to this modulus")             \
                                                                             \
   product(intx, MaxLoopPad, (OptoLoopAlignment-1),                          \
           "Align a loop if padding size in bytes is less or equal to this value") \
@@ -154,6 +151,18 @@
   notproduct(bool, TraceProfileTripCount, false,                            \
           "Trace profile loop trip count information")                      \
                                                                             \
+  product(bool, UseLoopPredicate, true,                                     \
+          "Generate a predicate to select fast/slow loop versions")         \
+                                                                            \
+  develop(bool, TraceLoopPredicate, false,                                  \
+          "Trace generation of loop predicates")                            \
+                                                                            \
+  product(bool, OptimizeFill, false,                                        \
+          "convert fill/copy loops into intrinsic")                         \
+                                                                            \
+  develop(bool, TraceOptimizeFill, false,                                   \
+          "print detailed information about fill conversion")               \
+                                                                            \
   develop(bool, OptoCoalesce, true,                                         \
           "Use Conservative Copy Coalescing in the Register Allocator")     \
                                                                             \
@@ -175,6 +184,9 @@
   product(bool, ReduceBulkZeroing, true,                                    \
           "When bulk-initializing, try to avoid needless zeroing")          \
                                                                             \
+  product(bool, UseFPUForSpilling, false,                                   \
+          "Spill integer registers to FPU instead of stack when possible")  \
+                                                                            \
   develop_pd(intx, RegisterCostAreaRatio,                                   \
           "Spill selection in reg allocator: scale area by (X/64K) before " \
           "adding cost")                                                    \
@@ -190,6 +202,9 @@
                                                                             \
   notproduct(bool, VerifyHashTableKeys, true,                               \
           "Verify the immutability of keys in the VN hash tables")          \
+                                                                            \
+  notproduct(bool, VerifyRegisterAllocator , false,                         \
+          "Verify Register Allocator")                                      \
                                                                             \
   develop_pd(intx, FLOATPRESSURE,                                           \
           "Number of float LRG's that constitute high register pressure")   \
@@ -274,6 +289,12 @@
                                                                             \
   product(bool, InsertMemBarAfterArraycopy, true,                           \
           "Insert memory barrier after arraycopy call")                     \
+                                                                            \
+  develop(bool, SubsumeLoads, true,                                         \
+          "Attempt to compile while subsuming loads into machine instructions.") \
+                                                                            \
+  develop(bool, StressRecompilation, false,                                 \
+          "Recompile each compiled method without subsuming loads or escape analysis.") \
                                                                             \
   /* controls for tier 1 compilations */                                    \
                                                                             \
@@ -373,7 +394,7 @@
   product(intx, AutoBoxCacheMax, 128,                                       \
           "Sets max value cached by the java.lang.Integer autobox cache")   \
                                                                             \
-  product(bool, DoEscapeAnalysis, false,                                    \
+  product(bool, DoEscapeAnalysis, true,                                     \
           "Perform escape analysis")                                        \
                                                                             \
   notproduct(bool, PrintEscapeAnalysis, false,                              \
@@ -388,8 +409,14 @@
   product(intx, EliminateAllocationArraySizeLimit, 64,                      \
           "Array size (number of elements) limit for scalar replacement")   \
                                                                             \
-  product(bool, UseOptoBiasInlining, true,                                 \
+  product(bool, UseOptoBiasInlining, true,                                  \
           "Generate biased locking code in C2 ideal graph")                 \
+                                                                            \
+  product(bool, OptimizeStringConcat, false,                                \
+          "Optimize the construction of Strings by StringBuilder")          \
+                                                                            \
+  notproduct(bool, PrintOptimizeStringConcat, false,                        \
+          "Print information about transformations performed on Strings")   \
                                                                             \
   product(intx, ValueSearchLimit, 1000,                                     \
           "Recursion limit in PhaseMacroExpand::value_from_mem_phi")        \
@@ -407,7 +434,7 @@
           "Miniumum %% of a successor (predecessor) for which block layout "\
           "a will allow a fork (join) in a single chain")                   \
                                                                             \
-  product(bool, BlockLayoutRotateLoops, false,                              \
+  product(bool, BlockLayoutRotateLoops, true,                               \
           "Allow back branches to be fall throughs in the block layour")    \
 
-C2_FLAGS(DECLARE_DEVELOPER_FLAG, DECLARE_PD_DEVELOPER_FLAG, DECLARE_PRODUCT_FLAG, DECLARE_PD_PRODUCT_FLAG, DECLARE_DIAGNOSTIC_FLAG, DECLARE_NOTPRODUCT_FLAG)
+C2_FLAGS(DECLARE_DEVELOPER_FLAG, DECLARE_PD_DEVELOPER_FLAG, DECLARE_PRODUCT_FLAG, DECLARE_PD_PRODUCT_FLAG, DECLARE_DIAGNOSTIC_FLAG, DECLARE_EXPERIMENTAL_FLAG, DECLARE_NOTPRODUCT_FLAG)

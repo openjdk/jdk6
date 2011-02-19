@@ -1,12 +1,12 @@
 #
-# Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License version 2 only, as
-# published by the Free Software Foundation.  Sun designates this
+# published by the Free Software Foundation.  Oracle designates this
 # particular file as subject to the "Classpath" exception as provided
-# by Sun in the LICENSE file that accompanied this code.
+# by Oracle in the LICENSE file that accompanied this code.
 #
 # This code is distributed in the hope that it will be useful, but WITHOUT
 # ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 
 #
@@ -94,10 +94,12 @@ ifeq ($(INCLUDE_SA), true)
   endif
 endif # INCLUDE_SA
 
-# Hotspot client is only available on 32-bit builds
+# Hotspot client is only available on 32-bit non-Zero builds
+ifneq ($(ZERO_BUILD), true)
 ifeq ($(ARCH_DATA_MODEL), 32)
   IMPORT_LIST += $(LIB_LOCATION)/$(CLIENT_LOCATION)/$(JVM_NAME) \
                  $(LIB_LOCATION)/$(CLIENT_LOCATION)/Xusage.txt
+endif
 endif
 
 ifeq ($(PLATFORM), windows)
@@ -161,6 +163,7 @@ ifeq ($(PLATFORM), solaris)
   IMPORT_LIST += $(LIB_LOCATION)/$(SERVER_LOCATION)/$(JVMDB_NAME)
 endif 
 
+ifneq ($(ZERO_BUILD), true)
 ifeq ($(ARCH_DATA_MODEL), 32)
 
 IMPORT_LIST += $(LIB_LOCATION)/$(CLIENT_LOCATION)/$(LIBJSIG_NAME)
@@ -191,6 +194,8 @@ endif # 32bit solaris
 
 endif # 32bit
 
+endif # ZERO_BUILD
+
 #  NOT Windows ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ NOT Windows
 
 endif # PLATFORM
@@ -198,7 +203,7 @@ endif # PLATFORM
 $(LIB_LOCATION)/$(CLIENT_LOCATION)/$(JVM_NAME): $(HOTSPOT_CLIENT_PATH)/$(JVM_NAME)
 	$(install-import-file)
 
-$(LIB_LOCATION)/$(LIBJSIG_NAME): $(HOTSPOT_SERVER_PATH)/$(LIBJSIG_NAME)
+$(LIB_LOCATION)/$(LIBJSIG_NAME): $(HOTSPOT_IMPORT_PATH)/$(ARCH_VM_SUBDIR)/$(LIBJSIG_NAME)
 	$(install-import-file)
 
 $(LIB_LOCATION)/$(CLIENT_LOCATION)/$(LIBJSIG_NAME) \
@@ -250,15 +255,9 @@ endif # windows
 endif # INCLUDE_SA
 
 #
-# Specific to OpenJDK building
+# Specific to non-OpenJDK building
 #
-ifdef OPENJDK
-
-include $(BUILDDIR)/common/internal/BinaryPlugs.gmk
-
-build: import-binary-plugs
-
-else # !OPENJDK
+ifndef OPENJDK
 
 INTERNAL_IMPORT_LIST += \
             $(LIBDIR)/security/US_export_policy.jar \

@@ -1,12 +1,12 @@
 /*
- * Portions Copyright 2003-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 /*
@@ -126,19 +126,6 @@ public final class MathContext implements Serializable {
      */
     final RoundingMode roundingMode;
 
-    /**
-     *  Lookaside for the rounding points (the numbers which determine
-     *  whether the coefficient of a number will require rounding).
-     *  These will be present if {@code precision > 0} and
-     *  {@code precision <= MAX_LOOKASIDE}.  In this case they will share the
-     *  {@code BigInteger int[]} array.  Note that the transients
-     *  cannot be {@code final} because they are reconstructed on
-     *  deserialization.
-     */
-    transient BigInteger roundingMax = null;
-    transient BigInteger roundingMin = null;
-    private static final int MAX_LOOKASIDE = 1000;
-
     /* ----- Constructors ----- */
 
     /**
@@ -173,11 +160,6 @@ public final class MathContext implements Serializable {
             throw new NullPointerException("null RoundingMode");
 
         precision = setPrecision;
-        if (precision > 0 && precision <= MAX_LOOKASIDE) {
-            roundingMax = BigInteger.TEN.pow(precision);
-            roundingMin = roundingMax.negate();
-        }
-
         roundingMode = setRoundingMode;
         return;
     }
@@ -221,10 +203,6 @@ public final class MathContext implements Serializable {
             throw new IllegalArgumentException("Digits < 0");
         // the other parameters cannot be invalid if we got here
         precision = setPrecision;
-        if (precision > 0 && precision <= MAX_LOOKASIDE) {
-            roundingMax = BigInteger.TEN.pow(precision);
-            roundingMin = roundingMax.negate();
-        }
     }
 
     /**
@@ -342,11 +320,6 @@ public final class MathContext implements Serializable {
         if (roundingMode == null) {
             String message = "MathContext: null roundingMode in stream";
             throw new java.io.StreamCorruptedException(message);
-        }
-        // Set the lookaside, if applicable
-        if (precision <= MAX_LOOKASIDE) {
-            roundingMax = BigInteger.TEN.pow(precision);
-            roundingMin = roundingMax.negate();
         }
     }
 

@@ -1,13 +1,13 @@
 
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -19,9 +19,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package sun.swing;
 
@@ -263,6 +263,7 @@ public class FilePane extends JPanel implements PropertyChangeListener {
     private Color   listViewBackground;
     private boolean listViewWindowsStyle;
     private boolean readOnly;
+    private boolean fullRowSelection = false;
 
     private ListSelectionModel listSelectionModel;
     private JList list;
@@ -446,6 +447,7 @@ public class FilePane extends JPanel implements PropertyChangeListener {
         kiloByteString = UIManager.getString("FileChooser.fileSizeKiloBytes", l);
         megaByteString = UIManager.getString("FileChooser.fileSizeMegaBytes", l);
         gigaByteString = UIManager.getString("FileChooser.fileSizeGigaBytes", l);
+        fullRowSelection = UIManager.getBoolean("FileView.fullRowSelection");
 
         renameErrorTitleText = UIManager.getString("FileChooser.renameErrorTitleText", l);
         renameErrorText = UIManager.getString("FileChooser.renameErrorText", l);
@@ -976,6 +978,7 @@ public class FilePane extends JPanel implements PropertyChangeListener {
         public DetailsTableCellEditor(JTextField tf) {
             super(tf);
             this.tf = tf;
+            tf.setName("Table.editor");
             tf.addFocusListener(editorFocusListener);
         }
 
@@ -1003,7 +1006,8 @@ public class FilePane extends JPanel implements PropertyChangeListener {
         }
 
         public void setBounds(int x, int y, int width, int height) {
-            if (getHorizontalAlignment() == SwingConstants.LEADING) {
+        if (getHorizontalAlignment() == SwingConstants.LEADING &&
+                    !fullRowSelection) {
                 // Restrict width to actual text
                 width = Math.min(width, this.getPreferredSize().width+4);
             } else {
@@ -1024,9 +1028,9 @@ public class FilePane extends JPanel implements PropertyChangeListener {
         public Component getTableCellRendererComponent(JTable table, Object value,
                               boolean isSelected, boolean hasFocus, int row, int column) {
 
-            if (table.convertColumnIndexToModel(column) != COLUMN_FILENAME ||
-                    (listViewWindowsStyle && !table.isFocusOwner())) {
-
+            if ((table.convertColumnIndexToModel(column) != COLUMN_FILENAME ||
+                    (listViewWindowsStyle && !table.isFocusOwner())) &&
+                    !fullRowSelection) {
                 isSelected = false;
             }
 
@@ -1322,6 +1326,7 @@ public class FilePane extends JPanel implements PropertyChangeListener {
             Rectangle r = list.getCellBounds(index, index);
             if (editCell == null) {
                 editCell = new JTextField();
+                editCell.setName("Tree.cellEditor");
                 editCell.addActionListener(new EditActionListener());
                 editCell.addFocusListener(editorFocusListener);
                 editCell.setNextFocusableComponent(list);
@@ -1774,10 +1779,11 @@ public class FilePane extends JPanel implements PropertyChangeListener {
                 Point p = evt.getPoint();
                 index = table.rowAtPoint(p);
 
-                if (SwingUtilities2.pointOutsidePrefSize(table,
-                                                         index,
-                                                         table.columnAtPoint(p), p)) {
+                boolean pointOutsidePrefSize =
+                        SwingUtilities2.pointOutsidePrefSize(
+                            table, index, table.columnAtPoint(p), p);
 
+                if (pointOutsidePrefSize && !fullRowSelection) {
                     return;
                 }
 

@@ -1,12 +1,12 @@
 /*
- * Copyright 2000-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2005, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package com.sun.imageio.plugins.png;
@@ -244,13 +244,17 @@ final class IDATOutputStream extends ImageOutputStreamImpl {
     }
 
     public void finish() throws IOException {
-        if (!def.finished()) {
-            def.finish();
-            while (!def.finished()) {
-                deflate();
+        try {
+            if (!def.finished()) {
+                def.finish();
+                while (!def.finished()) {
+                    deflate();
+                }
             }
+            finishChunk();
+        } finally {
+            def.end();
         }
-        finishChunk();
     }
 
     protected void finalize() throws Throwable {
@@ -667,52 +671,46 @@ public class PNGImageWriter extends ImageWriter {
         }
     }
 
-    private byte[] deflate(String s) throws IOException {
+    private byte[] deflate(byte[] b) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DeflaterOutputStream dos = new DeflaterOutputStream(baos);
-
-        int len = s.length();
-        for (int i = 0; i < len; i++) {
-            dos.write((int)s.charAt(i));
-        }
+        dos.write(b);
         dos.close();
-
         return baos.toByteArray();
     }
 
     private void write_iTXt() throws IOException {
-        Iterator keywordIter = metadata.iTXt_keyword.iterator();
-        Iterator flagIter = metadata.iTXt_compressionFlag.iterator();
-        Iterator methodIter = metadata.iTXt_compressionMethod.iterator();
-        Iterator languageIter = metadata.iTXt_languageTag.iterator();
-        Iterator translatedKeywordIter =
+        Iterator<String> keywordIter = metadata.iTXt_keyword.iterator();
+        Iterator<Boolean> flagIter = metadata.iTXt_compressionFlag.iterator();
+        Iterator<Integer> methodIter = metadata.iTXt_compressionMethod.iterator();
+        Iterator<String> languageIter = metadata.iTXt_languageTag.iterator();
+        Iterator<String> translatedKeywordIter =
             metadata.iTXt_translatedKeyword.iterator();
-        Iterator textIter = metadata.iTXt_text.iterator();
+        Iterator<String> textIter = metadata.iTXt_text.iterator();
 
         while (keywordIter.hasNext()) {
             ChunkStream cs = new ChunkStream(PNGImageReader.iTXt_TYPE, stream);
-            String keyword = (String)keywordIter.next();
-            cs.writeBytes(keyword);
+
+            cs.writeBytes(keywordIter.next());
             cs.writeByte(0);
 
-            int flag = ((Integer)flagIter.next()).intValue();
-            cs.writeByte(flag);
-            int method = ((Integer)methodIter.next()).intValue();
-            cs.writeByte(method);
+            Boolean compressed = flagIter.next();
+            cs.writeByte(compressed ? 1 : 0);
 
-            String languageTag = (String)languageIter.next();
-            cs.writeBytes(languageTag);
+            cs.writeByte(methodIter.next().intValue());
+
+            cs.writeBytes(languageIter.next());
             cs.writeByte(0);
 
-            String translatedKeyword = (String)translatedKeywordIter.next();
-            cs.writeBytes(translatedKeyword);
+
+            cs.write(translatedKeywordIter.next().getBytes("UTF8"));
             cs.writeByte(0);
 
-            String text = (String)textIter.next();
-            if (flag == 1) {
-                cs.write(deflate(text));
+            String text = textIter.next();
+            if (compressed) {
+                cs.write(deflate(text.getBytes("UTF8")));
             } else {
-                cs.writeUTF(text);
+                cs.write(text.getBytes("UTF8"));
             }
             cs.finish();
         }
@@ -733,7 +731,7 @@ public class PNGImageWriter extends ImageWriter {
             cs.writeByte(compressionMethod);
 
             String text = (String)textIter.next();
-            cs.write(deflate(text));
+            cs.write(deflate(text.getBytes("ISO-8859-1")));
             cs.finish();
         }
     }
@@ -928,23 +926,24 @@ public class PNGImageWriter extends ImageWriter {
     // Use sourceXOffset, etc.
     private void write_IDAT(RenderedImage image) throws IOException {
         IDATOutputStream ios = new IDATOutputStream(stream, 32768);
-
-        if (metadata.IHDR_interlaceMethod == 1) {
-            for (int i = 0; i < 7; i++) {
-                encodePass(ios, image,
-                           PNGImageReader.adam7XOffset[i],
-                           PNGImageReader.adam7YOffset[i],
-                           PNGImageReader.adam7XSubsampling[i],
-                           PNGImageReader.adam7YSubsampling[i]);
-                if (abortRequested()) {
-                    break;
+        try {
+            if (metadata.IHDR_interlaceMethod == 1) {
+                for (int i = 0; i < 7; i++) {
+                    encodePass(ios, image,
+                               PNGImageReader.adam7XOffset[i],
+                               PNGImageReader.adam7YOffset[i],
+                               PNGImageReader.adam7XSubsampling[i],
+                               PNGImageReader.adam7YSubsampling[i]);
+                    if (abortRequested()) {
+                        break;
+                    }
                 }
+            } else {
+                encodePass(ios, image, 0, 0, 1, 1);
             }
-        } else {
-            encodePass(ios, image, 0, 0, 1, 1);
+        } finally {
+            ios.finish();
         }
-
-        ios.finish();
     }
 
     private void writeIEND() throws IOException {

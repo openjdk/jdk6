@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -28,7 +28,7 @@
 
 // ReservedSpace
 ReservedSpace::ReservedSpace(size_t size) {
-  initialize(size, 0, false, NULL, 0);
+  initialize(size, 0, false, NULL, 0, false);
 }
 
 ReservedSpace::ReservedSpace(size_t size, size_t alignment,
@@ -36,7 +36,13 @@ ReservedSpace::ReservedSpace(size_t size, size_t alignment,
                              char* requested_address,
                              const size_t noaccess_prefix) {
   initialize(size+noaccess_prefix, alignment, large, requested_address,
-             noaccess_prefix);
+             noaccess_prefix, false);
+}
+
+ReservedSpace::ReservedSpace(size_t size, size_t alignment,
+                             bool large,
+                             bool executable) {
+  initialize(size, alignment, large, NULL, 0, executable);
 }
 
 char *
@@ -105,10 +111,40 @@ char* ReservedSpace::reserve_and_align(const size_t reserve_size,
   return result;
 }
 
+// Helper method.
+static bool failed_to_reserve_as_requested(char* base, char* requested_address,
+                                           const size_t size, bool special)
+{
+  if (base == requested_address || requested_address == NULL)
+    return false; // did not fail
+
+  if (base != NULL) {
+    // Different reserve address may be acceptable in other cases
+    // but for compressed oops heap should be at requested address.
+    assert(UseCompressedOops, "currently requested address used only for compressed oops");
+    if (PrintCompressedOopsMode) {
+      tty->cr();
+      tty->print_cr("Reserved memory at not requested address: " PTR_FORMAT " vs " PTR_FORMAT, base, requested_address);
+    }
+    // OS ignored requested address. Try different address.
+    if (special) {
+      if (!os::release_memory_special(base, size)) {
+        fatal("os::release_memory_special failed");
+      }
+    } else {
+      if (!os::release_memory(base, size)) {
+        fatal("os::release_memory failed");
+      }
+    }
+  }
+  return true;
+}
+
 ReservedSpace::ReservedSpace(const size_t prefix_size,
                              const size_t prefix_align,
                              const size_t suffix_size,
                              const size_t suffix_align,
+                             char* requested_address,
                              const size_t noaccess_prefix)
 {
   assert(prefix_size != 0, "sanity");
@@ -122,6 +158,10 @@ ReservedSpace::ReservedSpace(const size_t prefix_size,
   assert((suffix_align & prefix_align - 1) == 0,
     "suffix_align not divisible by prefix_align");
 
+  // Assert that if noaccess_prefix is used, it is the same as prefix_align.
+  assert(noaccess_prefix == 0 ||
+         noaccess_prefix == prefix_align, "noaccess prefix wrong");
+
   // Add in noaccess_prefix to prefix_size;
   const size_t adjusted_prefix_size = prefix_size + noaccess_prefix;
   const size_t size = adjusted_prefix_size + suffix_size;
@@ -131,7 +171,8 @@ ReservedSpace::ReservedSpace(const size_t prefix_size,
   const bool try_reserve_special = UseLargePages &&
     prefix_align == os::large_page_size();
   if (!os::can_commit_large_page_memory() && try_reserve_special) {
-    initialize(size, prefix_align, true, NULL, noaccess_prefix);
+    initialize(size, prefix_align, true, requested_address, noaccess_prefix,
+               false);
     return;
   }
 
@@ -140,13 +181,21 @@ ReservedSpace::ReservedSpace(const size_t prefix_size,
   _alignment = 0;
   _special = false;
   _noaccess_prefix = 0;
-
-  // Assert that if noaccess_prefix is used, it is the same as prefix_align.
-  assert(noaccess_prefix == 0 ||
-         noaccess_prefix == prefix_align, "noaccess prefix wrong");
+  _executable = false;
 
   // Optimistically try to reserve the exact size needed.
-  char* addr = os::reserve_memory(size, NULL, prefix_align);
+  char* addr;
+  if (requested_address != 0) {
+    requested_address -= noaccess_prefix; // adjust address
+    assert(requested_address != NULL, "huge noaccess prefix?");
+    addr = os::attempt_reserve_memory_at(size, requested_address);
+    if (failed_to_reserve_as_requested(addr, requested_address, size, false)) {
+      // OS ignored requested address. Try different address.
+      addr = NULL;
+    }
+  } else {
+    addr = os::reserve_memory(size, NULL, prefix_align);
+  }
   if (addr == NULL) return;
 
   // Check whether the result has the needed alignment (unlikely unless
@@ -182,7 +231,8 @@ ReservedSpace::ReservedSpace(const size_t prefix_size,
 
 void ReservedSpace::initialize(size_t size, size_t alignment, bool large,
                                char* requested_address,
-                               const size_t noaccess_prefix) {
+                               const size_t noaccess_prefix,
+                               bool executable) {
   const size_t granularity = os::vm_allocation_granularity();
   assert((size & granularity - 1) == 0,
          "size not aligned to os::vm_allocation_granularity()");
@@ -194,6 +244,7 @@ void ReservedSpace::initialize(size_t size, size_t alignment, bool large,
   _base = NULL;
   _size = 0;
   _special = false;
+  _executable = executable;
   _alignment = 0;
   _noaccess_prefix = 0;
   if (size == 0) {
@@ -205,15 +256,20 @@ void ReservedSpace::initialize(size_t size, size_t alignment, bool large,
   bool special = large && !os::can_commit_large_page_memory();
   char* base = NULL;
 
-  if (special) {
-    // It's not hard to implement reserve_memory_special() such that it can
-    // allocate at fixed address, but there seems no use of this feature
-    // for now, so it's not implemented.
-    assert(requested_address == NULL, "not implemented");
+  if (requested_address != 0) {
+    requested_address -= noaccess_prefix; // adjust requested address
+    assert(requested_address != NULL, "huge noaccess prefix?");
+  }
 
-    base = os::reserve_memory_special(size);
+  if (special) {
+
+    base = os::reserve_memory_special(size, requested_address, executable);
 
     if (base != NULL) {
+      if (failed_to_reserve_as_requested(base, requested_address, size, true)) {
+        // OS ignored requested address. Try different address.
+        return;
+      }
       // Check alignment constraints
       if (alignment > 0) {
         assert((uintptr_t) base % alignment == 0,
@@ -222,6 +278,13 @@ void ReservedSpace::initialize(size_t size, size_t alignment, bool large,
       _special = true;
     } else {
       // failed; try to reserve regular memory below
+      if (UseLargePages && (!FLAG_IS_DEFAULT(UseLargePages) ||
+                            !FLAG_IS_DEFAULT(LargePageSizeInBytes))) {
+        if (PrintCompressedOopsMode) {
+          tty->cr();
+          tty->print_cr("Reserve regular memory without large pages.");
+        }
+      }
     }
   }
 
@@ -235,8 +298,11 @@ void ReservedSpace::initialize(size_t size, size_t alignment, bool large,
     // important.  If available space is not detected, return NULL.
 
     if (requested_address != 0) {
-      base = os::attempt_reserve_memory_at(size,
-                                           requested_address-noaccess_prefix);
+      base = os::attempt_reserve_memory_at(size, requested_address);
+      if (failed_to_reserve_as_requested(base, requested_address, size, false)) {
+        // OS ignored requested address. Try different address.
+        base = NULL;
+      }
     } else {
       base = os::reserve_memory(size, NULL, alignment);
     }
@@ -281,7 +347,7 @@ void ReservedSpace::initialize(size_t size, size_t alignment, bool large,
 
 
 ReservedSpace::ReservedSpace(char* base, size_t size, size_t alignment,
-                             bool special) {
+                             bool special, bool executable) {
   assert((size % os::vm_allocation_granularity()) == 0,
          "size not allocation aligned");
   _base = base;
@@ -289,6 +355,7 @@ ReservedSpace::ReservedSpace(char* base, size_t size, size_t alignment,
   _alignment = alignment;
   _noaccess_prefix = 0;
   _special = special;
+  _executable = executable;
 }
 
 
@@ -296,9 +363,10 @@ ReservedSpace ReservedSpace::first_part(size_t partition_size, size_t alignment,
                                         bool split, bool realloc) {
   assert(partition_size <= size(), "partition failed");
   if (split) {
-    os::split_reserved_memory(_base, _size, partition_size, realloc);
+    os::split_reserved_memory(base(), size(), partition_size, realloc);
   }
-  ReservedSpace result(base(), partition_size, alignment, special());
+  ReservedSpace result(base(), partition_size, alignment, special(),
+                       executable());
   return result;
 }
 
@@ -307,7 +375,7 @@ ReservedSpace
 ReservedSpace::last_part(size_t partition_size, size_t alignment) {
   assert(partition_size <= size(), "partition failed");
   ReservedSpace result(base() + partition_size, size() - partition_size,
-                       alignment, special());
+                       alignment, special(), executable());
   return result;
 }
 
@@ -345,11 +413,17 @@ void ReservedSpace::release() {
     _size = 0;
     _noaccess_prefix = 0;
     _special = false;
+    _executable = false;
   }
 }
 
 void ReservedSpace::protect_noaccess_prefix(const size_t size) {
-  // If there is noaccess prefix, return.
+  assert( (_noaccess_prefix != 0) == (UseCompressedOops && _base != NULL &&
+                                      (size_t(_base + _size) > OopEncodingHeapMax) &&
+                                      Universe::narrow_oop_use_implicit_null_checks()),
+         "noaccess_prefix should be used only with non zero based compressed oops");
+
+  // If there is no noaccess prefix, return.
   if (_noaccess_prefix == 0) return;
 
   assert(_noaccess_prefix >= (size_t)os::vm_page_size(),
@@ -360,6 +434,10 @@ void ReservedSpace::protect_noaccess_prefix(const size_t size) {
   if (!os::protect_memory(_base, _noaccess_prefix, os::MEM_PROT_NONE,
                           _special)) {
     fatal("cannot protect protection page");
+  }
+  if (PrintCompressedOopsMode) {
+    tty->cr();
+    tty->print_cr("Protected page at the reserved heap base: " PTR_FORMAT " / " INTX_FORMAT " bytes", _base, _noaccess_prefix);
   }
 
   _base += _noaccess_prefix;
@@ -372,7 +450,8 @@ ReservedHeapSpace::ReservedHeapSpace(size_t size, size_t alignment,
                                      bool large, char* requested_address) :
   ReservedSpace(size, alignment, large,
                 requested_address,
-                UseCompressedOops && UseImplicitNullCheckForNarrowOop ?
+                (UseCompressedOops && (Universe::narrow_oop_base() != NULL) &&
+                 Universe::narrow_oop_use_implicit_null_checks()) ?
                   lcm(os::vm_page_size(), alignment) : 0) {
   // Only reserved space for the java heap should have a noaccess_prefix
   // if using compressed oops.
@@ -382,11 +461,22 @@ ReservedHeapSpace::ReservedHeapSpace(size_t size, size_t alignment,
 ReservedHeapSpace::ReservedHeapSpace(const size_t prefix_size,
                                      const size_t prefix_align,
                                      const size_t suffix_size,
-                                     const size_t suffix_align) :
+                                     const size_t suffix_align,
+                                     char* requested_address) :
   ReservedSpace(prefix_size, prefix_align, suffix_size, suffix_align,
-                UseCompressedOops && UseImplicitNullCheckForNarrowOop ?
+                requested_address,
+                (UseCompressedOops && (Universe::narrow_oop_base() != NULL) &&
+                 Universe::narrow_oop_use_implicit_null_checks()) ?
                   lcm(os::vm_page_size(), prefix_align) : 0) {
   protect_noaccess_prefix(prefix_size+suffix_size);
+}
+
+// Reserve space for code segment.  Same as Java heap only we mark this as
+// executable.
+ReservedCodeSpace::ReservedCodeSpace(size_t r_size,
+                                     size_t rs_align,
+                                     bool large) :
+  ReservedSpace(r_size, rs_align, large, /*executable*/ true) {
 }
 
 // VirtualSpace
@@ -406,6 +496,7 @@ VirtualSpace::VirtualSpace() {
   _middle_alignment       = 0;
   _upper_alignment        = 0;
   _special                = false;
+  _executable             = false;
 }
 
 
@@ -419,6 +510,7 @@ bool VirtualSpace::initialize(ReservedSpace rs, size_t committed_size) {
   _high = low();
 
   _special = rs.special();
+  _executable = rs.executable();
 
   // When a VirtualSpace begins life at a large size, make all future expansion
   // and shrinking occur aligned to a granularity of large pages.  This avoids
@@ -476,6 +568,7 @@ void VirtualSpace::release() {
   _middle_alignment       = 0;
   _upper_alignment        = 0;
   _special                = false;
+  _executable             = false;
 }
 
 
@@ -585,7 +678,7 @@ bool VirtualSpace::expand_by(size_t bytes, bool pre_touch) {
     assert(low_boundary() <= lower_high() &&
            lower_high() + lower_needs <= lower_high_boundary(),
            "must not expand beyond region");
-    if (!os::commit_memory(lower_high(), lower_needs)) {
+    if (!os::commit_memory(lower_high(), lower_needs, _executable)) {
       debug_only(warning("os::commit_memory failed"));
       return false;
     } else {
@@ -596,7 +689,8 @@ bool VirtualSpace::expand_by(size_t bytes, bool pre_touch) {
     assert(lower_high_boundary() <= middle_high() &&
            middle_high() + middle_needs <= middle_high_boundary(),
            "must not expand beyond region");
-    if (!os::commit_memory(middle_high(), middle_needs, middle_alignment())) {
+    if (!os::commit_memory(middle_high(), middle_needs, middle_alignment(),
+                           _executable)) {
       debug_only(warning("os::commit_memory failed"));
       return false;
     }
@@ -606,7 +700,7 @@ bool VirtualSpace::expand_by(size_t bytes, bool pre_touch) {
     assert(middle_high_boundary() <= upper_high() &&
            upper_high() + upper_needs <= upper_high_boundary(),
            "must not expand beyond region");
-    if (!os::commit_memory(upper_high(), upper_needs)) {
+    if (!os::commit_memory(upper_high(), upper_needs, _executable)) {
       debug_only(warning("os::commit_memory failed"));
       return false;
     } else {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -60,13 +60,12 @@ public:
   bool add_entry(symbolHandle name, klassOop klass1, Handle loader1,
                                     klassOop klass2, Handle loader2);
 
-  void check_signature_loaders(symbolHandle signature, Handle loader1,
-                               Handle loader2, bool is_method, TRAPS);
+  // Note:  The main entry point for this module is via SystemDictionary.
+  // SystemDictionary::check_signature_loaders(symbolHandle signature,
+  //                                           Handle loader1, Handle loader2,
+  //                                           bool is_method, TRAPS)
 
   klassOop find_constrained_klass(symbolHandle name, Handle loader);
-  klassOop find_constrained_elem_klass(symbolHandle name, symbolHandle elem_name,
-                                       Handle loader, TRAPS);
-
 
   // Class loader constraints
 
@@ -82,7 +81,7 @@ public:
 
   void purge_loader_constraints(BoolObjectClosure* is_alive);
 
-  void verify(Dictionary* dictionary);
+  void verify(Dictionary* dictionary, PlaceholderTable* placeholders);
 #ifndef PRODUCT
   void print();
 #endif

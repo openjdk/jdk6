@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package sun.awt.X11;
 
@@ -75,7 +75,10 @@ public class XIconWindow extends XBaseWindow {
             XIconSize[] res = new XIconSize[count];
             for (int i = 0; i < count; i++, sizes_ptr += XIconSize.getSize()) {
                 res[i] = new XIconSize(sizes_ptr);
-                log.log(Level.FINEST, "sizes_ptr[{1}] = {0}", new Object[] {res[i], Integer.valueOf(i)});
+                if (log.isLoggable(Level.FINEST)) {
+                    log.log(Level.FINEST, "sizes_ptr[{1}] = {0}",
+                            new Object[] {String.valueOf(res[i]), Integer.valueOf(i)});
+                }
             }
             return res;
         } finally {
@@ -92,7 +95,9 @@ public class XIconWindow extends XBaseWindow {
         }
 
         XIconSize[] sizeList = getIconSizes();
-        log.log(Level.FINEST, "Icon sizes: {0}", new Object[] {sizeList});
+        if (log.isLoggable(Level.FINEST)) {
+            log.log(Level.FINEST, "Icon sizes: {0}", new Object[] {String.valueOf(sizeList)});
+        }
         if (sizeList == null) {
             // No icon sizes so we simply fall back to 16x16
             return new Dimension(16, 16);
@@ -444,7 +449,9 @@ public class XIconWindow extends XBaseWindow {
             }
             Dimension iconSize = getIconSize(width, height);
             if (iconSize != null) {
-                log.log(Level.FINEST, "Icon size: {0}", iconSize);
+                if (log.isLoggable(Level.FINEST)) {
+                    log.log(Level.FINEST, "Icon size: {0}", String.valueOf(iconSize));
+                }
                 iconWidth = iconSize.width;
                 iconHeight = iconSize.height;
             } else {

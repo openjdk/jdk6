@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -99,13 +99,6 @@ void Relocation::pd_set_data_value(address x, intptr_t o) {
       break;
     }
     ip->set_data64_sethi( ip->addr_at(0), (intptr_t)x );
-#ifdef COMPILER2
-    // [RGV] Someone must have missed putting in a reloc entry for the
-    // add in compiler2.
-    inst2 = ip->long_at( NativeMovConstReg::add_offset );
-    guarantee(Assembler::inv_op(inst2)==Assembler::arith_op, "arith op");
-    ip->set_long_at(NativeMovConstReg::add_offset,ip->set_data32_simm13( inst2, (intptr_t)x+o));
-#endif
 #else
     guarantee(Assembler::inv_op2(inst)==Assembler::sethi_op2, "must be sethi");
     inst &= ~Assembler::hi22(     -1);

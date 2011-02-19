@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -44,7 +44,7 @@ using namespace std;
 #error "Something is wrong with the detection of MSC_VER in the makefiles"
 #endif
 
-#if _MSC_VER >= 1400 && !defined(_WIN64)
+#if _MSC_VER >= 1400
 #define strdup _strdup
 #endif
 
@@ -79,6 +79,7 @@ typedef unsigned int uintptr_t;
 
 // Macros
 // Debugging note:  Put a breakpoint on "abort".
+#undef assert
 #define assert(cond, msg) { if (!(cond)) { fprintf(stderr, "assert fails %s %d: %s\n", __FILE__, __LINE__, msg); abort(); }}
 #define max(a, b)   (((a)>(b)) ? (a) : (b))
 

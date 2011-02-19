@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -437,11 +437,8 @@ public:
 // Because of a static contained within (for the purpose of iteration
 // over instructions), it is only valid to have one of these active at
 // a time
-class NullCheckEliminator {
+class NullCheckEliminator: public ValueVisitor {
  private:
-  static NullCheckEliminator* _static_nce;
-  static void                 do_value(Value* vp);
-
   Optimizer*        _opt;
 
   ValueSet*         _visitable_instructions;        // Visit each instruction only once per basic block
@@ -503,6 +500,8 @@ class NullCheckEliminator {
 
   // Process a graph
   void iterate(BlockBegin* root);
+
+  void visit(Value* f);
 
   // In some situations (like NullCheck(x); getfield(x)) the debug
   // information from the explicit NullCheck can be used to populate
@@ -602,14 +601,11 @@ void NullCheckVisitor::do_ProfileCall    (ProfileCall*     x) { nce()->clear_las
 void NullCheckVisitor::do_ProfileCounter (ProfileCounter*  x) {}
 
 
-NullCheckEliminator* NullCheckEliminator::_static_nce = NULL;
-
-
-void NullCheckEliminator::do_value(Value* p) {
+void NullCheckEliminator::visit(Value* p) {
   assert(*p != NULL, "should not find NULL instructions");
-  if (_static_nce->visitable(*p)) {
-    _static_nce->mark_visited(*p);
-    (*p)->visit(&_static_nce->_visitor);
+  if (visitable(*p)) {
+    mark_visited(*p);
+    (*p)->visit(&_visitor);
   }
 }
 
@@ -637,7 +633,6 @@ void NullCheckEliminator::iterate_all() {
 
 
 void NullCheckEliminator::iterate_one(BlockBegin* block) {
-  _static_nce = this;
   clear_visitable_state();
   // clear out an old explicit null checks
   set_last_explicit_null_check(NULL);
@@ -712,7 +707,7 @@ void NullCheckEliminator::iterate_one(BlockBegin* block) {
     mark_visitable(instr);
     if (instr->is_root() || instr->can_trap() || (instr->as_NullCheck() != NULL)) {
       mark_visited(instr);
-      instr->input_values_do(&NullCheckEliminator::do_value);
+      instr->input_values_do(this);
       instr->visit(&_visitor);
     }
   }

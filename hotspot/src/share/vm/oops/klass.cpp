@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -71,7 +71,7 @@ Klass *Klass::up_cast_abstract() {
   return r;                   // Return the 1 concrete class
 }
 
-// Find LCA in class heirarchy
+// Find LCA in class hierarchy
 Klass *Klass::LCA( Klass *k2 ) {
   Klass *k1 = this;
   while( 1 ) {
@@ -217,8 +217,8 @@ void Klass::initialize_supers(klassOop k, TRAPS) {
     set_super(NULL);
     oop_store_without_check((oop*) &_primary_supers[0], (oop) this->as_klassOop());
     assert(super_depth() == 0, "Object must already be initialized properly");
-  } else if (k != super() || k == SystemDictionary::object_klass()) {
-    assert(super() == NULL || super() == SystemDictionary::object_klass(),
+  } else if (k != super() || k == SystemDictionary::Object_klass()) {
+    assert(super() == NULL || super() == SystemDictionary::Object_klass(),
            "initialize this only once to a non-trivial value");
     set_super(k);
     Klass* sup = k->klass_part();
@@ -370,7 +370,7 @@ void Klass::append_to_sibling_list() {
 void Klass::remove_from_sibling_list() {
   // remove receiver from sibling list
   instanceKlass* super = superklass();
-  assert(super != NULL || as_klassOop() == SystemDictionary::object_klass(), "should have super");
+  assert(super != NULL || as_klassOop() == SystemDictionary::Object_klass(), "should have super");
   if (super == NULL) return;        // special case: class Object
   if (super->subklass() == this) {
     // first subklass
@@ -496,11 +496,13 @@ const char* Klass::external_name() const {
       return result;
     }
   }
+  if (name() == NULL)  return "<unknown>";
   return name()->as_klass_external_name();
 }
 
 
-char* Klass::signature_name() const {
+const char* Klass::signature_name() const {
+  if (name() == NULL)  return "<unknown>";
   return name()->as_C_string();
 }
 
@@ -517,8 +519,6 @@ int Klass::atomic_incr_biased_lock_revocation_count() {
 jint Klass::jvmti_class_status() const {
   return 0;
 }
-
-#ifndef PRODUCT
 
 // Printing
 
@@ -539,15 +539,12 @@ void Klass::oop_print_on(oop obj, outputStream* st) {
   st->cr();
 }
 
-
 void Klass::oop_print_value_on(oop obj, outputStream* st) {
   // print title
   ResourceMark rm;              // Cannot print in debug mode without this
   st->print("%s", internal_name());
   obj->print_address_on(st);
 }
-
-#endif
 
 // Verification
 

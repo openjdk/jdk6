@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -28,6 +28,10 @@
 
 #include "incls/_precompiled.incl"
 #include "incls/_unsafe.cpp.incl"
+
+HS_DTRACE_PROBE_DECL3(hotspot, thread__park__begin, uintptr_t, int, long long);
+HS_DTRACE_PROBE_DECL1(hotspot, thread__park__end, uintptr_t);
+HS_DTRACE_PROBE_DECL1(hotspot, thread__unpark, uintptr_t);
 
 #define MAX_OBJECT_SIZE \
   ( arrayOopDesc::header_size(T_DOUBLE) * HeapWordSize \
@@ -1048,7 +1052,11 @@ UNSAFE_ENTRY(jboolean, Unsafe_CompareAndSwapObject(JNIEnv *env, jobject unsafe, 
   oop e = JNIHandles::resolve(e_h);
   oop p = JNIHandles::resolve(obj);
   HeapWord* addr = (HeapWord *)index_oop_from_field_offset_long(p, offset);
-  update_barrier_set_pre((void*)addr, e);
+  if (UseCompressedOops) {
+    update_barrier_set_pre((narrowOop*)addr, e);
+  } else {
+    update_barrier_set_pre((oop*)addr, e);
+  }
   oop res = oopDesc::atomic_compare_exchange_oop(x, addr, e);
   jboolean success  = (res == e);
   if (success)
@@ -1079,8 +1087,10 @@ UNSAFE_END
 
 UNSAFE_ENTRY(void, Unsafe_Park(JNIEnv *env, jobject unsafe, jboolean isAbsolute, jlong time))
   UnsafeWrapper("Unsafe_Park");
+  HS_DTRACE_PROBE3(hotspot, thread__park__begin, thread->parker(), (int) isAbsolute, time);
   JavaThreadParkedState jtps(thread, time != 0);
   thread->parker()->park(isAbsolute != 0, time);
+  HS_DTRACE_PROBE1(hotspot, thread__park__end, thread->parker());
 UNSAFE_END
 
 UNSAFE_ENTRY(void, Unsafe_Unpark(JNIEnv *env, jobject unsafe, jobject jthread))
@@ -1112,6 +1122,7 @@ UNSAFE_ENTRY(void, Unsafe_Unpark(JNIEnv *env, jobject unsafe, jobject jthread))
     }
   }
   if (p != NULL) {
+    HS_DTRACE_PROBE1(hotspot, thread__unpark, p);
     p->unpark();
   }
 UNSAFE_END

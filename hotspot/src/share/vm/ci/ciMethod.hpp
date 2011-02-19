@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -38,6 +38,8 @@ class ciMethod : public ciObject {
   CI_PACKAGE_ACCESS
   friend class ciEnv;
   friend class ciExceptionHandlerStream;
+  friend class ciBytecodeStream;
+  friend class ciMethodHandle;
 
  private:
   // General method information.
@@ -46,7 +48,6 @@ class ciMethod : public ciObject {
   ciInstanceKlass* _holder;
   ciSignature*     _signature;
   ciMethodData*    _method_data;
-  BCEscapeAnalyzer* _bcea;
   ciMethodBlocks*   _method_blocks;
 
   // Code attributes.
@@ -69,8 +70,9 @@ class ciMethod : public ciObject {
 
   // Optional liveness analyzer.
   MethodLiveness* _liveness;
-#ifdef COMPILER2
-  ciTypeFlow*     _flow;
+#if defined(COMPILER2) || defined(SHARK)
+  ciTypeFlow*         _flow;
+  BCEscapeAnalyzer*   _bcea;
 #endif
 
   ciMethod(methodHandle h_m);
@@ -139,6 +141,9 @@ class ciMethod : public ciObject {
 
   // Runtime information.
   int           vtable_index();
+#ifdef SHARK
+  int           itable_index();
+#endif // SHARK
   address       native_entry();
   address       interpreter_entry();
 
@@ -149,6 +154,12 @@ class ciMethod : public ciObject {
   bool          has_monitor_bytecodes() const    { return _uses_monitors; }
   bool          has_balanced_monitors();
 
+  // Returns a bitmap indicating which locals are required to be
+  // maintained as live for deopt.  raw_liveness_at_bci is always the
+  // direct output of the liveness computation while liveness_at_bci
+  // may mark all locals as live to improve support for debugging Java
+  // code by maintaining the state of as many locals as possible.
+  MethodLivenessResult raw_liveness_at_bci(int bci);
   MethodLivenessResult liveness_at_bci(int bci);
 
   // Get the interpreters viewpoint on oop liveness.  MethodLiveness is
@@ -208,6 +219,11 @@ class ciMethod : public ciObject {
   void build_method_data();  // make sure it exists in the VM also
   int scale_count(int count, float prof_factor = 1.);  // make MDO count commensurate with IIC
 
+  // JSR 292 support
+  bool is_method_handle_invoke()  const;
+  bool is_method_handle_adapter() const;
+  ciInstance* method_handle_type();
+
   // What kind of ciObject is this?
   bool is_method()                               { return true; }
 
@@ -243,4 +259,10 @@ class ciMethod : public ciObject {
   // Print the name of this method in various incarnations.
   void print_name(outputStream* st = tty);
   void print_short_name(outputStream* st = tty);
+
+  methodOop get_method_handle_target() {
+    klassOop receiver_limit_oop = NULL;
+    int flags = 0;
+    return MethodHandles::decode_method(get_oop(), receiver_limit_oop, flags);
+  }
 };

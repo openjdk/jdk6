@@ -1,12 +1,12 @@
 /*
- * Copyright 2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,15 +18,16 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package sun.swing;
 
 import java.awt.Color;
 import java.awt.Insets;
 import javax.swing.*;
+import javax.swing.border.Border;
 import javax.swing.plaf.ComponentUI;
 import sun.awt.AppContext;
 
@@ -46,8 +47,7 @@ public class DefaultLookup {
     /**
      * Key used to store DefaultLookup for AppContext.
      */
-    private static final Object DEFAULT_LOOKUP_KEY = new
-                                        StringBuffer("DefaultLookup");
+    private static final Object DEFAULT_LOOKUP_KEY = new Object(); // DefaultLookup
     /**
      * Thread that last asked for a default.
      */
@@ -137,6 +137,10 @@ public class DefaultLookup {
         return ((Number)iValue).intValue();
     }
 
+    public static int getInt(JComponent c, ComponentUI ui, String key) {
+        return getInt(c, ui, key, -1);
+    }
+
     public static Insets getInsets(JComponent c, ComponentUI ui, String key,
                                    Insets defaultValue) {
         Object iValue = get(c, ui, key);
@@ -145,6 +149,10 @@ public class DefaultLookup {
             return defaultValue;
         }
         return (Insets)iValue;
+    }
+
+    public static Insets getInsets(JComponent c, ComponentUI ui, String key) {
+        return getInsets(c, ui, key, null);
     }
 
     public static boolean getBoolean(JComponent c, ComponentUI ui, String key,
@@ -157,6 +165,10 @@ public class DefaultLookup {
         return ((Boolean)iValue).booleanValue();
     }
 
+    public static boolean getBoolean(JComponent c, ComponentUI ui, String key) {
+        return getBoolean(c, ui, key, false);
+    }
+
     public static Color getColor(JComponent c, ComponentUI ui, String key,
                                  Color defaultValue) {
         Object iValue = get(c, ui, key);
@@ -167,7 +179,35 @@ public class DefaultLookup {
         return (Color)iValue;
     }
 
+    public static Color getColor(JComponent c, ComponentUI ui, String key) {
+        return getColor(c, ui, key, null);
+    }
 
+    public static Icon getIcon(JComponent c, ComponentUI ui, String key,
+            Icon defaultValue) {
+        Object iValue = get(c, ui, key);
+        if (iValue == null || !(iValue instanceof Icon)) {
+            return defaultValue;
+        }
+        return (Icon)iValue;
+    }
+
+    public static Icon getIcon(JComponent c, ComponentUI ui, String key) {
+        return getIcon(c, ui, key, null);
+    }
+
+    public static Border getBorder(JComponent c, ComponentUI ui, String key,
+            Border defaultValue) {
+        Object iValue = get(c, ui, key);
+        if (iValue == null || !(iValue instanceof Border)) {
+            return defaultValue;
+        }
+        return (Border)iValue;
+    }
+
+    public static Border getBorder(JComponent c, ComponentUI ui, String key) {
+        return getBorder(c, ui, key, null);
+    }
 
     public Object getDefault(JComponent c, ComponentUI ui, String key) {
         // basic

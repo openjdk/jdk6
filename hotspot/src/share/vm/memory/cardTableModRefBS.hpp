@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -44,6 +44,7 @@ class CardTableModRefBS: public ModRefBarrierSet {
   friend class VMStructs;
   friend class CardTableRS;
   friend class CheckForUnmarkedOops; // Needs access to raw card bytes.
+  friend class SharkBuilder;
 #ifndef PRODUCT
   // For debugging.
   friend class GuaranteeNotModClosure;
@@ -287,7 +288,7 @@ public:
   // these functions here for performance.
 protected:
   void write_ref_field_work(oop obj, size_t offset, oop newVal);
-  void write_ref_field_work(void* field, oop newVal);
+  virtual void write_ref_field_work(void* field, oop newVal);
 public:
 
   bool has_write_ref_array_opt() { return true; }
@@ -317,10 +318,10 @@ public:
 
   // *** Card-table-barrier-specific things.
 
-  inline void inline_write_ref_field_pre(void* field, oop newVal) {}
+  template <class T> inline void inline_write_ref_field_pre(T* field, oop newVal) {}
 
-  inline void inline_write_ref_field(void* field, oop newVal) {
-    jbyte* byte = byte_for(field);
+  template <class T> inline void inline_write_ref_field(T* field, oop newVal) {
+    jbyte* byte = byte_for((void*)field);
     *byte = dirty_card;
   }
 
@@ -337,6 +338,16 @@ public:
   bool is_card_claimed(size_t card_index) {
     jbyte val = _byte_map[card_index];
     return (val & (clean_card_mask_val() | claimed_card_val())) == claimed_card_val();
+  }
+
+  void set_card_claimed(size_t card_index) {
+      jbyte val = _byte_map[card_index];
+      if (val == clean_card_val()) {
+        val = (jbyte)claimed_card_val();
+      } else {
+        val |= (jbyte)claimed_card_val();
+      }
+      _byte_map[card_index] = val;
   }
 
   bool claim_card(size_t card_index);
@@ -456,6 +467,7 @@ public:
   void verify_guard();
 
   void verify_clean_region(MemRegion mr) PRODUCT_RETURN;
+  void verify_dirty_region(MemRegion mr) PRODUCT_RETURN;
 
   static size_t par_chunk_heapword_alignment() {
     return CardsPerStrideChunk * card_size_in_words;

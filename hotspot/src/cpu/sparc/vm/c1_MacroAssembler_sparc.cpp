@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -29,27 +29,16 @@ void C1_MacroAssembler::inline_cache_check(Register receiver, Register iCache) {
   Label L;
   const Register temp_reg = G3_scratch;
   // Note: needs more testing of out-of-line vs. inline slow case
-  Address ic_miss(temp_reg, SharedRuntime::get_ic_miss_stub());
   verify_oop(receiver);
   ld_ptr(receiver, oopDesc::klass_offset_in_bytes(), temp_reg);
   cmp(temp_reg, iCache);
   brx(Assembler::equal, true, Assembler::pt, L);
   delayed()->nop();
-  jump_to(ic_miss, 0);
+  AddressLiteral ic_miss(SharedRuntime::get_ic_miss_stub());
+  jump_to(ic_miss, temp_reg);
   delayed()->nop();
   align(CodeEntryAlignment);
   bind(L);
-}
-
-
-void C1_MacroAssembler::method_exit(bool restore_frame) {
-  // this code must be structured this way so that the return
-  // instruction can be a safepoint.
-  if (restore_frame) {
-    restore();
-  }
-  retl();
-  delayed()->nop();
 }
 
 
@@ -84,7 +73,7 @@ void C1_MacroAssembler::lock_object(Register Rmark, Register Roop, Register Rbox
 
   Label done;
 
-  Address mark_addr(Roop, 0, oopDesc::mark_offset_in_bytes());
+  Address mark_addr(Roop, oopDesc::mark_offset_in_bytes());
 
   // The following move must be the first instruction of emitted since debug
   // information may be generated for it.
@@ -132,7 +121,7 @@ void C1_MacroAssembler::unlock_object(Register Rmark, Register Roop, Register Rb
 
   Label done;
 
-  Address mark_addr(Roop, 0, oopDesc::mark_offset_in_bytes());
+  Address mark_addr(Roop, oopDesc::mark_offset_in_bytes());
   assert(mark_addr.disp() == 0, "cas must take a zero displacement");
 
   if (UseBiasedLocking) {
@@ -286,7 +275,7 @@ void C1_MacroAssembler::initialize_object(
     initialize_body(base, index);
   }
 
-  if (DTraceAllocProbes) {
+  if (CURRENT_ENV->dtrace_alloc_probes()) {
     assert(obj == O0, "must be");
     call(CAST_FROM_FN_PTR(address, Runtime1::entry_for(Runtime1::dtrace_object_alloc_id)),
          relocInfo::runtime_call_type);
@@ -355,7 +344,7 @@ void C1_MacroAssembler::allocate_array(
   sub(arr_size, hdr_size * wordSize, index);         // compute index = number of words to clear
   initialize_body(base, index);
 
-  if (DTraceAllocProbes) {
+  if (CURRENT_ENV->dtrace_alloc_probes()) {
     assert(obj == O0, "must be");
     call(CAST_FROM_FN_PTR(address, Runtime1::entry_for(Runtime1::dtrace_object_alloc_id)),
          relocInfo::runtime_call_type);
@@ -370,7 +359,7 @@ void C1_MacroAssembler::allocate_array(
 
 void C1_MacroAssembler::verify_stack_oop(int stack_offset) {
   if (!VerifyOops) return;
-  verify_oop_addr(Address(SP, 0, stack_offset + STACK_BIAS));
+  verify_oop_addr(Address(SP, stack_offset + STACK_BIAS));
 }
 
 void C1_MacroAssembler::verify_not_null_oop(Register r) {

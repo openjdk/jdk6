@@ -1,12 +1,12 @@
 /*
- * Copyright 2005-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,24 +18,31 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package sun.swing.table;
 
 import java.awt.Component;
 import java.awt.Color;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Insets;
+import java.awt.Point;
+import java.awt.Rectangle;
 import javax.swing.*;
 import javax.swing.plaf.UIResource;
 import javax.swing.border.Border;
 import javax.swing.table.*;
+import sun.swing.DefaultLookup;
 
-/**
- */
+
 public class DefaultTableCellHeaderRenderer extends DefaultTableCellRenderer
         implements UIResource {
     private boolean horizontalTextPositionSet;
+    private Icon sortArrow;
+    private EmptyIcon emptyIcon = new EmptyIcon();
 
     public DefaultTableCellHeaderRenderer() {
         setHorizontalAlignment(JLabel.CENTER);
@@ -58,8 +65,8 @@ public class DefaultTableCellHeaderRenderer extends DefaultTableCellRenderer
                 Color fgColor = null;
                 Color bgColor = null;
                 if (hasFocus) {
-                    fgColor = UIManager.getColor("TableHeader.focusCellForeground");
-                    bgColor = UIManager.getColor("TableHeader.focusCellBackground");
+                    fgColor = DefaultLookup.getColor(this, ui, "TableHeader.focusCellForeground");
+                    bgColor = DefaultLookup.getColor(this, ui, "TableHeader.focusCellBackground");
                 }
                 if (fgColor == null) {
                     fgColor = header.getForeground();
@@ -85,16 +92,16 @@ public class DefaultTableCellHeaderRenderer extends DefaultTableCellRenderer
                 if (sortOrder != null) {
                     switch(sortOrder) {
                     case ASCENDING:
-                        sortIcon = UIManager.getIcon(
-                            "Table.ascendingSortIcon");
+                        sortIcon = DefaultLookup.getIcon(
+                            this, ui, "Table.ascendingSortIcon");
                         break;
                     case DESCENDING:
-                        sortIcon = UIManager.getIcon(
-                            "Table.descendingSortIcon");
+                        sortIcon = DefaultLookup.getIcon(
+                            this, ui, "Table.descendingSortIcon");
                         break;
                     case UNSORTED:
-                        sortIcon = UIManager.getIcon(
-                            "Table.naturalSortIcon");
+                        sortIcon = DefaultLookup.getIcon(
+                            this, ui, "Table.naturalSortIcon");
                         break;
                     }
                 }
@@ -103,13 +110,14 @@ public class DefaultTableCellHeaderRenderer extends DefaultTableCellRenderer
 
         setText(value == null ? "" : value.toString());
         setIcon(sortIcon);
+        sortArrow = sortIcon;
 
         Border border = null;
         if (hasFocus) {
-            border = UIManager.getBorder("TableHeader.focusCellBorder");
+            border = DefaultLookup.getBorder(this, ui, "TableHeader.focusCellBorder");
         }
         if (border == null) {
-            border = UIManager.getBorder("TableHeader.cellBorder");
+            border = DefaultLookup.getBorder(this, ui, "TableHeader.cellBorder");
         }
         setBorder(border);
 
@@ -128,5 +136,61 @@ public class DefaultTableCellHeaderRenderer extends DefaultTableCellRenderer
             rv = sortKeys.get(0).getSortOrder();
         }
         return rv;
+    }
+
+    @Override
+    public void paintComponent(Graphics g) {
+        boolean b = DefaultLookup.getBoolean(this, ui,
+                "TableHeader.rightAlignSortArrow", false);
+        if (b && sortArrow != null) {
+            //emptyIcon is used so that if the text in the header is right
+            //aligned, or if the column is too narrow, then the text will
+            //be sized appropriately to make room for the icon that is about
+            //to be painted manually here.
+            emptyIcon.width = sortArrow.getIconWidth();
+            emptyIcon.height = sortArrow.getIconHeight();
+            setIcon(emptyIcon);
+            super.paintComponent(g);
+            Point position = computeIconPosition(g);
+            sortArrow.paintIcon(this, g, position.x, position.y);
+        } else {
+            super.paintComponent(g);
+        }
+    }
+
+    private Point computeIconPosition(Graphics g) {
+        FontMetrics fontMetrics = g.getFontMetrics();
+        Rectangle viewR = new Rectangle();
+        Rectangle textR = new Rectangle();
+        Rectangle iconR = new Rectangle();
+        Insets i = getInsets();
+        viewR.x = i.left;
+        viewR.y = i.top;
+        viewR.width = getWidth() - (i.left + i.right);
+        viewR.height = getHeight() - (i.top + i.bottom);
+        SwingUtilities.layoutCompoundLabel(
+            this,
+            fontMetrics,
+            getText(),
+            sortArrow,
+            getVerticalAlignment(),
+            getHorizontalAlignment(),
+            getVerticalTextPosition(),
+            getHorizontalTextPosition(),
+            viewR,
+            iconR,
+            textR,
+            getIconTextGap());
+        int x = getWidth() - i.right - sortArrow.getIconWidth();
+        int y = iconR.y;
+        return new Point(x, y);
+    }
+
+    private class EmptyIcon implements Icon {
+        int width = 0;
+        int height = 0;
+        public void paintIcon(Component c, Graphics g, int x, int y) {}
+        public int getIconWidth() { return width; }
+        public int getIconHeight() { return height; }
     }
 }

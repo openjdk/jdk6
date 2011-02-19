@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -38,6 +38,8 @@ RuntimeStub*       SharedRuntime::_ic_miss_blob;
 RuntimeStub*       SharedRuntime::_resolve_opt_virtual_call_blob;
 RuntimeStub*       SharedRuntime::_resolve_virtual_call_blob;
 RuntimeStub*       SharedRuntime::_resolve_static_call_blob;
+
+const int StackAlignmentInSlots = StackAlignmentInBytes / VMRegImpl::stack_slot_size;
 
 #define __ masm->
 
@@ -450,22 +452,6 @@ static void patch_callers_callsite(MacroAssembler *masm) {
   __ bind(L);
 }
 
-// Helper function to put tags in interpreter stack.
-static void  tag_stack(MacroAssembler *masm, const BasicType sig, int st_off) {
-  if (TaggedStackInterpreter) {
-    int tag_offset = st_off + Interpreter::expr_tag_offset_in_bytes(0);
-    if (sig == T_OBJECT || sig == T_ARRAY) {
-      __ movptr(Address(rsp, tag_offset), (int32_t) frame::TagReference);
-    } else if (sig == T_LONG || sig == T_DOUBLE) {
-      int next_tag_offset = st_off + Interpreter::expr_tag_offset_in_bytes(1);
-      __ movptr(Address(rsp, next_tag_offset), (int32_t) frame::TagValue);
-      __ movptr(Address(rsp, tag_offset), (int32_t) frame::TagValue);
-    } else {
-      __ movptr(Address(rsp, tag_offset), (int32_t) frame::TagValue);
-    }
-  }
-}
-
 
 static void gen_c2i_adapter(MacroAssembler *masm,
                             int total_args_passed,
@@ -487,7 +473,7 @@ static void gen_c2i_adapter(MacroAssembler *masm,
   // we also account for the return address location since
   // we store it first rather than hold it in rax across all the shuffling
 
-  int extraspace = (total_args_passed * Interpreter::stackElementSize()) + wordSize;
+  int extraspace = (total_args_passed * Interpreter::stackElementSize) + wordSize;
 
   // stack is aligned, keep it that way
   extraspace = round_to(extraspace, 2*wordSize);
@@ -511,9 +497,8 @@ static void gen_c2i_adapter(MacroAssembler *masm,
     }
 
     // offset to start parameters
-    int st_off   = (total_args_passed - i) * Interpreter::stackElementSize() +
-                   Interpreter::value_offset_in_bytes();
-    int next_off = st_off - Interpreter::stackElementSize();
+    int st_off   = (total_args_passed - i) * Interpreter::stackElementSize;
+    int next_off = st_off - Interpreter::stackElementSize;
 
     // Say 4 args:
     // i   st_off
@@ -541,7 +526,6 @@ static void gen_c2i_adapter(MacroAssembler *masm,
         // sign extend??
         __ movl(rax, Address(rsp, ld_off));
         __ movptr(Address(rsp, st_off), rax);
-        tag_stack(masm, sig_bt[i], st_off);
 
       } else {
 
@@ -558,10 +542,8 @@ static void gen_c2i_adapter(MacroAssembler *masm,
           __ mov64(rax, CONST64(0xdeadffffdeadaaaa));
           __ movptr(Address(rsp, st_off), rax);
 #endif /* ASSERT */
-          tag_stack(masm, sig_bt[i], next_off);
         } else {
           __ movq(Address(rsp, st_off), rax);
-          tag_stack(masm, sig_bt[i], st_off);
         }
       }
     } else if (r_1->is_Register()) {
@@ -570,7 +552,6 @@ static void gen_c2i_adapter(MacroAssembler *masm,
         // must be only an int (or less ) so move only 32bits to slot
         // why not sign extend??
         __ movl(Address(rsp, st_off), r);
-        tag_stack(masm, sig_bt[i], st_off);
       } else {
         // Two VMREgs|OptoRegs can be T_OBJECT, T_ADDRESS, T_DOUBLE, T_LONG
         // T_DOUBLE and T_LONG use two slots in the interpreter
@@ -582,10 +563,8 @@ static void gen_c2i_adapter(MacroAssembler *masm,
           __ movptr(Address(rsp, st_off), rax);
 #endif /* ASSERT */
           __ movq(Address(rsp, next_off), r);
-          tag_stack(masm, sig_bt[i], next_off);
         } else {
           __ movptr(Address(rsp, st_off), r);
-          tag_stack(masm, sig_bt[i], st_off);
         }
       }
     } else {
@@ -593,7 +572,6 @@ static void gen_c2i_adapter(MacroAssembler *masm,
       if (!r_2->is_valid()) {
         // only a float use just part of the slot
         __ movflt(Address(rsp, st_off), r_1->as_XMMRegister());
-        tag_stack(masm, sig_bt[i], st_off);
       } else {
 #ifdef ASSERT
         // Overwrite the unused slot with known junk
@@ -601,7 +579,6 @@ static void gen_c2i_adapter(MacroAssembler *masm,
         __ movptr(Address(rsp, st_off), rax);
 #endif /* ASSERT */
         __ movdbl(Address(rsp, next_off), r_1->as_XMMRegister());
-        tag_stack(masm, sig_bt[i], next_off);
       }
     }
   }
@@ -636,6 +613,10 @@ static void gen_i2c_adapter(MacroAssembler *masm,
 
   __ movptr(rax, Address(rsp, 0));
 
+  // Must preserve original SP for loading incoming arguments because
+  // we need to align the outgoing SP for compiled code.
+  __ movptr(r11, rsp);
+
   // Cut-out for having no stack args.  Since up to 2 int/oop args are passed
   // in registers, we will occasionally have no stack args.
   int comp_words_on_stack = 0;
@@ -659,6 +640,10 @@ static void gen_i2c_adapter(MacroAssembler *masm,
   // as far as the placement of the call instruction
   __ push(rax);
 
+  // Put saved SP in another register
+  const Register saved_sp = rax;
+  __ movptr(saved_sp, r11);
+
   // Will jump to the compiled code just as if compiled code was doing it.
   // Pre-load the register-jump target early, to schedule it better.
   __ movptr(r11, Address(rbx, in_bytes(methodOopDesc::from_compiled_offset())));
@@ -678,13 +663,9 @@ static void gen_i2c_adapter(MacroAssembler *masm,
     assert(!regs[i].second()->is_valid() || regs[i].first()->next() == regs[i].second(),
             "scrambled load targets?");
     // Load in argument order going down.
-    // int ld_off = (total_args_passed + comp_words_on_stack -i)*wordSize;
-    // base ld_off on r13 (sender_sp) as the stack alignment makes offsets from rsp
-    // unpredictable
-    int ld_off = ((total_args_passed - 1) - i)*Interpreter::stackElementSize();
-
+    int ld_off = (total_args_passed - i)*Interpreter::stackElementSize;
     // Point to interpreter value (vs. tag)
-    int next_off = ld_off - Interpreter::stackElementSize();
+    int next_off = ld_off - Interpreter::stackElementSize;
     //
     //
     //
@@ -697,10 +678,14 @@ static void gen_i2c_adapter(MacroAssembler *masm,
     if (r_1->is_stack()) {
       // Convert stack slot to an SP offset (+ wordSize to account for return address )
       int st_off = regs[i].first()->reg2stack()*VMRegImpl::stack_slot_size + wordSize;
+
+      // We can use r13 as a temp here because compiled code doesn't need r13 as an input
+      // and if we end up going thru a c2i because of a miss a reasonable value of r13
+      // will be generated.
       if (!r_2->is_valid()) {
         // sign extend???
-        __ movl(rax, Address(r13, ld_off));
-        __ movptr(Address(rsp, st_off), rax);
+        __ movl(r13, Address(saved_sp, ld_off));
+        __ movptr(Address(rsp, st_off), r13);
       } else {
         //
         // We are using two optoregs. This can be either T_OBJECT, T_ADDRESS, T_LONG, or T_DOUBLE
@@ -713,9 +698,9 @@ static void gen_i2c_adapter(MacroAssembler *masm,
         // ld_off is MSW so get LSW
         const int offset = (sig_bt[i]==T_LONG||sig_bt[i]==T_DOUBLE)?
                            next_off : ld_off;
-        __ movq(rax, Address(r13, offset));
+        __ movq(r13, Address(saved_sp, offset));
         // st_off is LSW (i.e. reg.first())
-        __ movq(Address(rsp, st_off), rax);
+        __ movq(Address(rsp, st_off), r13);
       }
     } else if (r_1->is_Register()) {  // Register argument
       Register r = r_1->as_Register();
@@ -730,16 +715,16 @@ static void gen_i2c_adapter(MacroAssembler *masm,
                            next_off : ld_off;
 
         // this can be a misaligned move
-        __ movq(r, Address(r13, offset));
+        __ movq(r, Address(saved_sp, offset));
       } else {
         // sign extend and use a full word?
-        __ movl(r, Address(r13, ld_off));
+        __ movl(r, Address(saved_sp, ld_off));
       }
     } else {
       if (!r_2->is_valid()) {
-        __ movflt(r_1->as_XMMRegister(), Address(r13, ld_off));
+        __ movflt(r_1->as_XMMRegister(), Address(saved_sp, ld_off));
       } else {
-        __ movdbl(r_1->as_XMMRegister(), Address(r13, next_off));
+        __ movdbl(r_1->as_XMMRegister(), Address(saved_sp, next_off));
       }
     }
   }
@@ -768,7 +753,8 @@ AdapterHandlerEntry* SharedRuntime::generate_i2c2i_adapters(MacroAssembler *masm
                                                             int total_args_passed,
                                                             int comp_args_on_stack,
                                                             const BasicType *sig_bt,
-                                                            const VMRegPair *regs) {
+                                                            const VMRegPair *regs,
+                                                            AdapterFingerPrint* fingerprint) {
   address i2c_entry = __ pc();
 
   gen_i2c_adapter(masm, total_args_passed, comp_args_on_stack, sig_bt, regs);
@@ -814,7 +800,7 @@ AdapterHandlerEntry* SharedRuntime::generate_i2c2i_adapters(MacroAssembler *masm
   gen_c2i_adapter(masm, total_args_passed, comp_args_on_stack, sig_bt, regs, skip_fixup);
 
   __ flush();
-  return new AdapterHandlerEntry(i2c_entry, c2i_entry, c2i_unverified_entry);
+  return AdapterHandlerLibrary::new_entry(fingerprint, i2c_entry, c2i_entry, c2i_unverified_entry);
 }
 
 int SharedRuntime::c_calling_convention(const BasicType *sig_bt,
@@ -1286,7 +1272,7 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
 
   // Now compute actual number of stack words we need rounding to make
   // stack properly aligned.
-  stack_slots = round_to(stack_slots, 4 * VMRegImpl::slots_per_word);
+  stack_slots = round_to(stack_slots, StackAlignmentInSlots);
 
   int stack_size = stack_slots * VMRegImpl::stack_slot_size;
 
@@ -1300,22 +1286,19 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
 
   const Register ic_reg = rax;
   const Register receiver = j_rarg0;
-  const Register tmp = rdx;
 
   Label ok;
   Label exception_pending;
 
+  assert_different_registers(ic_reg, receiver, rscratch1);
   __ verify_oop(receiver);
-  __ push(tmp); // spill (any other registers free here???)
-  __ load_klass(tmp, receiver);
-  __ cmpq(ic_reg, tmp);
+  __ load_klass(rscratch1, receiver);
+  __ cmpq(ic_reg, rscratch1);
   __ jcc(Assembler::equal, ok);
 
-  __ pop(tmp);
   __ jump(RuntimeAddress(SharedRuntime::get_ic_miss_stub()));
 
   __ bind(ok);
-  __ pop(tmp);
 
   // Verified entry point must be aligned
   __ align(8);
@@ -1348,7 +1331,7 @@ nmethod *SharedRuntime::generate_native_wrapper(MacroAssembler *masm,
     {
       Label L;
       __ mov(rax, rsp);
-      __ andptr(rax, -16); // must be 16 byte boundry (see amd64 ABI)
+      __ andptr(rax, -16); // must be 16 byte boundary (see amd64 ABI)
       __ cmpptr(rax, rsp);
       __ jcc(Assembler::equal, L);
       __ stop("improperly aligned stack");
@@ -2527,7 +2510,7 @@ nmethod *SharedRuntime::generate_dtrace_nmethod(MacroAssembler *masm,
 // this function returns the adjust size (in number of words) to a c2i adapter
 // activation for use during deoptimization
 int Deoptimization::last_frame_adjust(int callee_parameters, int callee_locals ) {
-  return (callee_locals - callee_parameters) * Interpreter::stackElementWords();
+  return (callee_locals - callee_parameters) * Interpreter::stackElementWords;
 }
 
 
@@ -2965,10 +2948,16 @@ void SharedRuntime::generate_uncommon_trap_blob() {
   __ pushptr(Address(rcx, 0));     // Save return address
   __ enter();                      // Save old & set new rbp
   __ subptr(rsp, rbx);             // Prolog
+#ifdef CC_INTERP
+  __ movptr(Address(rbp,
+                  -(sizeof(BytecodeInterpreter)) + in_bytes(byte_offset_of(BytecodeInterpreter, _sender_sp))),
+            sender_sp); // Make it walkable
+#else // CC_INTERP
   __ movptr(Address(rbp, frame::interpreter_frame_sender_sp_offset * wordSize),
             sender_sp);            // Make it walkable
   // This value is corrected by layout_activation_impl
   __ movptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), (int32_t)NULL_WORD );
+#endif // CC_INTERP
   __ mov(sender_sp, rsp);          // Pass sender_sp to next frame
   __ addptr(rsi, wordSize);        // Bump array pointer (sizes)
   __ addptr(rcx, wordSize);        // Bump array pointer (pcs)
@@ -3313,6 +3302,10 @@ void OptoRuntime::generate_exception_blob() {
   __ pop(rdx);                  // No need for exception pc anymore
 
   // rax: exception handler
+
+  // Restore SP from BP if the exception PC is a MethodHandle call site.
+  __ cmpl(Address(r15_thread, JavaThread::is_method_handle_return_offset()), 0);
+  __ cmovptr(Assembler::notEqual, rsp, rbp_mh_SP_save);
 
   // We have a handler in rax (could be deopt blob).
   __ mov(r8, rax);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -278,11 +278,6 @@ class StubGenerator: public StubCodeGenerator {
     __ movptr(c_rarg2, parameters);       // parameter pointer
     __ movl(c_rarg1, c_rarg3);            // parameter counter is in c_rarg1
     __ BIND(loop);
-    if (TaggedStackInterpreter) {
-      __ movl(rax, Address(c_rarg2, 0)); // get tag
-      __ addptr(c_rarg2, wordSize);      // advance to next tag
-      __ push(rax);                      // pass tag
-    }
     __ movptr(rax, Address(c_rarg2, 0));// get parameter
     __ addptr(c_rarg2, wordSize);       // advance to next parameter
     __ decrementl(c_rarg1);             // decrement counter
@@ -466,13 +461,13 @@ class StubGenerator: public StubCodeGenerator {
     BLOCK_COMMENT("call exception_handler_for_return_address");
     __ call_VM_leaf(CAST_FROM_FN_PTR(address,
                          SharedRuntime::exception_handler_for_return_address),
-                    c_rarg0);
+                    r15_thread, c_rarg0);
     __ mov(rbx, rax);
 
     // setup rax & rdx, remove return address & clear pending exception
     __ pop(rdx);
     __ movptr(rax, Address(r15_thread, Thread::pending_exception_offset()));
-    __ movptr(Address(r15_thread, Thread::pending_exception_offset()), (int)NULL_WORD);
+    __ movptr(Address(r15_thread, Thread::pending_exception_offset()), (int32_t)NULL_WORD);
 
 #ifdef ASSERT
     // make sure exception is set
@@ -637,7 +632,7 @@ class StubGenerator: public StubCodeGenerator {
   address generate_orderaccess_fence() {
     StubCodeMark mark(this, "StubRoutines", "orderaccess_fence");
     address start = __ pc();
-    __ mfence();
+    __ membar(Assembler::StoreLoad);
     __ ret(0);
 
     return start;
@@ -871,9 +866,8 @@ class StubGenerator: public StubCodeGenerator {
   }
 
   address generate_fp_mask(const char *stub_name, int64_t mask) {
+    __ align(CodeEntryAlignment);
     StubCodeMark mark(this, "StubRoutines", stub_name);
-
-    __ align(16);
     address start = __ pc();
 
     __ emit_data64( mask, relocInfo::none );
@@ -920,6 +914,7 @@ class StubGenerator: public StubCodeGenerator {
   //  * [tos + 5]: error message (char*)
   //  * [tos + 6]: object to verify (oop)
   //  * [tos + 7]: saved rax - saved by caller and bashed
+  //  * [tos + 8]: saved r10 (rscratch1) - saved by caller
   //  * = popped on exit
   address generate_verify_oop() {
     StubCodeMark mark(this, "StubRoutines", "verify_oop");
@@ -940,6 +935,7 @@ class StubGenerator: public StubCodeGenerator {
            // After previous pushes.
            oop_to_verify = 6 * wordSize,
            saved_rax     = 7 * wordSize,
+           saved_r10     = 8 * wordSize,
 
            // Before the call to MacroAssembler::debug(), see below.
            return_addr   = 16 * wordSize,
@@ -954,9 +950,9 @@ class StubGenerator: public StubCodeGenerator {
     __ jcc(Assembler::zero, exit); // if obj is NULL it is OK
     // Check if the oop is in the right area of memory
     __ movptr(c_rarg2, rax);
-    __ movptr(c_rarg3, (int64_t) Universe::verify_oop_mask());
+    __ movptr(c_rarg3, (intptr_t) Universe::verify_oop_mask());
     __ andptr(c_rarg2, c_rarg3);
-    __ movptr(c_rarg3, (int64_t) Universe::verify_oop_bits());
+    __ movptr(c_rarg3, (intptr_t) Universe::verify_oop_bits());
     __ cmpptr(c_rarg2, c_rarg3);
     __ jcc(Assembler::notZero, error);
 
@@ -969,9 +965,9 @@ class StubGenerator: public StubCodeGenerator {
     __ jcc(Assembler::zero, error); // if klass is NULL it is broken
     // Check if the klass is in the right area of memory
     __ mov(c_rarg2, rax);
-    __ movptr(c_rarg3, (int64_t) Universe::verify_klass_mask());
+    __ movptr(c_rarg3, (intptr_t) Universe::verify_klass_mask());
     __ andptr(c_rarg2, c_rarg3);
-    __ movptr(c_rarg3, (int64_t) Universe::verify_klass_bits());
+    __ movptr(c_rarg3, (intptr_t) Universe::verify_klass_bits());
     __ cmpptr(c_rarg2, c_rarg3);
     __ jcc(Assembler::notZero, error);
 
@@ -980,24 +976,26 @@ class StubGenerator: public StubCodeGenerator {
     __ testptr(rax, rax);
     __ jcc(Assembler::zero, error); // if klass' klass is NULL it is broken
     // Check if the klass' klass is in the right area of memory
-    __ movptr(c_rarg3, (int64_t) Universe::verify_klass_mask());
+    __ movptr(c_rarg3, (intptr_t) Universe::verify_klass_mask());
     __ andptr(rax, c_rarg3);
-    __ movptr(c_rarg3, (int64_t) Universe::verify_klass_bits());
+    __ movptr(c_rarg3, (intptr_t) Universe::verify_klass_bits());
     __ cmpptr(rax, c_rarg3);
     __ jcc(Assembler::notZero, error);
 
     // return if everything seems ok
     __ bind(exit);
     __ movptr(rax, Address(rsp, saved_rax));     // get saved rax back
+    __ movptr(rscratch1, Address(rsp, saved_r10)); // get saved r10 back
     __ pop(c_rarg3);                             // restore c_rarg3
     __ pop(c_rarg2);                             // restore c_rarg2
     __ pop(r12);                                 // restore r12
     __ popf();                                   // restore flags
-    __ ret(3 * wordSize);                        // pop caller saved stuff
+    __ ret(4 * wordSize);                        // pop caller saved stuff
 
     // handle errors
     __ bind(error);
     __ movptr(rax, Address(rsp, saved_rax));     // get saved rax back
+    __ movptr(rscratch1, Address(rsp, saved_r10)); // get saved r10 back
     __ pop(c_rarg3);                             // get saved c_rarg3 back
     __ pop(c_rarg2);                             // get saved c_rarg2 back
     __ pop(r12);                                 // get saved r12 back
@@ -1015,6 +1013,7 @@ class StubGenerator: public StubCodeGenerator {
     //   * [tos + 17] error message (char*)
     //   * [tos + 18] object to verify (oop)
     //   * [tos + 19] saved rax - saved by caller and bashed
+    //   * [tos + 20] saved r10 (rscratch1) - saved by caller
     //   * = popped on exit
 
     __ movptr(c_rarg0, Address(rsp, error_msg));    // pass address of error message
@@ -1027,7 +1026,7 @@ class StubGenerator: public StubCodeGenerator {
     __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, MacroAssembler::debug64)));
     __ mov(rsp, r12);                               // restore rsp
     __ popa();                                      // pop registers (includes r12)
-    __ ret(3 * wordSize);                           // pop caller saved stuff
+    __ ret(4 * wordSize);                           // pop caller saved stuff
 
     return start;
   }
@@ -1172,7 +1171,7 @@ class StubGenerator: public StubCodeGenerator {
             __ movptr(c_rarg0, addr);
             __ movptr(c_rarg1, count);
           }
-          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, BarrierSet::static_write_ref_array_pre)));
+          __ call_VM_leaf(CAST_FROM_FN_PTR(address, BarrierSet::static_write_ref_array_pre), 2);
           __ popa();
         }
         break;
@@ -1207,12 +1206,12 @@ class StubGenerator: public StubCodeGenerator {
           __ pusha();                      // push registers (overkill)
           // must compute element count unless barrier set interface is changed (other platforms supply count)
           assert_different_registers(start, end, scratch);
-          __ lea(scratch, Address(end, wordSize));
-          __ subptr(scratch, start);
-          __ shrptr(scratch, LogBytesPerWord);
+          __ lea(scratch, Address(end, BytesPerHeapOop));
+          __ subptr(scratch, start);               // subtract start to get #bytes
+          __ shrptr(scratch, LogBytesPerHeapOop);  // convert to element count
           __ mov(c_rarg0, start);
           __ mov(c_rarg1, scratch);
-          __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, BarrierSet::static_write_ref_array_post)));
+          __ call_VM_leaf(CAST_FROM_FN_PTR(address, BarrierSet::static_write_ref_array_post), 2);
           __ popa();
         }
         break;
@@ -1225,6 +1224,7 @@ class StubGenerator: public StubCodeGenerator {
           Label L_loop;
 
            __ shrptr(start, CardTableModRefBS::card_shift);
+           __ addptr(end, BytesPerHeapOop);
            __ shrptr(end, CardTableModRefBS::card_shift);
            __ subptr(end, start); // number of bytes to copy
 
@@ -1267,7 +1267,7 @@ class StubGenerator: public StubCodeGenerator {
                              Label& L_copy_32_bytes, Label& L_copy_8_bytes) {
     DEBUG_ONLY(__ stop("enter at entry label, not here"));
     Label L_loop;
-    __ align(16);
+    __ align(OptoLoopAlignment);
   __ BIND(L_loop);
     if(UseUnalignedLoadStores) {
       __ movdqu(xmm0, Address(end_from, qword_count, Address::times_8, -24));
@@ -1308,7 +1308,7 @@ class StubGenerator: public StubCodeGenerator {
                               Label& L_copy_32_bytes, Label& L_copy_8_bytes) {
     DEBUG_ONLY(__ stop("enter at entry label, not here"));
     Label L_loop;
-    __ align(16);
+    __ align(OptoLoopAlignment);
   __ BIND(L_loop);
     if(UseUnalignedLoadStores) {
       __ movdqu(xmm0, Address(from, qword_count, Address::times_8, 16));
@@ -1622,6 +1622,26 @@ class StubGenerator: public StubCodeGenerator {
     copy_32_bytes_forward(end_from, end_to, qword_count, rax, L_copy_32_bytes, L_copy_8_bytes);
     __ jmp(L_copy_4_bytes);
 
+    return start;
+  }
+
+  address generate_fill(BasicType t, bool aligned, const char *name) {
+    __ align(CodeEntryAlignment);
+    StubCodeMark mark(this, "StubRoutines", name);
+    address start = __ pc();
+
+    BLOCK_COMMENT("Entry:");
+
+    const Register to       = c_rarg0;  // source array address
+    const Register value    = c_rarg1;  // value
+    const Register count    = c_rarg2;  // elements count
+
+    __ enter(); // required for proper stackwalking of RuntimeStub frame
+
+    __ generate_fill(t, aligned, to, value, count, rax, xmm0);
+
+    __ leave(); // required for proper stackwalking of RuntimeStub frame
+    __ ret(0);
     return start;
   }
 
@@ -2091,66 +2111,9 @@ class StubGenerator: public StubCodeGenerator {
 
     Label L_miss;
 
-    // a couple of useful fields in sub_klass:
-    int ss_offset = (klassOopDesc::header_size() * HeapWordSize +
-                     Klass::secondary_supers_offset_in_bytes());
-    int sc_offset = (klassOopDesc::header_size() * HeapWordSize +
-                     Klass::secondary_super_cache_offset_in_bytes());
-    Address secondary_supers_addr(sub_klass, ss_offset);
-    Address super_cache_addr(     sub_klass, sc_offset);
-
-    // if the pointers are equal, we are done (e.g., String[] elements)
-    __ cmpptr(super_klass, sub_klass);
-    __ jcc(Assembler::equal, L_success);
-
-    // check the supertype display:
-    Address super_check_addr(sub_klass, super_check_offset, Address::times_1, 0);
-    __ cmpptr(super_klass, super_check_addr); // test the super type
-    __ jcc(Assembler::equal, L_success);
-
-    // if it was a primary super, we can just fail immediately
-    __ cmpl(super_check_offset, sc_offset);
-    __ jcc(Assembler::notEqual, L_miss);
-
-    // Now do a linear scan of the secondary super-klass chain.
-    // The repne_scan instruction uses fixed registers, which we must spill.
-    // (We need a couple more temps in any case.)
-    // This code is rarely used, so simplicity is a virtue here.
-    inc_counter_np(SharedRuntime::_partial_subtype_ctr);
-    {
-      __ push(rax);
-      __ push(rcx);
-      __ push(rdi);
-      assert_different_registers(sub_klass, super_klass, rax, rcx, rdi);
-
-      __ movptr(rdi, secondary_supers_addr);
-      // Load the array length.
-      __ movl(rcx, Address(rdi, arrayOopDesc::length_offset_in_bytes()));
-      // Skip to start of data.
-      __ addptr(rdi, arrayOopDesc::base_offset_in_bytes(T_OBJECT));
-      // Scan rcx words at [rdi] for occurance of rax
-      // Set NZ/Z based on last compare
-      __ movptr(rax, super_klass);
-      if (UseCompressedOops) {
-        // Compare against compressed form.  Don't need to uncompress because
-        // looks like orig rax is restored in popq below.
-        __ encode_heap_oop(rax);
-        __ repne_scanl();
-      } else {
-        __ repne_scan();
-      }
-
-      // Unspill the temp. registers:
-      __ pop(rdi);
-      __ pop(rcx);
-      __ pop(rax);
-
-      __ jcc(Assembler::notEqual, L_miss);
-    }
-
-    // Success.  Cache the super we found and proceed in triumph.
-    __ movptr(super_cache_addr, super_klass); // note: rax is dead
-    __ jmp(L_success);
+    __ check_klass_subtype_fast_path(sub_klass, super_klass, noreg,        &L_success, &L_miss, NULL,
+                                     super_check_offset);
+    __ check_klass_subtype_slow_path(sub_klass, super_klass, noreg, noreg, &L_success, NULL);
 
     // Fall through on failure!
     __ BIND(L_miss);
@@ -2285,7 +2248,7 @@ class StubGenerator: public StubCodeGenerator {
     // Loop control:
     //   for (count = -count; count != 0; count++)
     // Base pointers src, dst are biased by 8*(count-1),to last element.
-    __ align(16);
+    __ align(OptoLoopAlignment);
 
     __ BIND(L_store_element);
     __ store_heap_oop(to_element_addr, rax_oop);  // store the oop
@@ -2308,6 +2271,7 @@ class StubGenerator: public StubCodeGenerator {
     // and report their number to the caller.
     assert_different_registers(rax, r14_length, count, to, end_to, rcx);
     __ lea(end_to, to_element_addr);
+    __ addptr(end_to, -heapOopSize);      // make an inclusive end pointer
     gen_write_ref_array_post_barrier(to, end_to, rscratch1);
     __ movptr(rax, r14_length);           // original oops
     __ addptr(rax, count);                // K = (original - remaining) oops
@@ -2316,7 +2280,7 @@ class StubGenerator: public StubCodeGenerator {
 
     // Come here on success only.
     __ BIND(L_do_card_marks);
-    __ addptr(end_to, -wordSize);         // make an inclusive end pointer
+    __ addptr(end_to, -heapOopSize);         // make an inclusive end pointer
     gen_write_ref_array_post_barrier(to, end_to, rscratch1);
     __ xorptr(rax, rax);                  // return 0 on success
 
@@ -2768,6 +2732,13 @@ class StubGenerator: public StubCodeGenerator {
     StubRoutines::_unsafe_arraycopy    = generate_unsafe_copy("unsafe_arraycopy");
     StubRoutines::_generic_arraycopy   = generate_generic_copy("generic_arraycopy");
 
+    StubRoutines::_jbyte_fill = generate_fill(T_BYTE, false, "jbyte_fill");
+    StubRoutines::_jshort_fill = generate_fill(T_SHORT, false, "jshort_fill");
+    StubRoutines::_jint_fill = generate_fill(T_INT, false, "jint_fill");
+    StubRoutines::_arrayof_jbyte_fill = generate_fill(T_BYTE, true, "arrayof_jbyte_fill");
+    StubRoutines::_arrayof_jshort_fill = generate_fill(T_SHORT, true, "arrayof_jshort_fill");
+    StubRoutines::_arrayof_jint_fill = generate_fill(T_INT, true, "arrayof_jint_fill");
+
     // We don't generate specialized code for HeapWord-aligned source
     // arrays, so just use the code we've already generated
     StubRoutines::_arrayof_jbyte_disjoint_arraycopy  = StubRoutines::_jbyte_disjoint_arraycopy;
@@ -2784,6 +2755,79 @@ class StubGenerator: public StubCodeGenerator {
 
     StubRoutines::_arrayof_oop_disjoint_arraycopy    = StubRoutines::_oop_disjoint_arraycopy;
     StubRoutines::_arrayof_oop_arraycopy             = StubRoutines::_oop_arraycopy;
+  }
+
+  void generate_math_stubs() {
+    {
+      StubCodeMark mark(this, "StubRoutines", "log");
+      StubRoutines::_intrinsic_log = (double (*)(double)) __ pc();
+
+      __ subq(rsp, 8);
+      __ movdbl(Address(rsp, 0), xmm0);
+      __ fld_d(Address(rsp, 0));
+      __ flog();
+      __ fstp_d(Address(rsp, 0));
+      __ movdbl(xmm0, Address(rsp, 0));
+      __ addq(rsp, 8);
+      __ ret(0);
+    }
+    {
+      StubCodeMark mark(this, "StubRoutines", "log10");
+      StubRoutines::_intrinsic_log10 = (double (*)(double)) __ pc();
+
+      __ subq(rsp, 8);
+      __ movdbl(Address(rsp, 0), xmm0);
+      __ fld_d(Address(rsp, 0));
+      __ flog10();
+      __ fstp_d(Address(rsp, 0));
+      __ movdbl(xmm0, Address(rsp, 0));
+      __ addq(rsp, 8);
+      __ ret(0);
+    }
+    {
+      StubCodeMark mark(this, "StubRoutines", "sin");
+      StubRoutines::_intrinsic_sin = (double (*)(double)) __ pc();
+
+      __ subq(rsp, 8);
+      __ movdbl(Address(rsp, 0), xmm0);
+      __ fld_d(Address(rsp, 0));
+      __ trigfunc('s');
+      __ fstp_d(Address(rsp, 0));
+      __ movdbl(xmm0, Address(rsp, 0));
+      __ addq(rsp, 8);
+      __ ret(0);
+    }
+    {
+      StubCodeMark mark(this, "StubRoutines", "cos");
+      StubRoutines::_intrinsic_cos = (double (*)(double)) __ pc();
+
+      __ subq(rsp, 8);
+      __ movdbl(Address(rsp, 0), xmm0);
+      __ fld_d(Address(rsp, 0));
+      __ trigfunc('c');
+      __ fstp_d(Address(rsp, 0));
+      __ movdbl(xmm0, Address(rsp, 0));
+      __ addq(rsp, 8);
+      __ ret(0);
+    }
+    {
+      StubCodeMark mark(this, "StubRoutines", "tan");
+      StubRoutines::_intrinsic_tan = (double (*)(double)) __ pc();
+
+      __ subq(rsp, 8);
+      __ movdbl(Address(rsp, 0), xmm0);
+      __ fld_d(Address(rsp, 0));
+      __ trigfunc('t');
+      __ fstp_d(Address(rsp, 0));
+      __ movdbl(xmm0, Address(rsp, 0));
+      __ addq(rsp, 8);
+      __ ret(0);
+    }
+
+    // The intrinsic version of these seem to return the same value as
+    // the strict version.
+    StubRoutines::_intrinsic_exp = SharedRuntime::dexp;
+    StubRoutines::_intrinsic_pow = SharedRuntime::dpow;
   }
 
 #undef __
@@ -2990,6 +3034,8 @@ class StubGenerator: public StubCodeGenerator {
 
     // arraycopy stubs used by compilers
     generate_arraycopy_stubs();
+
+    generate_math_stubs();
   }
 
  public:

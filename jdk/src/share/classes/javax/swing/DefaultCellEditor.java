@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing;
@@ -264,6 +264,26 @@ public class DefaultCellEditor extends AbstractCellEditor
                                                  boolean isSelected,
                                                  int row, int column) {
         delegate.setValue(value);
+        if (editorComponent instanceof JCheckBox) {
+            //in order to avoid a "flashing" effect when clicking a checkbox
+            //in a table, it is important for the editor to have as a border
+            //the same border that the renderer has, and have as the background
+            //the same color as the renderer has. This is primarily only
+            //needed for JCheckBox since this editor doesn't fill all the
+            //visual space of the table cell, unlike a text field.
+            TableCellRenderer renderer = table.getCellRenderer(row, column);
+            Component c = renderer.getTableCellRendererComponent(table, value,
+                    isSelected, true, row, column);
+            if (c != null) {
+                editorComponent.setOpaque(true);
+                editorComponent.setBackground(c.getBackground());
+                if (c instanceof JComponent) {
+                    editorComponent.setBorder(((JComponent)c).getBorder());
+                }
+            } else {
+                editorComponent.setOpaque(false);
+            }
+        }
         return editorComponent;
     }
 

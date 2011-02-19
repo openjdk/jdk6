@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -277,10 +277,11 @@ void PatchingStub::emit_code(LIR_Assembler* ce) {
 
   if (_id == load_klass_id) {
     // produce a copy of the load klass instruction for use by the being initialized case
+#ifdef ASSERT
     address start = __ pc();
-    Address addr = Address(_obj, address(NULL), oop_Relocation::spec(_oop_index));
-    __ sethi(addr, true);
-    __ add(addr, _obj, 0);
+#endif
+    AddressLiteral addrlit(NULL, oop_Relocation::spec(_oop_index));
+    __ patchable_set(addrlit, _obj);
 
 #ifdef ASSERT
     for (int i = 0; i < _bytes_to_copy; i++) {
@@ -375,6 +376,16 @@ void PatchingStub::emit_code(LIR_Assembler* ce) {
   }
 
 }
+
+
+void DeoptimizeStub::emit_code(LIR_Assembler* ce) {
+  __ bind(_entry);
+  __ call(SharedRuntime::deopt_blob()->unpack_with_reexecution());
+  __ delayed()->nop();
+  ce->add_call_info_here(_info);
+  debug_only(__ should_not_reach_here());
+}
+
 
 void ArrayCopyStub::emit_code(LIR_Assembler* ce) {
   //---------------slow case: call to native-----------------

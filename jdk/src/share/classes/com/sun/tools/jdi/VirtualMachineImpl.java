@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package com.sun.tools.jdi;
@@ -146,8 +146,9 @@ class VirtualMachineImpl extends MirrorImpl
     public boolean threadResumable(ThreadAction action) {
         /*
          * If any thread is resumed, the VM is considered not suspended.
+         * Just one thread is being resumed so pass it to thaw.
          */
-        state.thaw();
+        state.thaw(action.thread());
         return true;
     }
 
@@ -302,9 +303,10 @@ class VirtualMachineImpl extends MirrorImpl
         Iterator it = classToBytes.entrySet().iterator();
         for (int i = 0; it.hasNext(); i++) {
             Map.Entry entry = (Map.Entry)it.next();
+            ReferenceTypeImpl refType = (ReferenceTypeImpl)entry.getKey();
+            validateMirror(refType);
             defs[i] = new JDWP.VirtualMachine.RedefineClasses
-                       .ClassDef((ReferenceTypeImpl)entry.getKey(),
-                                 (byte[])entry.getValue());
+                       .ClassDef(refType, (byte[])entry.getValue());
         }
 
         // flush caches and disable caching until the next suspend
@@ -533,6 +535,7 @@ class VirtualMachineImpl extends MirrorImpl
         ReferenceTypeImpl[] rtArray = new ReferenceTypeImpl[classes.size()];
         int ii = 0;
         for (ReferenceType rti: classes) {
+            validateMirror(rti);
             rtArray[ii++] = (ReferenceTypeImpl)rti;
         }
         try {
@@ -1189,8 +1192,7 @@ class VirtualMachineImpl extends MirrorImpl
                 }
                 requests = new JDWP.VirtualMachine.DisposeObjects.Request[size];
                 for (int i = 0; i < requests.length; i++) {
-                    SoftObjectReference ref =
-                        (SoftObjectReference)batchedDisposeRequests.get(i);
+                    SoftObjectReference ref = batchedDisposeRequests.get(i);
                     if ((traceFlags & TRACE_OBJREFS) != 0) {
                         printTrace("Disposing object " + ref.key().longValue() +
                                    " (ref count = " + ref.count() + ")");
@@ -1434,7 +1436,7 @@ class VirtualMachineImpl extends MirrorImpl
        }
 
        ObjectReferenceImpl object() {
-           return (ObjectReferenceImpl)get();
+           return get();
        }
    }
 }

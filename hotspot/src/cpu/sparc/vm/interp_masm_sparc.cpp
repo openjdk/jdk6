@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -35,8 +35,8 @@
 
 // This file specializes the assember with interpreter-specific macros
 
-const Address InterpreterMacroAssembler::l_tmp( FP, 0,  (frame::interpreter_frame_l_scratch_fp_offset    * wordSize ) + STACK_BIAS);
-const Address InterpreterMacroAssembler::d_tmp( FP, 0,  (frame::interpreter_frame_d_scratch_fp_offset    * wordSize) + STACK_BIAS);
+const Address InterpreterMacroAssembler::l_tmp(FP, (frame::interpreter_frame_l_scratch_fp_offset * wordSize) + STACK_BIAS);
+const Address InterpreterMacroAssembler::d_tmp(FP, (frame::interpreter_frame_d_scratch_fp_offset * wordSize) + STACK_BIAS);
 
 #else // CC_INTERP
 #ifndef STATE
@@ -50,7 +50,6 @@ void InterpreterMacroAssembler::compute_extra_locals_size_in_bytes(Register args
   // Any changes should also be applied to CodeEmitter::emit_osr_entry().
   assert_different_registers(args_size, locals_size);
   // max_locals*2 for TAGS.  Assumes that args_size has already been adjusted.
-  if (TaggedStackInterpreter) sll(locals_size, 1, locals_size);
   subcc(locals_size, args_size, delta);// extra space for non-arguments locals in words
   // Use br/mov combination because it works on both V8 and V9 and is
   // faster.
@@ -78,14 +77,12 @@ void InterpreterMacroAssembler::dispatch_prolog(TosState state, int bcp_incr) {
   sll(Lbyte_code, LogBytesPerWord, Lbyte_code);         // multiply by wordSize
   ld_ptr(IdispatchTables, Lbyte_code, IdispatchAddress);// get entry addr
 #else
-  ldub( Lbcp, bcp_incr, Lbyte_code);               // load next bytecode
+  ldub( Lbcp, bcp_incr, Lbyte_code);                    // load next bytecode
   // dispatch table to use
-  Address tbl(G3_scratch, (address)Interpreter::dispatch_table(state));
-
-  sethi(tbl);
-  sll(Lbyte_code, LogBytesPerWord, Lbyte_code);    // multiply by wordSize
-  add(tbl, tbl.base(), 0);
-  ld_ptr( G3_scratch, Lbyte_code, IdispatchAddress);     // get entry addr
+  AddressLiteral tbl(Interpreter::dispatch_table(state));
+  sll(Lbyte_code, LogBytesPerWord, Lbyte_code);         // multiply by wordSize
+  set(tbl, G3_scratch);                                 // compute addr of table
+  ld_ptr(G3_scratch, Lbyte_code, IdispatchAddress);     // get entry addr
 #endif
 }
 
@@ -165,8 +162,7 @@ void InterpreterMacroAssembler::check_and_handle_popframe(Register scratch_reg) 
     Label L;
 
     // Check the "pending popframe condition" flag in the current thread
-    Address popframe_condition_addr(G2_thread, 0, in_bytes(JavaThread::popframe_condition_offset()));
-    ld(popframe_condition_addr, scratch_reg);
+    ld(G2_thread, JavaThread::popframe_condition_offset(), scratch_reg);
 
     // Initiate popframe handling only if it is not already being processed.  If the flag
     // has the popframe_processing bit set, it means that this code is called *during* popframe
@@ -192,11 +188,10 @@ void InterpreterMacroAssembler::check_and_handle_popframe(Register scratch_reg) 
 
 void InterpreterMacroAssembler::load_earlyret_value(TosState state) {
   Register thr_state = G4_scratch;
-  ld_ptr(Address(G2_thread, 0, in_bytes(JavaThread::jvmti_thread_state_offset())),
-         thr_state);
-  const Address tos_addr(thr_state, 0, in_bytes(JvmtiThreadState::earlyret_tos_offset()));
-  const Address oop_addr(thr_state, 0, in_bytes(JvmtiThreadState::earlyret_oop_offset()));
-  const Address val_addr(thr_state, 0, in_bytes(JvmtiThreadState::earlyret_value_offset()));
+  ld_ptr(G2_thread, JavaThread::jvmti_thread_state_offset(), thr_state);
+  const Address tos_addr(thr_state, JvmtiThreadState::earlyret_tos_offset());
+  const Address oop_addr(thr_state, JvmtiThreadState::earlyret_oop_offset());
+  const Address val_addr(thr_state, JvmtiThreadState::earlyret_value_offset());
   switch (state) {
   case ltos: ld_long(val_addr, Otos_l);                   break;
   case atos: ld_ptr(oop_addr, Otos_l);
@@ -222,8 +217,7 @@ void InterpreterMacroAssembler::check_and_handle_earlyret(Register scratch_reg) 
   if (JvmtiExport::can_force_early_return()) {
     Label L;
     Register thr_state = G3_scratch;
-    ld_ptr(Address(G2_thread, 0, in_bytes(JavaThread::jvmti_thread_state_offset())),
-           thr_state);
+    ld_ptr(G2_thread, JavaThread::jvmti_thread_state_offset(), thr_state);
     tst(thr_state);
     br(zero, false, pt, L); // if (thread->jvmti_thread_state() == NULL) exit;
     delayed()->nop();
@@ -231,16 +225,14 @@ void InterpreterMacroAssembler::check_and_handle_earlyret(Register scratch_reg) 
     // Initiate earlyret handling only if it is not already being processed.
     // If the flag has the earlyret_processing bit set, it means that this code
     // is called *during* earlyret handling - we don't want to reenter.
-    ld(Address(thr_state, 0, in_bytes(JvmtiThreadState::earlyret_state_offset())),
-       G4_scratch);
+    ld(thr_state, JvmtiThreadState::earlyret_state_offset(), G4_scratch);
     cmp(G4_scratch, JvmtiThreadState::earlyret_pending);
     br(Assembler::notEqual, false, pt, L);
     delayed()->nop();
 
     // Call Interpreter::remove_activation_early_entry() to get the address of the
     // same-named entrypoint in the generated interpreter code
-    Address tos_addr(thr_state, 0, in_bytes(JvmtiThreadState::earlyret_tos_offset()));
-    ld(tos_addr, Otos_l1);
+    ld(thr_state, JvmtiThreadState::earlyret_tos_offset(), Otos_l1);
     call_VM_leaf(noreg, CAST_FROM_FN_PTR(address, Interpreter::remove_activation_early_entry), Otos_l1);
 
     // Jump to Interpreter::_remove_activation_early_entry
@@ -251,9 +243,10 @@ void InterpreterMacroAssembler::check_and_handle_earlyret(Register scratch_reg) 
 }
 
 
-void InterpreterMacroAssembler::super_call_VM_leaf(Register thread_cache, address entry_point, Register arg_1) {
+void InterpreterMacroAssembler::super_call_VM_leaf(Register thread_cache, address entry_point, Register arg_1, Register arg_2) {
   mov(arg_1, O0);
-  MacroAssembler::call_VM_leaf_base(thread_cache, entry_point, 1);
+  mov(arg_2, O1);
+  MacroAssembler::call_VM_leaf_base(thread_cache, entry_point, 2);
 }
 #endif /* CC_INTERP */
 
@@ -294,10 +287,9 @@ void InterpreterMacroAssembler::dispatch_Lbyte_code(TosState state, address* tab
   } else {
 #endif
     // dispatch table to use
-    Address tbl(G3_scratch, (address)table);
-
+    AddressLiteral tbl(table);
     sll(Lbyte_code, LogBytesPerWord, Lbyte_code);       // multiply by wordSize
-    load_address(tbl);                                  // compute addr of table
+    set(tbl, G3_scratch);                               // compute addr of table
     ld_ptr(G3_scratch, Lbyte_code, G3_scratch);         // get entry addr
 #ifdef FAST_DISPATCH
   }
@@ -326,7 +318,7 @@ void InterpreterMacroAssembler::load_unaligned_double(Register r1, int offset, F
   ldf(FloatRegisterImpl::D, r1, offset, d);
 #else
   ldf(FloatRegisterImpl::S, r1, offset, d);
-  ldf(FloatRegisterImpl::S, r1, offset + Interpreter::stackElementSize(), d->successor());
+  ldf(FloatRegisterImpl::S, r1, offset + Interpreter::stackElementSize, d->successor());
 #endif
 }
 
@@ -337,10 +329,10 @@ void InterpreterMacroAssembler::store_unaligned_double(FloatRegister d, Register
 #ifdef _LP64
   stf(FloatRegisterImpl::D, d, r1, offset);
   // store something more useful here
-  debug_only(stx(G0, r1, offset+Interpreter::stackElementSize());)
+  debug_only(stx(G0, r1, offset+Interpreter::stackElementSize);)
 #else
   stf(FloatRegisterImpl::S, d, r1, offset);
-  stf(FloatRegisterImpl::S, d->successor(), r1, offset + Interpreter::stackElementSize());
+  stf(FloatRegisterImpl::S, d->successor(), r1, offset + Interpreter::stackElementSize);
 #endif
 }
 
@@ -352,7 +344,7 @@ void InterpreterMacroAssembler::load_unaligned_long(Register r1, int offset, Reg
   ldx(r1, offset, rd);
 #else
   ld(r1, offset, rd);
-  ld(r1, offset + Interpreter::stackElementSize(), rd->successor());
+  ld(r1, offset + Interpreter::stackElementSize, rd->successor());
 #endif
 }
 
@@ -363,138 +355,62 @@ void InterpreterMacroAssembler::store_unaligned_long(Register l, Register r1, in
 #ifdef _LP64
   stx(l, r1, offset);
   // store something more useful here
-  debug_only(stx(G0, r1, offset+Interpreter::stackElementSize());)
+  debug_only(stx(G0, r1, offset+Interpreter::stackElementSize);)
 #else
   st(l, r1, offset);
-  st(l->successor(), r1, offset + Interpreter::stackElementSize());
+  st(l->successor(), r1, offset + Interpreter::stackElementSize);
 #endif
 }
 
-#ifdef ASSERT
-void InterpreterMacroAssembler::verify_stack_tag(frame::Tag t,
-                                                 Register r,
-                                                 Register scratch) {
-  if (TaggedStackInterpreter) {
-    Label ok, long_ok;
-    ld_ptr(Lesp, Interpreter::expr_tag_offset_in_bytes(0), r);
-    if (t == frame::TagCategory2) {
-      cmp(r, G0);
-      brx(Assembler::equal, false, Assembler::pt, long_ok);
-      delayed()->ld_ptr(Lesp, Interpreter::expr_tag_offset_in_bytes(1), r);
-      stop("stack long/double tag value bad");
-      bind(long_ok);
-      cmp(r, G0);
-    } else if (t == frame::TagValue) {
-      cmp(r, G0);
-    } else {
-      assert_different_registers(r, scratch);
-      mov(t, scratch);
-      cmp(r, scratch);
-    }
-    brx(Assembler::equal, false, Assembler::pt, ok);
-    delayed()->nop();
-    // Also compare if the stack value is zero, then the tag might
-    // not have been set coming from deopt.
-    ld_ptr(Lesp, Interpreter::expr_offset_in_bytes(0), r);
-    cmp(r, G0);
-    brx(Assembler::equal, false, Assembler::pt, ok);
-    delayed()->nop();
-    stop("Stack tag value is bad");
-    bind(ok);
-  }
-}
-#endif // ASSERT
-
 void InterpreterMacroAssembler::pop_i(Register r) {
   assert_not_delayed();
-  // Uses destination register r for scratch
-  debug_only(verify_stack_tag(frame::TagValue, r));
   ld(Lesp, Interpreter::expr_offset_in_bytes(0), r);
-  inc(Lesp, Interpreter::stackElementSize());
+  inc(Lesp, Interpreter::stackElementSize);
   debug_only(verify_esp(Lesp));
 }
 
 void InterpreterMacroAssembler::pop_ptr(Register r, Register scratch) {
   assert_not_delayed();
-  // Uses destination register r for scratch
-  debug_only(verify_stack_tag(frame::TagReference, r, scratch));
   ld_ptr(Lesp, Interpreter::expr_offset_in_bytes(0), r);
-  inc(Lesp, Interpreter::stackElementSize());
+  inc(Lesp, Interpreter::stackElementSize);
   debug_only(verify_esp(Lesp));
 }
 
 void InterpreterMacroAssembler::pop_l(Register r) {
   assert_not_delayed();
-  // Uses destination register r for scratch
-  debug_only(verify_stack_tag(frame::TagCategory2, r));
   load_unaligned_long(Lesp, Interpreter::expr_offset_in_bytes(0), r);
-  inc(Lesp, 2*Interpreter::stackElementSize());
+  inc(Lesp, 2*Interpreter::stackElementSize);
   debug_only(verify_esp(Lesp));
 }
 
 
 void InterpreterMacroAssembler::pop_f(FloatRegister f, Register scratch) {
   assert_not_delayed();
-  debug_only(verify_stack_tag(frame::TagValue, scratch));
   ldf(FloatRegisterImpl::S, Lesp, Interpreter::expr_offset_in_bytes(0), f);
-  inc(Lesp, Interpreter::stackElementSize());
+  inc(Lesp, Interpreter::stackElementSize);
   debug_only(verify_esp(Lesp));
 }
 
 
 void InterpreterMacroAssembler::pop_d(FloatRegister f, Register scratch) {
   assert_not_delayed();
-  debug_only(verify_stack_tag(frame::TagCategory2, scratch));
   load_unaligned_double(Lesp, Interpreter::expr_offset_in_bytes(0), f);
-  inc(Lesp, 2*Interpreter::stackElementSize());
+  inc(Lesp, 2*Interpreter::stackElementSize);
   debug_only(verify_esp(Lesp));
 }
 
-
-// (Note use register first, then decrement so dec can be done during store stall)
-void InterpreterMacroAssembler::tag_stack(Register r) {
-  if (TaggedStackInterpreter) {
-    st_ptr(r, Lesp, Interpreter::tag_offset_in_bytes());
-  }
-}
-
-void InterpreterMacroAssembler::tag_stack(frame::Tag t, Register r) {
-  if (TaggedStackInterpreter) {
-    assert (frame::TagValue == 0, "TagValue must be zero");
-    if (t == frame::TagValue) {
-      st_ptr(G0, Lesp, Interpreter::tag_offset_in_bytes());
-    } else if (t == frame::TagCategory2) {
-      st_ptr(G0, Lesp, Interpreter::tag_offset_in_bytes());
-      // Tag next slot down too
-      st_ptr(G0, Lesp, -Interpreter::stackElementSize() + Interpreter::tag_offset_in_bytes());
-    } else {
-      assert_different_registers(r, O3);
-      mov(t, O3);
-      st_ptr(O3, Lesp, Interpreter::tag_offset_in_bytes());
-    }
-  }
-}
 
 void InterpreterMacroAssembler::push_i(Register r) {
   assert_not_delayed();
   debug_only(verify_esp(Lesp));
-  tag_stack(frame::TagValue, r);
-  st(  r,    Lesp, Interpreter::value_offset_in_bytes());
-  dec( Lesp, Interpreter::stackElementSize());
+  st(r, Lesp, 0);
+  dec(Lesp, Interpreter::stackElementSize);
 }
 
 void InterpreterMacroAssembler::push_ptr(Register r) {
   assert_not_delayed();
-  tag_stack(frame::TagReference, r);
-  st_ptr(  r,    Lesp, Interpreter::value_offset_in_bytes());
-  dec( Lesp, Interpreter::stackElementSize());
-}
-
-void InterpreterMacroAssembler::push_ptr(Register r, Register tag) {
-  assert_not_delayed();
-  tag_stack(tag);
-  st_ptr(r, Lesp, Interpreter::value_offset_in_bytes());
-  dec( Lesp, Interpreter::stackElementSize());
+  st_ptr(r, Lesp, 0);
+  dec(Lesp, Interpreter::stackElementSize);
 }
 
 // remember: our convention for longs in SPARC is:
@@ -504,33 +420,28 @@ void InterpreterMacroAssembler::push_ptr(Register r, Register tag) {
 void InterpreterMacroAssembler::push_l(Register r) {
   assert_not_delayed();
   debug_only(verify_esp(Lesp));
-  tag_stack(frame::TagCategory2, r);
-  // Longs are in stored in memory-correct order, even if unaligned.
-  // and may be separated by stack tags.
-  int offset = -Interpreter::stackElementSize() + Interpreter::value_offset_in_bytes();
+  // Longs are stored in memory-correct order, even if unaligned.
+  int offset = -Interpreter::stackElementSize;
   store_unaligned_long(r, Lesp, offset);
-  dec(Lesp, 2 * Interpreter::stackElementSize());
+  dec(Lesp, 2 * Interpreter::stackElementSize);
 }
 
 
 void InterpreterMacroAssembler::push_f(FloatRegister f) {
   assert_not_delayed();
   debug_only(verify_esp(Lesp));
-  tag_stack(frame::TagValue, Otos_i);
-  stf(FloatRegisterImpl::S, f, Lesp, Interpreter::value_offset_in_bytes());
-  dec(Lesp, Interpreter::stackElementSize());
+  stf(FloatRegisterImpl::S, f, Lesp, 0);
+  dec(Lesp, Interpreter::stackElementSize);
 }
 
 
 void InterpreterMacroAssembler::push_d(FloatRegister d)   {
   assert_not_delayed();
   debug_only(verify_esp(Lesp));
-  tag_stack(frame::TagCategory2, Otos_i);
-  // Longs are in stored in memory-correct order, even if unaligned.
-  // and may be separated by stack tags.
-  int offset = -Interpreter::stackElementSize() + Interpreter::value_offset_in_bytes();
+  // Longs are stored in memory-correct order, even if unaligned.
+  int offset = -Interpreter::stackElementSize;
   store_unaligned_double(d, Lesp, offset);
-  dec(Lesp, 2 * Interpreter::stackElementSize());
+  dec(Lesp, 2 * Interpreter::stackElementSize);
 }
 
 
@@ -568,30 +479,18 @@ void InterpreterMacroAssembler::pop(TosState state) {
 }
 
 
-// Tagged stack helpers for swap and dup
-void InterpreterMacroAssembler::load_ptr_and_tag(int n, Register val,
-                                                 Register tag) {
+// Helpers for swap and dup
+void InterpreterMacroAssembler::load_ptr(int n, Register val) {
   ld_ptr(Lesp, Interpreter::expr_offset_in_bytes(n), val);
-  if (TaggedStackInterpreter) {
-    ld_ptr(Lesp, Interpreter::expr_tag_offset_in_bytes(n), tag);
-  }
 }
-void InterpreterMacroAssembler::store_ptr_and_tag(int n, Register val,
-                                                  Register tag) {
+void InterpreterMacroAssembler::store_ptr(int n, Register val) {
   st_ptr(val, Lesp, Interpreter::expr_offset_in_bytes(n));
-  if (TaggedStackInterpreter) {
-    st_ptr(tag, Lesp, Interpreter::expr_tag_offset_in_bytes(n));
-  }
 }
 
 
 void InterpreterMacroAssembler::load_receiver(Register param_count,
                                               Register recv) {
-
-  sll(param_count, Interpreter::logStackElementSize(), param_count);
-  if (TaggedStackInterpreter) {
-    add(param_count, Interpreter::value_offset_in_bytes(), param_count);  // get obj address
-  }
+  sll(param_count, Interpreter::logStackElementSize, param_count);
   ld_ptr(Lesp, param_count, recv);                      // gets receiver Oop
 }
 
@@ -601,27 +500,17 @@ void InterpreterMacroAssembler::empty_expression_stack() {
 
   // Reset SP by subtracting more space from Lesp.
   Label done;
-
-  const Address max_stack   (Lmethod, 0, in_bytes(methodOopDesc::max_stack_offset()));
-  const Address access_flags(Lmethod, 0, in_bytes(methodOopDesc::access_flags_offset()));
-
   verify_oop(Lmethod);
-
-
-  assert( G4_scratch    != Gframe_size,
-          "Only you can prevent register aliasing!");
+  assert(G4_scratch != Gframe_size, "Only you can prevent register aliasing!");
 
   // A native does not need to do this, since its callee does not change SP.
-  ld(access_flags, Gframe_size);
+  ld(Lmethod, methodOopDesc::access_flags_offset(), Gframe_size);  // Load access flags.
   btst(JVM_ACC_NATIVE, Gframe_size);
   br(Assembler::notZero, false, Assembler::pt, done);
   delayed()->nop();
 
-  //
   // Compute max expression stack+register save area
-  //
-  lduh( max_stack, Gframe_size );
-  if (TaggedStackInterpreter) sll ( Gframe_size, 1, Gframe_size);  // max_stack * 2 for TAGS
+  lduh(Lmethod, in_bytes(methodOopDesc::max_stack_offset()), Gframe_size);  // Load max stack.
   add( Gframe_size, frame::memory_parameter_word_sp_offset, Gframe_size );
 
   //
@@ -721,8 +610,7 @@ void InterpreterMacroAssembler::call_from_interpreter(Register target, Register 
     verify_thread();
     Label skip_compiled_code;
 
-    const Address interp_only       (G2_thread, 0, in_bytes(JavaThread::interp_only_mode_offset()));
-
+    const Address interp_only(G2_thread, JavaThread::interp_only_mode_offset());
     ld(interp_only, scratch);
     tst(scratch);
     br(Assembler::notZero, true, Assembler::pn, skip_compiled_code);
@@ -831,23 +719,48 @@ void InterpreterMacroAssembler::get_4_byte_integer_at_bcp(
 }
 
 
-void InterpreterMacroAssembler::get_cache_and_index_at_bcp(Register cache, Register tmp, int bcp_offset) {
+void InterpreterMacroAssembler::get_cache_index_at_bcp(Register cache, Register tmp,
+                                                       int bcp_offset, size_t index_size) {
+  assert(bcp_offset > 0, "bcp is still pointing to start of bytecode");
+  if (index_size == sizeof(u2)) {
+    get_2_byte_integer_at_bcp(bcp_offset, cache, tmp, Unsigned);
+  } else if (index_size == sizeof(u4)) {
+    assert(EnableInvokeDynamic, "giant index used only for EnableInvokeDynamic");
+    get_4_byte_integer_at_bcp(bcp_offset, cache, tmp);
+    assert(constantPoolCacheOopDesc::decode_secondary_index(~123) == 123, "else change next line");
+    xor3(tmp, -1, tmp);  // convert to plain index
+  } else if (index_size == sizeof(u1)) {
+    assert(EnableMethodHandles, "tiny index used only for EnableMethodHandles");
+    ldub(Lbcp, bcp_offset, tmp);
+  } else {
+    ShouldNotReachHere();
+  }
+}
+
+
+void InterpreterMacroAssembler::get_cache_and_index_at_bcp(Register cache, Register tmp,
+                                                           int bcp_offset, size_t index_size) {
   assert(bcp_offset > 0, "bcp is still pointing to start of bytecode");
   assert_different_registers(cache, tmp);
   assert_not_delayed();
-  get_2_byte_integer_at_bcp(bcp_offset, cache, tmp, Unsigned);
-              // convert from field index to ConstantPoolCacheEntry index
-              // and from word index to byte offset
+  get_cache_index_at_bcp(cache, tmp, bcp_offset, index_size);
+  // convert from field index to ConstantPoolCacheEntry index and from
+  // word index to byte offset
   sll(tmp, exact_log2(in_words(ConstantPoolCacheEntry::size()) * BytesPerWord), tmp);
   add(LcpoolCache, tmp, cache);
 }
 
 
-void InterpreterMacroAssembler::get_cache_entry_pointer_at_bcp(Register cache, Register tmp, int bcp_offset) {
+void InterpreterMacroAssembler::get_cache_entry_pointer_at_bcp(Register cache, Register tmp,
+                                                               int bcp_offset, size_t index_size) {
   assert(bcp_offset > 0, "bcp is still pointing to start of bytecode");
   assert_different_registers(cache, tmp);
   assert_not_delayed();
-  get_2_byte_integer_at_bcp(bcp_offset, cache, tmp, Unsigned);
+  if (index_size == sizeof(u2)) {
+    get_2_byte_integer_at_bcp(bcp_offset, cache, tmp, Unsigned);
+  } else {
+    ShouldNotReachHere();  // other sizes not supported here
+  }
               // convert from field index to ConstantPoolCacheEntry index
               // and from word index to byte offset
   sll(tmp, exact_log2(in_words(ConstantPoolCacheEntry::size()) * BytesPerWord), tmp);
@@ -866,65 +779,18 @@ void InterpreterMacroAssembler::gen_subtype_check(Register Rsub_klass,
                                                   Register Rtmp2,
                                                   Register Rtmp3,
                                                   Label &ok_is_subtype ) {
-  Label not_subtype, loop;
+  Label not_subtype;
 
   // Profile the not-null value's klass.
   profile_typecheck(Rsub_klass, Rtmp1);
 
-  // Load the super-klass's check offset into Rtmp1
-  ld( Rsuper_klass, sizeof(oopDesc) + Klass::super_check_offset_offset_in_bytes(), Rtmp1 );
-  // Load from the sub-klass's super-class display list, or a 1-word cache of
-  // the secondary superclass list, or a failing value with a sentinel offset
-  // if the super-klass is an interface or exceptionally deep in the Java
-  // hierarchy and we have to scan the secondary superclass list the hard way.
-  ld_ptr( Rsub_klass, Rtmp1, Rtmp2 );
-  // See if we get an immediate positive hit
-  cmp( Rtmp2, Rsuper_klass );
-  brx( Assembler::equal, false, Assembler::pt, ok_is_subtype );
-  // In the delay slot, check for immediate negative hit
-  delayed()->cmp( Rtmp1, sizeof(oopDesc) + Klass::secondary_super_cache_offset_in_bytes() );
-  br( Assembler::notEqual, false, Assembler::pt, not_subtype );
-  // In the delay slot, check for self
-  delayed()->cmp( Rsub_klass, Rsuper_klass );
-  brx( Assembler::equal, false, Assembler::pt, ok_is_subtype );
+  check_klass_subtype_fast_path(Rsub_klass, Rsuper_klass,
+                                Rtmp1, Rtmp2,
+                                &ok_is_subtype, &not_subtype, NULL);
 
-  // Now do a linear scan of the secondary super-klass chain.
-  delayed()->ld_ptr( Rsub_klass, sizeof(oopDesc) + Klass::secondary_supers_offset_in_bytes(), Rtmp2 );
-
-  // compress superclass
-  if (UseCompressedOops) encode_heap_oop(Rsuper_klass);
-
-  // Rtmp2 holds the objArrayOop of secondary supers.
-  ld( Rtmp2, arrayOopDesc::length_offset_in_bytes(), Rtmp1 );// Load the array length
-  // Check for empty secondary super list
-  tst(Rtmp1);
-
-  // Top of search loop
-  bind( loop );
-  br( Assembler::equal, false, Assembler::pn, not_subtype );
-  delayed()->nop();
-
-  // load next super to check
-  if (UseCompressedOops) {
-    lduw( Rtmp2, arrayOopDesc::base_offset_in_bytes(T_OBJECT), Rtmp3);
-    // Bump array pointer forward one oop
-    add( Rtmp2, 4, Rtmp2 );
-  } else {
-    ld_ptr( Rtmp2, arrayOopDesc::base_offset_in_bytes(T_OBJECT), Rtmp3);
-    // Bump array pointer forward one oop
-    add( Rtmp2, wordSize, Rtmp2);
-  }
-  // Look for Rsuper_klass on Rsub_klass's secondary super-class-overflow list
-  cmp( Rtmp3, Rsuper_klass );
-  // A miss means we are NOT a subtype and need to keep looping
-  brx( Assembler::notEqual, false, Assembler::pt, loop );
-  delayed()->deccc( Rtmp1 );    // dec trip counter in delay slot
-  // Falling out the bottom means we found a hit; we ARE a subtype
-  if (UseCompressedOops) decode_heap_oop(Rsuper_klass);
-  br( Assembler::always, false, Assembler::pt, ok_is_subtype );
-  // Update the cache
-  delayed()->st_ptr( Rsuper_klass, Rsub_klass,
-                     sizeof(oopDesc) + Klass::secondary_super_cache_offset_in_bytes() );
+  check_klass_subtype_slow_path(Rsub_klass, Rsuper_klass,
+                                Rtmp1, Rtmp2, Rtmp3, /*hack:*/ noreg,
+                                &ok_is_subtype, NULL);
 
   bind(not_subtype);
   profile_typecheck_failed(Rtmp1);
@@ -963,8 +829,8 @@ void InterpreterMacroAssembler::throw_if_not_2( address  throw_entry_point,
                                                 Register Rscratch,
                                                 Label&   ok ) {
   assert(throw_entry_point != NULL, "entry point must be generated by now");
-  Address dest(Rscratch, throw_entry_point);
-  jump_to(dest);
+  AddressLiteral dest(throw_entry_point);
+  jump_to(dest, Rscratch);
   delayed()->nop();
   bind(ok);
 }
@@ -1082,18 +948,18 @@ void InterpreterMacroAssembler::unlock_if_synchronized_method(TosState state,
   Label unlocked, unlock, no_unlock;
 
   // get the value of _do_not_unlock_if_synchronized into G1_scratch
-  const Address do_not_unlock_if_synchronized(G2_thread, 0,
-    in_bytes(JavaThread::do_not_unlock_if_synchronized_offset()));
+  const Address do_not_unlock_if_synchronized(G2_thread,
+    JavaThread::do_not_unlock_if_synchronized_offset());
   ldbool(do_not_unlock_if_synchronized, G1_scratch);
   stbool(G0, do_not_unlock_if_synchronized); // reset the flag
 
   // check if synchronized method
-  const Address access_flags(Lmethod, 0, in_bytes(methodOopDesc::access_flags_offset()));
+  const Address access_flags(Lmethod, methodOopDesc::access_flags_offset());
   interp_verify_oop(Otos_i, state, __FILE__, __LINE__);
   push(state); // save tos
-  ld(access_flags, G3_scratch);
+  ld(access_flags, G3_scratch); // Load access flags.
   btst(JVM_ACC_SYNCHRONIZED, G3_scratch);
-  br( zero, false, pt, unlocked);
+  br(zero, false, pt, unlocked);
   delayed()->nop();
 
   // Don't unlock anything if the _do_not_unlock_if_synchronized flag
@@ -1283,8 +1149,8 @@ void InterpreterMacroAssembler::lock_object(Register lock_reg, Register Object) 
     Register obj_reg = Object;
     Register mark_reg = G4_scratch;
     Register temp_reg = G1_scratch;
-    Address  lock_addr = Address(lock_reg, 0, BasicObjectLock::lock_offset_in_bytes());
-    Address  mark_addr = Address(obj_reg, 0, oopDesc::mark_offset_in_bytes());
+    Address  lock_addr(lock_reg, BasicObjectLock::lock_offset_in_bytes());
+    Address  mark_addr(obj_reg, oopDesc::mark_offset_in_bytes());
     Label    done;
 
     Label slow_case;
@@ -1362,9 +1228,8 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
     Register obj_reg = G3_scratch;
     Register mark_reg = G4_scratch;
     Register displaced_header_reg = G1_scratch;
-    Address  lock_addr = Address(lock_reg, 0, BasicObjectLock::lock_offset_in_bytes());
-    Address  lockobj_addr = Address(lock_reg, 0, BasicObjectLock::obj_offset_in_bytes());
-    Address  mark_addr = Address(obj_reg, 0, oopDesc::mark_offset_in_bytes());
+    Address  lockobj_addr(lock_reg, BasicObjectLock::obj_offset_in_bytes());
+    Address  mark_addr(obj_reg, oopDesc::mark_offset_in_bytes());
     Label    done;
 
     if (UseBiasedLocking) {
@@ -1375,7 +1240,8 @@ void InterpreterMacroAssembler::unlock_object(Register lock_reg) {
     }
 
     // Test first if we are in the fast recursive case
-    ld_ptr(lock_addr, displaced_header_reg, BasicLock::displaced_header_offset_in_bytes());
+    Address lock_addr(lock_reg, BasicObjectLock::lock_offset_in_bytes() + BasicLock::displaced_header_offset_in_bytes());
+    ld_ptr(lock_addr, displaced_header_reg);
     br_null(displaced_header_reg, true, Assembler::pn, done);
     delayed()->st_ptr(G0, lockobj_addr);  // free entry
 
@@ -1431,7 +1297,7 @@ void InterpreterMacroAssembler::set_method_data_pointer_for_bcp() {
   Label zero_continue;
 
   // Test MDO to avoid the call if it is NULL.
-  ld_ptr(Lmethod, in_bytes(methodOopDesc::method_data_offset()), ImethodDataPtr);
+  ld_ptr(Lmethod, methodOopDesc::method_data_offset(), ImethodDataPtr);
   test_method_data_pointer(zero_continue);
   call_VM_leaf(noreg, CAST_FROM_FN_PTR(address, InterpreterRuntime::bcp_to_di), Lmethod, Lbcp);
   set_method_data_pointer_offset(O0);
@@ -1460,7 +1326,7 @@ void InterpreterMacroAssembler::verify_method_data_pointer() {
   // If the mdp is valid, it will point to a DataLayout header which is
   // consistent with the bcp.  The converse is highly probable also.
   lduh(ImethodDataPtr, in_bytes(DataLayout::bci_offset()), G3_scratch);
-  ld_ptr(Address(Lmethod, 0, in_bytes(methodOopDesc::const_offset())), O5);
+  ld_ptr(Lmethod, methodOopDesc::const_offset(), O5);
   add(G3_scratch, in_bytes(constMethodOopDesc::codes_offset()), G3_scratch);
   add(G3_scratch, O5, G3_scratch);
   cmp(Lbcp, G3_scratch);
@@ -1471,7 +1337,7 @@ void InterpreterMacroAssembler::verify_method_data_pointer() {
   // %%% should use call_VM_leaf here?
   //call_VM_leaf(noreg, ..., Lmethod, Lbcp, ImethodDataPtr);
   save_frame_and_mov(sizeof(jdouble) / wordSize, Lmethod, O0, Lbcp, O1);
-  Address d_save(FP, 0, -sizeof(jdouble) + STACK_BIAS);
+  Address d_save(FP, -sizeof(jdouble) + STACK_BIAS);
   stf(FloatRegisterImpl::D, Ftos_d, d_save);
   mov(temp_reg->after_save(), O2);
   save_thread(L7_thread_cache);
@@ -1503,14 +1369,14 @@ void InterpreterMacroAssembler::test_invocation_counter_for_mdp(Register invocat
 #endif
 
   // Test to see if we should create a method data oop
-  Address profile_limit(Rtmp, (address)&InvocationCounter::InterpreterProfileLimit);
+  AddressLiteral profile_limit((address) &InvocationCounter::InterpreterProfileLimit);
 #ifdef _LP64
   delayed()->nop();
-  sethi(profile_limit);
+  sethi(profile_limit, Rtmp);
 #else
-  delayed()->sethi(profile_limit);
+  delayed()->sethi(profile_limit, Rtmp);
 #endif
-  ld(profile_limit, Rtmp);
+  ld(Rtmp, profile_limit.low10(), Rtmp);
   cmp(invocation_count, Rtmp);
   br(Assembler::lessUnsigned, false, Assembler::pn, profile_continue);
   delayed()->nop();
@@ -1568,7 +1434,7 @@ void InterpreterMacroAssembler::increment_mdp_data_at(int constant,
                                                       Register bumped_count,
                                                       bool decrement) {
   // Locate the counter at a fixed offset from the mdp:
-  Address counter(ImethodDataPtr, 0, constant);
+  Address counter(ImethodDataPtr, constant);
   increment_mdp_data_at(counter, bumped_count, decrement);
 }
 
@@ -1582,7 +1448,7 @@ void InterpreterMacroAssembler::increment_mdp_data_at(Register reg,
                                                       bool decrement) {
   // Add the constant to reg to get the offset.
   add(ImethodDataPtr, reg, scratch2);
-  Address counter(scratch2, 0, constant);
+  Address counter(scratch2, constant);
   increment_mdp_data_at(counter, bumped_count, decrement);
 }
 
@@ -1739,18 +1605,31 @@ void InterpreterMacroAssembler::profile_final_call(Register scratch) {
 // Count a virtual call in the bytecodes.
 
 void InterpreterMacroAssembler::profile_virtual_call(Register receiver,
-                                                     Register scratch) {
+                                                     Register scratch,
+                                                     bool receiver_can_be_null) {
   if (ProfileInterpreter) {
     Label profile_continue;
 
     // If no method data exists, go to profile_continue.
     test_method_data_pointer(profile_continue);
 
-    // We are making a call.  Increment the count.
-    increment_mdp_data_at(in_bytes(CounterData::count_offset()), scratch);
+
+    Label skip_receiver_profile;
+    if (receiver_can_be_null) {
+      Label not_null;
+      tst(receiver);
+      brx(Assembler::notZero, false, Assembler::pt, not_null);
+      delayed()->nop();
+      // We are making a call.  Increment the count for null receiver.
+      increment_mdp_data_at(in_bytes(CounterData::count_offset()), scratch);
+      ba(false, skip_receiver_profile);
+      delayed()->nop();
+      bind(not_null);
+    }
 
     // Record the receiver type.
-    record_klass_in_profile(receiver, scratch);
+    record_klass_in_profile(receiver, scratch, true);
+    bind(skip_receiver_profile);
 
     // The method data pointer needs to be updated to reflect the new target.
     update_mdp_by_constant(in_bytes(VirtualCallData::virtual_call_data_size()));
@@ -1760,7 +1639,14 @@ void InterpreterMacroAssembler::profile_virtual_call(Register receiver,
 
 void InterpreterMacroAssembler::record_klass_in_profile_helper(
                                         Register receiver, Register scratch,
-                                        int start_row, Label& done) {
+                                        int start_row, Label& done, bool is_virtual_call) {
+  if (TypeProfileWidth == 0) {
+    if (is_virtual_call) {
+      increment_mdp_data_at(in_bytes(CounterData::count_offset()), scratch);
+    }
+    return;
+  }
+
   int last_row = VirtualCallData::row_limit() - 1;
   assert(start_row <= last_row, "must be work left to do");
   // Test this row for both the receiver and for null.
@@ -1776,6 +1662,7 @@ void InterpreterMacroAssembler::record_klass_in_profile_helper(
     // See if the receiver is receiver[n].
     int recvr_offset = in_bytes(VirtualCallData::receiver_offset(row));
     test_mdp_data_at(recvr_offset, receiver, next_test, scratch);
+    // delayed()->tst(scratch);
 
     // The receiver is receiver[n].  Increment count[n].
     int count_offset = in_bytes(VirtualCallData::receiver_count_offset(row));
@@ -1785,20 +1672,31 @@ void InterpreterMacroAssembler::record_klass_in_profile_helper(
     bind(next_test);
 
     if (test_for_null_also) {
+      Label found_null;
       // Failed the equality check on receiver[n]...  Test for null.
       if (start_row == last_row) {
         // The only thing left to do is handle the null case.
-        brx(Assembler::notZero, false, Assembler::pt, done);
-        delayed()->nop();
+        if (is_virtual_call) {
+          brx(Assembler::zero, false, Assembler::pn, found_null);
+          delayed()->nop();
+          // Receiver did not match any saved receiver and there is no empty row for it.
+          // Increment total counter to indicate polymorphic case.
+          increment_mdp_data_at(in_bytes(CounterData::count_offset()), scratch);
+          ba(false, done);
+          delayed()->nop();
+          bind(found_null);
+        } else {
+          brx(Assembler::notZero, false, Assembler::pt, done);
+          delayed()->nop();
+        }
         break;
       }
       // Since null is rare, make it be the branch-taken case.
-      Label found_null;
       brx(Assembler::zero, false, Assembler::pn, found_null);
       delayed()->nop();
 
       // Put all the "Case 3" tests here.
-      record_klass_in_profile_helper(receiver, scratch, start_row + 1, done);
+      record_klass_in_profile_helper(receiver, scratch, start_row + 1, done, is_virtual_call);
 
       // Found a null.  Keep searching for a matching receiver,
       // but remember that this is an empty (unused) slot.
@@ -1815,16 +1713,18 @@ void InterpreterMacroAssembler::record_klass_in_profile_helper(
   int count_offset = in_bytes(VirtualCallData::receiver_count_offset(start_row));
   mov(DataLayout::counter_increment, scratch);
   set_mdp_data_at(count_offset, scratch);
-  ba(false, done);
-  delayed()->nop();
+  if (start_row > 0) {
+    ba(false, done);
+    delayed()->nop();
+  }
 }
 
 void InterpreterMacroAssembler::record_klass_in_profile(Register receiver,
-                                                        Register scratch) {
+                                                        Register scratch, bool is_virtual_call) {
   assert(ProfileInterpreter, "must be profiling");
   Label done;
 
-  record_klass_in_profile_helper(receiver, scratch, 0, done);
+  record_klass_in_profile_helper(receiver, scratch, 0, done, is_virtual_call);
 
   bind (done);
 }
@@ -1902,7 +1802,7 @@ void InterpreterMacroAssembler::profile_typecheck(Register klass,
       mdp_delta = in_bytes(VirtualCallData::virtual_call_data_size());
 
       // Record the object type.
-      record_klass_in_profile(klass, scratch);
+      record_klass_in_profile(klass, scratch, false);
     }
 
     // The method data pointer needs to be updated.
@@ -2031,51 +1931,11 @@ void InterpreterMacroAssembler::add_monitor_to_stack( bool stack_is_empty,
 }
 
 // Locals
-#ifdef ASSERT
-void InterpreterMacroAssembler::verify_local_tag(frame::Tag t,
-                                                 Register base,
-                                                 Register scratch,
-                                                 int n) {
-  if (TaggedStackInterpreter) {
-    Label ok, long_ok;
-    // Use dst for scratch
-    assert_different_registers(base, scratch);
-    ld_ptr(base, Interpreter::local_tag_offset_in_bytes(n), scratch);
-    if (t == frame::TagCategory2) {
-      cmp(scratch, G0);
-      brx(Assembler::equal, false, Assembler::pt, long_ok);
-      delayed()->ld_ptr(base, Interpreter::local_tag_offset_in_bytes(n+1), scratch);
-      stop("local long/double tag value bad");
-      bind(long_ok);
-      // compare second half tag
-      cmp(scratch, G0);
-    } else if (t == frame::TagValue) {
-      cmp(scratch, G0);
-    } else {
-      assert_different_registers(O3, base, scratch);
-      mov(t, O3);
-      cmp(scratch, O3);
-    }
-    brx(Assembler::equal, false, Assembler::pt, ok);
-    delayed()->nop();
-    // Also compare if the local value is zero, then the tag might
-    // not have been set coming from deopt.
-    ld_ptr(base, Interpreter::local_offset_in_bytes(n), scratch);
-    cmp(scratch, G0);
-    brx(Assembler::equal, false, Assembler::pt, ok);
-    delayed()->nop();
-    stop("Local tag value is bad");
-    bind(ok);
-  }
-}
-#endif // ASSERT
-
 void InterpreterMacroAssembler::access_local_ptr( Register index, Register dst ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  debug_only(verify_local_tag(frame::TagReference, index, dst));
-  ld_ptr(index, Interpreter::value_offset_in_bytes(), dst);
+  ld_ptr(index, 0, dst);
   // Note:  index must hold the effective address--the iinc template uses it
 }
 
@@ -2083,27 +1943,24 @@ void InterpreterMacroAssembler::access_local_ptr( Register index, Register dst )
 void InterpreterMacroAssembler::access_local_returnAddress(Register index,
                                                            Register dst ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  debug_only(verify_local_tag(frame::TagValue, index, dst));
-  ld_ptr(index, Interpreter::value_offset_in_bytes(), dst);
+  ld_ptr(index, 0, dst);
 }
 
 void InterpreterMacroAssembler::access_local_int( Register index, Register dst ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  debug_only(verify_local_tag(frame::TagValue, index, dst));
-  ld(index, Interpreter::value_offset_in_bytes(), dst);
+  ld(index, 0, dst);
   // Note:  index must hold the effective address--the iinc template uses it
 }
 
 
 void InterpreterMacroAssembler::access_local_long( Register index, Register dst ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  debug_only(verify_local_tag(frame::TagCategory2, index, dst));
   // First half stored at index n+1 (which grows down from Llocals[n])
   load_unaligned_long(index, Interpreter::local_offset_in_bytes(1), dst);
 }
@@ -2111,18 +1968,16 @@ void InterpreterMacroAssembler::access_local_long( Register index, Register dst 
 
 void InterpreterMacroAssembler::access_local_float( Register index, FloatRegister dst ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  debug_only(verify_local_tag(frame::TagValue, index, G1_scratch));
-  ldf(FloatRegisterImpl::S, index, Interpreter::value_offset_in_bytes(), dst);
+  ldf(FloatRegisterImpl::S, index, 0, dst);
 }
 
 
 void InterpreterMacroAssembler::access_local_double( Register index, FloatRegister dst ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  debug_only(verify_local_tag(frame::TagCategory2, index, G1_scratch));
   load_unaligned_double(index, Interpreter::local_offset_in_bytes(1), dst);
 }
 
@@ -2148,94 +2003,60 @@ void InterpreterMacroAssembler::check_for_regarea_stomp(Register Rindex, int off
 }
 #endif // ASSERT
 
-void InterpreterMacroAssembler::tag_local(frame::Tag t,
-                                          Register base,
-                                          Register src,
-                                          int n) {
-  if (TaggedStackInterpreter) {
-    // have to store zero because local slots can be reused (rats!)
-    if (t == frame::TagValue) {
-      st_ptr(G0, base, Interpreter::local_tag_offset_in_bytes(n));
-    } else if (t == frame::TagCategory2) {
-      st_ptr(G0, base, Interpreter::local_tag_offset_in_bytes(n));
-      st_ptr(G0, base, Interpreter::local_tag_offset_in_bytes(n+1));
-    } else {
-      // assert that we don't stomp the value in 'src'
-      // O3 is arbitrary because it's not used.
-      assert_different_registers(src, base, O3);
-      mov( t, O3);
-      st_ptr(O3, base, Interpreter::local_tag_offset_in_bytes(n));
-    }
-  }
-}
-
 
 void InterpreterMacroAssembler::store_local_int( Register index, Register src ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  debug_only(check_for_regarea_stomp(index, Interpreter::value_offset_in_bytes(), FP, G1_scratch, G4_scratch);)
-  tag_local(frame::TagValue, index, src);
-  st(src, index, Interpreter::value_offset_in_bytes());
+  debug_only(check_for_regarea_stomp(index, 0, FP, G1_scratch, G4_scratch);)
+  st(src, index, 0);
 }
 
-void InterpreterMacroAssembler::store_local_ptr( Register index, Register src,
-                                                 Register tag ) {
+void InterpreterMacroAssembler::store_local_ptr( Register index, Register src ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  #ifdef ASSERT
-  check_for_regarea_stomp(index, Interpreter::value_offset_in_bytes(), FP, G1_scratch, G4_scratch);
-  #endif
-  st_ptr(src, index, Interpreter::value_offset_in_bytes());
-  // Store tag register directly
-  if (TaggedStackInterpreter) {
-    st_ptr(tag, index, Interpreter::tag_offset_in_bytes());
-  }
+#ifdef ASSERT
+  check_for_regarea_stomp(index, 0, FP, G1_scratch, G4_scratch);
+#endif
+  st_ptr(src, index, 0);
 }
 
 
 
-void InterpreterMacroAssembler::store_local_ptr( int n, Register src,
-                                                 Register tag ) {
-  st_ptr(src,  Llocals, Interpreter::local_offset_in_bytes(n));
-  if (TaggedStackInterpreter) {
-    st_ptr(tag, Llocals, Interpreter::local_tag_offset_in_bytes(n));
-  }
+void InterpreterMacroAssembler::store_local_ptr( int n, Register src ) {
+  st_ptr(src, Llocals, Interpreter::local_offset_in_bytes(n));
 }
 
 void InterpreterMacroAssembler::store_local_long( Register index, Register src ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  #ifdef ASSERT
+#ifdef ASSERT
   check_for_regarea_stomp(index, Interpreter::local_offset_in_bytes(1), FP, G1_scratch, G4_scratch);
-  #endif
-  tag_local(frame::TagCategory2, index, src);
+#endif
   store_unaligned_long(src, index, Interpreter::local_offset_in_bytes(1)); // which is n+1
 }
 
 
 void InterpreterMacroAssembler::store_local_float( Register index, FloatRegister src ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  #ifdef ASSERT
-  check_for_regarea_stomp(index, Interpreter::value_offset_in_bytes(), FP, G1_scratch, G4_scratch);
-  #endif
-  tag_local(frame::TagValue, index, G1_scratch);
-  stf(FloatRegisterImpl::S, src, index, Interpreter::value_offset_in_bytes());
+#ifdef ASSERT
+  check_for_regarea_stomp(index, 0, FP, G1_scratch, G4_scratch);
+#endif
+  stf(FloatRegisterImpl::S, src, index, 0);
 }
 
 
 void InterpreterMacroAssembler::store_local_double( Register index, FloatRegister src ) {
   assert_not_delayed();
-  sll(index, Interpreter::logStackElementSize(), index);
+  sll(index, Interpreter::logStackElementSize, index);
   sub(Llocals, index, index);
-  #ifdef ASSERT
+#ifdef ASSERT
   check_for_regarea_stomp(index, Interpreter::local_offset_in_bytes(1), FP, G1_scratch, G4_scratch);
-  #endif
-  tag_local(frame::TagCategory2, index, G1_scratch);
+#endif
   store_unaligned_double(src, index, Interpreter::local_offset_in_bytes(1));
 }
 
@@ -2248,7 +2069,7 @@ int InterpreterMacroAssembler::top_most_monitor_byte_offset() {
 
 
 Address InterpreterMacroAssembler::top_most_monitor() {
-  return Address(FP, 0, top_most_monitor_byte_offset());
+  return Address(FP, top_most_monitor_byte_offset());
 }
 
 
@@ -2261,15 +2082,15 @@ void InterpreterMacroAssembler::compute_stack_base( Register Rdest ) {
 void InterpreterMacroAssembler::increment_invocation_counter( Register Rtmp, Register Rtmp2 ) {
   assert(UseCompiler, "incrementing must be useful");
 #ifdef CC_INTERP
-  Address inv_counter(G5_method, 0, in_bytes(methodOopDesc::invocation_counter_offset()
-                            + InvocationCounter::counter_offset()));
-  Address be_counter(G5_method, 0, in_bytes(methodOopDesc::backedge_counter_offset()
-                            + InvocationCounter::counter_offset()));
+  Address inv_counter(G5_method, methodOopDesc::invocation_counter_offset() +
+                                 InvocationCounter::counter_offset());
+  Address be_counter (G5_method, methodOopDesc::backedge_counter_offset() +
+                                 InvocationCounter::counter_offset());
 #else
-  Address inv_counter(Lmethod, 0, in_bytes(methodOopDesc::invocation_counter_offset()
-                            + InvocationCounter::counter_offset()));
-  Address be_counter(Lmethod, 0, in_bytes(methodOopDesc::backedge_counter_offset()
-                            + InvocationCounter::counter_offset()));
+  Address inv_counter(Lmethod, methodOopDesc::invocation_counter_offset() +
+                               InvocationCounter::counter_offset());
+  Address be_counter (Lmethod, methodOopDesc::backedge_counter_offset() +
+                               InvocationCounter::counter_offset());
 #endif /* CC_INTERP */
   int delta = InvocationCounter::count_increment;
 
@@ -2297,15 +2118,15 @@ void InterpreterMacroAssembler::increment_invocation_counter( Register Rtmp, Reg
 void InterpreterMacroAssembler::increment_backedge_counter( Register Rtmp, Register Rtmp2 ) {
   assert(UseCompiler, "incrementing must be useful");
 #ifdef CC_INTERP
-  Address be_counter(G5_method, 0, in_bytes(methodOopDesc::backedge_counter_offset()
-                            + InvocationCounter::counter_offset()));
-  Address inv_counter(G5_method, 0, in_bytes(methodOopDesc::invocation_counter_offset()
-                            +  InvocationCounter::counter_offset()));
+  Address be_counter (G5_method, methodOopDesc::backedge_counter_offset() +
+                                 InvocationCounter::counter_offset());
+  Address inv_counter(G5_method, methodOopDesc::invocation_counter_offset() +
+                                 InvocationCounter::counter_offset());
 #else
-  Address be_counter(Lmethod, 0, in_bytes(methodOopDesc::backedge_counter_offset()
-                            + InvocationCounter::counter_offset()));
-  Address inv_counter(Lmethod, 0, in_bytes(methodOopDesc::invocation_counter_offset()
-                            + InvocationCounter::counter_offset()));
+  Address be_counter (Lmethod, methodOopDesc::backedge_counter_offset() +
+                               InvocationCounter::counter_offset());
+  Address inv_counter(Lmethod, methodOopDesc::invocation_counter_offset() +
+                               InvocationCounter::counter_offset());
 #endif /* CC_INTERP */
   int delta = InvocationCounter::count_increment;
   // Load each counter in a register
@@ -2336,7 +2157,7 @@ void InterpreterMacroAssembler::test_backedge_count_for_osr( Register backedge_c
   assert_different_registers(backedge_count, Rtmp, branch_bcp);
   assert(UseOnStackReplacement,"Must UseOnStackReplacement to test_backedge_count_for_osr");
 
-  Address limit(Rtmp, address(&InvocationCounter::InterpreterBackwardBranchLimit));
+  AddressLiteral limit(&InvocationCounter::InterpreterBackwardBranchLimit);
   load_contents(limit, Rtmp);
   cmp(backedge_count, Rtmp);
   br(Assembler::lessUnsigned, false, Assembler::pt, did_not_overflow);
@@ -2482,9 +2303,7 @@ void InterpreterMacroAssembler::notify_method_entry() {
   if (JvmtiExport::can_post_interpreter_events()) {
     Label L;
     Register temp_reg = O5;
-
-    const Address interp_only       (G2_thread, 0, in_bytes(JavaThread::interp_only_mode_offset()));
-
+    const Address interp_only(G2_thread, JavaThread::interp_only_mode_offset());
     ld(interp_only, temp_reg);
     tst(temp_reg);
     br(zero, false, pt, L);
@@ -2536,9 +2355,7 @@ void InterpreterMacroAssembler::notify_method_exit(bool is_native_method,
   if (mode == NotifyJVMTI && JvmtiExport::can_post_interpreter_events()) {
     Label L;
     Register temp_reg = O5;
-
-    const Address interp_only       (G2_thread, 0, in_bytes(JavaThread::interp_only_mode_offset()));
-
+    const Address interp_only(G2_thread, JavaThread::interp_only_mode_offset());
     ld(interp_only, temp_reg);
     tst(temp_reg);
     br(zero, false, pt, L);

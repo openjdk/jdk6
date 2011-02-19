@@ -1,7 +1,7 @@
 #!/bin/sh
 
 #
-# Copyright 2002-2005 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -18,9 +18,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 
 #
@@ -141,7 +141,10 @@ topPid=$$
 cleanup()
 {
     if [ -r "$failFile" ] ; then
-        cat $failFile  >& 2
+        ls -l "$failFile" >&2
+        echo "<cleanup:_begin_failFile_contents>" >&2
+        cat "$failFile" >&2
+        echo "<cleanup:_end_failFile_contents>" >&2
     fi
 
     # Kill all processes that have our special
@@ -193,11 +196,17 @@ findPid()
 {
     # Return 0 if $1 is the pid of a running process.
     if [ -z "$isWin98" ] ; then
-        #   Never use plain 'ps', which requires a "controlling terminal"
-        #     and will fail  with a "ps: no controlling terminal" error.
-        #     Running under 'rsh' will cause this ps error.
-        # cygwin ps puts an I in column 1 for some reason.
-        $psCmd -e | $grep '^I* *'"$1 " > $devnull 2>&1
+        if [ "$osname" = SunOS ] ; then
+            # Solaris and OpenSolaris use pgrep and not ps in psCmd
+            findPidCmd="$psCmd"
+        else
+            #   Never use plain 'ps', which requires a "controlling terminal"
+            #     and will fail  with a "ps: no controlling terminal" error.
+            #     Running under 'rsh' will cause this ps error.
+            # cygwin ps puts an I in column 1 for some reason.
+            findPidCmd="$psCmd -e"
+        fi
+	$findPidCmd | $grep '^I* *'"$1 " > $devnull 2>&1
         return $?
     fi
 
@@ -292,7 +301,17 @@ EOF
          # On linux, core files take a long time, and can leave
          # zombie processes
          if [ "$osname" = SunOS ] ; then
-             psCmd="/usr/ucb/ps -axwww"
+             # Experiments show Solaris '/usr/ucb/ps -axwww' and
+             # '/usr/bin/pgrep -f -l' provide the same small amount of the
+             # argv string (PRARGSZ=80 in /usr/include/sys/procfs.h)
+             #  1) This seems to have been working OK in ShellScaffold.
+             #  2) OpenSolaris does not provide /usr/ucb/ps, so use pgrep
+             #     instead
+             # The alternative would be to use /usr/bin/pargs [pid] to get
+             # all the args for a process, splice them back into one
+             # long string, then grep.
+             UU=`/usr/xpg4/bin/id -u -n`
+             psCmd="pgrep -f -l -U $UU"
          else
              ulimit -c 0
              # See bug 6238593.
@@ -321,6 +340,10 @@ EOF
     failFile=$tmpFileDir/testFailed
     debuggeepidFile=$tmpFileDir/debuggeepid
     rm -f $failFile $debuggeepidFile
+    if [ -f "$failFile" ]; then
+        echo "ERROR: unable to delete existing failFile:" >&2
+        ls -l "$failFile" >&2
+    fi
 
     if [ -z "$pkg" ] ; then
         pkgSlash=
@@ -503,11 +526,15 @@ cmd()
         # if jdb got a cont cmd that caused the debuggee
         # to run to completion, jdb can be gone before
         # we get here.
-        echo quit >& 2
+        echo "--Sending cmd: quit" >& 2
         echo quit
         # See 6562090. Maybe there is a way that the exit
         # can cause jdb to not get the quit.
         sleep 5
+
+        # The exit code value here doesn't matter since this function
+        # is called as part of a pipeline and it is not the last command
+        # in the pipeline.
         exit 1
     fi
     
@@ -515,7 +542,7 @@ cmd()
     # because after starting jdb, we waited 
     # for the prompt.
     fileSize=`wc -c $jdbOutFile | awk '{ print $1 }'`
-    echo $* >&2
+    echo "--Sending cmd: " $* >&2
 
     # jjh: We have a few intermittent failures here.
     # It is as if every so often, jdb doesn't
@@ -542,12 +569,85 @@ cmd()
     # seen the ].  
     echo $*
 
-    # wait for jdb output to appear
+    # Now we have to wait for the next jdb prompt.  We wait for a pattern
+    # to appear in the last line of jdb output.  Normally, the prompt is
+    #
+    # 1) ^main[89] @
+    #
+    # where ^ means start of line, and @ means end of file with no end of line
+    # and 89 is the current command counter. But we have complications e.g.,
+    # the following jdb output can appear:
+    #
+    # 2) a[89] = 10
+    #
+    # The above form is an array assignment and not a prompt.
+    #
+    # 3) ^main[89] main[89] ...
+    #
+    # This occurs if the next cmd is one that causes no jdb output, e.g.,
+    # 'trace methods'.
+    #
+    # 4) ^main[89] [main[89]] .... > @
+    #
+    # jdb prints a > as a prompt after something like a cont.
+    # Thus, even though the above is the last 'line' in the file, it
+    # isn't the next prompt we are waiting for after the cont completes.
+    # HOWEVER, sometimes we see this for a cont command:
+    #
+    #   ^main[89] $
+    #      <lines output for hitting a bkpt>
+    #
+    # 5) ^main[89] > @
+    #
+    # i.e., the > prompt comes out AFTER the prompt we we need to wait for.
+    #
+    # So, how do we know when the next prompt has appeared??
+    # 1.  Search for 
+    #         main[89] $
+    #     This will handle cases 1, 2, 3
+    # 2.  This leaves cases 4 and 5.
+    #
+    # What if we wait for 4 more chars to appear and then search for
+    #
+    #    main[89] [>]$
+    #
+    # on the last line?
+    #
+    # a.  if we are currently at
+    #
+    #       ^main[89] main[89] @
+    #
+    #     and a 'trace methods comes in, we will wait until at least
+    #
+    #       ^main[89] main[89] main@
+    #
+    #     and then the search will find the new prompt when it completes.
+    #
+    # b.  if we are currently at
+    #
+    #       ^main[89] main[89] @
+    #
+    #     and the first form of cont comes in, then we will see
+    #
+    #       ^main[89] main[89] > $
+    #       ^x@
+    #
+    #     where x is the first char of the msg output when the bkpt is hit
+    #     and we will start our search, which will find the prompt
+    #     when it comes out after the bkpt output, with or without the
+    #     trailing >
+    #
+
+    # wait for 4 new chars to appear in the jdb output
     count=0
+    desiredFileSize=`expr $fileSize + 4`
     msg1=`echo At start: cmd/size/waiting : $* / $fileSize / \`date\``
     while [ 1 = 1 ] ; do
         newFileSize=`wc -c $jdbOutFile | awk '{ print $1 } '`
-        if [ "$fileSize" != "$newFileSize" ] ; then
+        #echo jj: desired = $desiredFileSize, new = $newFileSize >& 2
+
+        done=`expr $newFileSize \>= $desiredFileSize`
+        if [ $done = 1 ] ; then
             break
         fi
         sleep ${sleep_seconds}
@@ -557,14 +657,19 @@ cmd()
             echo "--DEBUG: jdb $$ didn't responded to command in $count secs: $*" >& 2
             echo "--DEBUG:" $msg1 >& 2
             echo "--DEBUG: "done size/waiting : / $newFileSize  / `date` >& 2
-            $psCmd | sed -e '/com.sun.javatest/d' -e '/nsk/d' >& 2
+            echo "-- $jdbOutFile follows-------------------------------" >& 2
+            cat $jdbOutFile >& 2
+            echo "------------------------------------------" >& 2
+            dojstack
+            #$psCmd | sed -e '/com.sun.javatest/d' -e '/nsk/d' >& 2
             if [ $count = 60 ] ; then
                 dofail "jdb never responded to command: $*"
             fi
         fi
     done
-
-    waitForJdbMsg '^.*\[[0-9]*\] $' 1 allowExit
+    # Note that this assumes just these chars in thread names.
+    waitForJdbMsg '[a-zA-Z0-9_-][a-zA-Z0-9_-]*\[[1-9][0-9]*\] [ >]*$' \
+        1 allowExit
 }
 
 setBkpts()
@@ -580,15 +685,19 @@ setBkpts()
 runToBkpt()
 {
     cmd run
+    # Don't need to do this - the above waits for the next prompt which comes out
+    # AFTER the Breakpoint hit message.
     # Wait for jdb to hit the bkpt
-    waitForJdbMsg "Breakpoint hit" 5
+    #waitForJdbMsg "Breakpoint hit" 5
 }
 
 contToBkpt()
 {
     cmd cont
+    # Don't need to do this - the above waits for the next prompt which comes out
+    # AFTER the Breakpoint hit message.
     # Wait for jdb to hit the bkpt
-    waitForJdbMsg "Breakpoint hit" 5
+    #waitForJdbMsg "Breakpoint hit" 5
 }
 
 
@@ -602,7 +711,7 @@ waitForJdbMsg()
     nlines=$2
     allowExit="$3"
     myCount=0
-    timeLimit=40  # wait a max of 40 secs for a response from a jdb command
+    timeLimit=40  # wait a max of this many secs for a response from a jdb command
     while [ 1 = 1 ] ; do 
         if [  -r $jdbOutFile ] ; then
             # Something here causes jdb to complain about Unrecognized cmd on x86.
@@ -638,8 +747,11 @@ waitForJdbMsg()
 
         myCount=`expr $myCount + ${sleep_seconds}`
         if [ $myCount -gt $timeLimit ] ; then
+            echo "--Fail: waitForJdbMsg timed out after $timeLimit seconds, looking for /$1/, in $nlines lines; exitting" >> $failFile
+            echo "vv jdbOutFile  vvvvvvvvvvvvvvvvvvvvvvvvvvvv" >& 2
+            cat $jdbOutFile >& 2
+            echo "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" >& 2
             dojstack
-            echo "--Fail: waitForJdbMsg timed out after $timeLimit seconds; exitting" >> $failFile
             exit 1
         fi
     done
@@ -837,6 +949,10 @@ waitForFinish()
     done
 
     if [ -r "$failFile" ] ; then
+        ls -l "$failFile" >&2
+        echo "<waitForFinish:_begin_failFile_contents>" >&2
+        cat "$failFile" >&2
+        echo "<waitForFinish:_end_failFile_contents>" >&2
         exit 1
     fi
 }
@@ -845,39 +961,45 @@ waitForFinish()
 # $3 is the number of lines to search (from the end)
 grepForString()
 {
-    # See bug 6220903.  Sometimes the jdb '> ' prompt chars
-    # get inserted into the string we are searching for 
-    # so ignore those chars.
     if [ -z "$3" ] ; then
-        case "$2" in 
-          *\>*)
-            # Target string contains a > so we better
-            # not ignore it
-            $grep -s "$2" $1  > $devnull 2>&1
-            stat=$?
-            ;;
-          *)
-            # Target string does not contain a >.
-            # Ignore > and '> ' in the file.
-            cat $1 | sed -e 's@> @@g' -e 's@>@@g' | $grep -s "$2" > $devnull 2>&1
-            stat=$?
-        esac
+        theCmd=cat
     else
-        case "$2" in 
-          *\>*)
-            # Target string contains a > so we better
-            # not ignore it
-            tail -$3 $1 | $grep -s "$2"  > $devnull 2>&1
-            stat=$?
-            ;;
-          *)
-            # Target string does not contain a >.
-            # Ignore > and '> ' in the file.
-            tail -$3 $1 | sed -e 's@> @@g' -e 's@>@@g' | $grep -s "$2" > $devnull 2>&1
-            stat=$?
-            ;;
-        esac
+        theCmd="tail -$3"
     fi
+
+    case "$2" in 
+    *\>*)
+        # Target string contains a '>' so we better not ignore it
+        $theCmd $1 | $grep -s "$2"  > $devnull 2>&1
+        stat="$?"
+        ;;
+    *)
+        # Target string does not contain a '>'.
+        # NOTE:  if $1 does not end with a new line, piping it to sed
+        # doesn't include the chars on the last line.  Detect this
+        # case, and add a new line.
+        theFile="$1"
+        if [ `tail -1 "$theFile" | wc -l | sed -e 's@ @@g'` = 0 ] ; then
+            # The target file doesn't end with a new line so we have
+            # add one to a copy of the target file so the sed command
+            # below can filter that last line.
+            cp "$theFile" "$theFile.tmp"
+            theFile="$theFile.tmp"
+            echo >> "$theFile"
+        fi
+
+        # See bug 6220903. Sometimes the jdb prompt chars ('> ') can
+        # get interleaved in the target file which can keep us from
+        # matching the target string.
+        $theCmd "$theFile" | sed -e 's@> @@g' -e 's@>@@g' \
+            | $grep -s "$2" > $devnull 2>&1
+        stat=$?
+        if [ "$theFile" != "$1" ]; then
+            # remove the copy of the target file
+            rm -f "$theFile"
+        fi
+        unset theFile
+    esac
     return $stat
 }
 
@@ -942,6 +1064,11 @@ pass()
         echo
         echo "--Done: test passed"
         exit 0
+    else
+        ls -l "$failFile" >&2
+        echo "<pass:_begin_failFile_contents>" >&2
+        cat "$failFile" >&2
+        echo "<pass:_end_failFile_contents>" >&2
     fi
 }
 

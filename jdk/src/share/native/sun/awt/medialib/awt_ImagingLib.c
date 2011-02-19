@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 #include <stdio.h>
@@ -2216,7 +2216,8 @@ allocateRasterArray(JNIEnv *env, RasterS_t *rasterP,
     int dataType = BYTE_DATA_TYPE;
     int width;
     int height;
-    int size = rasterP->width * rasterP->height * rasterP->numBands;
+    int dataSize;
+    int offset;
 
     *dataPP = NULL;
 
@@ -2269,6 +2270,22 @@ allocateRasterArray(JNIEnv *env, RasterS_t *rasterP,
 #endif
     switch (rasterP->type) {
     case sun_awt_image_IntegerComponentRaster_TYPE_INT_8BIT_SAMPLES:
+        if (!((rasterP->chanOffsets[0] == 0 || SAFE_TO_ALLOC_2(rasterP->chanOffsets[0], 4)) &&
+              SAFE_TO_ALLOC_2(width, 4) &&
+              SAFE_TO_ALLOC_3(height, rasterP->scanlineStride, 4)))
+        {
+            return -1;
+        }
+        offset = 4 * rasterP->chanOffsets[0];
+        dataSize = 4 * (*env)->GetArrayLength(env, rasterP->jdata);
+
+        if (offset < 0 || offset >= dataSize ||
+            width > rasterP->scanlineStride ||
+            height * rasterP->scanlineStride * 4 > dataSize - offset)
+        {
+            // raster data buffer is too short
+            return -1;
+        }
         dataP = (void *) (*env)->GetPrimitiveArrayCritical(env, rasterP->jdata,
                                                            NULL);
         if (dataP == NULL) {
@@ -2277,11 +2294,25 @@ allocateRasterArray(JNIEnv *env, RasterS_t *rasterP,
         *mlibImagePP = (*sMlibSysFns.createStructFP)(MLIB_BYTE, 4,
                                               width, height,
                                               rasterP->scanlineStride*4,
-                                              (unsigned char *)dataP
-                                              + rasterP->chanOffsets[0]*4);
+                                              (unsigned char *)dataP + offset);
         *dataPP = dataP;
         return 0;
     case sun_awt_image_IntegerComponentRaster_TYPE_BYTE_SAMPLES:
+        if (!(SAFE_TO_ALLOC_2(width, rasterP->numBands) &&
+              SAFE_TO_ALLOC_2(height, rasterP->scanlineStride)))
+        {
+            return -1;
+        }
+        offset = rasterP->chanOffsets[0];
+        dataSize = (*env)->GetArrayLength(env, rasterP->jdata);
+
+        if (offset < 0 || offset >= dataSize ||
+            width * rasterP->numBands > rasterP->scanlineStride ||
+            height * rasterP->scanlineStride > dataSize - offset)
+        {
+            // raster data buffer is too short
+            return -1;
+        }
         dataP = (void *) (*env)->GetPrimitiveArrayCritical(env, rasterP->jdata,
                                                            NULL);
         if (dataP == NULL) {
@@ -2290,11 +2321,26 @@ allocateRasterArray(JNIEnv *env, RasterS_t *rasterP,
         *mlibImagePP = (*sMlibSysFns.createStructFP)(MLIB_BYTE, rasterP->numBands,
                                               width, height,
                                               rasterP->scanlineStride,
-                                              (unsigned char *)dataP
-                                              + rasterP->chanOffsets[0]);
+                                              (unsigned char *)dataP + offset);
         *dataPP = dataP;
         return 0;
     case sun_awt_image_IntegerComponentRaster_TYPE_USHORT_SAMPLES:
+        if (!((rasterP->chanOffsets[0] == 0 || SAFE_TO_ALLOC_2(rasterP->chanOffsets[0], 2)) &&
+              SAFE_TO_ALLOC_3(width, rasterP->numBands, 2) &&
+              SAFE_TO_ALLOC_3(height, rasterP->scanlineStride, 2)))
+        {
+              return -1;
+        }
+        offset = rasterP->chanOffsets[0] * 2;
+        dataSize = 2 * (*env)->GetArrayLength(env, rasterP->jdata);
+
+        if (offset < 0 || offset >= dataSize ||
+            width * rasterP->numBands > rasterP->scanlineStride ||
+            height * rasterP->scanlineStride * 2 > dataSize - offset)
+        {
+            // raster data buffer is too short
+             return -1;
+        }
         dataP = (void *) (*env)->GetPrimitiveArrayCritical(env, rasterP->jdata,
                                                            NULL);
         if (dataP == NULL) {
@@ -2304,8 +2350,7 @@ allocateRasterArray(JNIEnv *env, RasterS_t *rasterP,
                                                      rasterP->numBands,
                                                      width, height,
                                                      rasterP->scanlineStride*2,
-                                                     (unsigned char *)dataP
-                                                     + rasterP->chanOffsets[0]*2);
+                                                     (unsigned char *)dataP + offset);
         *dataPP = dataP;
         return 0;
 

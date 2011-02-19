@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2004 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,17 +18,17 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.security.provider.certpath;
 
 import java.io.IOException;
-import java.security.cert.CertPathValidatorException;
+import java.util.Collections;
+import java.util.List;
 import sun.misc.HexDumpEncoder;
-import sun.security.x509.*;
 import sun.security.util.*;
 
 /**
@@ -77,47 +77,33 @@ class OCSPRequest {
     private static final Debug debug = Debug.getInstance("certpath");
     private static final boolean dump = false;
 
-    // Serial number of the certificates to be checked for revocation
-    private SerialNumber serialNumber;
-
-    // Issuer's certificate (for computing certId hash values)
-    private X509CertImpl issuerCert;
-
-    // CertId of the certificate to be checked
-    private CertId certId = null;
+    // List of request CertIds
+    private final List<CertId> certIds;
 
     /*
      * Constructs an OCSPRequest. This constructor is used
      * to construct an unsigned OCSP Request for a single user cert.
      */
-    // used by OCSPChecker
-    OCSPRequest(X509CertImpl userCert, X509CertImpl issuerCert)
-        throws CertPathValidatorException {
-
-        if (issuerCert == null) {
-            throw new CertPathValidatorException("Null IssuerCertificate");
-        }
-        this.issuerCert = issuerCert;
-        serialNumber = userCert.getSerialNumberObject();
+    OCSPRequest(CertId certId) {
+        this.certIds = Collections.singletonList(certId);
     }
 
-    // used by OCSPChecker
+    OCSPRequest(List<CertId> certIds) {
+        this.certIds = certIds;
+    }
+
     byte[] encodeBytes() throws IOException {
 
         // encode tbsRequest
         DerOutputStream tmp = new DerOutputStream();
-        DerOutputStream derSingleReqList  = new DerOutputStream();
-        SingleRequest singleRequest = null;
-
-        try {
-            singleRequest = new SingleRequest(issuerCert, serialNumber);
-        } catch (Exception e) {
-            throw new IOException("Error encoding OCSP request");
+        DerOutputStream requestsOut  = new DerOutputStream();
+        for (CertId certId : certIds) {
+            DerOutputStream certIdOut = new DerOutputStream();
+            certId.encode(certIdOut);
+            requestsOut.write(DerValue.tag_Sequence, certIdOut);
         }
 
-        certId = singleRequest.getCertId();
-        singleRequest.encode(derSingleReqList);
-        tmp.write(DerValue.tag_Sequence, derSingleReqList);
+        tmp.write(DerValue.tag_Sequence, requestsOut);
         // No extensions supported
         DerOutputStream tbsRequest = new DerOutputStream();
         tbsRequest.write(DerValue.tag_Sequence, tmp);
@@ -130,35 +116,14 @@ class OCSPRequest {
 
         if (dump) {
             HexDumpEncoder hexEnc = new HexDumpEncoder();
-            System.out.println ("OCSPRequest bytes are... ");
+            System.out.println("OCSPRequest bytes are... ");
             System.out.println(hexEnc.encode(bytes));
         }
 
-        return(bytes);
+        return bytes;
     }
 
-    // used by OCSPChecker
-    CertId getCertId() {
-        return certId;
-    }
-
-    private static class SingleRequest {
-        private CertId certId;
-
-        // No extensions are set
-
-        private SingleRequest(X509CertImpl cert, SerialNumber serialNo) throws Exception {
-            certId = new CertId(cert, serialNo);
-        }
-
-        private void encode(DerOutputStream out) throws IOException {
-            DerOutputStream tmp = new DerOutputStream();
-            certId.encode(tmp);
-            out.write(DerValue.tag_Sequence, tmp);
-        }
-
-        private CertId getCertId() {
-            return certId;
-        }
+    List<CertId> getCertIds() {
+        return certIds;
     }
 }

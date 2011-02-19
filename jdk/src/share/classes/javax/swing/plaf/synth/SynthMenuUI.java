@@ -1,12 +1,12 @@
 /*
- * Copyright 2002-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2002, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package javax.swing.plaf.synth;
 
@@ -35,7 +35,7 @@ import javax.swing.border.*;
 import java.util.Arrays;
 import java.util.ArrayList;
 import sun.swing.plaf.synth.SynthUI;
-
+import sun.swing.MenuItemLayoutHelper;
 
 /**
  * Synth's MenuUI.
@@ -86,7 +86,7 @@ class SynthMenuUI extends BasicMenuUI implements PropertyChangeListener,
             acceleratorDelimiter = style.getString(context, prefix +
                                             ".acceleratorDelimiter", "+");
 
-            if (useCheckAndArrow()) {
+            if (MenuItemLayoutHelper.useCheckAndArrow(menuItem)) {
                 checkIcon = style.getIcon(context, prefix + ".checkIcon");
                 arrowIcon = style.getIcon(context, prefix + ".arrowIcon");
             } else {
@@ -109,6 +109,16 @@ class SynthMenuUI extends BasicMenuUI implements PropertyChangeListener,
 
         accStyle = SynthLookAndFeel.updateStyle(accContext, this);
         accContext.dispose();
+    }
+
+    public void uninstallUI(JComponent c) {
+        super.uninstallUI(c);
+        // Remove values from the parent's Client Properties.
+        JComponent p = MenuItemLayoutHelper.getMenuItemParent((JMenuItem) c);
+        if (p != null) {
+            p.putClientProperty(
+                    SynthMenuItemLayoutHelper.MAX_ACC_OR_ARROW_WIDTH, null);
+        }
     }
 
     protected void uninstallDefaults() {
@@ -182,9 +192,11 @@ class SynthMenuUI extends BasicMenuUI implements PropertyChangeListener,
                                                      int defaultTextIconGap) {
         SynthContext context = getContext(c);
         SynthContext accContext = getContext(c, Region.MENU_ITEM_ACCELERATOR);
-        Dimension value = SynthMenuItemUI.getPreferredMenuItemSize(
-                  context, accContext, c, checkIcon, arrowIcon,
-                  defaultTextIconGap, acceleratorDelimiter);
+        Dimension value = SynthGraphicsUtils.getPreferredMenuItemSize(
+                context, accContext, c, checkIcon, arrowIcon,
+                defaultTextIconGap, acceleratorDelimiter,
+                MenuItemLayoutHelper.useCheckAndArrow(menuItem),
+                getPropertyPrefix());
         context.dispose();
         accContext.dispose();
         return value;
@@ -211,21 +223,12 @@ class SynthMenuUI extends BasicMenuUI implements PropertyChangeListener,
     protected void paint(SynthContext context, Graphics g) {
         SynthContext accContext = getContext(menuItem,
                                              Region.MENU_ITEM_ACCELERATOR);
-        SynthStyle style = context.getStyle();
-        Icon checkIcon;
-        Icon arrowIcon;
-        if (useCheckAndArrow()) {
-            // Refetch the appropriate icons for the current state
-            String prefix = getPropertyPrefix();
-            checkIcon = style.getIcon(context, prefix + ".checkIcon");
-            arrowIcon = style.getIcon(context, prefix + ".arrowIcon");
-        } else {
-            // Not needed in this case
-            checkIcon = null;
-            arrowIcon = null;
-        }
-        SynthMenuItemUI.paint(context, accContext, g, checkIcon, arrowIcon,
-                              acceleratorDelimiter, defaultTextIconGap);
+        // Refetch the appropriate check indicator for the current state
+        String prefix = getPropertyPrefix();
+        Icon checkIcon = style.getIcon(context, prefix + ".checkIcon");
+        Icon arrowIcon = style.getIcon(context, prefix + ".arrowIcon");
+        SynthGraphicsUtils.paint(context, accContext, g, checkIcon, arrowIcon,
+              acceleratorDelimiter, defaultTextIconGap, getPropertyPrefix());
         accContext.dispose();
     }
 
@@ -238,9 +241,5 @@ class SynthMenuUI extends BasicMenuUI implements PropertyChangeListener,
         if (SynthLookAndFeel.shouldUpdateStyle(e)) {
             updateStyle((JMenu)e.getSource());
         }
-    }
-
-    private boolean useCheckAndArrow() {
-        return !((JMenu)menuItem).isTopLevelMenu();
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,13 +16,15 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
 class AdapterHandlerEntry;
+class AdapterHandlerTable;
+class AdapterFingerPrint;
 class vframeStream;
 
 // Runtime is the base class for various runtime interfaces
@@ -76,6 +78,18 @@ class SharedRuntime: AllStatic {
   static jfloat  frem(jfloat  x, jfloat  y);
   static jdouble drem(jdouble x, jdouble y);
 
+#ifdef __SOFTFP__
+  static jfloat  fadd(jfloat x, jfloat y);
+  static jfloat  fsub(jfloat x, jfloat y);
+  static jfloat  fmul(jfloat x, jfloat y);
+  static jfloat  fdiv(jfloat x, jfloat y);
+
+  static jdouble dadd(jdouble x, jdouble y);
+  static jdouble dsub(jdouble x, jdouble y);
+  static jdouble dmul(jdouble x, jdouble y);
+  static jdouble ddiv(jdouble x, jdouble y);
+#endif // __SOFTFP__
+
   // float conversion (needs to set appropriate rounding mode)
   static jint    f2i (jfloat  x);
   static jlong   f2l (jfloat  x);
@@ -84,6 +98,12 @@ class SharedRuntime: AllStatic {
   static jfloat  d2f (jdouble x);
   static jfloat  l2f (jlong   x);
   static jdouble l2d (jlong   x);
+
+#ifdef __SOFTFP__
+  static jfloat  i2f (jint    x);
+  static jdouble i2d (jint    x);
+  static jdouble f2d (jfloat  x);
+#endif // __SOFTFP__
 
   // double trigonometrics and transcendentals
   static jdouble dsin(jdouble x);
@@ -94,10 +114,35 @@ class SharedRuntime: AllStatic {
   static jdouble dexp(jdouble x);
   static jdouble dpow(jdouble x, jdouble y);
 
+#if defined(__SOFTFP__) || defined(E500V2)
+  static double dabs(double f);
+  static double dsqrt(double f);
+#endif
+
+#ifdef __SOFTFP__
+  // C++ compiler generates soft float instructions as well as passing
+  // float and double in registers.
+  static int  fcmpl(float x, float y);
+  static int  fcmpg(float x, float y);
+  static int  dcmpl(double x, double y);
+  static int  dcmpg(double x, double y);
+
+  static int unordered_fcmplt(float x, float y);
+  static int unordered_dcmplt(double x, double y);
+  static int unordered_fcmple(float x, float y);
+  static int unordered_dcmple(double x, double y);
+  static int unordered_fcmpge(float x, float y);
+  static int unordered_dcmpge(double x, double y);
+  static int unordered_fcmpgt(float x, float y);
+  static int unordered_dcmpgt(double x, double y);
+
+  static float  fneg(float f);
+  static double dneg(double f);
+#endif
 
   // exception handling across interpreter/compiler boundaries
-  static address raw_exception_handler_for_return_address(address return_address);
-  static address exception_handler_for_return_address(address return_address);
+  static address raw_exception_handler_for_return_address(JavaThread* thread, address return_address);
+  static address exception_handler_for_return_address(JavaThread* thread, address return_address);
 
 #ifndef SERIALGC
   // G1 write barriers
@@ -180,9 +225,6 @@ class SharedRuntime: AllStatic {
 
   static oop retrieve_receiver( symbolHandle sig, frame caller );
 
-  static void verify_caller_frame(frame caller_frame, methodHandle callee_method) PRODUCT_RETURN;
-  static methodHandle find_callee_method_inside_interpreter(frame caller_frame, methodHandle caller_method, int bci) PRODUCT_RETURN_(return methodHandle(););
-
   static void register_finalizer(JavaThread* thread, oopDesc* obj);
 
   // dtrace notifications
@@ -215,10 +257,32 @@ class SharedRuntime: AllStatic {
   static char* generate_class_cast_message(JavaThread* thr, const char* name);
 
   /**
+   * Fill in the message for a WrongMethodTypeException
+   *
+   * @param thr the current thread
+   * @param mtype (optional) expected method type (or argument class)
+   * @param mhandle (optional) actual method handle (or argument)
+   * @return the dynamically allocated exception message
+   *
+   * BCP for the frame on top of the stack must refer to an
+   * 'invokevirtual' op for a method handle, or an 'invokedyamic' op.
+   * The caller (or one of its callers) must use a ResourceMark
+   * in order to correctly free the result.
+   */
+  static char* generate_wrong_method_type_message(JavaThread* thr,
+                                                  oopDesc* mtype = NULL,
+                                                  oopDesc* mhandle = NULL);
+
+  /** Return non-null if the mtype is a klass or Class, not a MethodType. */
+  static oop wrong_method_type_is_for_single_argument(JavaThread* thr,
+                                                      oopDesc* mtype);
+
+  /**
    * Fill in the "X cannot be cast to a Y" message for ClassCastException
    *
    * @param name the name of the class of the object attempted to be cast
    * @param klass the name of the target klass attempt
+   * @param gripe the specific kind of problem being reported
    * @return the dynamically allocated exception message (must be freed
    * by the caller using a resource mark)
    *
@@ -227,7 +291,8 @@ class SharedRuntime: AllStatic {
    * The caller (or one of it's callers) must use a ResourceMark
    * in order to correctly free the result.
    */
-  static char* generate_class_cast_message(const char* name, const char* klass);
+  static char* generate_class_cast_message(const char* name, const char* klass,
+                                           const char* gripe = " cannot be cast to ");
 
   // Resolves a call site- may patch in the destination of the call into the
   // compiled code.
@@ -317,7 +382,8 @@ class SharedRuntime: AllStatic {
                                                       int total_args_passed,
                                                       int max_arg,
                                                       const BasicType *sig_bt,
-                                                      const VMRegPair *regs);
+                                                      const VMRegPair *regs,
+                                                      AdapterFingerPrint* fingerprint);
 
   // OSR support
 
@@ -337,7 +403,7 @@ class SharedRuntime: AllStatic {
 
   // Convert a sig into a calling convention register layout
   // and find interesting things about it.
-  static VMRegPair* find_callee_arguments(symbolOop sig, bool is_static, int *arg_size);
+  static VMRegPair* find_callee_arguments(symbolOop sig, bool has_receiver, int *arg_size);
   static VMReg     name_for_receiver();
 
   // "Top of Stack" slots that may be unused by the calling convention but must
@@ -508,66 +574,88 @@ class SharedRuntime: AllStatic {
 // used by the adapters.  The code generation happens here because it's very
 // similar to what the adapters have to do.
 
-class AdapterHandlerEntry : public CHeapObj {
+class AdapterHandlerEntry : public BasicHashtableEntry {
+  friend class AdapterHandlerTable;
+
  private:
+  AdapterFingerPrint* _fingerprint;
   address _i2c_entry;
   address _c2i_entry;
   address _c2i_unverified_entry;
 
- public:
+#ifdef ASSERT
+  // Captures code and signature used to generate this adapter when
+  // verifing adapter equivalence.
+  unsigned char* _saved_code;
+  int            _code_length;
+  BasicType*     _saved_sig;
+  int            _total_args_passed;
+#endif
 
-  // The name we give all buffer blobs
-  static const char* name;
-
-  AdapterHandlerEntry(address i2c_entry, address c2i_entry, address c2i_unverified_entry):
-    _i2c_entry(i2c_entry),
-    _c2i_entry(c2i_entry),
-    _c2i_unverified_entry(c2i_unverified_entry) {
+  void init(AdapterFingerPrint* fingerprint, address i2c_entry, address c2i_entry, address c2i_unverified_entry) {
+    _fingerprint = fingerprint;
+    _i2c_entry = i2c_entry;
+    _c2i_entry = c2i_entry;
+    _c2i_unverified_entry = c2i_unverified_entry;
+#ifdef ASSERT
+    _saved_code = NULL;
+    _code_length = 0;
+    _saved_sig = NULL;
+    _total_args_passed = 0;
+#endif
   }
 
+  void deallocate();
+
+  // should never be used
+  AdapterHandlerEntry();
+
+ public:
   address get_i2c_entry()            { return _i2c_entry; }
   address get_c2i_entry()            { return _c2i_entry; }
   address get_c2i_unverified_entry() { return _c2i_unverified_entry; }
 
   void relocate(address new_base);
-#ifndef PRODUCT
+
+  AdapterFingerPrint* fingerprint()  { return _fingerprint; }
+
+  AdapterHandlerEntry* next() {
+    return (AdapterHandlerEntry*)BasicHashtableEntry::next();
+  }
+
+#ifdef ASSERT
+  // Used to verify that code generated for shared adapters is equivalent
+  void save_code(unsigned char* code, int length, int total_args_passed, BasicType* sig_bt);
+  bool compare_code(unsigned char* code, int length, int total_args_passed, BasicType* sig_bt);
+#endif
+
   void print();
-#endif /* PRODUCT */
 };
 
 class AdapterHandlerLibrary: public AllStatic {
  private:
-  static u_char                   _buffer[];  // the temporary code buffer
-  static GrowableArray<uint64_t>* _fingerprints; // the fingerprint collection
-  static GrowableArray<AdapterHandlerEntry*> * _handlers; // the corresponding handlers
-  enum {
-    AbstractMethodHandler = 1 // special handler for abstract methods
-  };
+  static BufferBlob* _buffer; // the temporary code buffer in CodeCache
+  static AdapterHandlerTable* _adapters;
+  static AdapterHandlerEntry* _abstract_method_handler;
+  static BufferBlob* buffer_blob();
   static void initialize();
-  static int get_create_adapter_index(methodHandle method);
-  static address get_i2c_entry( int index ) {
-    return get_entry(index)->get_i2c_entry();
-  }
-  static address get_c2i_entry( int index ) {
-    return get_entry(index)->get_c2i_entry();
-  }
-  static address get_c2i_unverified_entry( int index ) {
-    return get_entry(index)->get_c2i_unverified_entry();
-  }
 
  public:
-  static AdapterHandlerEntry* get_entry( int index ) { return _handlers->at(index); }
+
+  static AdapterHandlerEntry* new_entry(AdapterFingerPrint* fingerprint,
+                                        address i2c_entry, address c2i_entry, address c2i_unverified_entry);
   static nmethod* create_native_wrapper(methodHandle method);
-  static AdapterHandlerEntry* get_adapter(methodHandle method)  {
-    return get_entry(get_create_adapter_index(method));
-  }
+  static AdapterHandlerEntry* get_adapter(methodHandle method);
+
 #ifdef HAVE_DTRACE_H
   static nmethod* create_dtrace_nmethod (methodHandle method);
 #endif // HAVE_DTRACE_H
 
-#ifndef PRODUCT
-  static void print_handler(CodeBlob* b);
+  static void print_handler(CodeBlob* b) { print_handler_on(tty, b); }
+  static void print_handler_on(outputStream* st, CodeBlob* b);
   static bool contains(CodeBlob* b);
+#ifndef PRODUCT
+  static void print_statistics();
 #endif /* PRODUCT */
 
 };

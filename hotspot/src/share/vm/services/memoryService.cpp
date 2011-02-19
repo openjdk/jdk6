@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -60,8 +60,8 @@ void MemoryService::set_universe_heap(CollectedHeap* heap) {
       break;
     }
     case CollectedHeap::G1CollectedHeap : {
-      G1CollectedHeap::g1_unimplemented();
-      return;
+      add_g1_heap_info(G1CollectedHeap::heap());
+      break;
     }
 #endif // SERIALGC
     default: {
@@ -163,6 +163,19 @@ void MemoryService::add_parallel_scavenge_heap_info(ParallelScavengeHeap* heap) 
   add_psYoung_memory_pool(heap->young_gen(), _major_gc_manager, _minor_gc_manager);
   add_psOld_memory_pool(heap->old_gen(), _major_gc_manager);
   add_psPerm_memory_pool(heap->perm_gen(), _major_gc_manager);
+}
+
+void MemoryService::add_g1_heap_info(G1CollectedHeap* g1h) {
+  assert(UseG1GC, "sanity");
+
+  _minor_gc_manager = MemoryManager::get_g1YoungGen_memory_manager();
+  _major_gc_manager = MemoryManager::get_g1OldGen_memory_manager();
+  _managers_list->append(_minor_gc_manager);
+  _managers_list->append(_major_gc_manager);
+
+  add_g1YoungGen_memory_pool(g1h, _major_gc_manager, _minor_gc_manager);
+  add_g1OldGen_memory_pool(g1h, _major_gc_manager);
+  add_g1PermGen_memory_pool(g1h, _major_gc_manager);
 }
 #endif // SERIALGC
 
@@ -384,6 +397,64 @@ void MemoryService::add_psPerm_memory_pool(PSPermGen* gen, MemoryManager* mgr) {
   mgr->add_pool(perm_gen);
   _pools_list->append(perm_gen);
 }
+
+void MemoryService::add_g1YoungGen_memory_pool(G1CollectedHeap* g1h,
+                                               MemoryManager* major_mgr,
+                                               MemoryManager* minor_mgr) {
+  assert(major_mgr != NULL && minor_mgr != NULL, "should have two managers");
+
+  G1EdenPool* eden = new G1EdenPool(g1h);
+  G1SurvivorPool* survivor = new G1SurvivorPool(g1h);
+
+  major_mgr->add_pool(eden);
+  major_mgr->add_pool(survivor);
+  minor_mgr->add_pool(eden);
+  minor_mgr->add_pool(survivor);
+  _pools_list->append(eden);
+  _pools_list->append(survivor);
+}
+
+void MemoryService::add_g1OldGen_memory_pool(G1CollectedHeap* g1h,
+                                             MemoryManager* mgr) {
+  assert(mgr != NULL, "should have one manager");
+
+  G1OldGenPool* old_gen = new G1OldGenPool(g1h);
+  mgr->add_pool(old_gen);
+  _pools_list->append(old_gen);
+}
+
+void MemoryService::add_g1PermGen_memory_pool(G1CollectedHeap* g1h,
+                                              MemoryManager* mgr) {
+  assert(mgr != NULL, "should have one manager");
+
+  CompactingPermGenGen* perm_gen = (CompactingPermGenGen*) g1h->perm_gen();
+  PermanentGenerationSpec* spec = perm_gen->spec();
+  size_t max_size = spec->max_size() - spec->read_only_size()
+                                     - spec->read_write_size();
+  MemoryPool* pool = add_space(perm_gen->unshared_space(),
+                               "G1 Perm Gen",
+                               false, /* is_heap */
+                               max_size,
+                               true   /* support_usage_threshold */);
+  mgr->add_pool(pool);
+
+  // in case we support CDS in G1
+  if (UseSharedSpaces) {
+    pool = add_space(perm_gen->ro_space(),
+                     "G1 Perm Gen [shared-ro]",
+                     false, /* is_heap */
+                     spec->read_only_size(),
+                     true   /* support_usage_threshold */);
+    mgr->add_pool(pool);
+
+    pool = add_space(perm_gen->rw_space(),
+                     "G1 Perm Gen [shared-rw]",
+                     false, /* is_heap */
+                     spec->read_write_size(),
+                     true   /* support_usage_threshold */);
+    mgr->add_pool(pool);
+  }
+}
 #endif // SERIALGC
 
 void MemoryService::add_code_heap_memory_pool(CodeHeap* heap) {
@@ -438,7 +509,10 @@ void MemoryService::track_memory_pool_usage(MemoryPool* pool) {
   }
 }
 
-void MemoryService::gc_begin(bool fullGC) {
+void MemoryService::gc_begin(bool fullGC, bool recordGCBeginTime,
+                             bool recordAccumulatedGCTime,
+                             bool recordPreGCUsage, bool recordPeakUsage) {
+
   GCMemoryManager* mgr;
   if (fullGC) {
     mgr = _major_gc_manager;
@@ -446,16 +520,21 @@ void MemoryService::gc_begin(bool fullGC) {
     mgr = _minor_gc_manager;
   }
   assert(mgr->is_gc_memory_manager(), "Sanity check");
-  mgr->gc_begin();
+  mgr->gc_begin(recordGCBeginTime, recordPreGCUsage, recordAccumulatedGCTime);
 
   // Track the peak memory usage when GC begins
-  for (int i = 0; i < _pools_list->length(); i++) {
-    MemoryPool* pool = _pools_list->at(i);
-    pool->record_peak_memory_usage();
+  if (recordPeakUsage) {
+    for (int i = 0; i < _pools_list->length(); i++) {
+      MemoryPool* pool = _pools_list->at(i);
+      pool->record_peak_memory_usage();
+    }
   }
 }
 
-void MemoryService::gc_end(bool fullGC) {
+void MemoryService::gc_end(bool fullGC, bool recordPostGCUsage,
+                           bool recordAccumulatedGCTime,
+                           bool recordGCEndTime, bool countCollection) {
+
   GCMemoryManager* mgr;
   if (fullGC) {
     mgr = (GCMemoryManager*) _major_gc_manager;
@@ -465,7 +544,8 @@ void MemoryService::gc_end(bool fullGC) {
   assert(mgr->is_gc_memory_manager(), "Sanity check");
 
   // register the GC end statistics and memory usage
-  mgr->gc_end();
+  mgr->gc_end(recordPostGCUsage, recordAccumulatedGCTime, recordGCEndTime,
+              countCollection);
 }
 
 void MemoryService::oops_do(OopClosure* f) {
@@ -514,12 +594,12 @@ Handle MemoryService::create_MemoryUsage_obj(MemoryUsage usage, TRAPS) {
   return obj;
 }
 //
-// GC manager type depends on the type of Generation. Depending the space
-// availablity and vm option the gc uses major gc manager or minor gc
+// GC manager type depends on the type of Generation. Depending on the space
+// availablity and vm options the gc uses major gc manager or minor gc
 // manager or both. The type of gc manager depends on the generation kind.
-// For DefNew, ParNew and ASParNew generation doing scavange gc uses minor
-// gc manager (so _fullGC is set to false ) and for other generation kind
-// DOing mark-sweep-compact uses major gc manager (so _fullGC is set
+// For DefNew, ParNew and ASParNew generation doing scavenge gc uses minor
+// gc manager (so _fullGC is set to false ) and for other generation kinds
+// doing mark-sweep-compact uses major gc manager (so _fullGC is set
 // to true).
 TraceMemoryManagerStats::TraceMemoryManagerStats(Generation::Name kind) {
   switch (kind) {
@@ -540,13 +620,48 @@ TraceMemoryManagerStats::TraceMemoryManagerStats(Generation::Name kind) {
     default:
       assert(false, "Unrecognized gc generation kind.");
   }
-  MemoryService::gc_begin(_fullGC);
+  // this has to be called in a stop the world pause and represent
+  // an entire gc pause, start to finish:
+  initialize(_fullGC, true, true, true, true, true, true, true);
 }
-TraceMemoryManagerStats::TraceMemoryManagerStats(bool fullGC) {
+TraceMemoryManagerStats::TraceMemoryManagerStats(bool fullGC,
+                                                 bool recordGCBeginTime,
+                                                 bool recordPreGCUsage,
+                                                 bool recordPeakUsage,
+                                                 bool recordPostGCUsage,
+                                                 bool recordAccumulatedGCTime,
+                                                 bool recordGCEndTime,
+                                                 bool countCollection) {
+  initialize(fullGC, recordGCBeginTime, recordPreGCUsage, recordPeakUsage,
+             recordPostGCUsage, recordAccumulatedGCTime, recordGCEndTime,
+             countCollection);
+}
+
+// for a subclass to create then initialize an instance before invoking
+// the MemoryService
+void TraceMemoryManagerStats::initialize(bool fullGC,
+                                         bool recordGCBeginTime,
+                                         bool recordPreGCUsage,
+                                         bool recordPeakUsage,
+                                         bool recordPostGCUsage,
+                                         bool recordAccumulatedGCTime,
+                                         bool recordGCEndTime,
+                                         bool countCollection) {
   _fullGC = fullGC;
-  MemoryService::gc_begin(_fullGC);
+  _recordGCBeginTime = recordGCBeginTime;
+  _recordPreGCUsage = recordPreGCUsage;
+  _recordPeakUsage = recordPeakUsage;
+  _recordPostGCUsage = recordPostGCUsage;
+  _recordAccumulatedGCTime = recordAccumulatedGCTime;
+  _recordGCEndTime = recordGCEndTime;
+  _countCollection = countCollection;
+
+  MemoryService::gc_begin(_fullGC, _recordGCBeginTime, _recordAccumulatedGCTime,
+                          _recordPreGCUsage, _recordPeakUsage);
 }
 
 TraceMemoryManagerStats::~TraceMemoryManagerStats() {
-  MemoryService::gc_end(_fullGC);
+  MemoryService::gc_end(_fullGC, _recordPostGCUsage, _recordAccumulatedGCTime,
+                        _recordGCEndTime, _countCollection);
 }
+

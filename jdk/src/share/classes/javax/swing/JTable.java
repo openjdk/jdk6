@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing;
@@ -57,6 +57,7 @@ import sun.swing.SwingUtilities2;
 import sun.swing.SwingUtilities2.Section;
 import static sun.swing.SwingUtilities2.Section.*;
 import sun.swing.PrintingStatus;
+import sun.swing.SwingLazyValue;
 
 /**
  * The <code>JTable</code> is used to display and edit regular two-dimensional tables
@@ -731,6 +732,37 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
                     return;
                 }
                 scrollPane.setColumnHeaderView(getTableHeader());
+                // configure the scrollpane for any LAF dependent settings
+                configureEnclosingScrollPaneUI();
+            }
+        }
+    }
+
+    /**
+     * This is a sub-part of configureEnclosingScrollPane() that configures
+     * anything on the scrollpane that may change when the look and feel
+     * changes. It needed to be split out from configureEnclosingScrollPane() so
+     * that it can be called from updateUI() when the LAF changes without
+     * causing the regression found in bug 6687962. This was because updateUI()
+     * is called from the constructor which then caused
+     * configureEnclosingScrollPane() to be called by the constructor which
+     * changes its contract for any subclass that overrides it. So by splitting
+     * it out in this way configureEnclosingScrollPaneUI() can be called both
+     * from configureEnclosingScrollPane() and updateUI() in a safe manor.
+     */
+    private void configureEnclosingScrollPaneUI() {
+        Container p = getParent();
+        if (p instanceof JViewport) {
+            Container gp = p.getParent();
+            if (gp instanceof JScrollPane) {
+                JScrollPane scrollPane = (JScrollPane)gp;
+                // Make certain we are the viewPort's view and not, for
+                // example, the rowHeaderView of the scrollPane -
+                // an implementor of fixed columns might do this.
+                JViewport viewport = scrollPane.getViewport();
+                if (viewport == null || viewport.getView() != this) {
+                    return;
+                }
                 //  scrollPane.getViewport().setBackingStoreEnabled(true);
                 Border border = scrollPane.getBorder();
                 if (border == null || border instanceof UIResource) {
@@ -739,6 +771,24 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
                     if (scrollPaneBorder != null) {
                         scrollPane.setBorder(scrollPaneBorder);
                     }
+                }
+                // add JScrollBar corner component if available from LAF and not already set by the user
+                Component corner =
+                        scrollPane.getCorner(JScrollPane.UPPER_TRAILING_CORNER);
+                if (corner == null || corner instanceof UIResource){
+                    corner = null;
+                    Object componentClass = UIManager.get(
+                            "Table.scrollPaneCornerComponent");
+                    if (componentClass instanceof Class){
+                        try {
+                            corner = (Component)
+                                    ((Class)componentClass).newInstance();
+                        } catch (Exception e) {
+                            // just ignore and don't set corner
+                        }
+                    }
+                    scrollPane.setCorner(JScrollPane.UPPER_TRAILING_CORNER,
+                            corner);
                 }
             }
         }
@@ -783,6 +833,13 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
                     return;
                 }
                 scrollPane.setColumnHeaderView(null);
+                // remove ScrollPane corner if one was added by the LAF
+                Component corner =
+                        scrollPane.getCorner(JScrollPane.UPPER_TRAILING_CORNER);
+                if (corner instanceof UIResource){
+                    scrollPane.setCorner(JScrollPane.UPPER_TRAILING_CORNER,
+                            null);
+                }
             }
         }
     }
@@ -3586,6 +3643,9 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
             tableHeader.updateUI();
         }
 
+        // Update UI applied to parent ScrollPane
+        configureEnclosingScrollPaneUI();
+
         setUI((TableUI)UIManager.getUI(this));
     }
 
@@ -5250,7 +5310,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
     }
 
     private void setLazyValue(Hashtable h, Class c, String s) {
-        h.put(c, new UIDefaults.ProxyLazyValue(s));
+        h.put(c, new SwingLazyValue(s));
     }
 
     private void setLazyRenderer(Class c, String s) {

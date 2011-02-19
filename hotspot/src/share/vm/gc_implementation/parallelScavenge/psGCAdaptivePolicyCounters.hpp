@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -44,8 +44,8 @@ class PSGCAdaptivePolicyCounters : public GCAdaptivePolicyCounters {
   PerfVariable* _live_space;
   PerfVariable* _free_space;
   PerfVariable* _avg_base_footprint;
-  PerfVariable* _gc_time_limit_exceeded;
-  PerfVariable* _live_at_last_full_gc;
+  PerfVariable* _gc_overhead_limit_exceeded_counter;
+  PerfVariable* _live_at_last_full_gc_counter;
   PerfVariable* _old_capacity;
   PerfVariable* _boundary_moved;
 
@@ -168,6 +168,14 @@ class PSGCAdaptivePolicyCounters : public GCAdaptivePolicyCounters {
     _major_pause_young_slope->set_value(
       (jlong)(ps_size_policy()->major_pause_young_slope() * 1000)
     );
+  }
+  inline void update_gc_overhead_limit_exceeded_counter() {
+    _gc_overhead_limit_exceeded_counter->set_value(
+      (jlong) ps_size_policy()->gc_overhead_limit_exceeded());
+  }
+  inline void update_live_at_last_full_gc_counter() {
+    _live_at_last_full_gc_counter->set_value(
+      (jlong)(ps_size_policy()->live_at_last_full_gc()));
   }
 
   inline void update_scavenge_skipped(int cause) {

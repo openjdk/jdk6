@@ -1,12 +1,12 @@
 /*
- * Copyright 2005-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.awt.X11;
@@ -106,10 +106,11 @@ public class XTrayIconPeer implements TrayIconPeer {
                     }
 
                     XConfigureEvent ce = ev.get_xconfigure();
-
-                    ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}: {1}x{2}+{3}+{4} (old: {5}+{6})",
-                               new Object[] { XTrayIconPeer.this, ce.get_width(), ce.get_height(),
-                                              ce.get_x(), ce.get_y(), old_x, old_y });
+                    if (ctrLog.isLoggable(Level.FINE)) {
+                        ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}: {1}x{2}+{3}+{4} (old: {5}+{6})",
+                                   new Object[] { String.valueOf(XTrayIconPeer.this), ce.get_width(), ce.get_height(),
+                                                  ce.get_x(), ce.get_y(), old_x, old_y });
+                    }
 
                     // A workaround for Gnome/Metacity (it doesn't affect the behaviour on KDE).
                     // On Metacity the EmbeddedFrame's parent window bounds are larger
@@ -129,15 +130,17 @@ public class XTrayIconPeer implements TrayIconPeer {
                         // If both the height and the width differ from the fixed size then WM
                         // must level at least one side to the fixed size. For some reason it may take
                         // a few hops (even after reparenting) and we have to skip the intermediate ones.
-                        ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Skipping as intermediate resizing.",
-                                   XTrayIconPeer.this);
+                        if (ctrLog.isLoggable(Level.FINE)) {
+                            ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Skipping as intermediate resizing.",
+                                       String.valueOf(XTrayIconPeer.this));
+                        }
                         return;
 
                     } else if (ce.get_height() > TRAY_ICON_HEIGHT) {
-
-                        ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Centering by \"Y\".",
-                                   XTrayIconPeer.this);
-
+                        if (ctrLog.isLoggable(Level.FINE)) {
+                            ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Centering by \"Y\".",
+                                       String.valueOf(XTrayIconPeer.this));
+                        }
                         XlibWrapper.XMoveResizeWindow(XToolkit.getDisplay(), eframeParentID,
                                                       ce.get_x(),
                                                       ce.get_y()+ce.get_height()/2-TRAY_ICON_HEIGHT/2,
@@ -147,10 +150,10 @@ public class XTrayIconPeer implements TrayIconPeer {
                         ex_width = 0;
 
                     } else if (ce.get_width() > TRAY_ICON_WIDTH) {
-
-                        ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Centering by \"X\".",
-                                   XTrayIconPeer.this);
-
+                        if (ctrLog.isLoggable(Level.FINE)) {
+                            ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Centering by \"X\".",
+                                       String.valueOf(XTrayIconPeer.this));
+                        }
                         XlibWrapper.XMoveResizeWindow(XToolkit.getDisplay(), eframeParentID,
                                                       ce.get_x()+ce.get_width()/2 - TRAY_ICON_WIDTH/2,
                                                       ce.get_y(),
@@ -165,25 +168,27 @@ public class XTrayIconPeer implements TrayIconPeer {
                         // In this case the parent window also lose centering. We have to restore it.
 
                         if (ex_height != 0) {
-
-                            ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Move detected. Centering by \"Y\".",
-                                       XTrayIconPeer.this);
-
+                            if (ctrLog.isLoggable(Level.FINE)) {
+                                ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Move detected. Centering by \"Y\".",
+                                           String.valueOf(XTrayIconPeer.this));
+                            }
                             XlibWrapper.XMoveWindow(XToolkit.getDisplay(), eframeParentID,
                                                     ce.get_x(),
                                                     ce.get_y() + ex_height/2 - TRAY_ICON_HEIGHT/2);
 
                         } else if (ex_width != 0) {
-
-                            ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Move detected. Centering by \"X\".",
-                                       XTrayIconPeer.this);
-
+                            if (ctrLog.isLoggable(Level.FINE)) {
+                                ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Move detected. Centering by \"X\".",
+                                           String.valueOf(XTrayIconPeer.this));
+                            }
                             XlibWrapper.XMoveWindow(XToolkit.getDisplay(), eframeParentID,
                                                     ce.get_x() + ex_width/2 - TRAY_ICON_WIDTH/2,
                                                     ce.get_y());
                         } else {
-                            ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Move detected. Skipping.",
-                                       XTrayIconPeer.this);
+                            if (ctrLog.isLoggable(Level.FINE)) {
+                                ctrLog.log(Level.FINE, "ConfigureNotify on parent of {0}. Move detected. Skipping.",
+                                           String.valueOf(XTrayIconPeer.this));
+                            }
                         }
                     }
                     old_x = ce.get_x();

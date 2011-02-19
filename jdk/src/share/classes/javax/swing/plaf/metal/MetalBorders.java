@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing.plaf.metal;
@@ -33,14 +33,11 @@ import javax.swing.text.JTextComponent;
 
 import java.awt.Component;
 import java.awt.Insets;
-import java.awt.Dimension;
-import java.awt.Rectangle;
 import java.awt.Color;
 import java.awt.Dialog;
 import java.awt.Frame;
 import java.awt.Graphics;
 import java.awt.Window;
-import java.io.Serializable;
 
 import sun.swing.StringUIClientPropertyKey;
 
@@ -62,8 +59,6 @@ public class MetalBorders {
 
     public static class Flush3DBorder extends AbstractBorder implements UIResource{
 
-        private static final Insets insets = new Insets(2, 2, 2, 2);
-
         public void paintBorder(Component c, Graphics g, int x, int y,
                           int w, int h) {
             if (c.isEnabled()) {
@@ -73,13 +68,13 @@ public class MetalBorders {
             }
         }
         public Insets getBorderInsets(Component c)       {
-            return insets;
+            return new Insets(2, 2, 2, 2);
         }
         public Insets getBorderInsets(Component c, Insets newInsets) {
-            newInsets.top = insets.top;
-            newInsets.left = insets.left;
-            newInsets.bottom = insets.bottom;
-            newInsets.right = insets.right;
+            newInsets.top = 2;
+            newInsets.left = 2;
+            newInsets.bottom = 2;
+            newInsets.right = 2;
             return newInsets;
         }
     }
@@ -190,20 +185,18 @@ public class MetalBorders {
         }
 
         public Insets getBorderInsets( Component c ) {
-            return borderInsets;
+            return new Insets(3, 3, 3, 3);
         }
         public Insets getBorderInsets(Component c, Insets newInsets) {
-            newInsets.top = borderInsets.top;
-            newInsets.left = borderInsets.left;
-            newInsets.bottom = borderInsets.bottom;
-            newInsets.right = borderInsets.right;
+            newInsets.top = 3;
+            newInsets.left = 3;
+            newInsets.bottom = 3;
+            newInsets.right = 3;
             return newInsets;
         }
     }
 
     public static class InternalFrameBorder extends AbstractBorder implements UIResource {
-
-        private static final Insets insets = new Insets(5, 5, 5, 5);
 
         private static final int corner = 14;
 
@@ -256,13 +249,13 @@ public class MetalBorders {
           }
 
           public Insets getBorderInsets(Component c)       {
-              return insets;
+              return new Insets(5, 5, 5, 5);
           }
           public Insets getBorderInsets(Component c, Insets newInsets) {
-              newInsets.top = insets.top;
-              newInsets.left = insets.left;
-              newInsets.bottom = insets.bottom;
-              newInsets.right = insets.right;
+              newInsets.top = 5;
+              newInsets.left = 5;
+              newInsets.bottom = 5;
+              newInsets.right = 5;
               return newInsets;
           }
     }
@@ -272,8 +265,6 @@ public class MetalBorders {
      * @since 1.4
      */
     static class FrameBorder extends AbstractBorder implements UIResource {
-
-        private static final Insets insets = new Insets(5, 5, 5, 5);
 
         private static final int corner = 14;
 
@@ -326,15 +317,15 @@ public class MetalBorders {
         }
 
         public Insets getBorderInsets(Component c)       {
-            return insets;
+            return new Insets(5, 5, 5, 5);
         }
 
         public Insets getBorderInsets(Component c, Insets newInsets)
         {
-            newInsets.top = insets.top;
-            newInsets.left = insets.left;
-            newInsets.bottom = insets.bottom;
-            newInsets.right = insets.right;
+            newInsets.top = 5;
+            newInsets.left = 5;
+            newInsets.bottom = 5;
+            newInsets.right = 5;
             return newInsets;
         }
     }
@@ -345,7 +336,6 @@ public class MetalBorders {
      */
     static class DialogBorder extends AbstractBorder implements UIResource
     {
-        private static final Insets insets = new Insets(5, 5, 5, 5);
         private static final int corner = 14;
 
         protected Color getActiveBackground()
@@ -427,15 +417,15 @@ public class MetalBorders {
         }
 
         public Insets getBorderInsets(Component c)       {
-            return insets;
+            return new Insets(5, 5, 5, 5);
         }
 
         public Insets getBorderInsets(Component c, Insets newInsets)
         {
-            newInsets.top = insets.top;
-            newInsets.left = insets.left;
-            newInsets.bottom = insets.bottom;
-            newInsets.right = insets.right;
+            newInsets.top = 5;
+            newInsets.left = 5;
+            newInsets.bottom = 5;
+            newInsets.right = 5;
             return newInsets;
         }
     }
@@ -482,7 +472,6 @@ public class MetalBorders {
      * @since 1.3
      */
     public static class PaletteBorder extends AbstractBorder implements UIResource {
-        private static final Insets insets = new Insets(1, 1, 1, 1);
         int titleHeight = 0;
 
         public void paintBorder( Component c, Graphics g, int x, int y, int w, int h ) {
@@ -499,20 +488,19 @@ public class MetalBorders {
         }
 
         public Insets getBorderInsets(Component c)       {
-            return insets;
+            return new Insets(1, 1, 1, 1);
         }
 
         public Insets getBorderInsets(Component c, Insets newInsets) {
-            newInsets.top = insets.top;
-            newInsets.left = insets.left;
-            newInsets.bottom = insets.bottom;
-            newInsets.right = insets.right;
+            newInsets.top = 1;
+            newInsets.left = 1;
+            newInsets.bottom = 1;
+            newInsets.right = 1;
             return newInsets;
         }
     }
 
     public static class OptionDialogBorder extends AbstractBorder implements UIResource {
-        private static final Insets insets = new Insets(3, 3, 3, 3);
         int titleHeight = 0;
 
         public void paintBorder( Component c, Graphics g, int x, int y, int w, int h ) {
@@ -568,14 +556,14 @@ public class MetalBorders {
         }
 
         public Insets getBorderInsets(Component c)       {
-            return insets;
+            return new Insets(3, 3, 3, 3);
         }
 
         public Insets getBorderInsets(Component c, Insets newInsets) {
-            newInsets.top = insets.top;
-            newInsets.left = insets.left;
-            newInsets.bottom = insets.bottom;
-            newInsets.right = insets.right;
+            newInsets.top = 3;
+            newInsets.left = 3;
+            newInsets.bottom = 3;
+            newInsets.right = 3;
             return newInsets;
         }
     }
@@ -615,10 +603,10 @@ public class MetalBorders {
                 newInsets.set(0, 0, 2, 0);
             }
             else {
-                newInsets.top = borderInsets.top;
-                newInsets.left = borderInsets.left;
-                newInsets.bottom = borderInsets.bottom;
-                newInsets.right = borderInsets.right;
+                newInsets.top = 1;
+                newInsets.left = 0;
+                newInsets.bottom = 1;
+                newInsets.right = 0;
             }
             return newInsets;
         }
@@ -663,14 +651,14 @@ public class MetalBorders {
         }
 
         public Insets getBorderInsets( Component c ) {
-            return borderInsets;
+            return new Insets(2, 2, 2, 2);
         }
 
         public Insets getBorderInsets(Component c, Insets newInsets) {
-            newInsets.top = borderInsets.top;
-            newInsets.left = borderInsets.left;
-            newInsets.bottom = borderInsets.bottom;
-            newInsets.right = borderInsets.right;
+            newInsets.top = 2;
+            newInsets.left = 2;
+            newInsets.bottom = 2;
+            newInsets.right = 2;
             return newInsets;
         }
     }
@@ -694,14 +682,14 @@ public class MetalBorders {
         }
 
         public Insets getBorderInsets( Component c ) {
-             return borderInsets;
+             return new Insets(3, 1, 2, 1);
         }
 
         public Insets getBorderInsets(Component c, Insets newInsets) {
-            newInsets.top = borderInsets.top;
-            newInsets.left = borderInsets.left;
-            newInsets.bottom = borderInsets.bottom;
-            newInsets.right = borderInsets.right;
+            newInsets.top = 3;
+            newInsets.left = 1;
+            newInsets.bottom = 2;
+            newInsets.right = 1;
             return newInsets;
         }
     }
@@ -911,8 +899,6 @@ public class MetalBorders {
 
     public static class ScrollPaneBorder extends AbstractBorder implements UIResource {
 
-       private static final Insets insets = new Insets(1, 1, 2, 2);
-
         public void paintBorder(Component c, Graphics g, int x, int y,
                           int w, int h) {
 
@@ -946,7 +932,7 @@ public class MetalBorders {
         }
 
         public Insets getBorderInsets(Component c)       {
-            return insets;
+            return new Insets(1, 1, 2, 2);
         }
     }
 

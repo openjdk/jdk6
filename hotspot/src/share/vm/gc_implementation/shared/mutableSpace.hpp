@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,16 +16,19 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
 // A MutableSpace is a subtype of ImmutableSpace that supports the
 // concept of allocation. This includes the concepts that a space may
 // be only partially full, and the querry methods that go with such
-// an assumption.
+// an assumption. MutableSpace is also responsible for minimizing the
+// page allocation time by having the memory pretouched (with
+// AlwaysPretouch) and for optimizing page placement on NUMA systems
+// by make the underlying region interleaved (with UseNUMA).
 //
 // Invariant: (ImmutableSpace +) bottom() <= top() <= end()
 // top() is inclusive and end() is exclusive.
@@ -37,15 +40,23 @@ class MutableSpace: public ImmutableSpace {
 
   // Helper for mangling unused space in debug builds
   MutableSpaceMangler* _mangler;
-
+  // The last region which page had been setup to be interleaved.
+  MemRegion _last_setup_region;
+  size_t _alignment;
  protected:
   HeapWord* _top;
 
   MutableSpaceMangler* mangler() { return _mangler; }
 
+  void numa_setup_pages(MemRegion mr, bool clear_space);
+  void pretouch_pages(MemRegion mr);
+
+  void set_last_setup_region(MemRegion mr) { _last_setup_region = mr;   }
+  MemRegion last_setup_region() const      { return _last_setup_region; }
+
  public:
   virtual ~MutableSpace();
-  MutableSpace();
+  MutableSpace(size_t page_size);
 
   // Accessors
   HeapWord* top() const                    { return _top;    }
@@ -57,13 +68,20 @@ class MutableSpace: public ImmutableSpace {
   virtual void set_bottom(HeapWord* value) { _bottom = value; }
   virtual void set_end(HeapWord* value)    { _end = value; }
 
+  size_t alignment()                       { return _alignment; }
+
   // Returns a subregion containing all objects in this space.
   MemRegion used_region() { return MemRegion(bottom(), top()); }
+
+  static const bool SetupPages = true;
+  static const bool DontSetupPages = false;
 
   // Initialization
   virtual void initialize(MemRegion mr,
                           bool clear_space,
-                          bool mangle_space);
+                          bool mangle_space,
+                          bool setup_pages = SetupPages);
+
   virtual void clear(bool mangle_space);
   // Does the usual initialization but optionally resets top to bottom.
 #if 0  // MANGLE_SPACE

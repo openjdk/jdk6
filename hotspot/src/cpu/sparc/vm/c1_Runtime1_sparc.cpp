@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -57,13 +57,13 @@ int StubAssembler::call_RT(Register oop_result1, Register oop_result2, address e
 
   // check for pending exceptions
   { Label L;
-    Address exception_addr(G2_thread, 0, in_bytes(Thread::pending_exception_offset()));
+    Address exception_addr(G2_thread, Thread::pending_exception_offset());
     ld_ptr(exception_addr, Gtemp);
     br_null(Gtemp, false, pt, L);
     delayed()->nop();
-    Address vm_result_addr(G2_thread, 0, in_bytes(JavaThread::vm_result_offset()));
+    Address vm_result_addr(G2_thread, JavaThread::vm_result_offset());
     st_ptr(G0, vm_result_addr);
-    Address vm_result_addr_2(G2_thread, 0, in_bytes(JavaThread::vm_result_2_offset()));
+    Address vm_result_addr_2(G2_thread, JavaThread::vm_result_2_offset());
     st_ptr(G0, vm_result_addr_2);
 
     if (frame_size() == no_frame_size) {
@@ -73,8 +73,8 @@ int StubAssembler::call_RT(Register oop_result1, Register oop_result2, address e
     } else if (_stub_id == Runtime1::forward_exception_id) {
       should_not_reach_here();
     } else {
-      Address exc(G4, Runtime1::entry_for(Runtime1::forward_exception_id));
-      jump_to(exc, 0);
+      AddressLiteral exc(Runtime1::entry_for(Runtime1::forward_exception_id));
+      jump_to(exc, G4);
       delayed()->nop();
     }
     bind(L);
@@ -85,7 +85,7 @@ int StubAssembler::call_RT(Register oop_result1, Register oop_result2, address e
     get_vm_result  (oop_result1);
   } else {
     // be a little paranoid and clear the result
-    Address vm_result_addr(G2_thread, 0, in_bytes(JavaThread::vm_result_offset()));
+    Address vm_result_addr(G2_thread, JavaThread::vm_result_offset());
     st_ptr(G0, vm_result_addr);
   }
 
@@ -93,7 +93,7 @@ int StubAssembler::call_RT(Register oop_result1, Register oop_result2, address e
     get_vm_result_2(oop_result2);
   } else {
     // be a little paranoid and clear the result
-    Address vm_result_addr_2(G2_thread, 0, in_bytes(JavaThread::vm_result_2_offset()));
+    Address vm_result_addr_2(G2_thread, JavaThread::vm_result_2_offset());
     st_ptr(G0, vm_result_addr_2);
   }
 
@@ -479,8 +479,8 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         Register G4_length = G4; // Incoming
         Register O0_obj   = O0; // Outgoing
 
-        Address klass_lh(G5_klass, 0, ((klassOopDesc::header_size() * HeapWordSize)
-                                       + Klass::layout_helper_offset_in_bytes()));
+        Address klass_lh(G5_klass, ((klassOopDesc::header_size() * HeapWordSize)
+                                    + Klass::layout_helper_offset_in_bytes()));
         assert(Klass::_lh_header_size_shift % BitsPerByte == 0, "bytewise");
         assert(Klass::_lh_header_size_mask == 0xFF, "bytewise");
         // Use this offset to pick out an individual byte of the layout_helper:
@@ -677,10 +677,17 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         __ add(I7, frame::pc_return_offset, Oissuing_pc->after_save());
 
         __ call_VM_leaf(L7_thread_cache, CAST_FROM_FN_PTR(address, SharedRuntime::exception_handler_for_return_address),
-                        Oissuing_pc->after_save());
+                        G2_thread, Oissuing_pc->after_save());
         __ verify_not_null_oop(Oexception->after_save());
-        __ jmp(O0, 0);
-        __ delayed()->restore();
+
+        // Restore SP from L7 if the exception PC is a MethodHandle call site.
+        __ mov(O0, G5);  // Save the target address.
+        __ lduw(Address(G2_thread, JavaThread::is_method_handle_return_offset()), L0);
+        __ tst(L0);  // Condition codes are preserved over the restore.
+        __ restore();
+
+        __ jmp(G5, 0);
+        __ delayed()->movcc(Assembler::notZero, false, Assembler::icc, L7_mh_SP_save, SP);  // Restore SP if required.
       }
       break;
 
@@ -714,38 +721,19 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         //      sub  : G3, argument, destroyed
         //      super: G1, argument, not changed
         //      raddr: O7, blown by call
-        Label loop, miss;
+        Label miss;
 
         __ save_frame(0);               // Blow no registers!
 
-        __ ld_ptr( G3, sizeof(oopDesc) + Klass::secondary_supers_offset_in_bytes(), L3 );
-        __ lduw(L3,arrayOopDesc::length_offset_in_bytes(),L0); // length in l0
-        __ add(L3,arrayOopDesc::base_offset_in_bytes(T_OBJECT),L1); // ptr into array
-        __ clr(L4);                     // Index
-        // Load a little early; will load 1 off the end of the array.
-        // Ok for now; revisit if we have other uses of this routine.
-        __ ld_ptr(L1,0,L2);             // Will load a little early
-
-        // The scan loop
-        __ bind(loop);
-        __ add(L1,wordSize,L1); // Bump by OOP size
-        __ cmp(L4,L0);
-        __ br(Assembler::equal,false,Assembler::pn,miss);
-        __ delayed()->inc(L4);  // Bump index
-        __ subcc(L2,G1,L3);             // Check for match; zero in L3 for a hit
-        __ brx( Assembler::notEqual, false, Assembler::pt, loop );
-        __ delayed()->ld_ptr(L1,0,L2); // Will load a little early
-
-        // Got a hit; report success; set cache
-        __ st_ptr( G1, G3, sizeof(oopDesc) + Klass::secondary_super_cache_offset_in_bytes() );
+        __ check_klass_subtype_slow_path(G3, G1, L0, L1, L2, L4, NULL, &miss);
 
         __ mov(1, G3);
-        __ ret();                       // Result in G5 is ok; flags set
+        __ ret();                       // Result in G5 is 'true'
         __ delayed()->restore();        // free copy or add can go here
 
         __ bind(miss);
         __ mov(0, G3);
-        __ ret();                       // Result in G5 is ok; flags set
+        __ ret();                       // Result in G5 is 'false'
         __ delayed()->restore();        // free copy or add can go here
       }
 
@@ -921,8 +909,8 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
         __ srl(addr, CardTableModRefBS::card_shift, addr);
 #endif
 
-        Address rs(cardtable, (address)byte_map_base);
-        __ load_address(rs); // cardtable := <card table base>
+        AddressLiteral rs(byte_map_base);
+        __ set(rs, cardtable);         // cardtable := <card table base>
         __ ldub(addr, cardtable, tmp); // tmp := [addr + cardtable]
 
         __ br_on_reg_cond(Assembler::rc_nz, /*annul*/false, Assembler::pt,
@@ -1004,7 +992,6 @@ OopMapSet* Runtime1::generate_code_for(StubID id, StubAssembler* sasm) {
 
 void Runtime1::generate_handle_exception(StubAssembler* sasm, OopMapSet* oop_maps, OopMap* oop_map, bool) {
   Label no_deopt;
-  Label no_handler;
 
   __ verify_not_null_oop(Oexception);
 
@@ -1022,29 +1009,20 @@ void Runtime1::generate_handle_exception(StubAssembler* sasm, OopMapSet* oop_map
   // whether it had a handler or not we will deoptimize
   // by entering the deopt blob with a pending exception.
 
+#ifdef ASSERT
+  Label done;
   __ tst(O0);
-  __ br(Assembler::zero, false, Assembler::pn, no_handler);
+  __ br(Assembler::notZero, false, Assembler::pn, done);
   __ delayed()->nop();
+  __ stop("should have found address");
+  __ bind(done);
+#endif
 
   // restore the registers that were saved at the beginning and jump to the exception handler.
   restore_live_registers(sasm);
 
   __ jmp(O0, 0);
   __ delayed()->restore();
-
-  __ bind(no_handler);
-  __ mov(L0, I7); // restore return address
-
-  // restore exception oop
-  __ ld_ptr(G2_thread, in_bytes(JavaThread::exception_oop_offset()), Oexception->after_save());
-  __ st_ptr(G0, G2_thread, in_bytes(JavaThread::exception_oop_offset()));
-
-  __ restore();
-
-  Address exc(G4, Runtime1::entry_for(Runtime1::unwind_exception_id));
-  __ jump_to(exc, 0);
-  __ delayed()->nop();
-
 
   oop_maps->add_gc_map(call_offset, oop_map);
 }
@@ -1053,3 +1031,7 @@ void Runtime1::generate_handle_exception(StubAssembler* sasm, OopMapSet* oop_map
 #undef __
 
 #define __ masm->
+
+const char *Runtime1::pd_name_for_address(address entry) {
+  return "<unknown function>";
+}

@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package com.sun.rowset.internal;
@@ -46,6 +46,17 @@ import javax.sql.rowset.spi.*;
  */
 public class WebRowSetXmlReader implements XmlReader, Serializable {
 
+
+    private JdbcRowSetResourceBundle resBundle;
+
+    public WebRowSetXmlReader(){
+        try {
+           resBundle = JdbcRowSetResourceBundle.getJdbcRowSetResourceBundle();
+        } catch(IOException ioe) {
+            throw new RuntimeException(ioe);
+        }
+    }
+
     /**
      * Parses the given <code>WebRowSet</code> object, getting its input from
      * the given <code>java.io.Reader</code> object.  The parser will send
@@ -69,17 +80,6 @@ public class WebRowSetXmlReader implements XmlReader, Serializable {
      *            reader for the given rowset
      * @see XmlReaderContentHandler
      */
-
-    private JdbcRowSetResourceBundle resBundle;
-
-    public WebRowSetXmlReader(){
-        try {
-           resBundle = JdbcRowSetResourceBundle.getJdbcRowSetResourceBundle();
-        } catch(IOException ioe) {
-            throw new RuntimeException(ioe);
-        }
-    }
-
     public void readXML(WebRowSet caller, java.io.Reader reader) throws SQLException {
         try {
             // Crimson Parser(as in J2SE 1.4.1 is NOT able to handle

@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -58,7 +58,6 @@ class JvmtiExport : public AllStatic {
   static int         _field_modification_count;
 
   static bool        _can_access_local_variables;
-  static bool        _can_examine_or_deopt_anywhere;
   static bool        _can_hotswap_or_post_breakpoint;
   static bool        _can_modify_any_class;
   static bool        _can_walk_any_space;
@@ -66,7 +65,7 @@ class JvmtiExport : public AllStatic {
   JVMTI_SUPPORT_FLAG(can_get_source_debug_extension)
   JVMTI_SUPPORT_FLAG(can_maintain_original_method_order)
   JVMTI_SUPPORT_FLAG(can_post_interpreter_events)
-  JVMTI_SUPPORT_FLAG(can_post_exceptions)
+  JVMTI_SUPPORT_FLAG(can_post_on_exceptions)
   JVMTI_SUPPORT_FLAG(can_post_breakpoint)
   JVMTI_SUPPORT_FLAG(can_post_field_access)
   JVMTI_SUPPORT_FLAG(can_post_field_modification)
@@ -93,6 +92,7 @@ class JvmtiExport : public AllStatic {
   JVMTI_SUPPORT_FLAG(should_post_data_dump)
   JVMTI_SUPPORT_FLAG(should_post_garbage_collection_start)
   JVMTI_SUPPORT_FLAG(should_post_garbage_collection_finish)
+  JVMTI_SUPPORT_FLAG(should_post_on_exceptions)
 
   // ------ the below maybe don't have to be (but are for now)
   // fixed conditions here ------------
@@ -111,7 +111,6 @@ class JvmtiExport : public AllStatic {
 
   // these should only be called by the friend class
   friend class JvmtiManageCapabilities;
-  inline static void set_can_examine_or_deopt_anywhere(bool on)        { _can_examine_or_deopt_anywhere = (on != 0); }
   inline static void set_can_modify_any_class(bool on)                 { _can_modify_any_class = (on != 0); }
   inline static void set_can_access_local_variables(bool on)           { _can_access_local_variables = (on != 0); }
   inline static void set_can_hotswap_or_post_breakpoint(bool on)       { _can_hotswap_or_post_breakpoint = (on != 0); }
@@ -144,6 +143,9 @@ class JvmtiExport : public AllStatic {
 
   // posts any pending CompiledMethodUnload events.
   static void post_pending_compiled_method_unload_events();
+
+  // Perform the actual notification to interested JvmtiEnvs.
+  static void post_compiled_method_unload_internal(JavaThread* self, jmethodID mid, const void* code_begin);
 
   // posts a DynamicCodeGenerated event (internal/private implementation).
   // The public post_dynamic_code_generated* functions make use of the
@@ -219,7 +221,6 @@ class JvmtiExport : public AllStatic {
   static void enter_live_phase();
 
   // ------ can_* conditions (below) are set at OnLoad and never changed ------------
-  inline static bool can_examine_or_deopt_anywhere()              { return _can_examine_or_deopt_anywhere; }
   inline static bool can_modify_any_class()                       { return _can_modify_any_class; }
   inline static bool can_access_local_variables()                 { return _can_access_local_variables; }
   inline static bool can_hotswap_or_post_breakpoint()             { return _can_hotswap_or_post_breakpoint; }
@@ -236,6 +237,8 @@ class JvmtiExport : public AllStatic {
   static bool is_jvmti_version(jint version)                      { return (version & JVMTI_VERSION_MASK) == JVMTI_VERSION_VALUE; }
   static bool is_jvmdi_version(jint version)                      { return (version & JVMTI_VERSION_MASK) == JVMDI_VERSION_VALUE; }
   static jint get_jvmti_interface(JavaVM *jvm, void **penv, jint version);
+  static void decode_version_values(jint version, int * major, int * minor,
+                                    int * micro);
 
   // single stepping management methods
   static void at_single_stepping_point(JavaThread *thread, methodOop method, address location) KERNEL_RETURN;
@@ -299,8 +302,8 @@ class JvmtiExport : public AllStatic {
   static void post_compiled_method_load(nmethod *nm) KERNEL_RETURN;
   static void post_dynamic_code_generated(const char *name, const void *code_begin, const void *code_end) KERNEL_RETURN;
 
-  // used at a safepoint to post a CompiledMethodUnload event
-  static void post_compiled_method_unload_at_safepoint(jmethodID mid, const void *code_begin) KERNEL_RETURN;
+  // used to post a CompiledMethodUnload event
+  static void post_compiled_method_unload(jmethodID mid, const void *code_begin) KERNEL_RETURN;
 
   // similiar to post_dynamic_code_generated except that it can be used to
   // post a DynamicCodeGenerated event while holding locks in the VM. Any event

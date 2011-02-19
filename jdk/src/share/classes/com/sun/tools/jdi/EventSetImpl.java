@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package com.sun.tools.jdi;
@@ -56,10 +56,8 @@ public class EventSetImpl extends ArrayList<Event> implements EventSet {
     public String toString() {
         String string = "event set, policy:" + suspendPolicy +
                         ", count:" + this.size() + " = {";
-        Iterator iter = this.iterator();
         boolean first = true;
-        while (iter.hasNext()) {
-            Event event = (Event)iter.next();
+        for (Event event : this) {
             if (!first) {
                 string += ", ";
             }
@@ -210,8 +208,9 @@ public class EventSetImpl extends ArrayList<Event> implements EventSet {
         }
 
         public String toString() {
-            return eventName() + "@" + location().toString() +
-                                 " in thread " + thread().name();
+            return eventName() + "@" +
+                   ((location() == null) ? " null" : location().toString()) +
+                   " in thread " + thread().name();
         }
     }
 
@@ -787,9 +786,7 @@ public class EventSetImpl extends ArrayList<Event> implements EventSet {
     }
 
     private ThreadReference eventThread() {
-        Iterator iter = this.iterator();
-        while (iter.hasNext()) {
-            Event event = (Event)iter.next();
+        for (Event event : this) {
             if (event instanceof ThreadedEventImpl) {
                 return ((ThreadedEventImpl)event).thread();
             }
@@ -846,7 +843,7 @@ public class EventSetImpl extends ArrayList<Event> implements EventSet {
         }
 
         public Event nextEvent() {
-            return (Event)next();
+            return next();
         }
 
         public void remove() {

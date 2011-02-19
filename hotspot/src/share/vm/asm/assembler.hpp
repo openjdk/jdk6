@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,13 +16,13 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
-// This file contains platform-independant assembler declarations.
+// This file contains platform-independent assembler declarations.
 
 class CodeBuffer;
 class MacroAssembler;
@@ -140,6 +140,28 @@ class Label VALUE_OBJ_CLASS_SPEC {
   }
 };
 
+// A union type for code which has to assemble both constant and
+// non-constant operands, when the distinction cannot be made
+// statically.
+class RegisterOrConstant VALUE_OBJ_CLASS_SPEC {
+ private:
+  Register _r;
+  intptr_t _c;
+
+ public:
+  RegisterOrConstant(): _r(noreg), _c(0) {}
+  RegisterOrConstant(Register r): _r(r), _c(0) {}
+  RegisterOrConstant(intptr_t c): _r(noreg), _c(c) {}
+
+  Register as_register() const { assert(is_register(),""); return _r; }
+  intptr_t as_constant() const { assert(is_constant(),""); return _c; }
+
+  Register register_or_noreg() const { return _r; }
+  intptr_t constant_or_zero() const  { return _c; }
+
+  bool is_register() const { return _r != noreg; }
+  bool is_constant() const { return _r == noreg; }
+};
 
 // The Abstract Assembler: Pure assembler doing NO optimizations on the
 // instruction level; i.e., what you write is what you get.
@@ -279,6 +301,26 @@ class AbstractAssembler : public ResourceObj  {
   }
   inline address address_constant(Label& L);
   inline address address_table_constant(GrowableArray<Label*> label);
+
+  // Bootstrapping aid to cope with delayed determination of constants.
+  // Returns a static address which will eventually contain the constant.
+  // The value zero (NULL) stands instead of a constant which is still uncomputed.
+  // Thus, the eventual value of the constant must not be zero.
+  // This is fine, since this is designed for embedding object field
+  // offsets in code which must be generated before the object class is loaded.
+  // Field offsets are never zero, since an object's header (mark word)
+  // is located at offset zero.
+  RegisterOrConstant delayed_value(int(*value_fn)(), Register tmp, int offset = 0) {
+    return delayed_value_impl(delayed_value_addr(value_fn), tmp, offset);
+  }
+  RegisterOrConstant delayed_value(address(*value_fn)(), Register tmp, int offset = 0) {
+    return delayed_value_impl(delayed_value_addr(value_fn), tmp, offset);
+  }
+  virtual RegisterOrConstant delayed_value_impl(intptr_t* delayed_value_addr, Register tmp, int offset) = 0;
+  // Last overloading is platform-dependent; look in assembler_<arch>.cpp.
+  static intptr_t* delayed_value_addr(int(*constant_fn)());
+  static intptr_t* delayed_value_addr(address(*constant_fn)());
+  static void update_delayed_values();
 
   // Bang stack to trigger StackOverflowError at a safe location
   // implementation delegates to machine-specific bang_stack_with_offset

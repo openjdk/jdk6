@@ -1,12 +1,12 @@
 /*
- * Copyright 2002-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2002, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.security.validator;
@@ -86,6 +86,9 @@ class EndEntityChecker {
 
     // the Microsoft Server-Gated-Cryptography EKU extension OID
     private final static String OID_EKU_MS_SGC = "1.3.6.1.4.1.311.10.3.3";
+
+    // the recognized extension OIDs
+    private final static String OID_SUBJECT_ALT_NAME = "2.5.29.17";
 
     private final static String NSCT_SSL_CLIENT =
                                 NetscapeCertTypeExtension.SSL_CLIENT;
@@ -171,6 +174,13 @@ class EndEntityChecker {
             throws CertificateException {
         // basic constraints irrelevant in EE certs
         exts.remove(SimpleValidator.OID_BASIC_CONSTRAINTS);
+
+        // If the subject field contains an empty sequence, the subjectAltName
+        // extension MUST be marked critical.
+        // We do not check the validity of the critical extension, just mark
+        // it recognizable here.
+        exts.remove(OID_SUBJECT_ALT_NAME);
+
         if (!exts.isEmpty()) {
             throw new CertificateException("Certificate contains unsupported "
                 + "critical extensions: " + exts);

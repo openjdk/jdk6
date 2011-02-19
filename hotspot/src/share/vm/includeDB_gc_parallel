@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2007 Sun Microsystems, Inc.  All Rights Reserved.
+// Copyright (c) 2007, Oracle and/or its affiliates. All rights reserved.
 // DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 //   
 // This code is free software; you can redistribute it and/or modify it
@@ -16,10 +16,12 @@
 // 2 along with this work; if not, write to the Free Software Foundation,
 // Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 //   
-// Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-// CA 95054 USA or visit www.sun.com if you need additional information or
-// have any questions.
+// Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+// or visit www.oracle.com if you need additional information or have any
+// questions.
 //  
+
+arguments.cpp                           compactibleFreeListSpace.hpp
 
 assembler_<arch>.cpp                    g1SATBCardTableModRefBS.hpp
 assembler_<arch>.cpp                    g1CollectedHeap.inline.hpp
@@ -35,6 +37,18 @@ constantPoolKlass.cpp                   oop.pcgc.inline.hpp
 constantPoolKlass.cpp                   psPromotionManager.inline.hpp
 constantPoolKlass.cpp                   psScavenge.inline.hpp
 constantPoolKlass.cpp                   parOopClosures.inline.hpp
+
+constantPoolKlass.cpp                   cardTableRS.hpp
+constantPoolKlass.cpp                   oop.pcgc.inline.hpp
+constantPoolKlass.cpp                   psPromotionManager.inline.hpp
+constantPoolKlass.cpp                   psScavenge.inline.hpp
+constantPoolKlass.cpp                   parOopClosures.inline.hpp
+
+cpCacheKlass.cpp                        cardTableRS.hpp
+cpCacheKlass.cpp                        oop.pcgc.inline.hpp
+cpCacheKlass.cpp                        psPromotionManager.inline.hpp
+cpCacheKlass.cpp                        psScavenge.inline.hpp
+cpCacheKlass.cpp                        parOopClosures.inline.hpp
 
 genCollectedHeap.cpp                    concurrentMarkSweepThread.hpp
 genCollectedHeap.cpp                    vmCMSOperations.hpp
@@ -66,7 +80,6 @@ instanceRefKlass.cpp                    g1CollectedHeap.inline.hpp
 instanceRefKlass.cpp                    g1OopClosures.inline.hpp
 instanceRefKlass.cpp                    oop.pcgc.inline.hpp
 instanceRefKlass.cpp                    psPromotionManager.inline.hpp
-instanceRefKlass.cpp                    oop.pcgc.inline.hpp
 instanceRefKlass.cpp                    psScavenge.inline.hpp
 instanceRefKlass.cpp                    parOopClosures.inline.hpp
 
@@ -102,9 +115,13 @@ objArrayKlass.cpp                       heapRegionSeq.inline.hpp
 objArrayKlass.cpp                       g1CollectedHeap.inline.hpp
 objArrayKlass.cpp                       g1OopClosures.inline.hpp
 objArrayKlass.cpp                       oop.pcgc.inline.hpp
+objArrayKlass.cpp                       psCompactionManager.hpp
 objArrayKlass.cpp                       psPromotionManager.inline.hpp
 objArrayKlass.cpp                       psScavenge.inline.hpp
 objArrayKlass.cpp                       parOopClosures.inline.hpp
+
+objArrayKlass.inline.hpp		psCompactionManager.inline.hpp
+objArrayKlass.inline.hpp		psParallelCompact.hpp
 
 oop.pcgc.inline.hpp                     parNewGeneration.hpp
 oop.pcgc.inline.hpp                     parallelScavengeHeap.hpp

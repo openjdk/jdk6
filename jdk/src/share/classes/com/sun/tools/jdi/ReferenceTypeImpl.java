@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package com.sun.tools.jdi;
@@ -59,7 +59,7 @@ implements ReferenceType {
     private boolean constantPoolInfoGotten = false;
     private int constanPoolCount;
     private byte[] constantPoolBytes;
-    private SoftReference constantPoolBytesRef = null;
+    private SoftReference<byte[]> constantPoolBytesRef = null;
 
     /* to mark a SourceFile request that returned a genuine JDWP.Error.ABSENT_INFORMATION */
     private static final String ABSENT_BASE_SOURCE_NAME = "**ABSENT_BASE_SOURCE_NAME**";
@@ -352,13 +352,10 @@ implements ReferenceType {
     abstract List<? extends ReferenceType> inheritedTypes();
 
     void addVisibleFields(List<Field> visibleList, Map<String, Field> visibleTable, List<String> ambiguousNames) {
-        List<Field> list = visibleFields();
-        Iterator iter = list.iterator();
-        while (iter.hasNext()) {
-            Field field = (Field)iter.next();
+        for (Field field : visibleFields()) {
             String name = field.name();
             if (!ambiguousNames.contains(name)) {
-                Field duplicate = (Field)visibleTable.get(name);
+                Field duplicate = visibleTable.get(name);
                 if (duplicate == null) {
                     visibleList.add(field);
                     visibleTable.put(name, field);
@@ -402,10 +399,8 @@ implements ReferenceType {
          * hide.
          */
         List<Field> retList = new ArrayList<Field>(fields());
-        iter = retList.iterator();
-        while (iter.hasNext()) {
-            Field field = (Field)iter.next();
-            Field hidden = (Field)visibleTable.get(field.name());
+        for (Field field : retList) {
+            Field hidden = visibleTable.get(field.name());
             if (hidden != null) {
                 visibleList.remove(hidden);
             }
@@ -515,12 +510,9 @@ implements ReferenceType {
      * methods.
      */
     void addToMethodMap(Map<String, Method> methodMap, List<Method> methodList) {
-        Iterator iter = methodList.iterator();
-        while (iter.hasNext()) {
-            Method method = (Method)iter.next();
+        for (Method method : methodList)
             methodMap.put(method.name().concat(method.signature()), method);
         }
-    }
 
     abstract void addVisibleMethods(Map<String, Method> methodMap);
 
@@ -549,9 +541,7 @@ implements ReferenceType {
     public List<Method> methodsByName(String name) {
         List<Method> methods = visibleMethods();
         ArrayList<Method> retList = new ArrayList<Method>(methods.size());
-        Iterator iter = methods.iterator();
-        while (iter.hasNext()) {
-            Method candidate = (Method)iter.next();
+        for (Method candidate : methods) {
             if (candidate.name().equals(name)) {
                 retList.add(candidate);
             }
@@ -563,9 +553,7 @@ implements ReferenceType {
     public List<Method> methodsByName(String name, String signature) {
         List<Method> methods = visibleMethods();
         ArrayList<Method> retList = new ArrayList<Method>(methods.size());
-        Iterator iter = methods.iterator();
-        while (iter.hasNext()) {
-            Method candidate = (Method)iter.next();
+        for (Method candidate : methods) {
             if (candidate.name().equals(name) &&
                 candidate.signature().equals(signature)) {
                 retList.add(candidate);
@@ -706,7 +694,7 @@ implements ReferenceType {
     }
 
     public String sourceName() throws AbsentInformationException {
-        return (String)(sourceNames(vm.getDefaultStratum()).get(0));
+        return sourceNames(vm.getDefaultStratum()).get(0);
     }
 
     public List<String> sourceNames(String stratumID)
@@ -796,7 +784,7 @@ implements ReferenceType {
         if (!vm.canGetSourceDebugExtension()) {
             return NO_SDE_INFO_MARK;
         }
-        SDE sde = (sdeRef == null) ?  null : (SDE)sdeRef.get();
+        SDE sde = (sdeRef == null) ?  null : sdeRef.get();
         if (sde == null) {
             String extension = null;
             try {
@@ -1034,13 +1022,13 @@ implements ReferenceType {
             throw exc;
         }
         if (constantPoolBytesRef != null) {
-            byte[] cpbytes = (byte[])constantPoolBytesRef.get();
+            byte[] cpbytes = constantPoolBytesRef.get();
             /*
              * Arrays are always modifiable, so it is a little unsafe
              * to return the cached bytecodes directly; instead, we
              * make a clone at the cost of using more memory.
              */
-            return (byte[])cpbytes.clone();
+            return cpbytes.clone();
         } else {
             return null;
         }

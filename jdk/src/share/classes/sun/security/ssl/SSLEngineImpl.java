@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.security.ssl;
@@ -275,6 +275,12 @@ final public class SSLEngineImpl extends SSLEngine {
     private CipherBox           readCipher, writeCipher;
     // NOTE: compression state would be saved here
 
+    /*
+     * security parameters for secure renegotiation.
+     */
+    private boolean             secureRenegotiation;
+    private byte[]              clientVerifyData;
+    private byte[]              serverVerifyData;
 
     /*
      * READ ME * READ ME * READ ME * READ ME * READ ME * READ ME *
@@ -356,6 +362,11 @@ final public class SSLEngineImpl extends SSLEngine {
         writeCipher = CipherBox.NULL;
         writeMAC = MAC.NULL;
 
+        // default security parameters for secure renegotiation
+        secureRenegotiation = false;
+        clientVerifyData = new byte[0];
+        serverVerifyData = new byte[0];
+
         enabledCipherSuites = CipherSuiteList.getDefault();
         enabledProtocols = ProtocolList.getDefault();
 
@@ -433,11 +444,15 @@ final public class SSLEngineImpl extends SSLEngine {
             connectionState = cs_RENEGOTIATE;
         }
         if (roleIsServer) {
-            handshaker = new ServerHandshaker
-                        (this, sslContext, enabledProtocols, doClientAuth);
+            handshaker = new ServerHandshaker(this, sslContext,
+                    enabledProtocols, doClientAuth,
+                    protocolVersion, connectionState == cs_HANDSHAKE,
+                    secureRenegotiation, clientVerifyData, serverVerifyData);
         } else {
-            handshaker = new ClientHandshaker
-                        (this, sslContext, enabledProtocols);
+            handshaker = new ClientHandshaker(this, sslContext,
+                    enabledProtocols,
+                    protocolVersion, connectionState == cs_HANDSHAKE,
+                    secureRenegotiation, clientVerifyData, serverVerifyData);
         }
         handshaker.enabledCipherSuites = enabledCipherSuites;
         handshaker.setEnableSessionCreation(enableSessionCreation);
@@ -622,6 +637,18 @@ final public class SSLEngineImpl extends SSLEngine {
             break;
 
         case cs_DATA:
+            if (!secureRenegotiation && !Handshaker.allowUnsafeRenegotiation) {
+                throw new SSLHandshakeException(
+                        "Insecure renegotiation is not allowed");
+            }
+
+            if (!secureRenegotiation) {
+                if (debug != null && Debug.isOn("handshake")) {
+                    System.out.println(
+                        "Warning: Using insecure renegotiation");
+                }
+            }
+
             // initialize the handshaker, move to cs_RENEGOTIATE
             initHandshaker();
             break;
@@ -949,7 +976,19 @@ final public class SSLEngineImpl extends SSLEngine {
                     handshaker.process_record(inputRecord, expectingFinished);
                     expectingFinished = false;
 
-                    if (handshaker.isDone()) {
+                    if (handshaker.invalidated) {
+                        handshaker = null;
+                        // if state is cs_RENEGOTIATE, revert it to cs_DATA
+                        if (connectionState == cs_RENEGOTIATE) {
+                            connectionState = cs_DATA;
+                        }
+                    } else if (handshaker.isDone()) {
+                        // reset the parameters for secure renegotiation.
+                        secureRenegotiation =
+                                        handshaker.isSecureRenegotiation();
+                        clientVerifyData = handshaker.getClientVerifyData();
+                        serverVerifyData = handshaker.getServerVerifyData();
+
                         sess = handshaker.getSession();
                         if (!writer.hasOutboundData()) {
                             hsStatus = HandshakeStatus.FINISHED;

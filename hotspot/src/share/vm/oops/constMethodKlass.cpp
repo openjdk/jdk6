@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -49,10 +49,16 @@ bool constMethodKlass::oop_is_parsable(oop obj) const {
   return constMethodOop(obj)->object_is_parsable();
 }
 
+bool constMethodKlass::oop_is_conc_safe(oop obj) const {
+  assert(obj->is_constMethod(), "must be constMethod oop");
+  return constMethodOop(obj)->is_conc_safe();
+}
+
 constMethodOop constMethodKlass::allocate(int byte_code_size,
                                           int compressed_line_number_size,
                                           int localvariable_table_length,
                                           int checked_exceptions_length,
+                                          bool is_conc_safe,
                                           TRAPS) {
 
   int size = constMethodOopDesc::object_size(byte_code_size,
@@ -75,6 +81,7 @@ constMethodOop constMethodKlass::allocate(int byte_code_size,
                                 compressed_line_number_size,
                                 localvariable_table_length);
   assert(cm->size() == size, "wrong size for object");
+  cm->set_is_conc_safe(is_conc_safe);
   cm->set_partially_loaded();
   assert(cm->is_parsable(), "Is safely parsable by gc");
   return cm;
@@ -150,10 +157,6 @@ int constMethodKlass::oop_adjust_pointers(oop obj) {
 }
 
 #ifndef SERIALGC
-void constMethodKlass::oop_copy_contents(PSPromotionManager* pm, oop obj) {
-  assert(obj->is_constMethod(), "should be constMethod");
-}
-
 void constMethodKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
   assert(obj->is_constMethod(), "should be constMethod");
 }
@@ -190,8 +193,6 @@ int constMethodKlass::oop_update_pointers(ParCompactionManager* cm, oop obj,
 }
 #endif // SERIALGC
 
-#ifndef PRODUCT
-
 // Printing
 
 void constMethodKlass::oop_print_on(oop obj, outputStream* st) {
@@ -209,7 +210,6 @@ void constMethodKlass::oop_print_on(oop obj, outputStream* st) {
   }
 }
 
-
 // Short version of printing constMethodOop - just print the name of the
 // method it belongs to.
 void constMethodKlass::oop_print_value_on(oop obj, outputStream* st) {
@@ -218,8 +218,6 @@ void constMethodKlass::oop_print_value_on(oop obj, outputStream* st) {
   st->print(" const part of method " );
   m->method()->print_value_on(st);
 }
-
-#endif // PRODUCT
 
 const char* constMethodKlass::internal_name() const {
   return "{constMethod}";

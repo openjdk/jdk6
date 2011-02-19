@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2006, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -82,8 +82,8 @@ class MutableNUMASpace : public MutableSpace {
     char* last_page_scanned()            { return _last_page_scanned; }
     void set_last_page_scanned(char* p)  { _last_page_scanned = p;    }
    public:
-    LGRPSpace(int l) : _lgrp_id(l), _last_page_scanned(NULL), _allocation_failed(false) {
-      _space = new MutableSpace();
+    LGRPSpace(int l, size_t alignment) : _lgrp_id(l), _last_page_scanned(NULL), _allocation_failed(false) {
+      _space = new MutableSpace(alignment);
       _alloc_rate = new AdaptiveWeightedAverage(NUMAChunkResizeWeight);
     }
     ~LGRPSpace() {
@@ -183,10 +183,10 @@ class MutableNUMASpace : public MutableSpace {
 
  public:
   GrowableArray<LGRPSpace*>* lgrp_spaces() const     { return _lgrp_spaces;       }
-  MutableNUMASpace();
+  MutableNUMASpace(size_t alignment);
   virtual ~MutableNUMASpace();
   // Space initialization.
-  virtual void initialize(MemRegion mr, bool clear_space, bool mangle_space);
+  virtual void initialize(MemRegion mr, bool clear_space, bool mangle_space, bool setup_pages = SetupPages);
   // Update space layout if necessary. Do all adaptive resizing job.
   virtual void update();
   // Update allocation rate averages.

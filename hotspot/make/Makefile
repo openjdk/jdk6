@@ -1,5 +1,5 @@
 #
-# Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #  
 #
 
@@ -84,15 +84,35 @@ endif
 C1_VM_TARGETS=product1 fastdebug1 optimized1 jvmg1
 C2_VM_TARGETS=product  fastdebug  optimized  jvmg
 KERNEL_VM_TARGETS=productkernel fastdebugkernel optimizedkernel jvmgkernel
+ZERO_VM_TARGETS=productzero fastdebugzero optimizedzero jvmgzero
+SHARK_VM_TARGETS=productshark fastdebugshark optimizedshark jvmgshark
 
 # JDK directory list
 JDK_DIRS=bin include jre lib demo
 
 all:           all_product all_fastdebug
+ifndef BUILD_CLIENT_ONLY
 all_product:   product product1 productkernel docs export_product
 all_fastdebug: fastdebug fastdebug1 fastdebugkernel docs export_fastdebug
 all_debug:     jvmg jvmg1 jvmgkernel docs export_debug
+else
+all_product:   product1 docs export_product
+all_fastdebug: fastdebug1 docs export_fastdebug
+all_debug:     jvmg1 docs export_debug
+endif
 all_optimized: optimized optimized1 optimizedkernel docs export_optimized
+
+allzero:           all_productzero all_fastdebugzero
+all_productzero:   productzero docs export_product
+all_fastdebugzero: fastdebugzero docs export_fastdebug
+all_debugzero:     jvmgzero docs export_debug
+all_optimizedzero: optimizedzero docs export_optimized
+
+allshark:           all_productshark all_fastdebugshark
+all_productshark:   productshark docs export_product
+all_fastdebugshark: fastdebugshark docs export_fastdebug
+all_debugshark:     jvmgshark docs export_debug
+all_optimizedshark: optimizedshark docs export_optimized
 
 # Do everything
 world:         all create_jdk
@@ -119,6 +139,14 @@ $(C2_VM_TARGETS):
 $(KERNEL_VM_TARGETS):
 	$(CD) $(GAMMADIR)/make; \
 	$(MAKE) VM_TARGET=$@ generic_buildkernel $(ALT_OUT)
+
+$(ZERO_VM_TARGETS):
+	$(CD) $(GAMMADIR)/make; \
+	$(MAKE) VM_TARGET=$@ generic_buildzero $(ALT_OUT)
+
+$(SHARK_VM_TARGETS):
+	$(CD) $(GAMMADIR)/make; \
+	$(MAKE) VM_TARGET=$@ generic_buildshark $(ALT_OUT)
 
 # Build compiler1 (client) rule, different for platforms
 generic_build1:
@@ -180,6 +208,18 @@ else
 	@$(ECHO) "No kernel ($(VM_TARGET)) for OS_NAME=$(OSNAME)"
 endif
 
+generic_buildzero:
+	$(MKDIR) -p $(OUTPUTDIR)
+	$(CD) $(OUTPUTDIR); \
+		$(MAKE) -f $(ABS_OS_MAKEFILE) \
+			$(MAKE_ARGS) $(VM_TARGET)
+
+generic_buildshark:
+	$(MKDIR) -p $(OUTPUTDIR)
+	$(CD) $(OUTPUTDIR); \
+		$(MAKE) -f $(ABS_OS_MAKEFILE) \
+			$(MAKE_ARGS) $(VM_TARGET) 
+
 # Export file rule
 generic_export: $(EXPORT_LIST)
 export_product:
@@ -210,17 +250,31 @@ DOCS_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_docs
 C1_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_compiler1
 C2_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_compiler2
 KERNEL_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_kernel
+ZERO_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_zero
+SHARK_BASE_DIR=$(OUTPUTDIR)/$(VM_PLATFORM)_shark
 C1_DIR=$(C1_BASE_DIR)/$(VM_SUBDIR)
 C2_DIR=$(C2_BASE_DIR)/$(VM_SUBDIR)
 KERNEL_DIR=$(KERNEL_BASE_DIR)/$(VM_SUBDIR)
+ZERO_DIR=$(ZERO_BASE_DIR)/$(VM_SUBDIR)
+SHARK_DIR=$(SHARK_BASE_DIR)/$(VM_SUBDIR)
 
 # Misc files and generated files need to come from C1 or C2 area
+ifeq ($(ZERO_BUILD), true)
+ifeq ($(SHARK_BUILD), true)
+  MISC_DIR=$(SHARK_DIR)
+  GEN_DIR=$(SHARK_BASE_DIR)/generated
+else
+  MISC_DIR=$(ZERO_DIR)
+  GEN_DIR=$(ZERO_BASE_DIR)/generated
+endif
+else
 ifeq ($(ARCH_DATA_MODEL), 32)
   MISC_DIR=$(C1_DIR)
   GEN_DIR=$(C1_BASE_DIR)/generated
 else
   MISC_DIR=$(C2_DIR)
   GEN_DIR=$(C2_BASE_DIR)/generated
+endif
 endif
 
 # Bin files (windows)
@@ -265,6 +319,21 @@ endif
 
 # Shared Library
 ifneq ($(OSNAME),windows)
+  ifeq ($(ZERO_BUILD), true)
+    ifeq ($(SHARK_BUILD), true)
+$(EXPORT_JRE_LIB_ARCH_DIR)/%.so: $(SHARK_DIR)/%.so
+	$(install-file)
+$(EXPORT_SERVER_DIR)/%.so:       $(SHARK_DIR)/%.so
+	$(install-file)
+    else
+$(EXPORT_JRE_LIB_ARCH_DIR)/%.so: $(ZERO_DIR)/%.so
+	$(install-file)
+$(EXPORT_SERVER_DIR)/%.so:       $(ZERO_DIR)/%.so
+	$(install-file)
+    endif
+  else
+$(EXPORT_JRE_LIB_ARCH_DIR)/%.so: $(C1_DIR)/%.so
+	$(install-file)
 $(EXPORT_JRE_LIB_ARCH_DIR)/%.so: $(C2_DIR)/%.so
 	$(install-file)
 $(EXPORT_CLIENT_DIR)/%.so:       $(C1_DIR)/%.so
@@ -275,14 +344,18 @@ $(EXPORT_SERVER_DIR)/%.so:       $(C2_DIR)/%.so
 	$(install-file)
 $(EXPORT_SERVER_DIR)/64/%.so:    $(C2_DIR)/%.so
 	$(install-file)
+  endif
 endif
 
 # Jar file (sa-jdi.jar)
 $(EXPORT_LIB_DIR)/%.jar: $(GEN_DIR)/%.jar
 	$(install-file)
 
-# Include files (jvmti.h, jni.h, $(JDK_INCLUDE_SUBDIR)/jni_md.h, jmm.h)
+# Include files (jvmti.h, jvmticmlr.h, jni.h, $(JDK_INCLUDE_SUBDIR)/jni_md.h, jmm.h)
 $(EXPORT_INCLUDE_DIR)/%: $(GEN_DIR)/jvmtifiles/%
+	$(install-file)
+
+$(EXPORT_INCLUDE_DIR)/%: $(HS_SRC_DIR)/share/vm/code/%
 	$(install-file)
 
 $(EXPORT_INCLUDE_DIR)/%: $(HS_SRC_DIR)/share/vm/prims/%
@@ -313,6 +386,8 @@ clean_build:
 	$(RM) -r $(C1_DIR)
 	$(RM) -r $(C2_DIR)
 	$(RM) -r $(KERNEL_DIR)
+	$(RM) -r $(ZERO_DIR)
+	$(RM) -r $(SHARK_DIR)
 clean_export:
 	$(RM) -r $(EXPORT_PATH)
 clean_jdk:
@@ -335,8 +410,10 @@ $(JDK_IMAGE_DIR)/jre/lib/rt.jar:
 	 ($(CD) $(JDK_IMAGE_DIR) && $(TAR) -xf -)
 
 test_jdk:
-  ifeq ($(ARCH_DATA_MODEL), 32)
+  ifneq ($(ZERO_BUILD), true)
+    ifeq ($(ARCH_DATA_MODEL), 32)
 	$(JDK_IMAGE_DIR)/bin/java -client -version
+    endif
   endif
 	$(JDK_IMAGE_DIR)/bin/java -server -version
 

@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.awt.X11;
@@ -35,20 +35,6 @@ class XProtocol {
     private Map<XAtom, XAtomList> atomToList = new HashMap<XAtom, XAtomList>();
     private Map<XAtom, Long> atomToAnchor = new HashMap<XAtom, Long>();
 
-    /*
-     * Temporary error handler that ensures that we know if
-     * XChangeProperty succeeded or not.
-     */
-    static XToolkit.XErrorHandler VerifyChangePropertyHandler = new XToolkit.XErrorHandler() {
-            public int handleError(long display, XErrorEvent err) {
-                XToolkit.XERROR_SAVE(err);
-                if (err.get_request_code() == XlibWrapper.X_ChangeProperty) {
-                    return 0;
-                } else {
-                    return XToolkit.SAVED_ERROR_HANDLER(display, err);
-                }
-            }
-        };
     volatile boolean firstCheck = true;
     /*
      * Check that that the list of protocols specified by WM in property
@@ -68,7 +54,10 @@ class XProtocol {
         } finally {
             if (firstCheck) {
                 firstCheck = false;
-                log.log(Level.FINE, "{0}:{1} supports {2}", new Object[] {this, listName, protocols});
+                if (log.isLoggable(Level.FINE)) {
+                    log.log(Level.FINE, "{0}:{1} supports {2}",
+                            new Object[] {String.valueOf(this), String.valueOf(listName), String.valueOf(protocols)});
+                }
             }
         }
     }

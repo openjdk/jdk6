@@ -32,7 +32,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --- end of LICENSE file ---
 %% This notice is provided with respect to ASM, which may be included with this software: 
-Copyright (c) 2000-2005 INRIA, France Telecom
+Copyright (c) 2000-2007 INRIA, France Telecom
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1138,7 +1138,7 @@ Project.
 %% This notice is provided with respect to Fast Infoset, which may be included with this software: 
 * Fast Infoset ver. 0.1 software ("Software") 
 * 
-* Copyright, 2004-2005 Sun Microsystems, Inc. All Rights Reserved. 
+* Copyright (c) 2004, 2005, Oracle and/or its affiliates. All rights reserved.
 * 
 * Software is licensed under the Apache License, Version 2.0 (the "License"); 
 * you may not use this file except in compliance with the License. You may 
@@ -1151,9 +1151,9 @@ Project.
 * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the 
 * License for the specific language governing permissions and limitations. 
 * 
-* Sun supports and benefits from the global community of open source 
+* Oracle supports and benefits from the global community of open source 
 * developers, and thanks the community for its important contributions and 
-* open standards-based technology, which Sun has adopted into many of its 
+* open standards-based technology, which Oracle has adopted into many of its 
 * products. 
 * 
 * Please note that portions of Software may be provided with notices and 

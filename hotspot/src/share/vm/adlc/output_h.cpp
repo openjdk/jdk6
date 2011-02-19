@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -574,7 +574,7 @@ void gen_inst_format(FILE *fp, FormDict &globals, InstructForm &inst, bool for_c
   // Generate the user-defined portion of the format
   if( inst._format ) {
     // If there are replacement variables,
-    // Generate index values needed for determing the operand position
+    // Generate index values needed for determining the operand position
     if( inst._format->_rep_vars.count() )
       inst.index_temps(fp, globals);
 
@@ -1367,11 +1367,11 @@ void ArchDesc::declareClasses(FILE *fp) {
         else if (!strcmp(oper->ideal_type(_globalNames), "ConN")) {
           // Access the locally stored constant
           fprintf(fp,"  virtual intptr_t       constant() const {");
-          fprintf(fp,   " return _c0->make_oopptr()->get_con();");
+          fprintf(fp,   " return _c0->get_ptrtype()->get_con();");
           fprintf(fp, " }\n");
           // Generate query to determine if this pointer is an oop
           fprintf(fp,"  virtual bool           constant_is_oop() const {");
-          fprintf(fp,   " return _c0->make_oopptr()->isa_oop_ptr();");
+          fprintf(fp,   " return _c0->get_ptrtype()->isa_oop_ptr();");
           fprintf(fp, " }\n");
         }
         else if (!strcmp(oper->ideal_type(_globalNames), "ConL")) {
@@ -1493,7 +1493,7 @@ void ArchDesc::declareClasses(FILE *fp) {
     // Build class definition for this instruction
     fprintf(fp,"\n");
     fprintf(fp,"class %sNode : public %s { \n",
-            instr->_ident, instr->mach_base_class() );
+            instr->_ident, instr->mach_base_class(_globalNames) );
     fprintf(fp,"private:\n");
     fprintf(fp,"  MachOper *_opnd_array[%d];\n", instr->num_opnds() );
     if ( instr->is_ideal_jump() ) {
@@ -1566,7 +1566,7 @@ void ArchDesc::declareClasses(FILE *fp) {
     // Use MachNode::ideal_Opcode() for nodes based on MachNode class
     // if the ideal_Opcode == Op_Node.
     if ( strcmp("Node", instr->ideal_Opcode(_globalNames)) != 0 ||
-         strcmp("MachNode", instr->mach_base_class()) != 0 ) {
+         strcmp("MachNode", instr->mach_base_class(_globalNames)) != 0 ) {
       fprintf(fp,"  virtual int            ideal_Opcode() const { return Op_%s; }\n",
             instr->ideal_Opcode(_globalNames) );
     }
@@ -1631,7 +1631,7 @@ void ArchDesc::declareClasses(FILE *fp) {
     // Use MachNode::oper_input_base() for nodes based on MachNode class
     // if the base == 1.
     if ( instr->oper_input_base(_globalNames) != 1 ||
-         strcmp("MachNode", instr->mach_base_class()) != 0 ) {
+         strcmp("MachNode", instr->mach_base_class(_globalNames)) != 0 ) {
       fprintf(fp,"  virtual uint           oper_input_base() const { return %d; }\n",
             instr->oper_input_base(_globalNames));
     }
@@ -1754,7 +1754,7 @@ void ArchDesc::declareClasses(FILE *fp) {
         instr->has_temps() ||
         instr->_matrule != NULL &&
         instr->num_opnds() != instr->num_unique_opnds() ) {
-      fprintf(fp,"  virtual MachNode      *Expand(State *state, Node_List &proj_list);\n");
+      fprintf(fp,"  virtual MachNode      *Expand(State *state, Node_List &proj_list, Node* mem);\n");
     }
 
     if (instr->is_pinned(_globalNames)) {
@@ -1832,7 +1832,7 @@ void ArchDesc::declareClasses(FILE *fp) {
         break;
       case Form::idealP:
       case Form::idealN:
-        fprintf(fp,"    return  opnd_array(1)->type();\n",result);
+        fprintf(fp,"    return  opnd_array(1)->type();\n");
         break;
       case Form::idealD:
         fprintf(fp,"    return  TypeD::make(opnd_array(1)->constantD());\n");
@@ -1905,11 +1905,6 @@ void ArchDesc::declareClasses(FILE *fp) {
       // Special hack for ideal CMoveN; ideal type depends on inputs
       fprintf(fp,"  const Type            *bottom_type() const { const Type *t = in(oper_input_base()+%d)->bottom_type(); return (req() <= oper_input_base()+%d) ? t : t->meet(in(oper_input_base()+%d)->bottom_type()); } // CMoveN\n",
         offset, offset+1, offset+1);
-    }
-    else if( instr->needs_base_oop_edge(_globalNames) ) {
-      // Special hack for ideal AddP.  Bottom type is an oop IFF it has a
-      // legal base-pointer input.  Otherwise it is NOT an oop.
-      fprintf(fp,"  const Type *bottom_type() const { return AddPNode::mach_bottom_type(this); } // AddP\n");
     }
     else if (instr->is_tls_instruction()) {
       // Special hack for tlsLoadP

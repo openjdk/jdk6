@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -87,12 +87,18 @@ class Reflection: public AllStatic {
                                       bool classloader_only,
                                       bool protected_restriction = false);
   static bool     is_same_class_package(klassOop class1, klassOop class2);
+  static bool     is_same_package_member(klassOop class1, klassOop class2, TRAPS);
 
   static bool can_relax_access_check_for(
     klassOop accessor, klassOop accesee, bool classloader_only);
 
   // inner class reflection
-  static void check_for_inner_class(instanceKlassHandle outer, instanceKlassHandle inner, TRAPS);
+  // raise an ICCE unless the required relationship can be proven to hold
+  // If inner_is_member, require the inner to be a member of the outer.
+  // If !inner_is_member, require the inner to be anonymous (a non-member).
+  // Caller is responsible for figuring out in advance which case must be true.
+  static void check_for_inner_class(instanceKlassHandle outer, instanceKlassHandle inner,
+                                    bool inner_is_member, TRAPS);
 
   //
   // Support for reflection based on dynamic bytecode generation (JDK 1.4)

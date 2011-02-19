@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -35,17 +35,20 @@ import sun.jvm.hotspot.utilities.*;
 
 public class NMethod extends CodeBlob {
   private static long          pcDescSize;
-  private static CIntegerField zombieInstructionSizeField;
   private static sun.jvm.hotspot.types.OopField methodField;
   /** != InvocationEntryBci if this nmethod is an on-stack replacement method */
   private static CIntegerField entryBCIField;
   /** To support simple linked-list chaining of nmethods */
-  private static AddressField  linkField;
+  private static AddressField  osrLinkField;
+  private static AddressField  scavengeRootLinkField;
+  private static JByteField    scavengeRootStateField;
+
   /** Offsets for different nmethod parts */
   private static CIntegerField exceptionOffsetField;
   private static CIntegerField deoptOffsetField;
   private static CIntegerField origPCOffsetField;
   private static CIntegerField stubOffsetField;
+  private static CIntegerField oopsOffsetField;
   private static CIntegerField scopesDataOffsetField;
   private static CIntegerField scopesPCsOffsetField;
   private static CIntegerField dependenciesOffsetField;
@@ -84,14 +87,17 @@ public class NMethod extends CodeBlob {
   private static void initialize(TypeDataBase db) {
     Type type = db.lookupType("nmethod");
 
-    zombieInstructionSizeField  = type.getCIntegerField("_zombie_instruction_size");
     methodField                 = type.getOopField("_method");
     entryBCIField               = type.getCIntegerField("_entry_bci");
-    linkField                   = type.getAddressField("_link");
+    osrLinkField                = type.getAddressField("_osr_link");
+    scavengeRootLinkField       = type.getAddressField("_scavenge_root_link");
+    scavengeRootStateField      = type.getJByteField("_scavenge_root_state");
+
     exceptionOffsetField        = type.getCIntegerField("_exception_offset");
     deoptOffsetField            = type.getCIntegerField("_deoptimize_offset");
     origPCOffsetField           = type.getCIntegerField("_orig_pc_offset");
     stubOffsetField             = type.getCIntegerField("_stub_offset");
+    oopsOffsetField             = type.getCIntegerField("_oops_offset");
     scopesDataOffsetField       = type.getCIntegerField("_scopes_data_offset");
     scopesPCsOffsetField        = type.getCIntegerField("_scopes_pcs_offset");
     dependenciesOffsetField     = type.getCIntegerField("_dependencies_offset");
@@ -135,7 +141,9 @@ public class NMethod extends CodeBlob {
   public Address exceptionBegin()       { return headerBegin().addOffsetTo(getExceptionOffset());    }
   public Address deoptBegin()           { return headerBegin().addOffsetTo(getDeoptOffset());        }
   public Address stubBegin()            { return headerBegin().addOffsetTo(getStubOffset());         }
-  public Address stubEnd()              { return headerBegin().addOffsetTo(getScopesDataOffset());   }
+  public Address stubEnd()              { return headerBegin().addOffsetTo(getOopsOffset());         }
+  public Address oopsBegin()            { return headerBegin().addOffsetTo(getOopsOffset());         }
+  public Address oopsEnd()              { return headerBegin().addOffsetTo(getScopesDataOffset());   }
   public Address scopesDataBegin()      { return headerBegin().addOffsetTo(getScopesDataOffset());   }
   public Address scopesDataEnd()        { return headerBegin().addOffsetTo(getScopesPCsOffset());    }
   public Address scopesPCsBegin()       { return headerBegin().addOffsetTo(getScopesPCsOffset());    }
@@ -150,6 +158,7 @@ public class NMethod extends CodeBlob {
   public int constantsSize()            { return (int) constantsEnd()   .minus(constantsBegin());    }
   public int codeSize()                 { return (int) codeEnd()        .minus(codeBegin());         }
   public int stubSize()                 { return (int) stubEnd()        .minus(stubBegin());         }
+  public int oopsSize()                 { return (int) oopsEnd()        .minus(oopsBegin());         }
   public int scopesDataSize()           { return (int) scopesDataEnd()  .minus(scopesDataBegin());   }
   public int scopesPCsSize()            { return (int) scopesPCsEnd()   .minus(scopesPCsBegin());    }
   public int dependenciesSize()         { return (int) dependenciesEnd().minus(dependenciesBegin()); }
@@ -172,6 +181,7 @@ public class NMethod extends CodeBlob {
   public boolean constantsContains   (Address addr) { return constantsBegin()   .lessThanOrEqual(addr) && constantsEnd()   .greaterThan(addr); }
   public boolean codeContains        (Address addr) { return codeBegin()        .lessThanOrEqual(addr) && codeEnd()        .greaterThan(addr); }
   public boolean stubContains        (Address addr) { return stubBegin()        .lessThanOrEqual(addr) && stubEnd()        .greaterThan(addr); }
+  public boolean oopsContains        (Address addr) { return oopsBegin()        .lessThanOrEqual(addr) && oopsEnd()        .greaterThan(addr); }
   public boolean scopesDataContains  (Address addr) { return scopesDataBegin()  .lessThanOrEqual(addr) && scopesDataEnd()  .greaterThan(addr); }
   public boolean scopesPCsContains   (Address addr) { return scopesPCsBegin()   .lessThanOrEqual(addr) && scopesPCsEnd()   .greaterThan(addr); }
   public boolean handlerTableContains(Address addr) { return handlerTableBegin().lessThanOrEqual(addr) && handlerTableEnd().greaterThan(addr); }
@@ -180,6 +190,15 @@ public class NMethod extends CodeBlob {
   /** Entry points */
   public Address getEntryPoint()         { return entryPointField.getValue(addr);         }
   public Address getVerifiedEntryPoint() { return verifiedEntryPointField.getValue(addr); }
+
+  /** Support for oops in scopes and relocs. Note: index 0 is reserved for null. */
+  public OopHandle getOopAt(int index) {
+    if (index == 0) return null;
+    if (Assert.ASSERTS_ENABLED) {
+      Assert.that(index > 0 && index <= oopsSize(), "must be a valid non-zero index");
+    }
+    return oopsBegin().getOopHandleAt((index - 1) * VM.getVM().getOopSize());
+  }
 
   // FIXME: add interpreter_entry_point()
   // FIXME: add lazy_interpreter_entry_point() for C2
@@ -219,9 +238,18 @@ public class NMethod extends CodeBlob {
     return getEntryBCI();
   }
 
-  public NMethod getLink() {
-    return (NMethod) VMObjectFactory.newObject(NMethod.class, linkField.getValue(addr));
+  public NMethod getOSRLink() {
+    return (NMethod) VMObjectFactory.newObject(NMethod.class, osrLinkField.getValue(addr));
   }
+
+  public NMethod getScavengeRootLink() {
+    return (NMethod) VMObjectFactory.newObject(NMethod.class, scavengeRootLinkField.getValue(addr));
+  }
+
+  public int getScavengeRootState() {
+    return (int) scavengeRootStateField.getValue(addr);
+  }
+
 
   /** Tells whether frames described by this nmethod can be
       deoptimized. Note: native wrappers cannot be deoptimized. */
@@ -259,7 +287,7 @@ public class NMethod extends CodeBlob {
     if (Assert.ASSERTS_ENABLED) {
       Assert.that(pd != null, "scope must be present");
     }
-    return new ScopeDesc(this, pd.getScopeDecodeOffset());
+    return new ScopeDesc(this, pd.getScopeDecodeOffset(), pd.getObjDecodeOffset(), pd.getReexecute());
   }
 
   /** This is only for use by the debugging system, and is only
@@ -291,11 +319,11 @@ public class NMethod extends CodeBlob {
   public ScopeDesc getScopeDescNearDbg(Address pc) {
     PCDesc pd = getPCDescNearDbg(pc);
     if (pd == null) return null;
-    return new ScopeDesc(this, pd.getScopeDecodeOffset());
+    return new ScopeDesc(this, pd.getScopeDecodeOffset(), pd.getObjDecodeOffset(), pd.getReexecute());
   }
 
-  public Map/*<Address, PcDesc>*/ getSafepoints() {
-    Map safepoints = new HashMap(); // Map<Address, PcDesc>
+  public Map/*<Address, PCDesc>*/ getSafepoints() {
+    Map safepoints = new HashMap(); // Map<Address, PCDesc>
     sun.jvm.hotspot.debugger.Address p = null;
     for (p = scopesPCsBegin(); p.lessThan(scopesPCsEnd());
          p = p.addOffsetTo(pcDescSize)) {
@@ -321,6 +349,14 @@ public class NMethod extends CodeBlob {
 
   public void print() {
     printOn(System.out);
+  }
+
+  protected void printComponentsOn(PrintStream tty) {
+    // FIXME: add relocation information
+    tty.println(" instructions: [" + instructionsBegin() + ", " + instructionsEnd() + "), " +
+                " data: [" + dataBegin() + ", " + dataEnd() + "), " +
+                " oops: [" + oopsBegin() + ", " + oopsEnd() + "), " +
+                " frame size: " + getFrameSize());
   }
 
   public String toString() {
@@ -352,6 +388,7 @@ public class NMethod extends CodeBlob {
   private int getExceptionOffset()    { return (int) exceptionOffsetField   .getValue(addr); }
   private int getDeoptOffset()        { return (int) deoptOffsetField       .getValue(addr); }
   private int getStubOffset()         { return (int) stubOffsetField        .getValue(addr); }
+  private int getOopsOffset()         { return (int) oopsOffsetField        .getValue(addr); }
   private int getScopesDataOffset()   { return (int) scopesDataOffsetField  .getValue(addr); }
   private int getScopesPCsOffset()    { return (int) scopesPCsOffsetField   .getValue(addr); }
   private int getDependenciesOffset() { return (int) dependenciesOffsetField.getValue(addr); }

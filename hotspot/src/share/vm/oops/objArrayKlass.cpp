@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -39,6 +39,7 @@ objArrayOop objArrayKlass::allocate(int length, TRAPS) {
       assert(a->is_parsable(), "Can't publish unless parsable");
       return a;
     } else {
+      report_java_out_of_memory("Requested array size exceeds VM limit");
       THROW_OOP_0(Universe::out_of_memory_error_array_size());
     }
   } else {
@@ -84,8 +85,6 @@ oop objArrayKlass::multi_allocate(int rank, jint* sizes, TRAPS) {
 template <class T> void objArrayKlass::do_copy(arrayOop s, T* src,
                                arrayOop d, T* dst, int length, TRAPS) {
 
-  const size_t word_len = objArrayOopDesc::array_size(length);
-
   BarrierSet* bs = Universe::heap()->barrier_set();
   // For performance reasons, we assume we are that the write barrier we
   // are using has optimized modes for arrays of references.  At least one
@@ -93,11 +92,10 @@ template <class T> void objArrayKlass::do_copy(arrayOop s, T* src,
   assert(bs->has_write_ref_array_opt(), "Barrier set must have ref array opt");
   assert(bs->has_write_ref_array_pre_opt(), "For pre-barrier as well.");
 
-  MemRegion dst_mr = MemRegion((HeapWord*)dst, word_len);
   if (s == d) {
     // since source and destination are equal we do not need conversion checks.
     assert(length > 0, "sanity check");
-    bs->write_ref_array_pre(dst_mr);
+    bs->write_ref_array_pre(dst, length);
     Copy::conjoint_oops_atomic(src, dst, length);
   } else {
     // We have to make sure all elements conform to the destination array
@@ -105,7 +103,7 @@ template <class T> void objArrayKlass::do_copy(arrayOop s, T* src,
     klassOop stype = objArrayKlass::cast(s->klass())->element_klass();
     if (stype == bound || Klass::cast(stype)->is_subtype_of(bound)) {
       // elements are guaranteed to be subtypes, so no check necessary
-      bs->write_ref_array_pre(dst_mr);
+      bs->write_ref_array_pre(dst, length);
       Copy::conjoint_oops_atomic(src, dst, length);
     } else {
       // slow case: need individual subtype checks
@@ -129,15 +127,14 @@ template <class T> void objArrayKlass::do_copy(arrayOop s, T* src,
           // pointer delta is scaled to number of elements (length field in
           // objArrayOop) which we assume is 32 bit.
           assert(pd == (size_t)(int)pd, "length field overflow");
-          const size_t done_word_len = objArrayOopDesc::array_size((int)pd);
-          bs->write_ref_array(MemRegion((HeapWord*)dst, done_word_len));
+          bs->write_ref_array((HeapWord*)dst, pd);
           THROW(vmSymbols::java_lang_ArrayStoreException());
           return;
         }
       }
     }
   }
-  bs->write_ref_array(MemRegion((HeapWord*)dst, word_len));
+  bs->write_ref_array((HeapWord*)dst, length);
 }
 
 void objArrayKlass::copy_array(arrayOop s, int src_pos, arrayOop d,
@@ -249,8 +246,8 @@ objArrayOop objArrayKlass::compute_secondary_supers(int num_extra_slots, TRAPS) 
   } else {
     objArrayOop sec_oop = oopFactory::new_system_objArray(num_secondaries, CHECK_NULL);
     objArrayHandle secondaries(THREAD, sec_oop);
-    secondaries->obj_at_put(num_extra_slots+0, SystemDictionary::cloneable_klass());
-    secondaries->obj_at_put(num_extra_slots+1, SystemDictionary::serializable_klass());
+    secondaries->obj_at_put(num_extra_slots+0, SystemDictionary::Cloneable_klass());
+    secondaries->obj_at_put(num_extra_slots+1, SystemDictionary::Serializable_klass());
     for (int i = 0; i < num_elem_supers; i++) {
       klassOop elem_super = (klassOop) elem_supers->obj_at(i);
       klassOop array_super = elem_super->klass_part()->array_klass_or_null();
@@ -317,24 +314,24 @@ void objArrayKlass::initialize(TRAPS) {
 
 void objArrayKlass::oop_follow_contents(oop obj) {
   assert (obj->is_array(), "obj must be array");
-  objArrayOop a = objArrayOop(obj);
-  a->follow_header();
-  ObjArrayKlass_OOP_ITERATE( \
-    a, p, \
-    /* we call mark_and_follow here to avoid excessive marking stack usage */ \
-    MarkSweep::mark_and_follow(p))
+  objArrayOop(obj)->follow_header();
+  if (UseCompressedOops) {
+    objarray_follow_contents<narrowOop>(obj, 0);
+  } else {
+    objarray_follow_contents<oop>(obj, 0);
+  }
 }
 
 #ifndef SERIALGC
 void objArrayKlass::oop_follow_contents(ParCompactionManager* cm,
                                         oop obj) {
-  assert (obj->is_array(), "obj must be array");
-  objArrayOop a = objArrayOop(obj);
-  a->follow_header(cm);
-  ObjArrayKlass_OOP_ITERATE( \
-    a, p, \
-    /* we call mark_and_follow here to avoid excessive marking stack usage */ \
-    PSParallelCompact::mark_and_follow(cm, p))
+  assert(obj->is_array(), "obj must be array");
+  objArrayOop(obj)->follow_header(cm);
+  if (UseCompressedOops) {
+    objarray_follow_contents<narrowOop>(cm, obj, 0);
+  } else {
+    objarray_follow_contents<oop>(cm, obj, 0);
+  }
 }
 #endif // SERIALGC
 
@@ -429,18 +426,7 @@ int objArrayKlass::oop_adjust_pointers(oop obj) {
 }
 
 #ifndef SERIALGC
-void objArrayKlass::oop_copy_contents(PSPromotionManager* pm, oop obj) {
-  assert(!pm->depth_first(), "invariant");
-  assert(obj->is_objArray(), "obj must be obj array");
-  ObjArrayKlass_OOP_ITERATE( \
-    objArrayOop(obj), p, \
-    if (PSScavenge::should_scavenge(p)) { \
-      pm->claim_or_forward_breadth(p); \
-    })
-}
-
 void objArrayKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
-  assert(pm->depth_first(), "invariant");
   assert(obj->is_objArray(), "obj must be obj array");
   ObjArrayKlass_OOP_ITERATE( \
     objArrayOop(obj), p, \
@@ -502,15 +488,28 @@ void objArrayKlass::oop_print_on(oop obj, outputStream* st) {
   }
 }
 
+#endif //PRODUCT
+
+static int max_objArray_print_length = 4;
 
 void objArrayKlass::oop_print_value_on(oop obj, outputStream* st) {
   assert(obj->is_objArray(), "must be objArray");
+  st->print("a ");
   element_klass()->print_value_on(st);
-  st->print("a [%d] ", objArrayOop(obj)->length());
-  as_klassOop()->klass()->print_value_on(st);
+  int len = objArrayOop(obj)->length();
+  st->print("[%d] ", len);
+  obj->print_address_on(st);
+  if (NOT_PRODUCT(PrintOopAddress ||) PrintMiscellaneous && (WizardMode || Verbose)) {
+    st->print("{");
+    for (int i = 0; i < len; i++) {
+      if (i > max_objArray_print_length) {
+        st->print("..."); break;
+      }
+      st->print(" "INTPTR_FORMAT, (intptr_t)(void*)objArrayOop(obj)->obj_at(i));
+    }
+    st->print(" }");
+  }
 }
-
-#endif // PRODUCT
 
 const char* objArrayKlass::internal_name() const {
   return external_name();

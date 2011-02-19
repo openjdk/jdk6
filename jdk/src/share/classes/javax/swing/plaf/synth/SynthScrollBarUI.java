@@ -1,12 +1,12 @@
 /*
- * Copyright 2002-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2002, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,20 +18,16 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing.plaf.synth;
 
 import java.awt.*;
-import java.awt.event.*;
-
 import java.beans.*;
-
 import javax.swing.*;
-import javax.swing.event.*;
 import javax.swing.plaf.*;
 import javax.swing.plaf.basic.*;
 import sun.swing.plaf.synth.SynthUI;
@@ -52,12 +48,23 @@ class SynthScrollBarUI extends BasicScrollBarUI implements
     private boolean validMinimumThumbSize;
     private int scrollBarWidth;
 
+    //These two variables should be removed when the corrosponding ones in BasicScrollBarUI are made protected
+    private int incrGap;
+    private int decrGap;
 
     public static ComponentUI createUI(JComponent c)    {
         return new SynthScrollBarUI();
     }
 
     protected void installDefaults() {
+        //NOTE: This next line of code was added because, since incrGap and decrGap in
+        //BasicScrollBarUI are private, I need to have some way of updating them.
+        //This is an incomplete solution (since it implies that the incrGap and decrGap
+        //are set once, and not reset per state. Probably ok, but not always ok).
+        //This line of code should be removed at the same time that incrGap and
+        //decrGap are removed and made protected in the super class.
+        super.installDefaults();
+
         trackHighlight = NO_HIGHLIGHT;
         if (scrollbar.getLayout() == null ||
                      (scrollbar.getLayout() instanceof UIResource)) {
@@ -89,6 +96,31 @@ class SynthScrollBarUI extends BasicScrollBarUI implements
             if (maximumThumbSize == null) {
                 maximumThumbSize = new Dimension(4096, 4097);
             }
+
+            incrGap = style.getInt(context, "ScrollBar.incrementButtonGap", 0);
+            decrGap = style.getInt(context, "ScrollBar.decrementButtonGap", 0);
+
+            // handle scaling for sizeVarients for special case components. The
+            // key "JComponent.sizeVariant" scales for large/small/mini
+            // components are based on Apples LAF
+            String scaleKey = (String)scrollbar.getClientProperty(
+                    "JComponent.sizeVariant");
+            if (scaleKey != null){
+                if ("large".equals(scaleKey)){
+                    scrollBarWidth *= 1.15;
+                    incrGap *= 1.15;
+                    decrGap *= 1.15;
+                } else if ("small".equals(scaleKey)){
+                    scrollBarWidth *= 0.857;
+                    incrGap *= 0.857;
+                    decrGap *= 0.857;
+                } else if ("mini".equals(scaleKey)){
+                    scrollBarWidth *= 0.714;
+                    incrGap *= 0.714;
+                    decrGap *= 0.714;
+                }
+            }
+
             if (oldStyle != null) {
                 uninstallKeyboardActions();
                 installKeyboardActions();
@@ -274,18 +306,56 @@ class SynthScrollBarUI extends BasicScrollBarUI implements
             }
         }
         return minimumThumbSize;
-
     }
 
-
     protected JButton createDecreaseButton(int orientation)  {
-        SynthArrowButton synthArrowButton = new SynthArrowButton(orientation);
+        SynthArrowButton synthArrowButton = new SynthArrowButton(orientation) {
+            @Override
+            public boolean contains(int x, int y) {
+                if (decrGap < 0) { //there is an overlap between the track and button
+                    int width = getWidth();
+                    int height = getHeight();
+                    if (scrollbar.getOrientation() == JScrollBar.VERTICAL) {
+                        //adjust the height by decrGap
+                        //Note: decrGap is negative!
+                        height += decrGap;
+                    } else {
+                        //adjust the width by decrGap
+                        //Note: decrGap is negative!
+                        width += decrGap;
+                    }
+                    return (x >= 0) && (x < width) && (y >= 0) && (y < height);
+                }
+                return super.contains(x, y);
+            }
+        };
         synthArrowButton.setName("ScrollBar.button");
         return synthArrowButton;
     }
 
     protected JButton createIncreaseButton(int orientation)  {
-        SynthArrowButton synthArrowButton = new SynthArrowButton(orientation);
+        SynthArrowButton synthArrowButton = new SynthArrowButton(orientation) {
+            @Override
+            public boolean contains(int x, int y) {
+                if (incrGap < 0) { //there is an overlap between the track and button
+                    int width = getWidth();
+                    int height = getHeight();
+                    if (scrollbar.getOrientation() == JScrollBar.VERTICAL) {
+                        //adjust the height and y by incrGap
+                        //Note: incrGap is negative!
+                        height += incrGap;
+                        y += incrGap;
+                    } else {
+                        //adjust the width and x by incrGap
+                        //Note: incrGap is negative!
+                        width += incrGap;
+                        x += incrGap;
+                    }
+                    return (x >= 0) && (x < width) && (y >= 0) && (y < height);
+                }
+                return super.contains(x, y);
+            }
+        };
         synthArrowButton.setName("ScrollBar.button");
         return synthArrowButton;
     }

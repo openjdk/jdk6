@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -301,22 +301,25 @@ void LIR_Assembler::osr_entry() {
   Register OSR_buf = osrBufferPointer()->as_pointer_register();
   { assert(frame::interpreter_frame_monitor_size() == BasicObjectLock::size(), "adjust code below");
     int monitor_offset = BytesPerWord * method()->max_locals() +
-      (BasicObjectLock::size() * BytesPerWord) * (number_of_locks - 1);
+      (2 * BytesPerWord) * (number_of_locks - 1);
+    // SharedRuntime::OSR_migration_begin() packs BasicObjectLocks in
+    // the OSR buffer using 2 word entries: first the lock and then
+    // the oop.
     for (int i = 0; i < number_of_locks; i++) {
-      int slot_offset = monitor_offset - ((i * BasicObjectLock::size()) * BytesPerWord);
+      int slot_offset = monitor_offset - ((i * 2) * BytesPerWord);
 #ifdef ASSERT
       // verify the interpreter's monitor has a non-null object
       {
         Label L;
-        __ cmpptr(Address(OSR_buf, slot_offset + BasicObjectLock::obj_offset_in_bytes()), (int32_t)NULL_WORD);
+        __ cmpptr(Address(OSR_buf, slot_offset + 1*BytesPerWord), (int32_t)NULL_WORD);
         __ jcc(Assembler::notZero, L);
         __ stop("locked object is NULL");
         __ bind(L);
       }
 #endif
-      __ movptr(rbx, Address(OSR_buf, slot_offset + BasicObjectLock::lock_offset_in_bytes()));
+      __ movptr(rbx, Address(OSR_buf, slot_offset + 0));
       __ movptr(frame_map()->address_for_monitor_lock(i), rbx);
-      __ movptr(rbx, Address(OSR_buf, slot_offset + BasicObjectLock::obj_offset_in_bytes()));
+      __ movptr(rbx, Address(OSR_buf, slot_offset + 1*BytesPerWord));
       __ movptr(frame_map()->address_for_monitor_object(i), rbx);
     }
   }
@@ -415,13 +418,12 @@ int LIR_Assembler::initial_frame_size_in_bytes() {
 }
 
 
-void LIR_Assembler::emit_exception_handler() {
+int LIR_Assembler::emit_exception_handler() {
   // if the last instruction is a call (typically to do a throw which
   // is coming at the end after block reordering) the return address
   // must still point into the code area in order to avoid assertion
   // failures when searching for the corresponding bci => add a nop
   // (was bug 5/14/1999 - gri)
-
   __ nop();
 
   // generate code for exception handler
@@ -429,61 +431,92 @@ void LIR_Assembler::emit_exception_handler() {
   if (handler_base == NULL) {
     // not enough space left for the handler
     bailout("exception handler overflow");
-    return;
+    return -1;
   }
-#ifdef ASSERT
+
   int offset = code_offset();
-#endif // ASSERT
 
-  compilation()->offsets()->set_value(CodeOffsets::Exceptions, code_offset());
-
-  // if the method does not have an exception handler, then there is
-  // no reason to search for one
-  if (compilation()->has_exception_handlers() || JvmtiExport::can_post_exceptions()) {
-    // the exception oop and pc are in rax, and rdx
-    // no other registers need to be preserved, so invalidate them
-    __ invalidate_registers(false, true, true, false, true, true);
-
-    // check that there is really an exception
-    __ verify_not_null_oop(rax);
-
-    // search an exception handler (rax: exception oop, rdx: throwing pc)
-    __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::handle_exception_nofpu_id)));
-
-    // if the call returns here, then the exception handler for particular
-    // exception doesn't exist -> unwind activation and forward exception to caller
-  }
-
-  // the exception oop is in rax,
+  // the exception oop and pc are in rax, and rdx
   // no other registers need to be preserved, so invalidate them
-  __ invalidate_registers(false, true, true, true, true, true);
+  __ invalidate_registers(false, true, true, false, true, true);
 
   // check that there is really an exception
   __ verify_not_null_oop(rax);
 
-  // unlock the receiver/klass if necessary
-  // rax,: exception
-  ciMethod* method = compilation()->method();
-  if (method->is_synchronized() && GenerateSynchronizationCode) {
-    monitorexit(FrameMap::rbx_oop_opr, FrameMap::rcx_opr, SYNC_header, 0, rax);
-  }
+  // search an exception handler (rax: exception oop, rdx: throwing pc)
+  __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::handle_exception_nofpu_id)));
 
-  // unwind activation and forward exception to caller
-  // rax,: exception
-  __ jump(RuntimeAddress(Runtime1::entry_for(Runtime1::unwind_exception_id)));
+  __ stop("should not reach here");
 
   assert(code_offset() - offset <= exception_handler_size, "overflow");
-
   __ end_a_stub();
+
+  return offset;
 }
 
-void LIR_Assembler::emit_deopt_handler() {
+
+// Emit the code to remove the frame from the stack in the exception
+// unwind path.
+int LIR_Assembler::emit_unwind_handler() {
+#ifndef PRODUCT
+  if (CommentedAssembly) {
+    _masm->block_comment("Unwind handler");
+  }
+#endif
+
+  int offset = code_offset();
+
+  // Fetch the exception from TLS and clear out exception related thread state
+  __ get_thread(rsi);
+  __ movptr(rax, Address(rsi, JavaThread::exception_oop_offset()));
+  __ movptr(Address(rsi, JavaThread::exception_oop_offset()), (int32_t)NULL_WORD);
+  __ movptr(Address(rsi, JavaThread::exception_pc_offset()), (int32_t)NULL_WORD);
+
+  __ bind(_unwind_handler_entry);
+  __ verify_not_null_oop(rax);
+  if (method()->is_synchronized() || compilation()->env()->dtrace_method_probes()) {
+    __ mov(rsi, rax);  // Preserve the exception
+  }
+
+  // Preform needed unlocking
+  MonitorExitStub* stub = NULL;
+  if (method()->is_synchronized()) {
+    monitor_address(0, FrameMap::rax_opr);
+    stub = new MonitorExitStub(FrameMap::rax_opr, true, 0);
+    __ unlock_object(rdi, rbx, rax, *stub->entry());
+    __ bind(*stub->continuation());
+  }
+
+  if (compilation()->env()->dtrace_method_probes()) {
+    __ get_thread(rax);
+    __ movptr(Address(rsp, 0), rax);
+    __ movoop(Address(rsp, sizeof(void*)), method()->constant_encoding());
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::dtrace_method_exit)));
+  }
+
+  if (method()->is_synchronized() || compilation()->env()->dtrace_method_probes()) {
+    __ mov(rax, rsi);  // Restore the exception
+  }
+
+  // remove the activation and dispatch to the unwind handler
+  __ remove_frame(initial_frame_size_in_bytes());
+  __ jump(RuntimeAddress(Runtime1::entry_for(Runtime1::unwind_exception_id)));
+
+  // Emit the slow path assembly
+  if (stub != NULL) {
+    stub->emit_code(this);
+  }
+
+  return offset;
+}
+
+
+int LIR_Assembler::emit_deopt_handler() {
   // if the last instruction is a call (typically to do a throw which
   // is coming at the end after block reordering) the return address
   // must still point into the code area in order to avoid assertion
   // failures when searching for the corresponding bci => add a nop
   // (was bug 5/14/1999 - gri)
-
   __ nop();
 
   // generate code for exception handler
@@ -491,23 +524,19 @@ void LIR_Assembler::emit_deopt_handler() {
   if (handler_base == NULL) {
     // not enough space left for the handler
     bailout("deopt handler overflow");
-    return;
+    return -1;
   }
-#ifdef ASSERT
+
   int offset = code_offset();
-#endif // ASSERT
-
-  compilation()->offsets()->set_value(CodeOffsets::Deopt, code_offset());
-
   InternalAddress here(__ pc());
-  __ pushptr(here.addr());
 
+  __ pushptr(here.addr());
   __ jump(RuntimeAddress(SharedRuntime::deopt_blob()->unpack()));
 
   assert(code_offset() - offset <= deopt_handler_size, "overflow");
-
   __ end_a_stub();
 
+  return offset;
 }
 
 
@@ -554,8 +583,8 @@ void LIR_Assembler::emit_string_compare(LIR_Opr arg0, LIR_Opr arg1, LIR_Opr dst,
   __ jcc (Assembler::zero, noLoop);
 
   // compare first characters
-  __ load_unsigned_word(rcx, Address(rdi, 0));
-  __ load_unsigned_word(rbx, Address(rsi, 0));
+  __ load_unsigned_short(rcx, Address(rdi, 0));
+  __ load_unsigned_short(rbx, Address(rsi, 0));
   __ subl(rcx, rbx);
   __ jcc(Assembler::notZero, haveResult);
   // starting loop
@@ -574,8 +603,8 @@ void LIR_Assembler::emit_string_compare(LIR_Opr arg0, LIR_Opr arg1, LIR_Opr dst,
   Label loop;
   __ align(wordSize);
   __ bind(loop);
-  __ load_unsigned_word(rcx, Address(rdi, rax, Address::times_2, 0));
-  __ load_unsigned_word(rbx, Address(rsi, rax, Address::times_2, 0));
+  __ load_unsigned_short(rcx, Address(rdi, rax, Address::times_2, 0));
+  __ load_unsigned_short(rbx, Address(rsi, rax, Address::times_2, 0));
   __ subl(rcx, rbx);
   __ jcc(Assembler::notZero, haveResult);
   __ increment(rax);
@@ -600,7 +629,7 @@ void LIR_Assembler::return_op(LIR_Opr result) {
   }
 
   // Pop the stack before the safepoint code
-  __ leave();
+  __ remove_frame(initial_frame_size_in_bytes());
 
   bool result_is_oop = result->is_valid() ? result->is_oop() : false;
 
@@ -655,7 +684,8 @@ void LIR_Assembler::const2reg(LIR_Opr src, LIR_Opr dest, LIR_PatchCode patch_cod
   LIR_Const* c = src->as_constant_ptr();
 
   switch (c->type()) {
-    case T_INT: {
+    case T_INT:
+    case T_ADDRESS: {
       assert(patch_code == lir_patch_none, "no patching handled here");
       __ movl(dest->as_register(), c->as_jint());
       break;
@@ -738,6 +768,7 @@ void LIR_Assembler::const2stack(LIR_Opr src, LIR_Opr dest) {
   switch (c->type()) {
     case T_INT:  // fall through
     case T_FLOAT:
+    case T_ADDRESS:
       __ movl(frame_map()->address_for_slot(dest->single_stack_ix()), c->as_jint_bits());
       break;
 
@@ -773,19 +804,26 @@ void LIR_Assembler::const2mem(LIR_Opr src, LIR_Opr dest, BasicType type, CodeEmi
   switch (type) {
     case T_INT:    // fall through
     case T_FLOAT:
+    case T_ADDRESS:
       __ movl(as_Address(addr), c->as_jint_bits());
       break;
 
     case T_OBJECT:  // fall through
     case T_ARRAY:
       if (c->as_jobject() == NULL) {
-        __ movptr(as_Address(addr), (int32_t)NULL_WORD);
+        __ movptr(as_Address(addr), NULL_WORD);
       } else {
         if (is_literal_address(addr)) {
           ShouldNotReachHere();
           __ movoop(as_Address(addr, noreg), c->as_jobject());
         } else {
+#ifdef _LP64
+          __ movoop(rscratch1, c->as_jobject());
+          null_check_here = code_offset();
+          __ movptr(as_Address_lo(addr), rscratch1);
+#else
           __ movoop(as_Address(addr), c->as_jobject());
+#endif
         }
       }
       break;
@@ -1118,8 +1156,14 @@ void LIR_Assembler::stack2stack(LIR_Opr src, LIR_Opr dest, BasicType type) {
       __ pushptr(frame_map()->address_for_slot(src ->single_stack_ix()));
       __ popptr (frame_map()->address_for_slot(dest->single_stack_ix()));
     } else {
+#ifndef _LP64
       __ pushl(frame_map()->address_for_slot(src ->single_stack_ix()));
       __ popl (frame_map()->address_for_slot(dest->single_stack_ix()));
+#else
+      //no pushl on 64bits
+      __ movl(rscratch1, frame_map()->address_for_slot(src ->single_stack_ix()));
+      __ movl(frame_map()->address_for_slot(dest->single_stack_ix()), rscratch1);
+#endif
     }
 
   } else if (src->is_double_stack()) {
@@ -1202,8 +1246,7 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
       break;
 #endif // _L64
     case T_INT:
-      // %%% could this be a movl? this is safer but longer instruction
-      __ movl2ptr(dest->as_register(), from_addr);
+      __ movl(dest->as_register(), from_addr);
       break;
 
     case T_LONG: {
@@ -1261,7 +1304,6 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
         __ shll(dest_reg, 24);
         __ sarl(dest_reg, 24);
       }
-      // These are unsigned so the zero extension on 64bit is just what we need
       break;
     }
 
@@ -1273,8 +1315,6 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
       } else {
         __ movw(dest_reg, from_addr);
       }
-      // This is unsigned so the zero extension on 64bit is just what we need
-      // __ movl2ptr(dest_reg, dest_reg);
       break;
     }
 
@@ -1287,8 +1327,6 @@ void LIR_Assembler::mem2reg(LIR_Opr src, LIR_Opr dest, BasicType type, LIR_Patch
         __ shll(dest_reg, 16);
         __ sarl(dest_reg, 16);
       }
-      // Might not be needed in 64bit but certainly doesn't hurt (except for code size)
-      __ movl2ptr(dest_reg, dest_reg);
       break;
     }
 
@@ -1598,18 +1636,9 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
 
     // get instance klass
     __ movptr(k_RInfo, Address(k_RInfo, objArrayKlass::element_klass_offset_in_bytes() + sizeof(oopDesc)));
-    // get super_check_offset
-    __ movl(Rtmp1, Address(k_RInfo, sizeof(oopDesc) + Klass::super_check_offset_offset_in_bytes()));
-    // See if we get an immediate positive hit
-    __ cmpptr(k_RInfo, Address(klass_RInfo, Rtmp1, Address::times_1));
-    __ jcc(Assembler::equal, done);
-    // check for immediate negative hit
-    __ cmpl(Rtmp1, sizeof(oopDesc) + Klass::secondary_super_cache_offset_in_bytes());
-    __ jcc(Assembler::notEqual, *stub->entry());
-    // check for self
-    __ cmpptr(klass_RInfo, k_RInfo);
-    __ jcc(Assembler::equal, done);
-
+    // perform the fast part of the checking logic
+    __ check_klass_subtype_fast_path(klass_RInfo, k_RInfo, Rtmp1, &done, stub->entry(), NULL);
+    // call out-of-line instance of __ check_klass_subtype_slow_path(...):
     __ push(klass_RInfo);
     __ push(k_RInfo);
     __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)));
@@ -1647,7 +1676,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
       jobject2reg_with_patching(k_RInfo, op->info_for_patch());
     } else {
 #ifdef _LP64
-      __ movoop(k_RInfo, k->encoding());
+      __ movoop(k_RInfo, k->constant_encoding());
 #else
       k_RInfo = noreg;
 #endif // _LP64
@@ -1670,7 +1699,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
       assert(data != NULL,       "need data for checkcast");
       assert(data->is_BitData(), "need BitData for checkcast");
       Register mdo  = klass_RInfo;
-      __ movoop(mdo, md->encoding());
+      __ movoop(mdo, md->constant_encoding());
       Address data_addr(mdo, md->byte_offset_of_slot(data, DataLayout::header_offset()));
       int header_bits = DataLayout::flag_mask_to_header_mask(BitData::null_seen_byte_constant());
       __ orl(data_addr, header_bits);
@@ -1688,7 +1717,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
 #ifdef _LP64
         __ cmpptr(k_RInfo, Address(obj, oopDesc::klass_offset_in_bytes()));
 #else
-        __ cmpoop(Address(obj, oopDesc::klass_offset_in_bytes()), k->encoding());
+        __ cmpoop(Address(obj, oopDesc::klass_offset_in_bytes()), k->constant_encoding());
 #endif // _LP64
       } else {
         __ cmpptr(k_RInfo, Address(obj, oopDesc::klass_offset_in_bytes()));
@@ -1705,7 +1734,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
 #ifdef _LP64
         __ cmpptr(k_RInfo, Address(klass_RInfo, k->super_check_offset()));
 #else
-        __ cmpoop(Address(klass_RInfo, k->super_check_offset()), k->encoding());
+        __ cmpoop(Address(klass_RInfo, k->super_check_offset()), k->constant_encoding());
 #endif // _LP64
         if (sizeof(oopDesc) + Klass::secondary_super_cache_offset_in_bytes() != k->super_check_offset()) {
           __ jcc(Assembler::notEqual, *stub->entry());
@@ -1716,7 +1745,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
 #ifdef _LP64
           __ cmpptr(klass_RInfo, k_RInfo);
 #else
-          __ cmpoop(klass_RInfo, k->encoding());
+          __ cmpoop(klass_RInfo, k->constant_encoding());
 #endif // _LP64
           __ jcc(Assembler::equal, done);
 
@@ -1724,7 +1753,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
 #ifdef _LP64
           __ push(k_RInfo);
 #else
-          __ pushoop(k->encoding());
+          __ pushoop(k->constant_encoding());
 #endif // _LP64
           __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)));
           __ pop(klass_RInfo);
@@ -1735,17 +1764,9 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
         }
         __ bind(done);
       } else {
-        __ movl(Rtmp1, Address(k_RInfo, sizeof(oopDesc) + Klass::super_check_offset_offset_in_bytes()));
-        // See if we get an immediate positive hit
-        __ cmpptr(k_RInfo, Address(klass_RInfo, Rtmp1, Address::times_1));
-        __ jcc(Assembler::equal, done);
-        // check for immediate negative hit
-        __ cmpl(Rtmp1, sizeof(oopDesc) + Klass::secondary_super_cache_offset_in_bytes());
-        __ jcc(Assembler::notEqual, *stub->entry());
-        // check for self
-        __ cmpptr(klass_RInfo, k_RInfo);
-        __ jcc(Assembler::equal, done);
-
+        // perform the fast part of the checking logic
+        __ check_klass_subtype_fast_path(klass_RInfo, k_RInfo, Rtmp1, &done, stub->entry(), NULL);
+        // call out-of-line instance of __ check_klass_subtype_slow_path(...):
         __ push(klass_RInfo);
         __ push(k_RInfo);
         __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)));
@@ -1780,7 +1801,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
     if (!k->is_loaded()) {
       jobject2reg_with_patching(k_RInfo, op->info_for_patch());
     } else {
-      LP64_ONLY(__ movoop(k_RInfo, k->encoding()));
+      LP64_ONLY(__ movoop(k_RInfo, k->constant_encoding()));
     }
     assert(obj != k_RInfo, "must be different");
 
@@ -1791,7 +1812,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
       // get object class
       // not a safepoint as obj null check happens earlier
       if (LP64_ONLY(false &&) k->is_loaded()) {
-        NOT_LP64(__ cmpoop(Address(obj, oopDesc::klass_offset_in_bytes()), k->encoding()));
+        NOT_LP64(__ cmpoop(Address(obj, oopDesc::klass_offset_in_bytes()), k->constant_encoding()));
         k_RInfo = noreg;
       } else {
         __ cmpptr(k_RInfo, Address(obj, oopDesc::klass_offset_in_bytes()));
@@ -1808,36 +1829,28 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
 #ifndef _LP64
       if (k->is_loaded()) {
         // See if we get an immediate positive hit
-        __ cmpoop(Address(klass_RInfo, k->super_check_offset()), k->encoding());
+        __ cmpoop(Address(klass_RInfo, k->super_check_offset()), k->constant_encoding());
         __ jcc(Assembler::equal, one);
         if (sizeof(oopDesc) + Klass::secondary_super_cache_offset_in_bytes() == k->super_check_offset()) {
           // check for self
-          __ cmpoop(klass_RInfo, k->encoding());
+          __ cmpoop(klass_RInfo, k->constant_encoding());
           __ jcc(Assembler::equal, one);
           __ push(klass_RInfo);
-          __ pushoop(k->encoding());
+          __ pushoop(k->constant_encoding());
           __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)));
           __ pop(klass_RInfo);
           __ pop(dst);
           __ jmp(done);
         }
-      } else {
-#else
-      { // YUCK
+      }
+        else // next block is unconditional if LP64:
 #endif // LP64
+      {
         assert(dst != klass_RInfo && dst != k_RInfo, "need 3 registers");
 
-        __ movl(dst, Address(k_RInfo, sizeof(oopDesc) + Klass::super_check_offset_offset_in_bytes()));
-        // See if we get an immediate positive hit
-        __ cmpptr(k_RInfo, Address(klass_RInfo, dst, Address::times_1));
-        __ jcc(Assembler::equal, one);
-        // check for immediate negative hit
-        __ cmpl(dst, sizeof(oopDesc) + Klass::secondary_super_cache_offset_in_bytes());
-        __ jcc(Assembler::notEqual, zero);
-        // check for self
-        __ cmpptr(klass_RInfo, k_RInfo);
-        __ jcc(Assembler::equal, one);
-
+        // perform the fast part of the checking logic
+        __ check_klass_subtype_fast_path(klass_RInfo, k_RInfo, dst, &one, &zero, NULL);
+        // call out-of-line instance of __ check_klass_subtype_slow_path(...):
         __ push(klass_RInfo);
         __ push(k_RInfo);
         __ call(RuntimeAddress(Runtime1::entry_for(Runtime1::slow_subtype_check_id)));
@@ -2451,9 +2464,18 @@ void LIR_Assembler::logic_op(LIR_Code code, LIR_Opr left, LIR_Opr right, LIR_Opr
       }
 #endif // _LP64
     } else {
+#ifdef _LP64
+      Register r_lo;
+      if (right->type() == T_OBJECT || right->type() == T_ARRAY) {
+        r_lo = right->as_register();
+      } else {
+        r_lo = right->as_register_lo();
+      }
+#else
       Register r_lo = right->as_register_lo();
       Register r_hi = right->as_register_hi();
       assert(l_lo != r_hi, "overwriting registers");
+#endif
       switch (code) {
         case lir_logic_and:
           __ andptr(l_lo, r_lo);
@@ -2727,19 +2749,14 @@ void LIR_Assembler::comp_fl2i(LIR_Code code, LIR_Opr left, LIR_Opr right, LIR_Op
   } else {
     assert(code == lir_cmp_l2i, "check");
 #ifdef _LP64
-      Register dest = dst->as_register();
-      __ xorptr(dest, dest);
-      Label high, done;
-      __ cmpptr(left->as_register_lo(), right->as_register_lo());
-      __ jcc(Assembler::equal, done);
-      __ jcc(Assembler::greater, high);
-      __ decrement(dest);
-      __ jmp(done);
-      __ bind(high);
-      __ increment(dest);
-
-      __ bind(done);
-
+    Label done;
+    Register dest = dst->as_register();
+    __ cmpptr(left->as_register_lo(), right->as_register_lo());
+    __ movl(dest, -1);
+    __ jccb(Assembler::less, done);
+    __ set_byte_if_not_zero(dest);
+    __ movzbl(dest, dest);
+    __ bind(done);
 #else
     __ lcmp2int(left->as_register_hi(),
                 left->as_register_lo(),
@@ -2758,6 +2775,7 @@ void LIR_Assembler::align_call(LIR_Code code) {
     switch (code) {
       case lir_static_call:
       case lir_optvirtual_call:
+      case lir_dynamic_call:
         offset += NativeCall::displacement_offset;
         break;
       case lir_icvirtual_call:
@@ -2773,29 +2791,30 @@ void LIR_Assembler::align_call(LIR_Code code) {
 }
 
 
-void LIR_Assembler::call(address entry, relocInfo::relocType rtype, CodeEmitInfo* info) {
+void LIR_Assembler::call(LIR_OpJavaCall* op, relocInfo::relocType rtype) {
   assert(!os::is_MP() || (__ offset() + NativeCall::displacement_offset) % BytesPerWord == 0,
          "must be aligned");
-  __ call(AddressLiteral(entry, rtype));
-  add_call_info(code_offset(), info);
+  __ call(AddressLiteral(op->addr(), rtype));
+  add_call_info(code_offset(), op->info());
 }
 
 
-void LIR_Assembler::ic_call(address entry, CodeEmitInfo* info) {
+void LIR_Assembler::ic_call(LIR_OpJavaCall* op) {
   RelocationHolder rh = virtual_call_Relocation::spec(pc());
   __ movoop(IC_Klass, (jobject)Universe::non_oop_word());
   assert(!os::is_MP() ||
          (__ offset() + NativeCall::displacement_offset) % BytesPerWord == 0,
          "must be aligned");
-  __ call(AddressLiteral(entry, rh));
-  add_call_info(code_offset(), info);
+  __ call(AddressLiteral(op->addr(), rh));
+  add_call_info(code_offset(), op->info());
 }
 
 
 /* Currently, vtable-dispatch is only enabled for sparc platforms */
-void LIR_Assembler::vtable_call(int vtable_offset, CodeEmitInfo* info) {
+void LIR_Assembler::vtable_call(LIR_OpJavaCall* op) {
   ShouldNotReachHere();
 }
+
 
 void LIR_Assembler::emit_static_call_stub() {
   address call_pc = __ pc();
@@ -2820,42 +2839,45 @@ void LIR_Assembler::emit_static_call_stub() {
   // On 64bit this will die since it will take a movq & jmp, must be only a jmp
   __ jump(RuntimeAddress(__ pc()));
 
-  assert(__ offset() - start <= call_stub_size, "stub too big")
+  assert(__ offset() - start <= call_stub_size, "stub too big");
   __ end_a_stub();
 }
 
 
-void LIR_Assembler::throw_op(LIR_Opr exceptionPC, LIR_Opr exceptionOop, CodeEmitInfo* info, bool unwind) {
+void LIR_Assembler::throw_op(LIR_Opr exceptionPC, LIR_Opr exceptionOop, CodeEmitInfo* info) {
   assert(exceptionOop->as_register() == rax, "must match");
-  assert(unwind || exceptionPC->as_register() == rdx, "must match");
+  assert(exceptionPC->as_register() == rdx, "must match");
 
   // exception object is not added to oop map by LinearScan
   // (LinearScan assumes that no oops are in fixed registers)
   info->add_register_oop(exceptionOop);
   Runtime1::StubID unwind_id;
 
-  if (!unwind) {
-    // get current pc information
-    // pc is only needed if the method has an exception handler, the unwind code does not need it.
-    int pc_for_athrow_offset = __ offset();
-    InternalAddress pc_for_athrow(__ pc());
-    __ lea(exceptionPC->as_register(), pc_for_athrow);
-    add_call_info(pc_for_athrow_offset, info); // for exception handler
+  // get current pc information
+  // pc is only needed if the method has an exception handler, the unwind code does not need it.
+  int pc_for_athrow_offset = __ offset();
+  InternalAddress pc_for_athrow(__ pc());
+  __ lea(exceptionPC->as_register(), pc_for_athrow);
+  add_call_info(pc_for_athrow_offset, info); // for exception handler
 
-    __ verify_not_null_oop(rax);
-    // search an exception handler (rax: exception oop, rdx: throwing pc)
-    if (compilation()->has_fpu_code()) {
-      unwind_id = Runtime1::handle_exception_id;
-    } else {
-      unwind_id = Runtime1::handle_exception_nofpu_id;
-    }
+  __ verify_not_null_oop(rax);
+  // search an exception handler (rax: exception oop, rdx: throwing pc)
+  if (compilation()->has_fpu_code()) {
+    unwind_id = Runtime1::handle_exception_id;
   } else {
-    unwind_id = Runtime1::unwind_exception_id;
+    unwind_id = Runtime1::handle_exception_nofpu_id;
   }
   __ call(RuntimeAddress(Runtime1::entry_for(unwind_id)));
 
   // enough room for two byte trap
   __ nop();
+}
+
+
+void LIR_Assembler::unwind_op(LIR_Opr exceptionOop) {
+  assert(exceptionOop->as_register() == rax, "must match");
+
+  __ jmp(_unwind_handler_entry);
 }
 
 
@@ -3137,7 +3159,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
     // subtype which we can't check or src is the same array as dst
     // but not necessarily exactly of type default_type.
     Label known_ok, halt;
-    __ movoop(tmp, default_type->encoding());
+    __ movoop(tmp, default_type->constant_encoding());
     if (basic_type != T_OBJECT) {
       __ cmpptr(tmp, dst_klass_addr);
       __ jcc(Assembler::notEqual, halt);
@@ -3161,8 +3183,10 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
 #ifdef _LP64
   assert_different_registers(c_rarg0, dst, dst_pos, length);
+  __ movl2ptr(src_pos, src_pos); //higher 32bits must be null
   __ lea(c_rarg0, Address(src, src_pos, scale, arrayOopDesc::base_offset_in_bytes(basic_type)));
   assert_different_registers(c_rarg1, length);
+  __ movl2ptr(dst_pos, dst_pos); //higher 32bits must be null
   __ lea(c_rarg1, Address(dst, dst_pos, scale, arrayOopDesc::base_offset_in_bytes(basic_type)));
   __ mov(c_rarg2, length);
 
@@ -3225,9 +3249,8 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
   assert(data->is_CounterData(), "need CounterData for calls");
   assert(op->mdo()->is_single_cpu(),  "mdo must be allocated");
   Register mdo  = op->mdo()->as_register();
-  __ movoop(mdo, md->encoding());
+  __ movoop(mdo, md->constant_encoding());
   Address counter_addr(mdo, md->byte_offset_of_slot(data, CounterData::count_offset()));
-  __ addl(counter_addr, DataLayout::counter_increment);
   Bytecodes::Code bc = method->java_code_at_bci(bci);
   // Perform additional virtual call profiling for invokevirtual and
   // invokeinterface bytecodes
@@ -3265,7 +3288,7 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
         ciKlass* receiver = vc_data->receiver(i);
         if (receiver == NULL) {
           Address recv_addr(mdo, md->byte_offset_of_slot(data, VirtualCallData::receiver_offset(i)));
-          __ movoop(recv_addr, known_klass->encoding());
+          __ movoop(recv_addr, known_klass->constant_encoding());
           Address data_addr(mdo, md->byte_offset_of_slot(data, VirtualCallData::receiver_count_offset(i)));
           __ addl(data_addr, DataLayout::counter_increment);
           return;
@@ -3294,14 +3317,18 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
         __ jcc(Assembler::notEqual, next_test);
         __ movptr(recv_addr, recv);
         __ movl(Address(mdo, md->byte_offset_of_slot(data, VirtualCallData::receiver_count_offset(i))), DataLayout::counter_increment);
-        if (i < (VirtualCallData::row_limit() - 1)) {
-          __ jmp(update_done);
-        }
+        __ jmp(update_done);
         __ bind(next_test);
       }
+      // Receiver did not match any saved receiver and there is no empty row for it.
+      // Increment total counter to indicate polymorphic case.
+      __ addl(counter_addr, DataLayout::counter_increment);
 
       __ bind(update_done);
     }
+  } else {
+    // Static call
+    __ addl(counter_addr, DataLayout::counter_increment);
   }
 }
 

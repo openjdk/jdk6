@@ -1,12 +1,12 @@
 /*
- * Copyright 2002-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package sun.awt.X11;
 
@@ -48,6 +48,7 @@ import java.util.logging.*;
 import sun.font.FontManager;
 import sun.misc.PerformanceLogger;
 import sun.print.PrintJob2D;
+import sun.security.action.GetBooleanAction;
 import java.lang.reflect.*;
 
 public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
@@ -120,63 +121,78 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             setBackingStoreType();
         }
         m_removeSourceEvents = SunToolkit.getMethod(EventQueue.class, "removeSourceEvents", new Class[] {Object.class, Boolean.TYPE}) ;
+
+        noisyAwtHandler = AccessController.doPrivileged(new GetBooleanAction("sun.awt.noisyerrorhandler"));
     }
 
-    // Error handler stuff
-    static XErrorEvent saved_error;
-    static long saved_error_handler;
-    static XErrorHandler curErrorHandler;
-    // Should be called under LOCK, before releasing LOCK RESTORE_XERROR_HANDLER should be called
-    static void WITH_XERROR_HANDLER(XErrorHandler handler) {
+    //---- ERROR HANDLER CODE ----//
+
+    /*
+     * Error handler at the moment of XToolkit initialization
+     */
+    private static long saved_error_handler;
+
+    /*
+     * XErrorEvent being handled
+     */
+    static volatile XErrorEvent saved_error;
+
+    /*
+     * Current error handler or null if no error handler is set
+     */
+    private static XErrorHandler current_error_handler;
+
+    /*
+     * Value of sun.awt.noisyerrorhandler system property
+     */
+    private static boolean noisyAwtHandler;
+
+    public static void WITH_XERROR_HANDLER(XErrorHandler handler) {
         saved_error = null;
-        curErrorHandler = handler;
-        XSync();
-        saved_error_handler = XlibWrapper.SetToolkitErrorHandler();
+        current_error_handler = handler;
     }
-    static void XERROR_SAVE(XErrorEvent event) {
-        saved_error = event;
+
+    public static void RESTORE_XERROR_HANDLER() {
+        current_error_handler = null;
     }
+
     // Should be called under LOCK
-    static void RESTORE_XERROR_HANDLER() {
-       XSync();
-        XlibWrapper.XSetErrorHandler(saved_error_handler);
-        curErrorHandler = null;
+    public static int SAVED_ERROR_HANDLER(long display, XErrorEvent error) {
+        if (saved_error_handler != 0) {
+            // Default XErrorHandler may just terminate the process. Don't call it.
+            // return XlibWrapper.CallErrorHandler(saved_error_handler, display, error.pData);
+        }
+        if (log.isLoggable(Level.FINE)) {
+            log.log(Level.FINE, "Unhandled XErrorEvent: " +
+                    "id=" + error.get_resourceid() + ", " +
+                    "serial=" + error.get_serial() + ", " +
+                    "ec=" + error.get_error_code() + ", " +
+                    "rc=" + error.get_request_code() + ", " +
+                    "mc=" + error.get_minor_code());
+        }
+        return 0;
     }
-    // Should be called under LOCK
-    static int SAVED_ERROR_HANDLER(long display, XErrorEvent error) {
-        return XlibWrapper.CallErrorHandler(saved_error_handler, display, error.pData);
-    }
-    interface XErrorHandler {
-        int handleError(long display, XErrorEvent err);
-    }
-    static int GlobalErrorHandler(long display, long event_ptr) {
+
+    // Called from the native code when an error occurs
+    private static int globalErrorHandler(long display, long event_ptr) {
+        if (noisyAwtHandler) {
+            XlibWrapper.PrintXErrorEvent(display, event_ptr);
+        }
         XErrorEvent event = new XErrorEvent(event_ptr);
+        saved_error = event;
         try {
-            if (curErrorHandler != null) {
-                return curErrorHandler.handleError(display, event);
+            if (current_error_handler != null) {
+                return current_error_handler.handleError(display, event);
             } else {
                 return SAVED_ERROR_HANDLER(display, event);
             }
-        } finally {
+        } catch (Throwable z) {
+            log.log(Level.FINE, "Error in GlobalErrorHandler", z);
         }
+        return 0;
     }
 
-/*
- * Instead of validating window id, we simply call XGetWindowProperty,
- * but temporary install this function as the error handler to ignore
- * BadWindow error.
- */
-    static XErrorHandler IgnoreBadWindowHandler = new XErrorHandler() {
-            public int handleError(long display, XErrorEvent err) {
-                XERROR_SAVE(err);
-                if (err.get_error_code() == BadWindow) {
-                    return 0;
-                } else {
-                    return SAVED_ERROR_HANDLER(display, err);
-                }
-            }
-        };
-
+    //---- END OF ERROR HANDLER CODE ----//
 
     private native static void initIDs();
     native static void waitForEvents(long nextTaskTime);
@@ -269,16 +285,20 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
 
             arrowCursor = XlibWrapper.XCreateFontCursor(XToolkit.getDisplay(),
                 XCursorFontConstants.XC_arrow);
+
+            saved_error_handler = XlibWrapper.SetToolkitErrorHandler();
         } finally {
             awtUnlock();
         }
 
         if (log.isLoggable(Level.FINE)) {
             Runtime.getRuntime().addShutdownHook(new Thread() {
-                    public void run() {
+                public void run() {
+                    if (log.isLoggable(Level.FINE)) {
                         dumpPeers();
                     }
-                });
+                }
+            });
         }
     }
 
@@ -560,7 +580,7 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
                 }
 
                 if (eventLog.isLoggable(Level.FINER)) {
-                    eventLog.log(Level.FINER, "{0}", ev);
+                    eventLog.log(Level.FINER, "{0}", String.valueOf(ev));
                 }
 
                 // Check if input method consumes the event
@@ -1046,10 +1066,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
     }
 
     public boolean isTraySupported() {
-        int wm = XWM.getWMID();
-        if (wm == XWM.METACITY_WM || wm == XWM.KDE2_WM)
-        {
-            return true;
+        XSystemTrayPeer peer = XSystemTrayPeer.getPeerInstance();
+        if (peer != null) {
+            return peer.isAvailable();
         }
         return false;
     }
@@ -1686,8 +1705,10 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             if (timeoutTaskLog.isLoggable(Level.FINER)) {
                 timeoutTaskLog.log(Level.FINER, "XToolkit.schedule(): current time={0}" +
                                    ";  interval={1}" +
-                                   ";  task being added={2}" + ";  tasks before addition={3}", new Object[] {
-                                   Long.valueOf(System.currentTimeMillis()), Long.valueOf(interval), task, timeoutTasks});
+                                   ";  task being added={2}" + ";  tasks before addition={3}",
+                                   new Object[] { Long.valueOf(System.currentTimeMillis()),
+                                                  Long.valueOf(interval), String.valueOf(task),
+                                                  String.valueOf(timeoutTasks)});
             }
 
             if (timeoutTasks == null) {
@@ -1732,7 +1753,8 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
     private static void callTimeoutTasks() {
         if (timeoutTaskLog.isLoggable(Level.FINER)) {
             timeoutTaskLog.log(Level.FINER, "XToolkit.callTimeoutTasks(): current time={0}" +
-                               ";  tasks={1}",  new Object[] {Long.valueOf(System.currentTimeMillis()), timeoutTasks});
+                               ";  tasks={1}",  new Object[] {Long.valueOf(System.currentTimeMillis()),
+                                                              String.valueOf(timeoutTasks)});
         }
 
         if (timeoutTasks == null || timeoutTasks.isEmpty()) {
@@ -1750,7 +1772,8 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
 
                 if (timeoutTaskLog.isLoggable(Level.FINER)) {
                     timeoutTaskLog.log(Level.FINER, "XToolkit.callTimeoutTasks(): current time={0}" +
-                                       ";  about to run task={1}", new Object[] {Long.valueOf(currentTime), task});
+                                       ";  about to run task={1}",
+                                       new Object[] {Long.valueOf(currentTime), String.valueOf(task)});
                 }
 
                 try {
@@ -2158,5 +2181,4 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
         return new XDesktopPeer();
     }
 
-    public static native void setNoisyXErrorHandler();
 }

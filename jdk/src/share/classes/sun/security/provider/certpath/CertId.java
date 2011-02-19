@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,16 +18,18 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.security.provider.certpath;
 
-import java.io.*;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import sun.misc.HexDumpEncoder;
 import sun.security.x509.*;
@@ -54,21 +56,28 @@ import sun.security.util.*;
 public class CertId {
 
     private static final boolean debug = false;
-    private AlgorithmId hashAlgId;
-    private byte[] issuerNameHash;
-    private byte[] issuerKeyHash;
-    private SerialNumber certSerialNumber;
+    private static final AlgorithmId SHA1_ALGID
+        = new AlgorithmId(AlgorithmId.SHA_oid);
+    private final AlgorithmId hashAlgId;
+    private final byte[] issuerNameHash;
+    private final byte[] issuerKeyHash;
+    private final SerialNumber certSerialNumber;
     private int myhash = -1; // hashcode for this CertId
 
     /**
      * Creates a CertId. The hash algorithm used is SHA-1.
      */
-    public CertId(X509CertImpl issuerCert, SerialNumber serialNumber)
-        throws Exception {
+    public CertId(X509Certificate issuerCert, SerialNumber serialNumber)
+        throws IOException {
 
         // compute issuerNameHash
-        MessageDigest md = MessageDigest.getInstance("SHA1");
-        hashAlgId = AlgorithmId.get("SHA1");
+        MessageDigest md = null;
+        try {
+            md = MessageDigest.getInstance("SHA1");
+        } catch (NoSuchAlgorithmException nsae) {
+            throw new IOException("Unable to create CertId", nsae);
+        }
+        hashAlgId = SHA1_ALGID;
         md.update(issuerCert.getSubjectX500Principal().getEncoded());
         issuerNameHash = md.digest();
 
@@ -90,6 +99,7 @@ public class CertId {
                 encoder.encode(issuerNameHash));
             System.out.println("issuerKeyHash is " +
                 encoder.encode(issuerKeyHash));
+            System.out.println("SerialNumber is " + serialNumber.getNumber());
         }
     }
 
@@ -157,7 +167,7 @@ public class CertId {
      *
      * @return the hashcode value.
      */
-    public int hashCode() {
+    @Override public int hashCode() {
         if (myhash == -1) {
             myhash = hashAlgId.hashCode();
             for (int i = 0; i < issuerNameHash.length; i++) {
@@ -180,7 +190,7 @@ public class CertId {
      * @param other the object to test for equality with this object.
      * @return true if the objects are considered equal, false otherwise.
      */
-    public boolean equals(Object other) {
+    @Override public boolean equals(Object other) {
 
         if (this == other) {
             return true;
@@ -203,7 +213,7 @@ public class CertId {
     /**
      * Create a string representation of the CertId.
      */
-    public String toString() {
+    @Override public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("CertId \n");
         sb.append("Algorithm: " + hashAlgId.toString() +"\n");

@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -91,6 +91,10 @@ public:
   // Only copy to C string to be added if lookup failed.
   static symbolOop lookup(symbolHandle sym, int begin, int end, TRAPS);
 
+  // jchar (utf16) version of lookups
+  static symbolOop lookup_unicode(const jchar* name, int len, TRAPS);
+  static symbolOop lookup_only_unicode(const jchar* name, int len, unsigned int& hash);
+
   static void add(constantPoolHandle cp, int names_count,
                   const char** names, int* lengths, int* cp_indices,
                   unsigned int* hashValues, TRAPS);
@@ -112,7 +116,14 @@ public:
   // Needed for preloading classes in signatures when compiling.
   // Returns the symbol is already present in symbol table, otherwise
   // NULL.  NO ALLOCATION IS GUARANTEED!
-  static symbolOop probe(const char* name, int len);
+  static symbolOop probe(const char* name, int len) {
+    unsigned int ignore_hash;
+    return lookup_only(name, len, ignore_hash);
+  }
+  static symbolOop probe_unicode(const jchar* name, int len) {
+    unsigned int ignore_hash;
+    return lookup_only_unicode(name, len, ignore_hash);
+  }
 
   // Histogram
   static void print_histogram()     PRODUCT_RETURN;

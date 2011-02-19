@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,31 +18,24 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package javax.swing;
 
 
 import java.util.HashSet;
 import java.util.Hashtable;
-import java.util.Dictionary;
 import java.util.Enumeration;
 import java.util.Locale;
 import java.util.Vector;
 import java.util.EventListener;
 import java.util.Set;
-import java.util.Map;
-import java.util.HashMap;
 
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.image.VolatileImage;
-import java.awt.Graphics2D;
 import java.awt.peer.LightweightPeer;
-import java.awt.dnd.DropTarget;
-import java.awt.font.FontRenderContext;
 import java.beans.*;
 
 import java.applet.Applet;
@@ -220,8 +213,7 @@ public abstract class JComponent extends Container implements Serializable,
      * indicates the EDT is calling into the InputVerifier from the
      * returned component.
      */
-    private static final Object INPUT_VERIFIER_SOURCE_KEY =
-            new StringBuilder("InputVerifierSourceKey");
+    private static final Object INPUT_VERIFIER_SOURCE_KEY = new Object(); // InputVerifierSourceKey
 
     /* The following fields support set methods for the corresponding
      * java.awt.Component properties.
@@ -369,8 +361,7 @@ public abstract class JComponent extends Container implements Serializable,
     private static final String defaultLocale = "JComponent.defaultLocale";
 
     private static Component componentObtainingGraphicsFrom;
-    private static Object componentObtainingGraphicsFromLock = new
-            StringBuilder("componentObtainingGraphicsFrom");
+    private static Object componentObtainingGraphicsFromLock = new Object(); // componentObtainingGraphicsFrom
 
     /**
      * AA text hints.

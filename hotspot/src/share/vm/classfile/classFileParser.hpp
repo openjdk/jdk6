@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -33,6 +33,7 @@ class ClassFileParser VALUE_OBJ_CLASS_SPEC {
   u2   _major_version;
   u2   _minor_version;
   symbolHandle _class_name;
+  KlassHandle _host_klass;
   GrowableArray<Handle>* _cp_patches; // overrides for CP entries
 
   bool _has_finalizer;
@@ -60,7 +61,6 @@ class ClassFileParser VALUE_OBJ_CLASS_SPEC {
                                   int length,
                                   Handle class_loader,
                                   Handle protection_domain,
-                                  PerfTraceTime* vmtimer,
                                   symbolHandle class_name,
                                   TRAPS);
 
@@ -125,10 +125,13 @@ class ClassFileParser VALUE_OBJ_CLASS_SPEC {
                                        int runtime_invisible_annotations_length, TRAPS);
 
   // Final setup
-  int  compute_oop_map_size(instanceKlassHandle super, int nonstatic_oop_count,
-                            int first_nonstatic_oop_offset);
-  void fill_oop_maps(instanceKlassHandle k, int nonstatic_oop_map_count,
-                     u2* nonstatic_oop_offsets, u2* nonstatic_oop_length);
+  unsigned int compute_oop_map_count(instanceKlassHandle super,
+                                     unsigned int nonstatic_oop_count,
+                                     int first_nonstatic_oop_offset);
+  void fill_oop_maps(instanceKlassHandle k,
+                     unsigned int nonstatic_oop_map_count,
+                     int* nonstatic_oop_offsets,
+                     unsigned int* nonstatic_oop_counts);
   void set_precomputed_flags(instanceKlassHandle k);
   objArrayHandle compute_transitive_interfaces(instanceKlassHandle super,
                                                objArrayHandle local_ifs, TRAPS);
@@ -145,6 +148,11 @@ class ClassFileParser VALUE_OBJ_CLASS_SPEC {
   // Adjust the next_nonstatic_oop_offset to place the fake fields
   // before any Java fields.
   void java_lang_Class_fix_post(int* next_nonstatic_oop_offset);
+  // Adjust the field allocation counts for java.dyn.MethodHandle to add
+  // a fake address (void*) field.
+  void java_dyn_MethodHandle_fix_pre(constantPoolHandle cp,
+                                     typeArrayHandle* fields_ptr,
+                                     FieldAllocationCount *fac_ptr, TRAPS);
 
   // Format checker methods
   void classfile_parse_error(const char* msg, TRAPS);
@@ -187,6 +195,9 @@ class ClassFileParser VALUE_OBJ_CLASS_SPEC {
     if (!b) { classfile_parse_error(msg, index, name, CHECK); }
   }
 
+  void throwIllegalSignature(
+      const char* type, symbolHandle name, symbolHandle sig, TRAPS);
+
   bool is_supported_version(u2 major, u2 minor);
   bool has_illegal_visibility(jint flags);
 
@@ -204,6 +215,10 @@ class ClassFileParser VALUE_OBJ_CLASS_SPEC {
   char* skip_over_field_name(char* name, bool slash_ok, unsigned int length);
   char* skip_over_field_signature(char* signature, bool void_ok, unsigned int length, TRAPS);
 
+  bool is_anonymous() {
+    assert(AnonymousClasses || _host_klass.is_null(), "");
+    return _host_klass.not_null();
+  }
   bool has_cp_patch_at(int index) {
     assert(AnonymousClasses, "");
     assert(index >= 0, "oob");
@@ -248,14 +263,18 @@ class ClassFileParser VALUE_OBJ_CLASS_SPEC {
                                      Handle class_loader,
                                      Handle protection_domain,
                                      symbolHandle& parsed_name,
+                                     bool verify,
                                      TRAPS) {
-    return parseClassFile(name, class_loader, protection_domain, NULL, parsed_name, THREAD);
+    KlassHandle no_host_klass;
+    return parseClassFile(name, class_loader, protection_domain, no_host_klass, NULL, parsed_name, verify, THREAD);
   }
   instanceKlassHandle parseClassFile(symbolHandle name,
                                      Handle class_loader,
                                      Handle protection_domain,
+                                     KlassHandle host_klass,
                                      GrowableArray<Handle>* cp_patches,
                                      symbolHandle& parsed_name,
+                                     bool verify,
                                      TRAPS);
 
   // Verifier checks

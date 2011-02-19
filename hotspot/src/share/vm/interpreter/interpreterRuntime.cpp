@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -63,7 +63,7 @@ void InterpreterRuntime::set_bcp_and_mdp(address bcp, JavaThread *thread) {
 IRT_ENTRY(void, InterpreterRuntime::ldc(JavaThread* thread, bool wide))
   // access constant pool
   constantPoolOop pool = method(thread)->constants();
-  int index = wide ? two_byte_index(thread) : one_byte_index(thread);
+  int index = wide ? get_index_u2(thread, Bytecodes::_ldc_w) : get_index_u1(thread, Bytecodes::_ldc);
   constantTag tag = pool->tag_at(index);
 
   if (tag.is_unresolved_klass() || tag.is_klass()) {
@@ -81,6 +81,18 @@ IRT_ENTRY(void, InterpreterRuntime::ldc(JavaThread* thread, bool wide))
     oop s_oop = pool->string_at(index, CHECK);
     thread->set_vm_result(s_oop);
   }
+IRT_END
+
+IRT_ENTRY(void, InterpreterRuntime::resolve_ldc(JavaThread* thread, Bytecodes::Code bytecode)) {
+  assert(bytecode == Bytecodes::_fast_aldc ||
+         bytecode == Bytecodes::_fast_aldc_w, "wrong bc");
+  ResourceMark rm(thread);
+  methodHandle m (thread, method(thread));
+  Bytecode_loadconstant* ldc = Bytecode_loadconstant_at(m, bci(thread));
+  oop result = ldc->resolve_constant(THREAD);
+  DEBUG_ONLY(ConstantPoolCacheEntry* cpce = m->constants()->cache()->entry_at(ldc->cache_index()));
+  assert(result == cpce->f1(), "expected result for assembly code");
+}
 IRT_END
 
 
@@ -135,7 +147,7 @@ IRT_END
 IRT_ENTRY(void, InterpreterRuntime::multianewarray(JavaThread* thread, jint* first_size_address))
   // We may want to pass in more arguments - could make this slightly faster
   constantPoolOop constants = method(thread)->constants();
-  int          i = two_byte_index(thread);
+  int          i = get_index_u2(thread, Bytecodes::_multianewarray);
   klassOop klass = constants->klass_at(i, CHECK);
   int   nof_dims = number_of_dimensions(thread);
   assert(oop(klass)->is_klass(), "not a class");
@@ -169,7 +181,7 @@ IRT_END
 // Quicken instance-of and check-cast bytecodes
 IRT_ENTRY(void, InterpreterRuntime::quicken_io_cc(JavaThread* thread))
   // Force resolving; quicken the bytecode
-  int which = two_byte_index(thread);
+  int which = get_index_u2(thread, Bytecodes::_checkcast);
   constantPoolOop cpool = method(thread)->constants();
   // We'd expect to assert that we're only here to quicken bytecodes, but in a multithreaded
   // program we might have seen an unquick'd bytecode in the interpreter but have another
@@ -293,6 +305,24 @@ IRT_ENTRY(void, InterpreterRuntime::throw_ClassCastException(
   THROW_MSG(vmSymbols::java_lang_ClassCastException(), message);
 IRT_END
 
+// required can be either a MethodType, or a Class (for a single argument)
+// actual (if not null) can be either a MethodHandle, or an arbitrary value (for a single argument)
+IRT_ENTRY(void, InterpreterRuntime::throw_WrongMethodTypeException(JavaThread* thread,
+                                                                   oopDesc* required,
+                                                                   oopDesc* actual)) {
+  ResourceMark rm(thread);
+  char* message = SharedRuntime::generate_wrong_method_type_message(thread, required, actual);
+
+  if (ProfileTraps) {
+    note_trap(thread, Deoptimization::Reason_constraint, CHECK);
+  }
+
+  // create exception
+  THROW_MSG(vmSymbols::java_dyn_WrongMethodTypeException(), message);
+}
+IRT_END
+
+
 
 // exception_handler_for_exception(...) returns the continuation address,
 // the exception oop (via TLS) and sets the bci/bcp for the continuation.
@@ -310,7 +340,7 @@ IRT_ENTRY(address, InterpreterRuntime::exception_handler_for_exception(JavaThrea
   typeArrayHandle    h_extable  (thread, h_method->exception_table());
   bool               should_repeat;
   int                handler_bci;
-  int                current_bci = bcp(thread) - h_method->code_base();
+  int                current_bci = bci(thread);
 
   // Need to do this check first since when _do_not_unlock_if_synchronized
   // is set, we don't want to trigger any classloading which may make calls
@@ -335,7 +365,7 @@ IRT_ENTRY(address, InterpreterRuntime::exception_handler_for_exception(JavaThrea
     assert(h_exception.not_null(), "NULL exceptions should be handled by athrow");
     assert(h_exception->is_oop(), "just checking");
     // Check that exception is a subclass of Throwable, otherwise we have a VerifyError
-    if (!(h_exception->is_a(SystemDictionary::throwable_klass()))) {
+    if (!(h_exception->is_a(SystemDictionary::Throwable_klass()))) {
       if (ExitVMOnVerifyError) vm_exit(-1);
       ShouldNotReachHere();
     }
@@ -379,7 +409,7 @@ IRT_ENTRY(address, InterpreterRuntime::exception_handler_for_exception(JavaThrea
 
   // notify JVMTI of an exception throw; JVMTI will detect if this is a first
   // time throw or a stack unwinding throw and accordingly notify the debugger
-  if (JvmtiExport::can_post_exceptions()) {
+  if (JvmtiExport::can_post_on_exceptions()) {
     JvmtiExport::post_exception_throw(thread, h_method(), bcp(thread), h_exception());
   }
 
@@ -408,7 +438,7 @@ IRT_ENTRY(address, InterpreterRuntime::exception_handler_for_exception(JavaThrea
   }
   // notify debugger of an exception catch
   // (this is good for exceptions caught in native methods as well)
-  if (JvmtiExport::can_post_exceptions()) {
+  if (JvmtiExport::can_post_on_exceptions()) {
     JvmtiExport::notice_unwind_due_to_exception(thread, h_method(), handler_pc, h_exception(), (handler_pc != NULL));
   }
 
@@ -445,7 +475,7 @@ IRT_ENTRY(void, InterpreterRuntime::resolve_get_put(JavaThread* thread, Bytecode
 
   {
     JvmtiHideSingleStepping jhss(thread);
-    LinkResolver::resolve_field(info, pool, two_byte_index(thread),
+    LinkResolver::resolve_field(info, pool, get_index_u2_cpcache(thread, bytecode),
                                 bytecode, false, CHECK);
   } // end JvmtiHideSingleStepping
 
@@ -567,7 +597,7 @@ IRT_ENTRY(void, InterpreterRuntime::new_illegal_monitor_state_exception(JavaThre
   Handle exception(thread, thread->vm_result());
   assert(exception() != NULL, "vm result should be set");
   thread->set_vm_result(NULL); // clear vm result before continuing (may cause memory leaks and assert failures)
-  if (!exception->is_a(SystemDictionary::threaddeath_klass())) {
+  if (!exception->is_a(SystemDictionary::ThreadDeath_klass())) {
     exception = get_preinitialized_exception(
                        SystemDictionary::IllegalMonitorStateException_klass(),
                        CATCH);
@@ -597,8 +627,7 @@ IRT_ENTRY(void, InterpreterRuntime::resolve_invoke(JavaThread* thread, Bytecodes
   if (bytecode == Bytecodes::_invokevirtual || bytecode == Bytecodes::_invokeinterface) {
     ResourceMark rm(thread);
     methodHandle m (thread, method(thread));
-    int bci = m->bci_from(bcp(thread));
-    Bytecode_invoke* call = Bytecode_invoke_at(m, bci);
+    Bytecode_invoke* call = Bytecode_invoke_at(m, bci(thread));
     symbolHandle signature (thread, call->signature());
     receiver = Handle(thread,
                   thread->last_frame().interpreter_callee_receiver(signature));
@@ -616,7 +645,7 @@ IRT_ENTRY(void, InterpreterRuntime::resolve_invoke(JavaThread* thread, Bytecodes
   {
     JvmtiHideSingleStepping jhss(thread);
     LinkResolver::resolve_invoke(info, receiver, pool,
-                                 two_byte_index(thread), bytecode, CHECK);
+                                 get_index_u2_cpcache(thread, bytecode), bytecode, CHECK);
     if (JvmtiExport::can_hotswap_or_post_breakpoint()) {
       int retry_count = 0;
       while (info.resolved_method()->is_old()) {
@@ -627,7 +656,7 @@ IRT_ENTRY(void, InterpreterRuntime::resolve_invoke(JavaThread* thread, Bytecodes
                   "Could not resolve to latest version of redefined method");
         // method is redefined in the middle of resolve so re-try.
         LinkResolver::resolve_invoke(info, receiver, pool,
-                                     two_byte_index(thread), bytecode, CHECK);
+                                     get_index_u2_cpcache(thread, bytecode), bytecode, CHECK);
       }
     }
   } // end JvmtiHideSingleStepping
@@ -642,7 +671,7 @@ IRT_ENTRY(void, InterpreterRuntime::resolve_invoke(JavaThread* thread, Bytecodes
       tty->print_cr("Resolving: klass: %s to method: %s", info.resolved_klass()->name()->as_C_string(), info.resolved_method()->name()->as_C_string());
     }
     if (info.resolved_method()->method_holder() ==
-                                            SystemDictionary::object_klass()) {
+                                            SystemDictionary::Object_klass()) {
       // NOTE: THIS IS A FIX FOR A CORNER CASE in the JVM spec
       // (see also cpCacheOop.cpp for details)
       methodHandle rm = info.resolved_method();
@@ -660,6 +689,87 @@ IRT_ENTRY(void, InterpreterRuntime::resolve_invoke(JavaThread* thread, Bytecodes
       info.resolved_method(),
       info.vtable_index());
   }
+IRT_END
+
+
+// First time execution:  Resolve symbols, create a permanent CallSite object.
+IRT_ENTRY(void, InterpreterRuntime::resolve_invokedynamic(JavaThread* thread)) {
+  ResourceMark rm(thread);
+
+  assert(EnableInvokeDynamic, "");
+
+  const Bytecodes::Code bytecode = Bytecodes::_invokedynamic;
+
+  methodHandle caller_method(thread, method(thread));
+
+  constantPoolHandle pool(thread, caller_method->constants());
+  pool->set_invokedynamic();    // mark header to flag active call sites
+
+  int caller_bci = 0;
+  int site_index = 0;
+  { address caller_bcp = bcp(thread);
+    caller_bci = caller_method->bci_from(caller_bcp);
+    site_index = Bytes::get_native_u4(caller_bcp+1);
+  }
+  assert(site_index == InterpreterRuntime::bytecode(thread)->get_index_u4(bytecode), "");
+  assert(constantPoolCacheOopDesc::is_secondary_index(site_index), "proper format");
+  // there is a second CPC entries that is of interest; it caches signature info:
+  int main_index = pool->cache()->secondary_entry_at(site_index)->main_entry_index();
+
+  // first resolve the signature to a MH.invoke methodOop
+  if (!pool->cache()->entry_at(main_index)->is_resolved(bytecode)) {
+    JvmtiHideSingleStepping jhss(thread);
+    CallInfo info;
+    LinkResolver::resolve_invoke(info, Handle(), pool,
+                                 site_index, bytecode, CHECK);
+    // The main entry corresponds to a JVM_CONSTANT_InvokeDynamic, and serves
+    // as a common reference point for all invokedynamic call sites with
+    // that exact call descriptor.  We will link it in the CP cache exactly
+    // as if it were an invokevirtual of MethodHandle.invoke.
+    pool->cache()->entry_at(main_index)->set_method(
+      bytecode,
+      info.resolved_method(),
+      info.vtable_index());
+  }
+
+  // The method (f2 entry) of the main entry is the MH.invoke for the
+  // invokedynamic target call signature.
+  oop f1_value = pool->cache()->entry_at(main_index)->f1();
+  methodHandle signature_invoker(THREAD, (methodOop) f1_value);
+  assert(signature_invoker.not_null() && signature_invoker->is_method() && signature_invoker->is_method_handle_invoke(),
+         "correct result from LinkResolver::resolve_invokedynamic");
+
+  Handle bootm = SystemDictionary::find_bootstrap_method(caller_method, caller_bci,
+                                                         main_index, CHECK);
+  if (bootm.is_null()) {
+    THROW_MSG(vmSymbols::java_lang_IllegalStateException(),
+              "no bootstrap method found for invokedynamic");
+  }
+
+  // Short circuit if CallSite has been bound already:
+  if (!pool->cache()->secondary_entry_at(site_index)->is_f1_null())
+    return;
+
+  symbolHandle call_site_name(THREAD, pool->name_ref_at(site_index));
+
+  Handle info;  // NYI: Other metadata from a new kind of CP entry.  (Annotations?)
+
+  Handle call_site
+    = SystemDictionary::make_dynamic_call_site(bootm,
+                                               // Callee information:
+                                               call_site_name,
+                                               signature_invoker,
+                                               info,
+                                               // Caller information:
+                                               caller_method,
+                                               caller_bci,
+                                               CHECK);
+
+  // In the secondary entry, the f1 field is the call site, and the f2 (index)
+  // field is some data about the invoke site.  Currently, it is just the BCI.
+  // Later, it might be changed to help manage inlining dependencies.
+  pool->cache()->secondary_entry_at(site_index)->set_dynamic_call(call_site, signature_invoker);
+}
 IRT_END
 
 
@@ -704,8 +814,25 @@ static void trace_osr_request(methodHandle method, nmethod* osr, int bci) {
 }
 #endif // !PRODUCT
 
+nmethod* InterpreterRuntime::frequency_counter_overflow(JavaThread* thread, address branch_bcp) {
+  nmethod* nm = frequency_counter_overflow_inner(thread, branch_bcp);
+  assert(branch_bcp != NULL || nm == NULL, "always returns null for non OSR requests");
+  if (branch_bcp != NULL && nm != NULL) {
+    // This was a successful request for an OSR nmethod.  Because
+    // frequency_counter_overflow_inner ends with a safepoint check,
+    // nm could have been unloaded so look it up again.  It's unsafe
+    // to examine nm directly since it might have been freed and used
+    // for something else.
+    frame fr = thread->last_frame();
+    methodOop method =  fr.interpreter_frame_method();
+    int bci = method->bci_from(fr.interpreter_frame_bcp());
+    nm = method->lookup_osr_nmethod_for(bci);
+  }
+  return nm;
+}
+
 IRT_ENTRY(nmethod*,
-          InterpreterRuntime::frequency_counter_overflow(JavaThread* thread, address branch_bcp))
+          InterpreterRuntime::frequency_counter_overflow_inner(JavaThread* thread, address branch_bcp))
   // use UnlockFlagSaver to clear and restore the _do_not_unlock_if_synchronized
   // flag, in case this method triggers classloading which will call into Java.
   UnlockFlagSaver fs(thread);
@@ -778,7 +905,6 @@ IRT_ENTRY(nmethod*,
         }
         BiasedLocking::revoke(objects_to_revoke);
       }
-
       return osr_nm;
     }
   }
@@ -961,7 +1087,7 @@ IRT_ENTRY(void, InterpreterRuntime::post_field_modification(JavaThread *thread,
   jlong_accessor u;
   jint* newval = (jint*)value;
   u.words[0] = newval[0];
-  u.words[1] = newval[Interpreter::stackElementWords()]; // skip if tag
+  u.words[1] = newval[Interpreter::stackElementWords]; // skip if tag
   fvalue.j = u.long_value;
 #endif // _LP64
 
@@ -1144,8 +1270,8 @@ IRT_LEAF(void, InterpreterRuntime::popframe_move_outgoing_args(JavaThread* threa
   methodHandle mh(thread, fr.interpreter_frame_method());
   Bytecode_invoke* invoke = Bytecode_invoke_at(mh, bci);
   ArgumentSizeComputer asc(invoke->signature());
-  int size_of_arguments = (asc.size() + (invoke->is_invokestatic() ? 0 : 1)); // receiver
-  Copy::conjoint_bytes(src_address, dest_address,
-                       size_of_arguments * Interpreter::stackElementSize());
+  int size_of_arguments = (asc.size() + (invoke->has_receiver() ? 1 : 0)); // receiver
+  Copy::conjoint_jbytes(src_address, dest_address,
+                       size_of_arguments * Interpreter::stackElementSize);
 IRT_END
 #endif

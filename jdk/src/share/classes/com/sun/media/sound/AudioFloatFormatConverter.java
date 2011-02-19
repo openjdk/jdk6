@@ -1,12 +1,12 @@
 /*
- * Copyright 2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.sun.media.sound;
 
@@ -175,7 +175,6 @@ public class AudioFloatFormatConverter extends FormatConversionProvider {
                 for (int c = 0; c < targetChannels; c++) {
                     for (int i = 0, ix = off + c; i < len2; i++, ix += cs) {
                         b[ix] = conversion_buffer[i];
-                        ;
                     }
                 }
             } else if (targetChannels == 1) {
@@ -186,7 +185,6 @@ public class AudioFloatFormatConverter extends FormatConversionProvider {
                 for (int c = 1; c < sourceChannels; c++) {
                     for (int i = c, ix = off; i < len2; i += cs, ix++) {
                         b[ix] += conversion_buffer[i];
-                        ;
                     }
                 }
                 float vol = 1f / ((float) sourceChannels);
@@ -390,6 +388,7 @@ public class AudioFloatFormatConverter extends FormatConversionProvider {
                 return -1;
             if (len < 0)
                 return 0;
+            int offlen = off + len;
             int remain = len / nrofchannels;
             int destPos = 0;
             int in_end = ibuffer_len;
@@ -423,7 +422,7 @@ public class AudioFloatFormatConverter extends FormatConversionProvider {
             for (int c = 0; c < nrofchannels; c++) {
                 int ix = 0;
                 float[] buff = cbuffer[c];
-                for (int i = c; i < b.length; i += nrofchannels) {
+                for (int i = c + off; i < offlen; i += nrofchannels) {
                     b[i] = buff[ix++];
                 }
             }
@@ -447,7 +446,7 @@ public class AudioFloatFormatConverter extends FormatConversionProvider {
         }
 
         public long skip(long len) throws IOException {
-            if (len > 0)
+            if (len < 0)
                 return 0;
             if (skipbuffer == null)
                 skipbuffer = new float[1024 * targetFormat.getFrameSize()];

@@ -1,12 +1,12 @@
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 
@@ -41,7 +41,10 @@ import java.lang.ref.WeakReference;
  * <p>
  * Logger objects may be obtained by calls on one of the getLogger
  * factory methods.  These will either create a new Logger or
- * return a suitable existing Logger.
+ * return a suitable existing Logger. It is important to note that
+ * the Logger returned by one of the {@code getLogger} factory methods
+ * may be garbage collected at any time if a strong reference to the
+ * Logger is not kept.
  * <p>
  * Logging messages will be forwarded to registered Handler
  * objects, which can forward the messages to a variety of
@@ -181,7 +184,7 @@ public class Logger {
     // We keep weak references from parents to children, but strong
     // references from children to parents.
     private Logger parent;    // our nearest parent.
-    private ArrayList<WeakReference<Logger>> kids;   // WeakReferences to loggers that have us as parent
+    private ArrayList<LogManager.LoggerWeakRef> kids;   // WeakReferences to loggers that have us as parent
     private Level levelObject;
     private volatile int levelValue;  // current effective level value
 
@@ -192,6 +195,8 @@ public class Logger {
      * use of the logging package (for example in products) should create
      * and use their own Logger objects, with appropriate names, so that
      * logging can be controlled on a suitable per-Logger granularity.
+     * Developers also need to keep a strong reference to their Logger
+     * objects to prevent them from being garbage collected.
      * <p>
      * The preferred way to get the global logger object is via the call
      * <code>Logger.getLogger(Logger.GLOBAL_LOGGER_NAME)</code>.
@@ -205,7 +210,9 @@ public class Logger {
      * who are making serious use of the logging package (for example
      * in products) should create and use their own Logger objects,
      * with appropriate names, so that logging can be controlled on a
-     * suitable per-Logger granularity.
+     * suitable per-Logger granularity. Developers also need to keep a
+     * strong reference to their Logger objects to prevent them from
+     * being garbage collected.
      * <p>
      * @deprecated Initialization of this field is prone to deadlocks.
      * The field must be initialized by the Logger class initialization
@@ -278,6 +285,15 @@ public class Logger {
      * based on the LogManager configuration and it will configured
      * to also send logging output to its parent's handlers.  It will
      * be registered in the LogManager global namespace.
+     * <p>
+     * Note: The LogManager may only retain a weak reference to the newly
+     * created Logger. It is important to understand that a previously
+     * created Logger with the given name may be garbage collected at any
+     * time if there is no strong reference to the Logger. In particular,
+     * this means that two back-to-back calls like
+     * {@code getLogger("MyLogger").log(...)} may use different Logger
+     * objects named "MyLogger" if there is no strong reference to the
+     * Logger named "MyLogger" elsewhere in the program.
      *
      * @param   name            A name for the logger.  This should
      *                          be a dot-separated name and should normally
@@ -301,6 +317,15 @@ public class Logger {
      * based on the LogManager and it will configured to also send logging
      * output to its parent loggers Handlers.  It will be registered in
      * the LogManager global namespace.
+     * <p>
+     * Note: The LogManager may only retain a weak reference to the newly
+     * created Logger. It is important to understand that a previously
+     * created Logger with the given name may be garbage collected at any
+     * time if there is no strong reference to the Logger. In particular,
+     * this means that two back-to-back calls like
+     * {@code getLogger("MyLogger", ...).log(...)} may use different Logger
+     * objects named "MyLogger" if there is no strong reference to the
+     * Logger named "MyLogger" elsewhere in the program.
      * <p>
      * If the named Logger already exists and does not yet have a
      * localization resource bundle then the given resource bundle
@@ -356,13 +381,8 @@ public class Logger {
      *
      * @return a newly created private Logger
      */
-    public static synchronized Logger getAnonymousLogger() {
-        LogManager manager = LogManager.getLogManager();
-        Logger result = new Logger(null, null);
-        result.anonymous = true;
-        Logger root = manager.getLogger("");
-        result.doSetParent(root);
-        return result;
+    public static Logger getAnonymousLogger() {
+        return getAnonymousLogger(null);
     }
 
     /**
@@ -390,6 +410,8 @@ public class Logger {
      */
     public static synchronized Logger getAnonymousLogger(String resourceBundleName) {
         LogManager manager = LogManager.getLogManager();
+        // cleanup some Loggers that have been GC'ed
+        manager.drainLoggerRefQueueBounded();
         Logger result = new Logger(null, resourceBundleName);
         result.anonymous = true;
         Logger root = manager.getLogger("");
@@ -1380,14 +1402,18 @@ public class Logger {
         synchronized (treeLock) {
 
             // Remove ourself from any previous parent.
+            LogManager.LoggerWeakRef ref = null;
             if (parent != null) {
                 // assert parent.kids != null;
-                for (Iterator<WeakReference<Logger>> iter = parent.kids.iterator(); iter.hasNext(); ) {
-                    WeakReference<Logger> ref =  iter.next();
+                for (Iterator<LogManager.LoggerWeakRef> iter = parent.kids.iterator(); iter.hasNext(); ) {
+                    ref = iter.next();
                     Logger kid =  ref.get();
                     if (kid == this) {
+                        // ref is used down below to complete the reparenting
                         iter.remove();
                         break;
+                    } else {
+                        ref = null;
                     }
                 }
                 // We have now removed ourself from our parents' kids.
@@ -1396,14 +1422,34 @@ public class Logger {
             // Set our new parent.
             parent = newParent;
             if (parent.kids == null) {
-                parent.kids = new ArrayList<WeakReference<Logger>>(2);
+                parent.kids = new ArrayList<LogManager.LoggerWeakRef>(2);
             }
-            parent.kids.add(new WeakReference<Logger>(this));
+            if (ref == null) {
+                // we didn't have a previous parent
+                ref = manager.new LoggerWeakRef(this);
+            }
+            ref.setParentRef(new WeakReference<Logger>(parent));
+            parent.kids.add(ref);
 
             // As a result of the reparenting, the effective level
             // may have changed for us and our children.
             updateEffectiveLevel();
 
+        }
+    }
+
+    // Package-level method.
+    // Remove the weak reference for the specified child Logger from the
+    // kid list. We should only be called from LoggerWeakRef.dispose().
+    final void removeChildLogger(LogManager.LoggerWeakRef child) {
+        synchronized (treeLock) {
+            for (Iterator<LogManager.LoggerWeakRef> iter = kids.iterator(); iter.hasNext(); ) {
+                LogManager.LoggerWeakRef ref = iter.next();
+                if (ref == child) {
+                    iter.remove();
+                    return;
+                }
+            }
         }
     }
 
@@ -1438,7 +1484,7 @@ public class Logger {
         // Recursively update the level on each of our kids.
         if (kids != null) {
             for (int i = 0; i < kids.size(); i++) {
-                WeakReference<Logger> ref = kids.get(i);
+                LogManager.LoggerWeakRef ref = kids.get(i);
                 Logger kid =  ref.get();
                 if (kid != null) {
                     kid.updateEffectiveLevel();

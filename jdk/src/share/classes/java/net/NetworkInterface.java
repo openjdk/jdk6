@@ -1,12 +1,12 @@
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package java.net;
@@ -278,8 +278,12 @@ public final class NetworkInterface {
      *          If the specified address is <tt>null</tt>.
      */
     public static NetworkInterface getByInetAddress(InetAddress addr) throws SocketException {
-        if (addr == null)
+        if (addr == null) {
             throw new NullPointerException();
+        }
+        if (!(addr instanceof Inet4Address || addr instanceof Inet6Address)) {
+            throw new IllegalArgumentException ("invalid address type");
+        }
         return getByInetAddress0(addr);
     }
 
@@ -389,6 +393,10 @@ public final class NetworkInterface {
      * @since 1.6
      */
     public byte[] getHardwareAddress() throws SocketException {
+        if (!getInetAddresses().hasMoreElements()) {
+            // don't have connect permission to any local address
+            return null;
+        }
         for (InetAddress addr : addrs) {
             if (addr instanceof Inet4Address) {
                 return getMacAddr0(((Inet4Address)addr).getAddress(), name, index);
@@ -505,11 +513,10 @@ public final class NetworkInterface {
     }
 
     public int hashCode() {
-        int count = 0;
-        if (addrs != null) {
-            for (int i = 0; i < addrs.length; i++) {
-                count += addrs[i].hashCode();
-            }
+        int count = name == null? 0: name.hashCode();
+        Enumeration<InetAddress> addrs = getInetAddresses();
+        while (addrs.hasMoreElements()) {
+            count += addrs.nextElement().hashCode();
         }
         return count;
     }

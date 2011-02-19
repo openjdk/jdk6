@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,21 +18,22 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package sun.misc;
 
+import java.io.EOFException;
 import java.net.URL;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.io.InputStream;
 import java.security.CodeSigner;
 import java.util.jar.Manifest;
-import java.util.jar.Attributes;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import sun.nio.ByteBuffered;
 
 /**
@@ -105,49 +106,37 @@ public abstract class Resource {
         }
 
         try {
-            if (len != -1) {
-                // Read exactly len bytes from the input stream
-                b = new byte[len];
-                while (len > 0) {
-                    int n = 0;
-                    try {
-                        n = in.read(b, b.length - len, len);
-                    } catch (InterruptedIOException iioe) {
-                        Thread.interrupted();
-                        isInterrupted = true;
+            b = new byte[0];
+            if (len == -1) len = Integer.MAX_VALUE;
+            int pos = 0;
+            while (pos < len) {
+                int bytesToRead;
+                if (pos >= b.length) { // Only expand when there's no room
+                    bytesToRead = Math.min(len - pos, b.length + 1024);
+                    if (b.length < pos + bytesToRead) {
+                        b = Arrays.copyOf(b, pos + bytesToRead);
                     }
-                    if (n == -1) {
-                        throw new IOException("unexpected EOF");
-                    }
-                    len -= n;
+                } else {
+                    bytesToRead = b.length - pos;
                 }
-            } else {
-                // Read until end of stream is reached
-                b = new byte[1024];
-                int total = 0;
-                for (;;) {
-                    len = 0;
-                    try {
-                        len = in.read(b, total, b.length - total);
-                        if (len == -1)
-                            break;
-                    } catch (InterruptedIOException iioe) {
-                        Thread.interrupted();
-                        isInterrupted = true;
-                    }
-                    total += len;
-                    if (total >= b.length) {
-                        byte[] tmp = new byte[total * 2];
-                        System.arraycopy(b, 0, tmp, 0, total);
-                        b = tmp;
+                int cc = 0;
+                try {
+                    cc = in.read(b, pos, bytesToRead);
+                } catch (InterruptedIOException iioe) {
+                    Thread.interrupted();
+                    isInterrupted = true;
+                }
+                if (cc < 0) {
+                    if (len != Integer.MAX_VALUE) {
+                        throw new EOFException("Detect premature EOF");
+                    } else {
+                        if (b.length != pos) {
+                            b = Arrays.copyOf(b, pos);
+                        }
+                        break;
                     }
                 }
-                // Trim array to correct size, if necessary
-                if (total != b.length) {
-                    byte[] tmp = new byte[total];
-                    System.arraycopy(b, 0, tmp, 0, total);
-                    b = tmp;
-                }
+                pos += cc;
             }
         } finally {
             try {

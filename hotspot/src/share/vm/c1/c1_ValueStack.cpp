@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -119,14 +119,14 @@ void ValueStack::pin_stack_for_linear_scan() {
 
 
 // apply function to all values of a list; factored out from values_do(f)
-void ValueStack::apply(Values list, void f(Value*)) {
+void ValueStack::apply(Values list, ValueVisitor* f) {
   for (int i = 0; i < list.length(); i++) {
     Value* va = list.adr_at(i);
     Value v0 = *va;
     if (v0 != NULL) {
       if (!v0->type()->is_illegal()) {
         assert(v0->as_HiWord() == NULL, "should never see HiWord during traversal");
-        f(va);
+        f->visit(va);
 #ifdef ASSERT
         Value v1 = *va;
         if (v0 != v1) {
@@ -143,7 +143,7 @@ void ValueStack::apply(Values list, void f(Value*)) {
 }
 
 
-void ValueStack::values_do(void f(Value*)) {
+void ValueStack::values_do(ValueVisitor* f) {
   apply(_stack, f);
   apply(_locks, f);
 

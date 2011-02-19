@@ -1,5 +1,5 @@
 /*
- * Copyright 1998-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -103,7 +103,7 @@ class Exceptions {
   } ExceptionMsgToUtf8Mode;
   // Throw exceptions: w/o message, w/ message & with formatted message.
   static void _throw_oop(Thread* thread, const char* file, int line, oop exception);
-  static void _throw(Thread* thread, const char* file, int line, Handle exception);
+  static void _throw(Thread* thread, const char* file, int line, Handle exception, const char* msg = NULL);
   static void _throw_msg(Thread* thread, const char* file, int line,
                          symbolHandle name, const char* message, Handle loader,
                          Handle protection_domain);
@@ -143,8 +143,8 @@ class Exceptions {
   static void throw_stack_overflow_exception(Thread* thread, const char* file, int line);
 
   // for AbortVMOnException flag
-  NOT_PRODUCT(static void debug_check_abort(Handle exception);)
-  NOT_PRODUCT(static void debug_check_abort(const char *value_string);)
+  NOT_PRODUCT(static void debug_check_abort(Handle exception, const char* message = NULL);)
+  NOT_PRODUCT(static void debug_check_abort(const char *value_string, const char* message = NULL);)
 };
 
 
@@ -236,6 +236,9 @@ class Exceptions {
 #define THROW_WRAPPED_0(name, oop_to_wrap)  THROW_WRAPPED_(name, oop_to_wrap, 0)
 #define THROW_ARG_0(name, signature, arg)   THROW_ARG_(name, signature, arg, 0)
 #define THROW_MSG_CAUSE_0(name, message, cause) THROW_MSG_CAUSE_(name, message, cause, 0)
+
+#define THROW_NULL(name)                    THROW_(name, NULL)
+#define THROW_MSG_NULL(name, message)       THROW_MSG_(name, message, NULL)
 
 // The CATCH macro checks that no exception has been thrown by a function; it is used at
 // call sites about which is statically known that the callee cannot throw an exception

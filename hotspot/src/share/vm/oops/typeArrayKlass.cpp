@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -80,6 +80,7 @@ typeArrayOop typeArrayKlass::allocate(int length, TRAPS) {
       assert(t->is_parsable(), "Don't publish unless parsable");
       return t;
     } else {
+      report_java_out_of_memory("Requested array size exceeds VM limit");
       THROW_OOP_0(Universe::out_of_memory_error_array_size());
     }
   } else {
@@ -122,16 +123,16 @@ void typeArrayKlass::copy_array(arrayOop s, int src_pos, arrayOop d, int dst_pos
      || (((unsigned int) length + (unsigned int) dst_pos) > (unsigned int) d->length()) ) {
     THROW(vmSymbols::java_lang_ArrayIndexOutOfBoundsException());
   }
+  // Check zero copy
+  if (length == 0)
+    return;
 
   // This is an attempt to make the copy_array fast.
-  // NB: memmove takes care of overlapping memory segments.
-  // Potential problem: memmove is not guaranteed to be word atomic
-  // Revisit in Merlin
   int l2es = log2_element_size();
   int ihs = array_header_in_bytes() / wordSize;
-  char* src = (char*) ((oop*)s + ihs) + (src_pos << l2es);
-  char* dst = (char*) ((oop*)d + ihs) + (dst_pos << l2es);
-  memmove(dst, src, length << l2es);
+  char* src = (char*) ((oop*)s + ihs) + ((size_t)src_pos << l2es);
+  char* dst = (char*) ((oop*)d + ihs) + ((size_t)dst_pos << l2es);
+  Copy::conjoint_memory_atomic(src, dst, (size_t)length << l2es);
 }
 
 
@@ -227,10 +228,6 @@ int typeArrayKlass::oop_oop_iterate_m(oop obj, OopClosure* blk, MemRegion mr) {
 }
 
 #ifndef SERIALGC
-void typeArrayKlass::oop_copy_contents(PSPromotionManager* pm, oop obj) {
-  assert(obj->is_typeArray(),"must be a type array");
-}
-
 void typeArrayKlass::oop_push_contents(PSPromotionManager* pm, oop obj) {
   assert(obj->is_typeArray(),"must be a type array");
 }

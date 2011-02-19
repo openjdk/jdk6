@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -379,7 +379,8 @@ void LIR_Assembler::record_non_safepoint_debug_info() {
     ValueStack* s = nth_oldest(vstack, n, s_bci);
     if (s == NULL)  break;
     IRScope* scope = s->scope();
-    debug_info->describe_scope(pc_offset, scope->method(), s_bci);
+    //Always pass false for reexecute since these ScopeDescs are never used for deopt
+    debug_info->describe_scope(pc_offset, scope->method(), s_bci, false/*reexecute*/);
   }
 
   debug_info->end_non_safepoint(pc_offset);
@@ -422,19 +423,27 @@ void LIR_Assembler::emit_call(LIR_OpJavaCall* op) {
 
   switch (op->code()) {
   case lir_static_call:
-    call(op->addr(), relocInfo::static_call_type, op->info());
+    call(op, relocInfo::static_call_type);
     break;
   case lir_optvirtual_call:
-    call(op->addr(), relocInfo::opt_virtual_call_type, op->info());
+  case lir_dynamic_call:
+    call(op, relocInfo::opt_virtual_call_type);
     break;
   case lir_icvirtual_call:
-    ic_call(op->addr(), op->info());
+    ic_call(op);
     break;
   case lir_virtual_call:
-    vtable_call(op->vtable_offset(), op->info());
+    vtable_call(op);
     break;
   default: ShouldNotReachHere();
   }
+
+  // JSR 292
+  // Record if this method has MethodHandle invokes.
+  if (op->is_method_handle_invoke()) {
+    compilation()->set_has_method_handle_invokes(true);
+  }
+
 #if defined(X86) && defined(TIERED)
   // C2 leave fpu stack dirty clean it
   if (UseSSE < 2) {
@@ -537,6 +546,10 @@ void LIR_Assembler::emit_op1(LIR_Op1* op) {
 
     case lir_monaddr:
       monitor_address(op->in_opr()->as_constant_ptr()->as_jint(), op->result_opr());
+      break;
+
+    case lir_unwind:
+      unwind_op(op->in_opr());
       break;
 
     default:
@@ -694,8 +707,7 @@ void LIR_Assembler::emit_op2(LIR_Op2* op) {
       break;
 
     case lir_throw:
-    case lir_unwind:
-      throw_op(op->in_opr1(), op->in_opr2(), op->info(), op->code() == lir_unwind);
+      throw_op(op->in_opr1(), op->in_opr2(), op->info());
       break;
 
     default:

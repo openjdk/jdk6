@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-1998 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 1998, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 #include <string.h>
@@ -142,84 +142,6 @@ Java_sun_awt_image_ImageRepresentation_setICMpixels(JNIEnv *env, jclass cls,
 
 }
 
-JNIEXPORT void JNICALL
-Java_sun_awt_image_ImageRepresentation_setBytePixels(JNIEnv *env, jclass cls,
-                                                     jint x, jint y, jint w,
-                                                     jint h, jbyteArray jpix,
-                                                     jint off, jint scansize,
-                                                     jobject jbct,
-                                                     jint chanOffs)
-{
-    int sStride;
-    int pixelStride;
-    jobject jdata;
-    unsigned char *srcData;
-    unsigned char *dstData;
-    unsigned char *dataP;
-    unsigned char *pixP;
-    int i;
-    int j;
-
-
-    if (JNU_IsNull(env, jpix)) {
-        JNU_ThrowNullPointerException(env, "NullPointerException");
-        return;
-    }
-
-    sStride = (*env)->GetIntField(env, jbct, g_BCRscanstrID);
-    pixelStride = (*env)->GetIntField(env, jbct, g_BCRpixstrID);
-    jdata = (*env)->GetObjectField(env, jbct, g_BCRdataID);
-
-    srcData = (unsigned char *) (*env)->GetPrimitiveArrayCritical(env, jpix,
-                                                                  NULL);
-    if (srcData == NULL) {
-        /* out of memory error already thrown */
-        return;
-    }
-
-    dstData = (unsigned char *) (*env)->GetPrimitiveArrayCritical(env, jdata,
-                                                                  NULL);
-    if (dstData == NULL) {
-        /* out of memory error already thrown */
-        (*env)->ReleasePrimitiveArrayCritical(env, jpix, srcData, JNI_ABORT);
-        return;
-    }
-
-    dataP = dstData + chanOffs + y*sStride + x*pixelStride;
-    pixP  = srcData + off;
-    if (pixelStride == 1) {
-        if (sStride == scansize && scansize == w) {
-            memcpy(dataP, pixP, w*h);
-        }
-        else {
-            for (i=0; i < h; i++) {
-                memcpy(dataP, pixP, w);
-                dataP += sStride;
-                pixP  += scansize;
-            }
-        }
-    }
-    else {
-        unsigned char *ydataP = dataP;
-        unsigned char *ypixP  = pixP;
-
-        for (i=0; i < h; i++) {
-            dataP = ydataP;
-            pixP = ypixP;
-            for (j=0; j < w; j++) {
-                *dataP = *pixP++;
-                dataP += pixelStride;
-            }
-            ydataP += sStride;
-            ypixP  += scansize;
-        }
-    }
-
-    (*env)->ReleasePrimitiveArrayCritical(env, jpix, srcData, JNI_ABORT);
-    (*env)->ReleasePrimitiveArrayCritical(env, jdata, dstData, JNI_ABORT);
-
-}
-
 JNIEXPORT jint JNICALL
 Java_sun_awt_image_ImageRepresentation_setDiffICM(JNIEnv *env, jclass cls,
                                                   jint x, jint y, jint w,
@@ -265,6 +187,14 @@ Java_sun_awt_image_ImageRepresentation_setDiffICM(JNIEnv *env, jclass cls,
     jdata = (*env)->GetObjectField(env, jbct, g_BCRdataID);
     jnewlut = (*env)->GetObjectField(env, jicm, g_ICMrgbID);
     mapSize = (*env)->GetIntField(env, jicm, g_ICMmapSizeID);
+
+    if (numLut < 0 || numLut > 256 || mapSize < 0 || mapSize > 256) {
+        /* Ether old or new ICM has a palette that exceeds capacity 
+           of byte data type, so we have to convert the image data
+           to default representation.
+        */
+        return 0;
+    }
 
     srcLUT = (unsigned int *) (*env)->GetPrimitiveArrayCritical(env, jlut,
                                                                 NULL);

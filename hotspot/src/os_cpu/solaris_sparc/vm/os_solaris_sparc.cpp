@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -532,7 +532,7 @@ int JVM_handle_solaris_signal(int sig, siginfo_t* info, void* ucVoid, int abort_
     if (oldAct.sa_sigaction != signalHandler) {
       void* sighand = oldAct.sa_sigaction ? CAST_FROM_FN_PTR(void*, oldAct.sa_sigaction)
                                           : CAST_FROM_FN_PTR(void*, oldAct.sa_handler);
-      warning("Unexpected Signal %d occured under user-defined signal handler " INTPTR_FORMAT, sig, (intptr_t)sighand);
+      warning("Unexpected Signal %d occurred under user-defined signal handler " INTPTR_FORMAT, sig, (intptr_t)sighand);
     }
   }
 
@@ -587,6 +587,61 @@ void os::print_context(outputStream *st, void *context) {
   st->print_cr(" PC=" INTPTR_FORMAT " nPC=" INTPTR_FORMAT,
             uc->uc_mcontext.gregs[REG_PC],
             uc->uc_mcontext.gregs[REG_nPC]);
+
+  st->cr();
+  st->cr();
+
+  st->print_cr("Register to memory mapping:");
+  st->cr();
+
+  // this is only for the "general purpose" registers
+
+  st->print_cr("O0=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_O0]);
+  print_location(st, uc->uc_mcontext.gregs[REG_O0]);
+  st->cr();
+  st->print_cr("O1=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_O1]);
+  print_location(st, uc->uc_mcontext.gregs[REG_O1]);
+  st->cr();
+  st->print_cr("O2=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_O2]);
+  print_location(st, uc->uc_mcontext.gregs[REG_O2]);
+  st->cr();
+  st->print_cr("O3=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_O3]);
+  print_location(st, uc->uc_mcontext.gregs[REG_O3]);
+  st->cr();
+  st->print_cr("O4=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_O4]);
+  print_location(st, uc->uc_mcontext.gregs[REG_O4]);
+  st->cr();
+  st->print_cr("O5=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_O5]);
+  print_location(st, uc->uc_mcontext.gregs[REG_O5]);
+  st->cr();
+  st->print_cr("O6=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_O6]);
+  print_location(st, uc->uc_mcontext.gregs[REG_O6]);
+  st->cr();
+  st->print_cr("O7=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_O7]);
+  print_location(st, uc->uc_mcontext.gregs[REG_O7]);
+  st->cr();
+
+  st->print_cr("G1=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_G1]);
+  print_location(st, uc->uc_mcontext.gregs[REG_G1]);
+  st->cr();
+  st->print_cr("G2=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_G2]);
+  print_location(st, uc->uc_mcontext.gregs[REG_G2]);
+  st->cr();
+  st->print_cr("G3=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_G3]);
+  print_location(st, uc->uc_mcontext.gregs[REG_G3]);
+  st->cr();
+  st->print_cr("G4=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_G4]);
+  print_location(st, uc->uc_mcontext.gregs[REG_G4]);
+  st->cr();
+  st->print_cr("G5=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_G5]);
+  print_location(st, uc->uc_mcontext.gregs[REG_G5]);
+  st->cr();
+  st->print_cr("G6=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_G6]);
+  print_location(st, uc->uc_mcontext.gregs[REG_G6]);
+  st->cr();
+  st->print_cr("G7=" INTPTR_FORMAT, uc->uc_mcontext.gregs[REG_G7]);
+  print_location(st, uc->uc_mcontext.gregs[REG_G7]);
+
   st->cr();
   st->cr();
 
@@ -619,7 +674,6 @@ typedef jint  xchg_func_t        (jint,  volatile jint*);
 typedef jint  cmpxchg_func_t     (jint,  volatile jint*,  jint);
 typedef jlong cmpxchg_long_func_t(jlong, volatile jlong*, jlong);
 typedef jint  add_func_t         (jint,  volatile jint*);
-typedef void  fence_func_t       ();
 
 jint os::atomic_xchg_bootstrap(jint exchange_value, volatile jint* dest) {
   // try to use the stub:
@@ -681,25 +735,10 @@ jint os::atomic_add_bootstrap(jint add_value, volatile jint* dest) {
   return (*dest) += add_value;
 }
 
-void os::fence_bootstrap() {
-  // try to use the stub:
-  fence_func_t* func = CAST_TO_FN_PTR(fence_func_t*, StubRoutines::fence_entry());
-
-  if (func != NULL) {
-    os::fence_func = func;
-    (*func)();
-    return;
-  }
-  assert(Threads::number_of_threads() == 0, "for bootstrap only");
-
-  // don't have to do anything for a single thread
-}
-
 xchg_func_t*         os::atomic_xchg_func         = os::atomic_xchg_bootstrap;
 cmpxchg_func_t*      os::atomic_cmpxchg_func      = os::atomic_cmpxchg_bootstrap;
 cmpxchg_long_func_t* os::atomic_cmpxchg_long_func = os::atomic_cmpxchg_long_bootstrap;
 add_func_t*          os::atomic_add_func          = os::atomic_add_bootstrap;
-fence_func_t*        os::fence_func               = os::fence_bootstrap;
 
 #endif // !_LP64 && !COMPILER2
 

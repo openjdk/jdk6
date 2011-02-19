@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -230,18 +230,36 @@ class MonitorInfo : public ResourceObj {
  private:
   oop        _owner; // the object owning the monitor
   BasicLock* _lock;
+  oop        _owner_klass; // klass if owner was scalar replaced
   bool       _eliminated;
+  bool       _owner_is_scalar_replaced;
  public:
   // Constructor
-  MonitorInfo(oop owner, BasicLock* lock, bool eliminated) {
-    _owner = owner;
+  MonitorInfo(oop owner, BasicLock* lock, bool eliminated, bool owner_is_scalar_replaced) {
+    if (!owner_is_scalar_replaced) {
+      _owner = owner;
+      _owner_klass = NULL;
+    } else {
+      assert(eliminated, "monitor should be eliminated for scalar replaced object");
+      _owner = NULL;
+      _owner_klass = owner;
+    }
     _lock  = lock;
     _eliminated = eliminated;
+    _owner_is_scalar_replaced = owner_is_scalar_replaced;
   }
   // Accessors
-  oop        owner() const { return _owner; }
+  oop        owner() const {
+    assert(!_owner_is_scalar_replaced, "should not be called for scalar replaced object");
+    return _owner;
+  }
+  klassOop   owner_klass() const {
+    assert(_owner_is_scalar_replaced, "should not be called for not scalar replaced object");
+    return (klassOop)_owner_klass;
+  }
   BasicLock* lock()  const { return _lock;  }
   bool eliminated()  const { return _eliminated; }
+  bool owner_is_scalar_replaced()  const { return _owner_is_scalar_replaced; }
 };
 
 class vframeStreamCommon : StackObj {

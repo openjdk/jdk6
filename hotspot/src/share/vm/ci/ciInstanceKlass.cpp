@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -44,9 +44,7 @@ ciInstanceKlass::ciInstanceKlass(KlassHandle h_k) :
   _flags = ciFlags(access_flags);
   _has_finalizer = access_flags.has_finalizer();
   _has_subklass = ik->subklass() != NULL;
-  _is_initialized = ik->is_initialized();
-  // Next line must follow and use the result of the previous line:
-  _is_linked = _is_initialized || ik->is_linked();
+  _init_state = (instanceKlass::ClassState)ik->get_init_state();
   _nonstatic_field_size = ik->nonstatic_field_size();
   _has_nonstatic_fields = ik->has_nonstatic_fields();
   _nonstatic_fields = NULL; // initialized lazily by compute_nonstatic_fields:
@@ -75,7 +73,7 @@ ciInstanceKlass::ciInstanceKlass(KlassHandle h_k) :
   _java_mirror = NULL;
 
   if (is_shared()) {
-    if (h_k() != SystemDictionary::object_klass()) {
+    if (h_k() != SystemDictionary::Object_klass()) {
       super();
     }
     java_mirror();
@@ -91,8 +89,7 @@ ciInstanceKlass::ciInstanceKlass(ciSymbol* name,
   : ciKlass(name, ciInstanceKlassKlass::make())
 {
   assert(name->byte_at(0) != '[', "not an instance klass");
-  _is_initialized = false;
-  _is_linked = false;
+  _init_state = (instanceKlass::ClassState)0;
   _nonstatic_field_size = -1;
   _has_nonstatic_fields = false;
   _nonstatic_fields = NULL;
@@ -109,21 +106,10 @@ ciInstanceKlass::ciInstanceKlass(ciSymbol* name,
 
 // ------------------------------------------------------------------
 // ciInstanceKlass::compute_shared_is_initialized
-bool ciInstanceKlass::compute_shared_is_initialized() {
+void ciInstanceKlass::compute_shared_init_state() {
   GUARDED_VM_ENTRY(
     instanceKlass* ik = get_instanceKlass();
-    _is_initialized = ik->is_initialized();
-    return _is_initialized;
-  )
-}
-
-// ------------------------------------------------------------------
-// ciInstanceKlass::compute_shared_is_linked
-bool ciInstanceKlass::compute_shared_is_linked() {
-  GUARDED_VM_ENTRY(
-    instanceKlass* ik = get_instanceKlass();
-    _is_linked = ik->is_linked();
-    return _is_linked;
+    _init_state = (instanceKlass::ClassState)ik->get_init_state();
   )
 }
 
@@ -232,8 +218,48 @@ bool ciInstanceKlass::is_java_lang_Object() {
 // ------------------------------------------------------------------
 // ciInstanceKlass::uses_default_loader
 bool ciInstanceKlass::uses_default_loader() {
-  VM_ENTRY_MARK;
-  return loader() == NULL;
+  // Note:  We do not need to resolve the handle or enter the VM
+  // in order to test null-ness.
+  return _loader == NULL;
+}
+
+// ------------------------------------------------------------------
+// ciInstanceKlass::is_in_package
+//
+// Is this klass in the given package?
+bool ciInstanceKlass::is_in_package(const char* packagename, int len) {
+  // To avoid class loader mischief, this test always rejects application classes.
+  if (!uses_default_loader())
+    return false;
+  GUARDED_VM_ENTRY(
+    return is_in_package_impl(packagename, len);
+  )
+}
+
+bool ciInstanceKlass::is_in_package_impl(const char* packagename, int len) {
+  ASSERT_IN_VM;
+
+  // If packagename contains trailing '/' exclude it from the
+  // prefix-test since we test for it explicitly.
+  if (packagename[len - 1] == '/')
+    len--;
+
+  if (!name()->starts_with(packagename, len))
+    return false;
+
+  // Test if the class name is something like "java/lang".
+  if ((len + 1) > name()->utf8_length())
+    return false;
+
+  // Test for trailing '/'
+  if ((char) name()->byte_at(len) != '/')
+    return false;
+
+  // Make sure it's not actually in a subpackage:
+  if (name()->index_of_at(len+1, "/", 1) >= 0)
+    return false;
+
+  return true;
 }
 
 // ------------------------------------------------------------------
@@ -283,8 +309,8 @@ ciInstanceKlass* ciInstanceKlass::super() {
 // ciInstanceKlass::java_mirror
 //
 // Get the instance of java.lang.Class corresponding to this klass.
+// Cache it on this->_java_mirror.
 ciInstance* ciInstanceKlass::java_mirror() {
-  assert(is_loaded(), "must be loaded");
   if (_java_mirror == NULL) {
     _java_mirror = ciKlass::java_mirror();
   }
@@ -341,6 +367,20 @@ ciField* ciInstanceKlass::get_field_by_offset(int field_offset, bool is_static) 
 }
 
 // ------------------------------------------------------------------
+// ciInstanceKlass::get_field_by_name
+ciField* ciInstanceKlass::get_field_by_name(ciSymbol* name, ciSymbol* signature, bool is_static) {
+  VM_ENTRY_MARK;
+  instanceKlass* k = get_instanceKlass();
+  fieldDescriptor fd;
+  klassOop def = k->find_field(name->get_symbolOop(), signature->get_symbolOop(), is_static, &fd);
+  if (def == NULL) {
+    return NULL;
+  }
+  ciField* field = new (CURRENT_THREAD_ENV->arena()) ciField(&fd);
+  return field;
+}
+
+// ------------------------------------------------------------------
 // ciInstanceKlass::non_static_fields.
 
 class NonStaticFieldFiller: public FieldClosure {
@@ -363,8 +403,9 @@ GrowableArray<ciField*>* ciInstanceKlass::non_static_fields() {
     instanceKlass* ik = get_instanceKlass();
     int max_n_fields = ik->fields()->length()/instanceKlass::next_offset;
 
+    Arena* arena = curEnv->arena();
     _non_static_fields =
-      new (curEnv->arena()) GrowableArray<ciField*>(max_n_fields);
+      new (arena) GrowableArray<ciField*>(arena, max_n_fields, 0, NULL);
     NonStaticFieldFiller filler(curEnv, _non_static_fields);
     ik->do_nonstatic_fields(&filler);
   }

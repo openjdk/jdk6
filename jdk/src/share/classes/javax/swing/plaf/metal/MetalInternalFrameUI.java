@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing.plaf.metal;
@@ -31,10 +31,8 @@ import javax.swing.*;
 import javax.swing.event.*;
 import javax.swing.border.*;
 import javax.swing.plaf.basic.*;
-import java.util.EventListener;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
-import java.beans.PropertyVetoException;
 import javax.swing.plaf.*;
 
 /**
@@ -51,7 +49,7 @@ public class MetalInternalFrameUI extends BasicInternalFrameUI {
   private static final Border handyEmptyBorder = new EmptyBorder(0,0,0,0);
 
   protected static String IS_PALETTE   = "JInternalFrame.isPalette";
-
+  private static String IS_PALETTE_KEY = "JInternalFrame.isPalette";
   private static String FRAME_TYPE     = "JInternalFrame.frameType";
   private static String NORMAL_FRAME   = "normal";
   private static String PALETTE_FRAME  = "palette";
@@ -68,7 +66,7 @@ public class MetalInternalFrameUI extends BasicInternalFrameUI {
   public void installUI(JComponent c) {
     super.installUI(c);
 
-    Object paletteProp = c.getClientProperty( IS_PALETTE );
+    Object paletteProp = c.getClientProperty(IS_PALETTE_KEY);
     if ( paletteProp != null ) {
         setPalette( ((Boolean)paletteProp).booleanValue() );
     }
@@ -187,7 +185,7 @@ public class MetalInternalFrameUI extends BasicInternalFrameUI {
                   ui.setFrameType( (String) e.getNewValue() );
               }
           }
-          else if ( name.equals( IS_PALETTE ) )
+          else if ( name.equals(IS_PALETTE_KEY) )
           {
               if ( e.getNewValue() != null )
               {

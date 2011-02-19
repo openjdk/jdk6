@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,25 +18,20 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing.plaf.basic;
 
 import java.awt.*;
 import java.awt.datatransfer.*;
-import java.awt.dnd.*;
 import java.awt.event.*;
 import java.util.Enumeration;
-import java.util.EventObject;
-import java.util.Hashtable;
-import java.util.TooManyListenersException;
 import javax.swing.*;
 import javax.swing.event.*;
 import javax.swing.plaf.*;
-import javax.swing.text.*;
 import javax.swing.table.*;
 import javax.swing.plaf.basic.DragRecognitionSupport.BeforeDrag;
 import sun.swing.SwingUtilities2;
@@ -56,8 +51,7 @@ import sun.swing.UIAction;
  */
 public class BasicTableUI extends TableUI
 {
-    private static final StringBuilder BASELINE_COMPONENT_KEY =
-        new StringBuilder("Table.baselineComponent");
+    private static final Object BASELINE_COMPONENT_KEY = new Object(); // Table.baselineComponent
 
 //
 // Instance Variables
@@ -1414,17 +1408,20 @@ public class BasicTableUI extends TableUI
 
         Color sbg = table.getSelectionBackground();
         if (sbg == null || sbg instanceof UIResource) {
-            table.setSelectionBackground(UIManager.getColor("Table.selectionBackground"));
+            sbg = UIManager.getColor("Table.selectionBackground");
+            table.setSelectionBackground(sbg != null ? sbg : UIManager.getColor("textHighlight"));
         }
 
         Color sfg = table.getSelectionForeground();
         if (sfg == null || sfg instanceof UIResource) {
-            table.setSelectionForeground(UIManager.getColor("Table.selectionForeground"));
+            sfg = UIManager.getColor("Table.selectionForeground");
+            table.setSelectionForeground(sfg != null ? sfg : UIManager.getColor("textHighlightText"));
         }
 
         Color gridColor = table.getGridColor();
         if (gridColor == null || gridColor instanceof UIResource) {
-            table.setGridColor(UIManager.getColor("Table.gridColor"));
+            gridColor = UIManager.getColor("Table.gridColor");
+            table.setGridColor(gridColor != null ? gridColor : Color.GRAY);
         }
 
         // install the scrollpane border

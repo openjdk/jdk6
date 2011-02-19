@@ -1,12 +1,12 @@
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.sql.rowset;
@@ -168,8 +168,8 @@ import javax.sql.rowset.serial.*;
  * The majority of methods for setting placeholder parameters take two parameters,
  *  with the first parameter
  * indicating which placeholder parameter is to be set, and the second parameter
- * giving the value to be set.  Methods such as <code>getInt</code>,
- * <code>getString</code>, <code>getBoolean</code>, and <code>getLong</code> fall into
+ * giving the value to be set.  Methods such as <code>setInt</code>,
+ * <code>setString</code>, <code>setBoolean</code>, and <code>setLong</code> fall into
  * this category.  After these methods have been called, a call to the method
  * <code>getParams</code> will return an array with the values that have been set. Each
  * element in the array is an <code>Object</code> instance representing the
@@ -3259,9 +3259,9 @@ public static final int ASCII_STREAM_PARAM = 2;
     * @param x the parameter value
     * @exception SQLException if a database access error occurs or
     * this method is called on a closed <code>CallableStatement</code>
-    * @see #getBoolean
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
+    * @see #getParams
     * @since 1.4
     */
    public void setBoolean(String parameterName, boolean x) throws SQLException{
@@ -3281,7 +3281,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getByte
+    * @see #getParams
     * @since 1.4
     */
    public void setByte(String parameterName, byte x) throws SQLException{
@@ -3301,7 +3301,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getShort
+    * @see #getParams
     * @since 1.4
     */
    public void setShort(String parameterName, short x) throws SQLException{
@@ -3320,7 +3320,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getInt
+    * @see #getParams
     * @since 1.4
     */
    public void setInt(String parameterName, int x) throws SQLException{
@@ -3339,7 +3339,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getLong
+    * @see #getParams
     * @since 1.4
     */
    public void setLong(String parameterName, long x) throws SQLException{
@@ -3358,7 +3358,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getFloat
+    * @see #getParams
     * @since 1.4
     */
    public void setFloat(String parameterName, float x) throws SQLException{
@@ -3377,7 +3377,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getDouble
+    * @see #getParams
     * @since 1.4
     */
    public void setDouble(String parameterName, double x) throws SQLException{
@@ -3398,7 +3398,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getBigDecimal
+    * @see #getParams
     * @since 1.4
     */
    public void setBigDecimal(String parameterName, BigDecimal x) throws SQLException{
@@ -3421,7 +3421,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getString
+    * @see #getParams
     * @since 1.4
     */
    public void setString(String parameterName, String x) throws SQLException{
@@ -3443,7 +3443,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getBytes
+    * @see #getParams
     * @since 1.4
     */
    public void setBytes(String parameterName, byte x[]) throws SQLException{
@@ -3464,7 +3464,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getTimestamp
+    * @see #getParams
     * @since 1.4
     */
    public void setTimestamp(String parameterName, java.sql.Timestamp x)
@@ -3712,7 +3712,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * or  <code>STRUCT</code> data type and the JDBC driver does not support
     * this data type
     * @see Types
-    * @see #getObject
+    * @see #getParams
     * @since 1.4
     */
    public void setObject(String parameterName, Object x, int targetSqlType, int scale)
@@ -3740,7 +3740,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     *  <code>REF</code>, <code>ROWID</code>, <code>SQLXML</code>
     * or  <code>STRUCT</code> data type and the JDBC driver does not support
     * this data type
-    * @see #getObject
+    * @see #getParams
     * @since 1.4
     */
    public void setObject(String parameterName, Object x, int targetSqlType)
@@ -3782,7 +3782,7 @@ public static final int ASCII_STREAM_PARAM = 2;
    *            <code>Object</code> parameter is ambiguous
    * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
    * this method
-   * @see #getObject
+   * @see #getParams
    * @since 1.4
    */
   public void setObject(String parameterName, Object x) throws SQLException{
@@ -4064,7 +4064,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getDate
+    * @see #getParams
     * @since 1.4
     */
    public void setDate(String parameterName, java.sql.Date x)
@@ -4091,7 +4091,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getDate
+    * @see #getParams
     * @since 1.4
     */
    public void setDate(String parameterName, java.sql.Date x, Calendar cal)
@@ -4111,7 +4111,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getTime
+    * @see #getParams
     * @since 1.4
     */
    public void setTime(String parameterName, java.sql.Time x)
@@ -4138,7 +4138,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getTime
+    * @see #getParams
     * @since 1.4
     */
    public void setTime(String parameterName, java.sql.Time x, Calendar cal)
@@ -4165,7 +4165,7 @@ public static final int ASCII_STREAM_PARAM = 2;
     * this method is called on a closed <code>CallableStatement</code>
     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
     * this method
-    * @see #getTimestamp
+    * @see #getParams
     * @since 1.4
     */
    public void setTimestamp(String parameterName, java.sql.Timestamp x, Calendar cal)

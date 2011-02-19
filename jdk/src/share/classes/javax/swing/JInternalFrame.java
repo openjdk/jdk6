@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,21 +18,18 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 package javax.swing;
 
 import java.awt.*;
-import java.awt.event.*;
 
 import java.beans.PropertyVetoException;
 import java.beans.PropertyChangeEvent;
-import java.util.EventListener;
 
-import javax.swing.border.Border;
 import javax.swing.event.InternalFrameEvent;
 import javax.swing.event.InternalFrameListener;
 import javax.swing.plaf.*;
@@ -40,9 +37,7 @@ import javax.swing.plaf.*;
 import javax.accessibility.*;
 
 import java.io.ObjectOutputStream;
-import java.io.ObjectInputStream;
 import java.io.IOException;
-import java.lang.StringBuilder;
 import java.beans.PropertyChangeListener;
 import sun.awt.AppContext;
 import sun.swing.SwingUtilities2;
@@ -226,8 +221,7 @@ public class JInternalFrame extends JComponent implements
     /** Constrained property name indicating that the internal frame is iconified. */
     public final static String IS_ICON_PROPERTY = "icon";
 
-    private static final Object PROPERTY_CHANGE_LISTENER_KEY =
-        new StringBuilder("InternalFramePropertyChangeListener");
+    private static final Object PROPERTY_CHANGE_LISTENER_KEY = new Object(); // InternalFramePropertyChangeListener
 
     private static void addPropertyChangeListenerIfNecessary() {
         if (AppContext.getAppContext().get(PROPERTY_CHANGE_LISTENER_KEY) ==

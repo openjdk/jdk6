@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -196,7 +196,6 @@ typedef jint      cmpxchg_func_t         (jint,     volatile jint*,  jint);
 typedef jlong     cmpxchg_long_func_t    (jlong,    volatile jlong*, jlong);
 typedef jint      add_func_t             (jint,     volatile jint*);
 typedef intptr_t  add_ptr_func_t         (intptr_t, volatile intptr_t*);
-typedef void      fence_func_t           ();
 
 #ifdef AMD64
 
@@ -292,27 +291,11 @@ intptr_t os::atomic_add_ptr_bootstrap(intptr_t add_value, volatile intptr_t* des
   return (*dest) += add_value;
 }
 
-void os::fence_bootstrap() {
-  // try to use the stub:
-  fence_func_t* func = CAST_TO_FN_PTR(fence_func_t*, StubRoutines::fence_entry());
-
-  if (func != NULL) {
-    os::fence_func = func;
-    (*func)();
-    return;
-  }
-  assert(Threads::number_of_threads() == 0, "for bootstrap only");
-
-  // don't have to do anything for a single thread
-}
-
-
 xchg_func_t*         os::atomic_xchg_func         = os::atomic_xchg_bootstrap;
 xchg_ptr_func_t*     os::atomic_xchg_ptr_func     = os::atomic_xchg_ptr_bootstrap;
 cmpxchg_func_t*      os::atomic_cmpxchg_func      = os::atomic_cmpxchg_bootstrap;
 add_func_t*          os::atomic_add_func          = os::atomic_add_bootstrap;
 add_ptr_func_t*      os::atomic_add_ptr_func      = os::atomic_add_ptr_bootstrap;
-fence_func_t*        os::fence_func               = os::fence_bootstrap;
 
 #endif // AMD64
 
@@ -394,18 +377,84 @@ void os::print_context(outputStream *st, void *context) {
 
   st->print_cr("Registers:");
 #ifdef AMD64
-  st->print(  "EAX=" INTPTR_FORMAT, uc->Rax);
-  st->print(", EBX=" INTPTR_FORMAT, uc->Rbx);
-  st->print(", ECX=" INTPTR_FORMAT, uc->Rcx);
-  st->print(", EDX=" INTPTR_FORMAT, uc->Rdx);
+  st->print(  "RAX=" INTPTR_FORMAT, uc->Rax);
+  st->print(", RBX=" INTPTR_FORMAT, uc->Rbx);
+  st->print(", RCX=" INTPTR_FORMAT, uc->Rcx);
+  st->print(", RDX=" INTPTR_FORMAT, uc->Rdx);
   st->cr();
-  st->print(  "ESP=" INTPTR_FORMAT, uc->Rsp);
-  st->print(", EBP=" INTPTR_FORMAT, uc->Rbp);
-  st->print(", ESI=" INTPTR_FORMAT, uc->Rsi);
-  st->print(", EDI=" INTPTR_FORMAT, uc->Rdi);
+  st->print(  "RSP=" INTPTR_FORMAT, uc->Rsp);
+  st->print(", RBP=" INTPTR_FORMAT, uc->Rbp);
+  st->print(", RSI=" INTPTR_FORMAT, uc->Rsi);
+  st->print(", RDI=" INTPTR_FORMAT, uc->Rdi);
   st->cr();
-  st->print(  "EIP=" INTPTR_FORMAT, uc->Rip);
+  st->print(  "R8=" INTPTR_FORMAT,  uc->R8);
+  st->print(", R9=" INTPTR_FORMAT,  uc->R9);
+  st->print(", R10=" INTPTR_FORMAT, uc->R10);
+  st->print(", R11=" INTPTR_FORMAT, uc->R11);
+  st->cr();
+  st->print(  "R12=" INTPTR_FORMAT, uc->R12);
+  st->print(", R13=" INTPTR_FORMAT, uc->R13);
+  st->print(", R14=" INTPTR_FORMAT, uc->R14);
+  st->print(", R15=" INTPTR_FORMAT, uc->R15);
+  st->cr();
+  st->print(  "RIP=" INTPTR_FORMAT, uc->Rip);
   st->print(", EFLAGS=" INTPTR_FORMAT, uc->EFlags);
+
+  st->cr();
+  st->cr();
+
+  st->print_cr("Register to memory mapping:");
+  st->cr();
+
+  // this is only for the "general purpose" registers
+
+  st->print_cr("RAX=" INTPTR_FORMAT, uc->Rax);
+  print_location(st, uc->Rax);
+  st->cr();
+  st->print_cr("RBX=" INTPTR_FORMAT, uc->Rbx);
+  print_location(st, uc->Rbx);
+  st->cr();
+  st->print_cr("RCX=" INTPTR_FORMAT, uc->Rcx);
+  print_location(st, uc->Rcx);
+  st->cr();
+  st->print_cr("RDX=" INTPTR_FORMAT, uc->Rdx);
+  print_location(st, uc->Rdx);
+  st->cr();
+  st->print_cr("RSP=" INTPTR_FORMAT, uc->Rsp);
+  print_location(st, uc->Rsp);
+  st->cr();
+  st->print_cr("RBP=" INTPTR_FORMAT, uc->Rbp);
+  print_location(st, uc->Rbp);
+  st->cr();
+  st->print_cr("RSI=" INTPTR_FORMAT, uc->Rsi);
+  print_location(st, uc->Rsi);
+  st->cr();
+  st->print_cr("RDI=" INTPTR_FORMAT, uc->Rdi);
+  print_location(st, uc->Rdi);
+  st->cr();
+  st->print_cr("R8 =" INTPTR_FORMAT, uc->R8);
+  print_location(st, uc->R8);
+  st->cr();
+  st->print_cr("R9 =" INTPTR_FORMAT, uc->R9);
+  print_location(st, uc->R9);
+  st->cr();
+  st->print_cr("R10=" INTPTR_FORMAT, uc->R10);
+  print_location(st, uc->R10);
+  st->cr();
+  st->print_cr("R11=" INTPTR_FORMAT, uc->R11);
+  print_location(st, uc->R11);
+  st->cr();
+  st->print_cr("R12=" INTPTR_FORMAT, uc->R12);
+  print_location(st, uc->R12);
+  st->cr();
+  st->print_cr("R13=" INTPTR_FORMAT, uc->R13);
+  print_location(st, uc->R13);
+  st->cr();
+  st->print_cr("R14=" INTPTR_FORMAT, uc->R14);
+  print_location(st, uc->R14);
+  st->cr();
+  st->print_cr("R15=" INTPTR_FORMAT, uc->R15);
+  print_location(st, uc->R15);
 #else
   st->print(  "EAX=" INTPTR_FORMAT, uc->Eax);
   st->print(", EBX=" INTPTR_FORMAT, uc->Ebx);
@@ -419,6 +468,38 @@ void os::print_context(outputStream *st, void *context) {
   st->cr();
   st->print(  "EIP=" INTPTR_FORMAT, uc->Eip);
   st->print(", EFLAGS=" INTPTR_FORMAT, uc->EFlags);
+
+  st->cr();
+  st->cr();
+
+  st->print_cr("Register to memory mapping:");
+  st->cr();
+
+  // this is only for the "general purpose" registers
+
+  st->print_cr("EAX=" INTPTR_FORMAT, uc->Eax);
+  print_location(st, uc->Eax);
+  st->cr();
+  st->print_cr("EBX=" INTPTR_FORMAT, uc->Ebx);
+  print_location(st, uc->Ebx);
+  st->cr();
+  st->print_cr("ECX=" INTPTR_FORMAT, uc->Ecx);
+  print_location(st, uc->Ecx);
+  st->cr();
+  st->print_cr("EDX=" INTPTR_FORMAT, uc->Edx);
+  print_location(st, uc->Edx);
+  st->cr();
+  st->print_cr("ESP=" INTPTR_FORMAT, uc->Esp);
+  print_location(st, uc->Esp);
+  st->cr();
+  st->print_cr("EBP=" INTPTR_FORMAT, uc->Ebp);
+  print_location(st, uc->Ebp);
+  st->cr();
+  st->print_cr("ESI=" INTPTR_FORMAT, uc->Esi);
+  print_location(st, uc->Esi);
+  st->cr();
+  st->print_cr("EDI=" INTPTR_FORMAT, uc->Edi);
+  print_location(st, uc->Edi);
 #endif // AMD64
   st->cr();
   st->cr();

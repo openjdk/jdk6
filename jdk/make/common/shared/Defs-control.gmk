@@ -1,12 +1,12 @@
 #
-# Copyright 1995-2007 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 1995, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License version 2 only, as
-# published by the Free Software Foundation.  Sun designates this
+# published by the Free Software Foundation.  Oracle designates this
 # particular file as subject to the "Classpath" exception as provided
-# by Sun in the LICENSE file that accompanied this code.
+# by Oracle in the LICENSE file that accompanied this code.
 #
 # This code is distributed in the hope that it will be useful, but WITHOUT
 # ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 
 #
@@ -35,9 +35,6 @@ ifndef JDK_MAKE_SHARED_DIR
   JDK_MAKE_SHARED_DIR = $(JDK_TOPDIR)/make/common/shared
 endif
 
-ifndef CONTROL_TOPDIR
-  CONTROL_TOPDIR=$(TOPDIR)/control
-endif
 ifndef HOTSPOT_TOPDIR
   HOTSPOT_TOPDIR=$(TOPDIR)/hotspot
 endif
@@ -56,21 +53,12 @@ endif
 ifndef JDK_TOPDIR
   JDK_TOPDIR=$(TOPDIR)/jdk
 endif
-ifndef INSTALL_TOPDIR
-  INSTALL_TOPDIR=$(TOPDIR)/install
-endif
-ifndef SPONSORS_TOPDIR
-  SPONSORS_TOPDIR=$(TOPDIR)/sponsors
-endif
-ifndef DEPLOY_TOPDIR
-  DEPLOY_TOPDIR=$(TOPDIR)/deploy
-endif
 
 # Get shared platform settings
 include $(JDK_MAKE_SHARED_DIR)/Platform.gmk
 
 # Default output directory
-_OUTPUTDIR=$(CONTROL_TOPDIR)/build/$(PLATFORM)-$(ARCH)
+_OUTPUTDIR=$(TOPDIR)/build/$(PLATFORM)-$(ARCH)
 
 # Get platform specific settings
 include $(JDK_MAKE_SHARED_DIR)/Defs.gmk

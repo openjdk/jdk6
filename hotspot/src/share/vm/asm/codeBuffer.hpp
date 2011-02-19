@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -39,6 +39,8 @@ public:
                  Dtrace_trap = OSR_Entry,  // dtrace probes can never have an OSR entry so reuse it
                  Exceptions,     // Offset where exception handler lives
                  Deopt,          // Offset where deopt handler lives
+                 DeoptMH,        // Offset where MethodHandle deopt handler lives
+                 UnwindHandler,  // Offset to default unwind handler
                  max_Entries };
 
   // special value to note codeBlobs where profile (forte) stack walking is
@@ -51,12 +53,14 @@ private:
 
 public:
   CodeOffsets() {
-    _values[Entry] = 0;
+    _values[Entry         ] = 0;
     _values[Verified_Entry] = 0;
     _values[Frame_Complete] = frame_never_safe;
-    _values[OSR_Entry] = 0;
-    _values[Exceptions] = -1;
-    _values[Deopt] = -1;
+    _values[OSR_Entry     ] = 0;
+    _values[Exceptions    ] = -1;
+    _values[Deopt         ] = -1;
+    _values[DeoptMH       ] = -1;
+    _values[UnwindHandler ] = -1;
   }
 
   int value(Entries e) { return _values[e]; }
@@ -98,7 +102,7 @@ class CodeSection VALUE_OBJ_CLASS_SPEC {
     _locs_point    = NULL;
     _locs_own      = false;
     _frozen        = false;
-    debug_only(_index = -1);
+    debug_only(_index = (char)-1);
     debug_only(_outer = (CodeBuffer*)badAddress);
   }
 
@@ -274,7 +278,7 @@ class CodeBuffer: public StackObj {
   // special case during expansion which is handled internally.  This
   // is done to guarantee proper cleanup of resources.
   void* operator new(size_t size) { return ResourceObj::operator new(size); }
-  void  operator delete(void* p)  {        ResourceObj::operator delete(p); }
+  void  operator delete(void* p)  { ShouldNotCallThis(); }
 
  public:
   typedef int csize_t;  // code size type; would be size_t except for history
@@ -506,9 +510,9 @@ class CodeBuffer: public StackObj {
     copy_relocations_to(blob);
     copy_code_to(blob);
   }
-  void copy_oops_to(CodeBlob* blob) {
+  void copy_oops_to(nmethod* nm) {
     if (!oop_recorder()->is_unused()) {
-      oop_recorder()->copy_to(blob);
+      oop_recorder()->copy_to(nm);
     }
   }
 

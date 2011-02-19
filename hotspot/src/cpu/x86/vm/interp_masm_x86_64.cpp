@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -30,7 +30,7 @@
 
 #ifdef CC_INTERP
 void InterpreterMacroAssembler::get_method(Register reg) {
-  movptr(reg, Address(rbp, -(sizeof(BytecodeInterpreter) + 2 * wordSize)));
+  movptr(reg, Address(rbp, -((int)sizeof(BytecodeInterpreter) + 2 * wordSize)));
   movptr(reg, Address(reg, byte_offset_of(BytecodeInterpreter, _method)));
 }
 #endif // CC_INTERP
@@ -185,12 +185,35 @@ void InterpreterMacroAssembler::get_unsigned_2_byte_index_at_bcp(
 }
 
 
+void InterpreterMacroAssembler::get_cache_index_at_bcp(Register index,
+                                                       int bcp_offset,
+                                                       size_t index_size) {
+  assert(bcp_offset > 0, "bcp is still pointing to start of bytecode");
+  if (index_size == sizeof(u2)) {
+    load_unsigned_short(index, Address(r13, bcp_offset));
+  } else if (index_size == sizeof(u4)) {
+    assert(EnableInvokeDynamic, "giant index used only for EnableInvokeDynamic");
+    movl(index, Address(r13, bcp_offset));
+    // Check if the secondary index definition is still ~x, otherwise
+    // we have to change the following assembler code to calculate the
+    // plain index.
+    assert(constantPoolCacheOopDesc::decode_secondary_index(~123) == 123, "else change next line");
+    notl(index);  // convert to plain index
+  } else if (index_size == sizeof(u1)) {
+    assert(EnableMethodHandles, "tiny index used only for EnableMethodHandles");
+    load_unsigned_byte(index, Address(r13, bcp_offset));
+  } else {
+    ShouldNotReachHere();
+  }
+}
+
+
 void InterpreterMacroAssembler::get_cache_and_index_at_bcp(Register cache,
                                                            Register index,
-                                                           int bcp_offset) {
-  assert(bcp_offset > 0, "bcp is still pointing to start of bytecode");
+                                                           int bcp_offset,
+                                                           size_t index_size) {
   assert(cache != index, "must use different registers");
-  load_unsigned_word(index, Address(r13, bcp_offset));
+  get_cache_index_at_bcp(index, bcp_offset, index_size);
   movptr(cache, Address(rbp, frame::interpreter_frame_cache_offset * wordSize));
   assert(sizeof(ConstantPoolCacheEntry) == 4 * wordSize, "adjust code below");
   // convert from field index to ConstantPoolCacheEntry index
@@ -200,10 +223,10 @@ void InterpreterMacroAssembler::get_cache_and_index_at_bcp(Register cache,
 
 void InterpreterMacroAssembler::get_cache_entry_pointer_at_bcp(Register cache,
                                                                Register tmp,
-                                                               int bcp_offset) {
-  assert(bcp_offset > 0, "bcp is still pointing to start of bytecode");
+                                                               int bcp_offset,
+                                                               size_t index_size) {
   assert(cache != tmp, "must use different register");
-  load_unsigned_word(tmp, Address(r13, bcp_offset));
+  get_cache_index_at_bcp(tmp, bcp_offset, index_size);
   assert(sizeof(ConstantPoolCacheEntry) == 4 * wordSize, "adjust code below");
   // convert from field index to ConstantPoolCacheEntry index
   // and from word offset to byte offset
@@ -232,65 +255,13 @@ void InterpreterMacroAssembler::gen_subtype_check(Register Rsub_klass,
   assert(Rsub_klass != rcx, "rcx holds 2ndary super array length");
   assert(Rsub_klass != rdi, "rdi holds 2ndary super array scan ptr");
 
-  Label not_subtype, not_subtype_pop, loop;
-
   // Profile the not-null value's klass.
-  profile_typecheck(rcx, Rsub_klass, rdi); // blows rcx, rdi
+  profile_typecheck(rcx, Rsub_klass, rdi); // blows rcx, reloads rdi
 
-  // Load the super-klass's check offset into rcx
-  movl(rcx, Address(rax, sizeof(oopDesc) +
-                    Klass::super_check_offset_offset_in_bytes()));
-  // Load from the sub-klass's super-class display list, or a 1-word
-  // cache of the secondary superclass list, or a failing value with a
-  // sentinel offset if the super-klass is an interface or
-  // exceptionally deep in the Java hierarchy and we have to scan the
-  // secondary superclass list the hard way.  See if we get an
-  // immediate positive hit
-  cmpptr(rax, Address(Rsub_klass, rcx, Address::times_1));
-  jcc(Assembler::equal,ok_is_subtype);
+  // Do the check.
+  check_klass_subtype(Rsub_klass, rax, rcx, ok_is_subtype); // blows rcx
 
-  // Check for immediate negative hit
-  cmpl(rcx, sizeof(oopDesc) + Klass::secondary_super_cache_offset_in_bytes());
-  jcc( Assembler::notEqual, not_subtype );
-  // Check for self
-  cmpptr(Rsub_klass, rax);
-  jcc(Assembler::equal, ok_is_subtype);
-
-  // Now do a linear scan of the secondary super-klass chain.
-  movptr(rdi, Address(Rsub_klass, sizeof(oopDesc) +
-                      Klass::secondary_supers_offset_in_bytes()));
-  // rdi holds the objArrayOop of secondary supers.
-  // Load the array length
-  movl(rcx, Address(rdi, arrayOopDesc::length_offset_in_bytes()));
-  // Skip to start of data; also clear Z flag incase rcx is zero
-  addptr(rdi, arrayOopDesc::base_offset_in_bytes(T_OBJECT));
-  // Scan rcx words at [rdi] for occurance of rax
-  // Set NZ/Z based on last compare
-
-  // this part is kind tricky, as values in supers array could be 32 or 64 bit wide
-  // and we store values in objArrays always encoded, thus we need to encode value
-  // before repne
-  if (UseCompressedOops) {
-    push(rax);
-    encode_heap_oop(rax);
-    repne_scanl();
-    // Not equal?
-    jcc(Assembler::notEqual, not_subtype_pop);
-    // restore heap oop here for movq
-    pop(rax);
-  } else {
-    repne_scan();
-    jcc(Assembler::notEqual, not_subtype);
-  }
-  // Must be equal but missed in cache.  Update cache.
-  movptr(Address(Rsub_klass, sizeof(oopDesc) +
-               Klass::secondary_super_cache_offset_in_bytes()), rax);
-  jmp(ok_is_subtype);
-
-  bind(not_subtype_pop);
-  // restore heap oop here for miss
-  if (UseCompressedOops) pop(rax);
-  bind(not_subtype);
+  // Profile the failure of the check.
   profile_typecheck_failed(rcx); // blows rcx
 }
 
@@ -298,113 +269,51 @@ void InterpreterMacroAssembler::gen_subtype_check(Register Rsub_klass,
 
 // Java Expression Stack
 
-#ifdef ASSERT
-// Verifies that the stack tag matches.  Must be called before the stack
-// value is popped off the stack.
-void InterpreterMacroAssembler::verify_stack_tag(frame::Tag t) {
-  if (TaggedStackInterpreter) {
-    frame::Tag tag = t;
-    if (t == frame::TagCategory2) {
-      tag = frame::TagValue;
-      Label hokay;
-      cmpptr(Address(rsp, 3*wordSize), (int32_t)tag);
-      jcc(Assembler::equal, hokay);
-      stop("Java Expression stack tag high value is bad");
-      bind(hokay);
-    }
-    Label okay;
-    cmpptr(Address(rsp, wordSize), (int32_t)tag);
-    jcc(Assembler::equal, okay);
-    // Also compare if the stack value is zero, then the tag might
-    // not have been set coming from deopt.
-    cmpptr(Address(rsp, 0), 0);
-    jcc(Assembler::equal, okay);
-    stop("Java Expression stack tag value is bad");
-    bind(okay);
-  }
-}
-#endif // ASSERT
-
 void InterpreterMacroAssembler::pop_ptr(Register r) {
-  debug_only(verify_stack_tag(frame::TagReference));
   pop(r);
-  if (TaggedStackInterpreter) addptr(rsp, 1 * wordSize);
-}
-
-void InterpreterMacroAssembler::pop_ptr(Register r, Register tag) {
-  pop(r);
-  if (TaggedStackInterpreter) pop(tag);
 }
 
 void InterpreterMacroAssembler::pop_i(Register r) {
   // XXX can't use pop currently, upper half non clean
-  debug_only(verify_stack_tag(frame::TagValue));
   movl(r, Address(rsp, 0));
   addptr(rsp, wordSize);
-  if (TaggedStackInterpreter) addptr(rsp, 1 * wordSize);
 }
 
 void InterpreterMacroAssembler::pop_l(Register r) {
-  debug_only(verify_stack_tag(frame::TagCategory2));
   movq(r, Address(rsp, 0));
-  addptr(rsp, 2 * Interpreter::stackElementSize());
+  addptr(rsp, 2 * Interpreter::stackElementSize);
 }
 
 void InterpreterMacroAssembler::pop_f(XMMRegister r) {
-  debug_only(verify_stack_tag(frame::TagValue));
   movflt(r, Address(rsp, 0));
   addptr(rsp, wordSize);
-  if (TaggedStackInterpreter) addptr(rsp, 1 * wordSize);
 }
 
 void InterpreterMacroAssembler::pop_d(XMMRegister r) {
-  debug_only(verify_stack_tag(frame::TagCategory2));
   movdbl(r, Address(rsp, 0));
-  addptr(rsp, 2 * Interpreter::stackElementSize());
+  addptr(rsp, 2 * Interpreter::stackElementSize);
 }
 
 void InterpreterMacroAssembler::push_ptr(Register r) {
-  if (TaggedStackInterpreter) push(frame::TagReference);
-  push(r);
-}
-
-void InterpreterMacroAssembler::push_ptr(Register r, Register tag) {
-  if (TaggedStackInterpreter) push(tag);
   push(r);
 }
 
 void InterpreterMacroAssembler::push_i(Register r) {
-  if (TaggedStackInterpreter) push(frame::TagValue);
   push(r);
 }
 
 void InterpreterMacroAssembler::push_l(Register r) {
-  if (TaggedStackInterpreter) {
-    push(frame::TagValue);
-    subptr(rsp, 1 * wordSize);
-    push(frame::TagValue);
-    subptr(rsp, 1 * wordSize);
-  } else {
-    subptr(rsp, 2 * wordSize);
-  }
+  subptr(rsp, 2 * wordSize);
   movq(Address(rsp, 0), r);
 }
 
 void InterpreterMacroAssembler::push_f(XMMRegister r) {
-  if (TaggedStackInterpreter) push(frame::TagValue);
   subptr(rsp, wordSize);
   movflt(Address(rsp, 0), r);
 }
 
 void InterpreterMacroAssembler::push_d(XMMRegister r) {
-  if (TaggedStackInterpreter) {
-    push(frame::TagValue);
-    subptr(rsp, 1 * wordSize);
-    push(frame::TagValue);
-    subptr(rsp, 1 * wordSize);
-  } else {
-    subptr(rsp, 2 * wordSize);
-  }
+  subptr(rsp, 2 * wordSize);
   movdbl(Address(rsp, 0), r);
 }
 
@@ -441,116 +350,14 @@ void InterpreterMacroAssembler::push(TosState state) {
 }
 
 
-
-
-// Tagged stack helpers for swap and dup
-void InterpreterMacroAssembler::load_ptr_and_tag(int n, Register val,
-                                                 Register tag) {
+// Helpers for swap and dup
+void InterpreterMacroAssembler::load_ptr(int n, Register val) {
   movptr(val, Address(rsp, Interpreter::expr_offset_in_bytes(n)));
-  if (TaggedStackInterpreter) {
-    movptr(tag, Address(rsp, Interpreter::expr_tag_offset_in_bytes(n)));
-  }
 }
 
-void InterpreterMacroAssembler::store_ptr_and_tag(int n, Register val,
-                                                  Register tag) {
+void InterpreterMacroAssembler::store_ptr(int n, Register val) {
   movptr(Address(rsp, Interpreter::expr_offset_in_bytes(n)), val);
-  if (TaggedStackInterpreter) {
-    movptr(Address(rsp, Interpreter::expr_tag_offset_in_bytes(n)), tag);
-  }
 }
-
-
-// Tagged local support
-void InterpreterMacroAssembler::tag_local(frame::Tag tag, int n) {
-  if (TaggedStackInterpreter) {
-    if (tag == frame::TagCategory2) {
-      movptr(Address(r14, Interpreter::local_tag_offset_in_bytes(n+1)),
-           (int32_t)frame::TagValue);
-      movptr(Address(r14, Interpreter::local_tag_offset_in_bytes(n)),
-           (int32_t)frame::TagValue);
-    } else {
-      movptr(Address(r14, Interpreter::local_tag_offset_in_bytes(n)), (int32_t)tag);
-    }
-  }
-}
-
-void InterpreterMacroAssembler::tag_local(frame::Tag tag, Register idx) {
-  if (TaggedStackInterpreter) {
-    if (tag == frame::TagCategory2) {
-      movptr(Address(r14, idx, Address::times_8,
-                  Interpreter::local_tag_offset_in_bytes(1)), (int32_t)frame::TagValue);
-      movptr(Address(r14, idx, Address::times_8,
-                  Interpreter::local_tag_offset_in_bytes(0)), (int32_t)frame::TagValue);
-    } else {
-      movptr(Address(r14, idx, Address::times_8, Interpreter::local_tag_offset_in_bytes(0)),
-           (int32_t)tag);
-    }
-  }
-}
-
-void InterpreterMacroAssembler::tag_local(Register tag, Register idx) {
-  if (TaggedStackInterpreter) {
-    // can only be TagValue or TagReference
-    movptr(Address(r14, idx, Address::times_8, Interpreter::local_tag_offset_in_bytes(0)), tag);
-  }
-}
-
-
-void InterpreterMacroAssembler::tag_local(Register tag, int n) {
-  if (TaggedStackInterpreter) {
-    // can only be TagValue or TagReference
-    movptr(Address(r14, Interpreter::local_tag_offset_in_bytes(n)), tag);
-  }
-}
-
-#ifdef ASSERT
-void InterpreterMacroAssembler::verify_local_tag(frame::Tag tag, int n) {
-  if (TaggedStackInterpreter) {
-     frame::Tag t = tag;
-    if (tag == frame::TagCategory2) {
-      Label nbl;
-      t = frame::TagValue;  // change to what is stored in locals
-      cmpptr(Address(r14, Interpreter::local_tag_offset_in_bytes(n+1)), (int32_t)t);
-      jcc(Assembler::equal, nbl);
-      stop("Local tag is bad for long/double");
-      bind(nbl);
-    }
-    Label notBad;
-    cmpq(Address(r14, Interpreter::local_tag_offset_in_bytes(n)), (int32_t)t);
-    jcc(Assembler::equal, notBad);
-    // Also compare if the local value is zero, then the tag might
-    // not have been set coming from deopt.
-    cmpptr(Address(r14, Interpreter::local_offset_in_bytes(n)), 0);
-    jcc(Assembler::equal, notBad);
-    stop("Local tag is bad");
-    bind(notBad);
-  }
-}
-
-void InterpreterMacroAssembler::verify_local_tag(frame::Tag tag, Register idx) {
-  if (TaggedStackInterpreter) {
-    frame::Tag t = tag;
-    if (tag == frame::TagCategory2) {
-      Label nbl;
-      t = frame::TagValue;  // change to what is stored in locals
-      cmpptr(Address(r14, idx, Address::times_8, Interpreter::local_tag_offset_in_bytes(1)), (int32_t)t);
-      jcc(Assembler::equal, nbl);
-      stop("Local tag is bad for long/double");
-      bind(nbl);
-    }
-    Label notBad;
-    cmpptr(Address(r14, idx, Address::times_8, Interpreter::local_tag_offset_in_bytes(0)), (int32_t)t);
-    jcc(Assembler::equal, notBad);
-    // Also compare if the local value is zero, then the tag might
-    // not have been set coming from deopt.
-    cmpptr(Address(r14, idx, Address::times_8, Interpreter::local_offset_in_bytes(0)), 0);
-    jcc(Assembler::equal, notBad);
-    stop("Local tag is bad");
-    bind(notBad);
-  }
-}
-#endif // ASSERT
 
 
 void InterpreterMacroAssembler::super_call_VM_leaf(address entry_point) {
@@ -603,13 +410,18 @@ void InterpreterMacroAssembler::super_call_VM_leaf(address entry_point,
   MacroAssembler::call_VM_leaf_base(entry_point, 3);
 }
 
-// Jump to from_interpreted entry of a call unless single stepping is possible
-// in this thread in which case we must call the i2i entry
-void InterpreterMacroAssembler::jump_from_interpreted(Register method, Register temp) {
+void InterpreterMacroAssembler::prepare_to_jump_from_interpreted() {
   // set sender sp
   lea(r13, Address(rsp, wordSize));
   // record last_sp
   movptr(Address(rbp, frame::interpreter_frame_last_sp_offset * wordSize), r13);
+}
+
+
+// Jump to from_interpreted entry of a call unless single stepping is possible
+// in this thread in which case we must call the i2i entry
+void InterpreterMacroAssembler::jump_from_interpreted(Register method, Register temp) {
+  prepare_to_jump_from_interpreted();
 
   if (JvmtiExport::can_post_interpreter_events()) {
     Label run_compiled_code;
@@ -1063,8 +875,8 @@ void InterpreterMacroAssembler::verify_method_data_pointer() {
 
   // If the mdp is valid, it will point to a DataLayout header which is
   // consistent with the bcp.  The converse is highly probable also.
-  load_unsigned_word(c_rarg2,
-                     Address(c_rarg3, in_bytes(DataLayout::bci_offset())));
+  load_unsigned_short(c_rarg2,
+                      Address(c_rarg3, in_bytes(DataLayout::bci_offset())));
   addptr(c_rarg2, Address(rbx, methodOopDesc::const_offset()));
   lea(c_rarg2, Address(c_rarg2, constMethodOopDesc::codes_offset()));
   cmpptr(c_rarg2, r13);
@@ -1283,18 +1095,28 @@ void InterpreterMacroAssembler::profile_final_call(Register mdp) {
 
 void InterpreterMacroAssembler::profile_virtual_call(Register receiver,
                                                      Register mdp,
-                                                     Register reg2) {
+                                                     Register reg2,
+                                                     bool receiver_can_be_null) {
   if (ProfileInterpreter) {
     Label profile_continue;
 
     // If no method data exists, go to profile_continue.
     test_method_data_pointer(mdp, profile_continue);
 
-    // We are making a call.  Increment the count.
-    increment_mdp_data_at(mdp, in_bytes(CounterData::count_offset()));
+    Label skip_receiver_profile;
+    if (receiver_can_be_null) {
+      Label not_null;
+      testptr(receiver, receiver);
+      jccb(Assembler::notZero, not_null);
+      // We are making a call.  Increment the count for null receiver.
+      increment_mdp_data_at(mdp, in_bytes(CounterData::count_offset()));
+      jmp(skip_receiver_profile);
+      bind(not_null);
+    }
 
     // Record the receiver type.
-    record_klass_in_profile(receiver, mdp, reg2);
+    record_klass_in_profile(receiver, mdp, reg2, true);
+    bind(skip_receiver_profile);
 
     // The method data pointer needs to be updated to reflect the new target.
     update_mdp_by_constant(mdp,
@@ -1317,8 +1139,15 @@ void InterpreterMacroAssembler::profile_virtual_call(Register receiver,
 // See below for example code.
 void InterpreterMacroAssembler::record_klass_in_profile_helper(
                                         Register receiver, Register mdp,
-                                        Register reg2,
-                                        int start_row, Label& done) {
+                                        Register reg2, int start_row,
+                                        Label& done, bool is_virtual_call) {
+  if (TypeProfileWidth == 0) {
+    if (is_virtual_call) {
+      increment_mdp_data_at(mdp, in_bytes(CounterData::count_offset()));
+    }
+    return;
+  }
+
   int last_row = VirtualCallData::row_limit() - 1;
   assert(start_row <= last_row, "must be work left to do");
   // Test this row for both the receiver and for null.
@@ -1345,19 +1174,28 @@ void InterpreterMacroAssembler::record_klass_in_profile_helper(
     bind(next_test);
 
     if (test_for_null_also) {
+      Label found_null;
       // Failed the equality check on receiver[n]...  Test for null.
       testptr(reg2, reg2);
       if (start_row == last_row) {
         // The only thing left to do is handle the null case.
-        jcc(Assembler::notZero, done);
+        if (is_virtual_call) {
+          jccb(Assembler::zero, found_null);
+          // Receiver did not match any saved receiver and there is no empty row for it.
+          // Increment total counter to indicate polymorphic case.
+          increment_mdp_data_at(mdp, in_bytes(CounterData::count_offset()));
+          jmp(done);
+          bind(found_null);
+        } else {
+          jcc(Assembler::notZero, done);
+        }
         break;
       }
       // Since null is rare, make it be the branch-taken case.
-      Label found_null;
       jcc(Assembler::zero, found_null);
 
       // Put all the "Case 3" tests here.
-      record_klass_in_profile_helper(receiver, mdp, reg2, start_row + 1, done);
+      record_klass_in_profile_helper(receiver, mdp, reg2, start_row + 1, done, is_virtual_call);
 
       // Found a null.  Keep searching for a matching receiver,
       // but remember that this is an empty (unused) slot.
@@ -1374,7 +1212,9 @@ void InterpreterMacroAssembler::record_klass_in_profile_helper(
   int count_offset = in_bytes(VirtualCallData::receiver_count_offset(start_row));
   movl(reg2, DataLayout::counter_increment);
   set_mdp_data_at(mdp, count_offset, reg2);
-  jmp(done);
+  if (start_row > 0) {
+    jmp(done);
+  }
 }
 
 // Example state machine code for three profile rows:
@@ -1386,7 +1226,7 @@ void InterpreterMacroAssembler::record_klass_in_profile_helper(
 //     if (row[1].rec != NULL) {
 //       // degenerate decision tree, rooted at row[2]
 //       if (row[2].rec == rec) { row[2].incr(); goto done; }
-//       if (row[2].rec != NULL) { goto done; } // overflow
+//       if (row[2].rec != NULL) { count.incr(); goto done; } // overflow
 //       row[2].init(rec); goto done;
 //     } else {
 //       // remember row[1] is empty
@@ -1399,14 +1239,15 @@ void InterpreterMacroAssembler::record_klass_in_profile_helper(
 //     if (row[2].rec == rec) { row[2].incr(); goto done; }
 //     row[0].init(rec); goto done;
 //   }
+//   done:
 
 void InterpreterMacroAssembler::record_klass_in_profile(Register receiver,
-                                                        Register mdp,
-                                                        Register reg2) {
+                                                        Register mdp, Register reg2,
+                                                        bool is_virtual_call) {
   assert(ProfileInterpreter, "must be profiling");
   Label done;
 
-  record_klass_in_profile_helper(receiver, mdp, reg2, 0, done);
+  record_klass_in_profile_helper(receiver, mdp, reg2, 0, done, is_virtual_call);
 
   bind (done);
 }
@@ -1456,6 +1297,8 @@ void InterpreterMacroAssembler::profile_null_seen(Register mdp) {
     // If no method data exists, go to profile_continue.
     test_method_data_pointer(mdp, profile_continue);
 
+    set_mdp_flag_at(mdp, BitData::null_seen_byte_constant());
+
     // The method data pointer needs to be updated.
     int mdp_delta = in_bytes(BitData::bit_data_size());
     if (TypeProfileCasts) {
@@ -1500,7 +1343,7 @@ void InterpreterMacroAssembler::profile_typecheck(Register mdp, Register klass, 
       mdp_delta = in_bytes(VirtualCallData::virtual_call_data_size());
 
       // Record the object type.
-      record_klass_in_profile(klass, mdp, reg2);
+      record_klass_in_profile(klass, mdp, reg2, false);
     }
     update_mdp_by_constant(mdp, mdp_delta);
 

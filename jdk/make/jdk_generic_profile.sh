@@ -1,14 +1,14 @@
 #!/bin/sh
 
 #
-# Copyright 2007 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License version 2 only, as
-# published by the Free Software Foundation.  Sun designates this
+# published by the Free Software Foundation.  Oracle designates this
 # particular file as subject to the "Classpath" exception as provided
-# by Sun in the LICENSE file that accompanied this code.
+# by Oracle in the LICENSE file that accompanied this code.
 #
 # This code is distributed in the hope that it will be useful, but WITHOUT
 # ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -20,9 +20,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 
 
@@ -78,16 +78,10 @@
 # Attempts to set these variables for the JDK builds:           
 #    ALT_COMPILER_PATH
 #    ALT_BOOTDIR
-#    ALT_BINARY_PLUGS_PATH
-#    ALT_CLOSED_JDK_IMPORT_PATH
 #    Windows Only:
 #      ALT_UNIXCOMMAND_PATH
 #      ALT_MSDEVTOOLS_PATH
 #      ALT_DXSDK_PATH
-#      ALT_MSVCRT_DLL_PATH
-#      ALT_MSVCR71_DLL_PATH
-#      ALT_UNICOWS_LIB_PATH
-#      ALT_UNICOWS_DLL_PATH
 #
 #############################################################################
 #
@@ -248,14 +242,14 @@ else
     path4sdk="${compiler_path};${path4sdk}"
   elif [ "${windows_arch}" = amd64 ] ; then
     # AMD64 64bit Windows compiler settings
-    if [ "${ALT_DEPLOY_MSSDK}" != "" ] ; then
-      platform_sdk=${ALT_DEPLOY_MSSDK}
+    if [ "${MSSDK}" != "" ] ; then
+      platform_sdk=${MSSDK}
     else
       platform_sdk=$(${cygpath} "C:/Program Files/Microsoft Platform SDK/")
     fi
     if [ "${ALT_COMPILER_PATH}" != "" ] ; then
       compiler_path=${ALT_COMPILER_PATH}
-      if [ "${ALT_DEPLOY_MSSDK}" = "" ] ; then
+      if [ "${MSSDK}" = "" ] ; then
         platform_sdk=${ALT_COMPILER_PATH}/../../../..
       fi
     else
@@ -314,29 +308,141 @@ if [ "${ALT_JDK_IMPORT_PATH}" = "" -a -d ${jdk_instances}/${importjdk} ] ; then
   export ALT_JDK_IMPORT_PATH
 fi
 
-# Get the latest JDK binary plugs or build to import pre-built binaries
-if [ "${ALT_BINARY_PLUGS_PATH}" = "" ] ; then
-  binplugs=${jdk_instances}/openjdk-binary-plugs
-  jdkplugs=${jdk_instances}/${importjdk}
-  if [ -d ${binplugs} ] ; then
-    ALT_BINARY_PLUGS_PATH=${binplugs}
-    export ALT_BINARY_PLUGS_PATH
-  elif [  "${ALT_CLOSED_JDK_IMPORT_PATH}" = "" -a -d ${jdkplugs} ] ; then
-    ALT_CLOSED_JDK_IMPORT_PATH=${jdkplugs}
-    export ALT_CLOSED_JDK_IMPORT_PATH
-  fi
-  if [ "${ALT_BINARY_PLUGS_PATH}" = "" ] ; then
-    echo "WARNING: Missing ALT_BINARY_PLUGS_PATH: ${binplugs}"
-  fi
-fi
-if [ "${ALT_BINARY_PLUGS_PATH}" != "" -a ! -d "${ALT_BINARY_PLUGS_PATH}" ] ; then
-  echo "WARNING: Cannot access ALT_BINARY_PLUGS_PATH=${ALT_BINARY_PLUGS_PATH}"
-fi
-if [ "${ALT_CLOSED_JDK_IMPORT_PATH}" != "" -a ! -d "${ALT_CLOSED_JDK_IMPORT_PATH}" ] ; then
-  echo "WARNING: Cannot access ALT_CLOSED_JDK_IMPORT_PATH=${ALT_CLOSED_JDK_IMPORT_PATH}"
-fi
-
 # Export PATH setting
 PATH="${path4sdk}"
 export PATH
 
+# Export variables required for Zero
+if [ "${SHARK_BUILD}" = true ] ; then
+  ZERO_BUILD=true
+  export ZERO_BUILD
+fi
+if [ "${ZERO_BUILD}" = true ] ; then
+  # ZERO_LIBARCH is the name of the architecture-specific
+  # subdirectory under $JAVA_HOME/jre/lib
+  arch=$(uname -m)
+  case "${arch}" in
+    x86_64)  ZERO_LIBARCH=amd64     ;;
+    i?86)    ZERO_LIBARCH=i386      ;;
+    sparc64) ZERO_LIBARCH=sparcv9   ;;
+    arm*)    ZERO_LIBARCH=arm       ;;
+    *)       ZERO_LIBARCH="$(arch)"
+  esac
+  export ZERO_LIBARCH
+
+  # ARCH_DATA_MODEL is the number of bits in a pointer
+  case "${ZERO_LIBARCH}" in
+    i386|ppc|s390|sparc|arm)
+      ARCH_DATA_MODEL=32
+      ;;
+    amd64|ppc64|s390x|sparcv9|ia64|alpha)
+      ARCH_DATA_MODEL=64
+      ;;
+    *)
+      echo "ERROR: Unable to determine ARCH_DATA_MODEL for ${ZERO_LIBARCH}"
+      exit 1
+  esac
+  export ARCH_DATA_MODEL
+
+  # ZERO_ENDIANNESS is the endianness of the processor
+  case "${ZERO_LIBARCH}" in
+    i386|amd64|ia64)
+      ZERO_ENDIANNESS=little
+      ;;
+    ppc*|s390*|sparc*|alpha)
+      ZERO_ENDIANNESS=big
+      ;;
+    *)
+      echo "ERROR: Unable to determine ZERO_ENDIANNESS for ${ZERO_LIBARCH}"
+      exit 1
+  esac
+  export ZERO_ENDIANNESS
+
+  # ZERO_ARCHDEF is used to enable architecture-specific code
+  case "${ZERO_LIBARCH}" in
+    i386)   ZERO_ARCHDEF=IA32  ;;
+    ppc*)   ZERO_ARCHDEF=PPC   ;;
+    s390*)  ZERO_ARCHDEF=S390  ;;
+    sparc*) ZERO_ARCHDEF=SPARC ;;
+    *)      ZERO_ARCHDEF=$(echo "${ZERO_LIBARCH}" | tr a-z A-Z)
+  esac
+  export ZERO_ARCHDEF
+
+  # ZERO_ARCHFLAG tells the compiler which mode to build for
+  case "${ZERO_LIBARCH}" in
+    s390)
+      ZERO_ARCHFLAG="-m31"
+      ;;
+    *)
+      ZERO_ARCHFLAG="-m${ARCH_DATA_MODEL}"
+  esac
+  export ZERO_ARCHFLAG
+
+  # LIBFFI_CFLAGS and LIBFFI_LIBS tell the compiler how to compile and
+  # link against libffi
+  pkgconfig=$(which pkg-config 2>/dev/null)
+  if [ -x "${pkgconfig}" ] ; then
+    if [ "${LIBFFI_CFLAGS}" = "" ] ; then
+      LIBFFI_CFLAGS=$("${pkgconfig}" --cflags libffi)
+    fi
+    if [ "${LIBFFI_LIBS}" = "" ] ; then
+      LIBFFI_LIBS=$("${pkgconfig}" --libs libffi)
+    fi
+  fi
+  if [ "${LIBFFI_LIBS}" = "" ] ; then
+      LIBFFI_LIBS="-lffi"
+  fi
+  export LIBFFI_CFLAGS
+  export LIBFFI_LIBS
+
+  # LLVM_CFLAGS, LLVM_LDFLAGS and LLVM_LIBS tell the compiler how to
+  # compile and link against LLVM
+  if [ "${SHARK_BUILD}" = true ] ; then
+    if [ "${LLVM_CONFIG}" = "" ] ; then
+      LLVM_CONFIG=$(which llvm-config 2>/dev/null)
+    fi
+    if [ ! -x "${LLVM_CONFIG}" ] ; then
+      echo "ERROR: Unable to locate llvm-config"
+      exit 1
+    fi
+    llvm_components="jit engine nativecodegen"
+
+    unset LLVM_CFLAGS
+    for flag in $("${LLVM_CONFIG}" --cxxflags $llvm_components); do
+      if echo "${flag}" | grep -q '^-[ID]'; then
+        if [ "${flag}" != "-D_DEBUG" ] ; then
+          if [ "${LLVM_CFLAGS}" != "" ] ; then
+            LLVM_CFLAGS="${LLVM_CFLAGS} "
+          fi
+          LLVM_CFLAGS="${LLVM_CFLAGS}${flag}"
+        fi
+      fi
+    done
+    llvm_version=$("${LLVM_CONFIG}" --version | sed 's/\.//; s/svn.*//')
+    LLVM_CFLAGS="${LLVM_CFLAGS} -DSHARK_LLVM_VERSION=${llvm_version}"
+
+    unset LLVM_LDFLAGS
+    for flag in $("${LLVM_CONFIG}" --ldflags $llvm_components); do
+      if echo "${flag}" | grep -q '^-L'; then
+        if [ "${LLVM_LDFLAGS}" != "" ] ; then
+          LLVM_LDFLAGS="${LLVM_LDFLAGS} "
+        fi
+        LLVM_LDFLAGS="${LLVM_LDFLAGS}${flag}"
+      fi
+    done
+
+    unset LLVM_LIBS
+    for flag in $("${LLVM_CONFIG}" --libs $llvm_components); do
+      if echo "${flag}" | grep -q '^-l'; then
+        if [ "${LLVM_LIBS}" != "" ] ; then
+          LLVM_LIBS="${LLVM_LIBS} "
+        fi
+        LLVM_LIBS="${LLVM_LIBS}${flag}"
+      fi
+    done
+
+    export LLVM_CFLAGS
+    export LLVM_LDFLAGS
+    export LLVM_LIBS
+  fi
+fi

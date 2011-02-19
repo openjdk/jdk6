@@ -1,12 +1,12 @@
 /*
- * Copyright 1998-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1998, 2007, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 #include <windows.h>
@@ -153,7 +153,8 @@ static int CALLBACK EnumFontFacesInFamilyProcA(
     JNIEnv *env = fmi->env;
     jstring fullname, fullnameLC;
 
-    if (FontType != TRUETYPE_FONTTYPE) {
+    /* Both Vista and XP return DEVICE_FONTTYPE for OTF fonts */
+    if (FontType != TRUETYPE_FONTTYPE && FontType != DEVICE_FONTTYPE) {
         return 1;
     }
 
@@ -227,7 +228,8 @@ static int CALLBACK EnumFontFacesInFamilyProcW(
     JNIEnv *env = fmi->env;
     jstring fullname, fullnameLC;
 
-    if (FontType != TRUETYPE_FONTTYPE) {
+    /* Both Vista and XP return DEVICE_FONTTYPE for OTF fonts */
+    if (FontType != TRUETYPE_FONTTYPE && FontType != DEVICE_FONTTYPE) {
         return 1;
     }
 
@@ -274,7 +276,8 @@ static int CALLBACK EnumFamilyNamesA(
     jstring familyLC;
     LOGFONTA lfa;
 
-    if (FontType != TRUETYPE_FONTTYPE) {
+    /* Both Vista and XP return DEVICE_FONTTYPE for OTF fonts */
+    if (FontType != TRUETYPE_FONTTYPE && FontType != DEVICE_FONTTYPE) {
         return 1;
     }
 
@@ -323,7 +326,8 @@ static int CALLBACK EnumFamilyNamesW(
     int slen;
     LOGFONTW lfw;
 
-    if (FontType != TRUETYPE_FONTTYPE) {
+    /* Both Vista and XP return DEVICE_FONTTYPE for OTF fonts */
+    if (FontType != TRUETYPE_FONTTYPE && FontType != DEVICE_FONTTYPE) {
         return 1;
     }
 /*     wprintf(L"FAMILY=%s charset=%d FULL=%s\n", */
@@ -383,15 +387,16 @@ static int CALLBACK EnumFamilyNamesW(
  * Also if a Font has a name for this locale that name also
  * exists in the registry using the appropriate platform encoding.
  * What do we do then?
+ *
+ * Note: OpenType fonts seems to have " (TrueType)" suffix on Vista
+ *   but " (OpenType)" on XP.
  */
 
-/* static const wchar_t W_TTSUFFIX[] = L" (TrueType)"; */
-/* static const char C_TTSUFFIX[] = " (TrueType)"; */
-/* static int TTSLEN = 11;  hard-coded - be careful */
-static BOOL RegistryToBaseTTNameA(LPCSTR name) {
+static BOOL RegistryToBaseTTNameA(LPSTR name) {
     static const char TTSUFFIX[] = " (TrueType)";
+    static const char OTSUFFIX[] = " (OpenType)";
     int TTSLEN = strlen(TTSUFFIX);
-    char *match;
+    char *suffix;
 
     int len = strlen(name);
     if (len == 0) {
@@ -403,19 +408,21 @@ static BOOL RegistryToBaseTTNameA(LPCSTR name) {
     if (len <= TTSLEN) {
         return FALSE;
     }
-    match = strstr(name, TTSUFFIX);
-    if ((match != NULL) && (match == name+(len-TTSLEN))) {
-        match[0] = '\0'; /* truncate name */
+
+    /* suffix length is the same for truetype and opentype fonts */
+    suffix = name + len - TTSLEN;
+    if (strcmp(suffix, TTSUFFIX) == 0 || strcmp(suffix, OTSUFFIX) == 0) {
+        suffix[0] = '\0'; /* truncate name */
         return TRUE;
-    } else {
-        return FALSE;
     }
+    return FALSE;
 }
 
 static BOOL RegistryToBaseTTNameW(LPWSTR name) {
     static const wchar_t TTSUFFIX[] = L" (TrueType)";
+    static const wchar_t OTSUFFIX[] = L" (OpenType)";
     int TTSLEN = wcslen(TTSUFFIX);
-    wchar_t *match;
+    wchar_t *suffix;
 
     int len = wcslen(name);
     if (len == 0) {
@@ -427,13 +434,13 @@ static BOOL RegistryToBaseTTNameW(LPWSTR name) {
     if (len <= TTSLEN) {
         return FALSE;
     }
-    match = wcsstr(name, TTSUFFIX);
-    if ((match != NULL) && (match == name+(len-TTSLEN))) {
-        match[0] = L'\0'; /* truncate name */
+    /* suffix length is the same for truetype and opentype fonts */
+    suffix = name + (len - TTSLEN);
+    if (wcscmp(suffix, TTSUFFIX) == 0 || wcscmp(suffix, OTSUFFIX) == 0) {
+        suffix[0] = L'\0'; /* truncate name */
         return TRUE;
-    } else {
-        return FALSE;
     }
+    return FALSE;
 }
 
 static void registerFontA(GdiFontMapInfo *fmi, jobject fontToFileMap,
@@ -675,18 +682,19 @@ Java_sun_font_FontManager_populateFontFileNameMap
         }
         if (IS_NT) {
             if (!RegistryToBaseTTNameW((LPWSTR)wname) ) {
-                /* If the filename ends with ".ttf" also accept it.
+                /* If the filename ends with ".ttf" or ".otf" also accept it.
                  * Not expecting to need to do this for .ttc files.
                  * Also note this code is not mirrored in the "A" (win9x) path.
                  */
                 LPWSTR dot = wcsrchr((LPWSTR)data, L'.');
-                if (dot == NULL || (wcsicmp(dot, L".ttf") != 0)) {
+                if (dot == NULL || ((wcsicmp(dot, L".ttf") != 0)
+                                      && (wcsicmp(dot, L".otf") != 0))) {
                     continue;  /* not a TT font... */
                 }
             }
             registerFontW(&fmi, fontToFileMap, (LPWSTR)wname, (LPWSTR)data);
         } else {
-            if (!RegistryToBaseTTNameA(cname) ) {
+            if (!RegistryToBaseTTNameA((LPSTR)cname)) {
                 continue; /* not a TT font... */
             }
             registerFontA(&fmi, fontToFileMap, cname, (LPCSTR)data);

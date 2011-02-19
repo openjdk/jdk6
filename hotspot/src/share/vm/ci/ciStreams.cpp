@@ -1,5 +1,5 @@
 /*
- * Copyright 1999-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -81,27 +81,21 @@ int ciExceptionHandlerStream::count_remaining() {
 // providing accessors for constant pool items.
 
 // ------------------------------------------------------------------
-// ciBytecodeStream::wide
-//
-// Special handling for the wide bytcode
-Bytecodes::Code ciBytecodeStream::wide()
-{
-  // Get following bytecode; do not return wide
-  Bytecodes::Code bc = (Bytecodes::Code)_pc[1];
-  _pc += 2;                     // Skip both bytecodes
-  _pc += 2;                     // Skip index always
-  if( bc == Bytecodes::_iinc )
-    _pc += 2;                   // Skip optional constant
-  _was_wide = _pc;              // Flag last wide bytecode found
-  return bc;
-}
-
-// ------------------------------------------------------------------
-// ciBytecodeStream::table
+// ciBytecodeStream::next_wide_or_table
 //
 // Special handling for switch ops
-Bytecodes::Code ciBytecodeStream::table( Bytecodes::Code bc ) {
-  switch( bc ) {                // Check for special bytecode handling
+Bytecodes::Code ciBytecodeStream::next_wide_or_table(Bytecodes::Code bc) {
+  switch (bc) {                // Check for special bytecode handling
+  case Bytecodes::_wide:
+    // Special handling for the wide bytcode
+    // Get following bytecode; do not return wide
+    assert(Bytecodes::Code(_pc[0]) == Bytecodes::_wide, "");
+    bc = Bytecodes::java_code(_raw_bc = (Bytecodes::Code)_pc[1]);
+    assert(Bytecodes::wide_length_for(bc) > 2, "must make progress");
+    _pc += Bytecodes::wide_length_for(bc);
+    _was_wide = _pc;              // Flag last wide bytecode found
+    assert(is_wide(), "accessor works right");
+    break;
 
   case Bytecodes::_lookupswitch:
     _pc++;                      // Skip wide bytecode
@@ -164,7 +158,7 @@ void ciBytecodeStream::force_bci(int bci) {
 int ciBytecodeStream::get_klass_index() const {
   switch(cur_bc()) {
   case Bytecodes::_ldc:
-    return get_index();
+    return get_index_u1();
   case Bytecodes::_ldc_w:
   case Bytecodes::_ldc2_w:
   case Bytecodes::_checkcast:
@@ -173,7 +167,7 @@ int ciBytecodeStream::get_klass_index() const {
   case Bytecodes::_multianewarray:
   case Bytecodes::_new:
   case Bytecodes::_newarray:
-    return get_index_big();
+    return get_index_u2();
   default:
     ShouldNotReachHere();
     return 0;
@@ -186,44 +180,75 @@ int ciBytecodeStream::get_klass_index() const {
 // If this bytecode is a new, newarray, multianewarray, instanceof,
 // or checkcast, get the referenced klass.
 ciKlass* ciBytecodeStream::get_klass(bool& will_link) {
-  return CURRENT_ENV->get_klass_by_index(_holder, get_klass_index(),
-                                         will_link);
+  VM_ENTRY_MARK;
+  constantPoolHandle cpool(_method->get_methodOop()->constants());
+  return CURRENT_ENV->get_klass_by_index(cpool, get_klass_index(), will_link, _holder);
 }
 
 // ------------------------------------------------------------------
-// ciBytecodeStream::get_constant_index
+// ciBytecodeStream::get_constant_raw_index
 //
 // If this bytecode is one of the ldc variants, get the index of the
 // referenced constant.
-int ciBytecodeStream::get_constant_index() const {
-  switch(cur_bc()) {
+int ciBytecodeStream::get_constant_raw_index() const {
+  // work-alike for Bytecode_loadconstant::raw_index()
+  switch (cur_bc()) {
   case Bytecodes::_ldc:
-    return get_index();
+    return get_index_u1();
   case Bytecodes::_ldc_w:
   case Bytecodes::_ldc2_w:
-    return get_index_big();
+    return get_index_u2();
   default:
     ShouldNotReachHere();
     return 0;
   }
 }
+
+// ------------------------------------------------------------------
+// ciBytecodeStream::get_constant_pool_index
+// Decode any CP cache index into a regular pool index.
+int ciBytecodeStream::get_constant_pool_index() const {
+  // work-alike for Bytecode_loadconstant::pool_index()
+  int index = get_constant_raw_index();
+  if (has_cache_index()) {
+    return get_cpcache()->get_pool_index(index);
+  }
+  return index;
+}
+
+// ------------------------------------------------------------------
+// ciBytecodeStream::get_constant_cache_index
+// Return the CP cache index, or -1 if there isn't any.
+int ciBytecodeStream::get_constant_cache_index() const {
+  // work-alike for Bytecode_loadconstant::cache_index()
+  return has_cache_index() ? get_constant_raw_index() : -1;
+}
+
 // ------------------------------------------------------------------
 // ciBytecodeStream::get_constant
 //
 // If this bytecode is one of the ldc variants, get the referenced
 // constant.
 ciConstant ciBytecodeStream::get_constant() {
-  return CURRENT_ENV->get_constant_by_index(_holder, get_constant_index());
+  int pool_index = get_constant_raw_index();
+  int cache_index = -1;
+  if (has_cache_index()) {
+    cache_index = pool_index;
+    pool_index = -1;
+  }
+  VM_ENTRY_MARK;
+  constantPoolHandle cpool(_method->get_methodOop()->constants());
+  return CURRENT_ENV->get_constant_by_index(cpool, pool_index, cache_index, _holder);
 }
 
 // ------------------------------------------------------------------
-bool ciBytecodeStream::is_unresolved_string() const {
-  return CURRENT_ENV->is_unresolved_string(_holder, get_constant_index());
-}
-
-// ------------------------------------------------------------------
-bool ciBytecodeStream::is_unresolved_klass() const {
-  return CURRENT_ENV->is_unresolved_klass(_holder, get_klass_index());
+// ciBytecodeStream::get_constant_pool_tag
+//
+// If this bytecode is one of the ldc variants, get the referenced
+// constant.
+constantTag ciBytecodeStream::get_constant_pool_tag(int index) const {
+  VM_ENTRY_MARK;
+  return _method->get_methodOop()->constants()->tag_at(index);
 }
 
 // ------------------------------------------------------------------
@@ -236,7 +261,7 @@ int ciBytecodeStream::get_field_index() {
          cur_bc() == Bytecodes::_putfield ||
          cur_bc() == Bytecodes::_getstatic ||
          cur_bc() == Bytecodes::_putstatic, "wrong bc");
-  return get_index_big();
+  return get_index_u2_cpcache();
 }
 
 
@@ -264,9 +289,11 @@ ciField* ciBytecodeStream::get_field(bool& will_link) {
 // There is no "will_link" result passed back.  The user is responsible
 // for checking linkability when retrieving the associated field.
 ciInstanceKlass* ciBytecodeStream::get_declared_field_holder() {
+  VM_ENTRY_MARK;
+  constantPoolHandle cpool(_method->get_methodOop()->constants());
   int holder_index = get_field_holder_index();
   bool ignore;
-  return CURRENT_ENV->get_klass_by_index(_holder, holder_index, ignore)
+  return CURRENT_ENV->get_klass_by_index(cpool, holder_index, ignore, _holder)
       ->as_instance_klass();
 }
 
@@ -277,9 +304,10 @@ ciInstanceKlass* ciBytecodeStream::get_declared_field_holder() {
 // referenced by the current bytecode.  Used for generating
 // deoptimization information.
 int ciBytecodeStream::get_field_holder_index() {
-  VM_ENTRY_MARK;
-  constantPoolOop cpool = _holder->get_instanceKlass()->constants();
-  return cpool->klass_ref_index_at(get_field_index());
+  GUARDED_VM_ENTRY(
+    constantPoolOop cpool = _holder->get_instanceKlass()->constants();
+    return cpool->klass_ref_index_at(get_field_index());
+  )
 }
 
 // ------------------------------------------------------------------
@@ -301,17 +329,21 @@ int ciBytecodeStream::get_field_signature_index() {
 // If this is a method invocation bytecode, get the constant pool
 // index of the invoked method.
 int ciBytecodeStream::get_method_index() {
+#ifdef ASSERT
   switch (cur_bc()) {
   case Bytecodes::_invokeinterface:
-    return Bytes::get_Java_u2(_pc-4);
   case Bytecodes::_invokevirtual:
   case Bytecodes::_invokespecial:
   case Bytecodes::_invokestatic:
-    return get_index_big();
+  case Bytecodes::_invokedynamic:
+    break;
   default:
     ShouldNotReachHere();
-    return 0;
   }
+#endif
+  if (has_index_u4())
+    return get_index_u4();  // invokedynamic
+  return get_index_u2_cpcache();
 }
 
 // ------------------------------------------------------------------
@@ -319,7 +351,9 @@ int ciBytecodeStream::get_method_index() {
 //
 // If this is a method invocation bytecode, get the invoked method.
 ciMethod* ciBytecodeStream::get_method(bool& will_link) {
-  ciMethod* m = CURRENT_ENV->get_method_by_index(_holder, get_method_index(),cur_bc());
+  VM_ENTRY_MARK;
+  constantPoolHandle cpool(_method->get_methodOop()->constants());
+  ciMethod* m = CURRENT_ENV->get_method_by_index(cpool, get_method_index(), cur_bc(), _holder);
   will_link = m->is_loaded();
   return m;
 }
@@ -336,8 +370,13 @@ ciMethod* ciBytecodeStream::get_method(bool& will_link) {
 // There is no "will_link" result passed back.  The user is responsible
 // for checking linkability when retrieving the associated method.
 ciKlass* ciBytecodeStream::get_declared_method_holder() {
+  VM_ENTRY_MARK;
+  constantPoolHandle cpool(_method->get_methodOop()->constants());
   bool ignore;
-  return CURRENT_ENV->get_klass_by_index(_holder, get_method_holder_index(), ignore);
+  // report as InvokeDynamic for invokedynamic, which is syntactically classless
+  if (cur_bc() == Bytecodes::_invokedynamic)
+    return CURRENT_ENV->get_klass_by_name(_holder, ciSymbol::java_dyn_InvokeDynamic(), false);
+  return CURRENT_ENV->get_klass_by_index(cpool, get_method_holder_index(), ignore, _holder);
 }
 
 // ------------------------------------------------------------------
@@ -347,8 +386,7 @@ ciKlass* ciBytecodeStream::get_declared_method_holder() {
 // referenced by the current bytecode.  Used for generating
 // deoptimization information.
 int ciBytecodeStream::get_method_holder_index() {
-  VM_ENTRY_MARK;
-  constantPoolOop cpool = _holder->get_instanceKlass()->constants();
+  constantPoolOop cpool = _method->get_methodOop()->constants();
   return cpool->klass_ref_index_at(get_method_index());
 }
 
@@ -364,4 +402,35 @@ int ciBytecodeStream::get_method_signature_index() {
   int method_index = get_method_index();
   int name_and_type_index = cpool->name_and_type_ref_index_at(method_index);
   return cpool->signature_ref_index_at(name_and_type_index);
+}
+
+// ------------------------------------------------------------------
+// ciBytecodeStream::get_cpcache
+ciCPCache* ciBytecodeStream::get_cpcache() const {
+  if (_cpcache == NULL) {
+    VM_ENTRY_MARK;
+    // Get the constant pool.
+    constantPoolOop      cpool   = _holder->get_instanceKlass()->constants();
+    constantPoolCacheOop cpcache = cpool->cache();
+
+    *(ciCPCache**)&_cpcache = CURRENT_ENV->get_object(cpcache)->as_cpcache();
+  }
+  return _cpcache;
+}
+
+// ------------------------------------------------------------------
+// ciBytecodeStream::get_call_site
+ciCallSite* ciBytecodeStream::get_call_site() {
+  VM_ENTRY_MARK;
+  // Get the constant pool.
+  constantPoolOop      cpool   = _holder->get_instanceKlass()->constants();
+  constantPoolCacheOop cpcache = cpool->cache();
+
+  // Get the CallSite from the constant pool cache.
+  int method_index = get_method_index();
+  ConstantPoolCacheEntry* cpcache_entry = cpcache->secondary_entry_at(method_index);
+  oop call_site_oop = cpcache_entry->f1();
+
+  // Create a CallSite object and return it.
+  return CURRENT_ENV->get_object(call_site_oop)->as_call_site();
 }

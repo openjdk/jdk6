@@ -1,12 +1,12 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 
@@ -29,8 +29,8 @@ package javax.swing;
 
 
 
-import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.*;
 import java.util.concurrent.atomic.AtomicLong;
 import sun.awt.AppContext;
 
@@ -46,13 +46,11 @@ import sun.awt.AppContext;
  */
 class TimerQueue implements Runnable
 {
-    private static final Object sharedInstanceKey =
-        new StringBuffer("TimerQueue.sharedInstanceKey");
-    private static final Object expiredTimersKey =
-        new StringBuffer("TimerQueue.expiredTimersKey");
+    private static final Object sharedInstanceKey = new Object(); // TimerQueue.sharedInstanceKey
 
     private final DelayQueue<DelayedTimer> queue;
-    volatile boolean running;
+    private volatile boolean running;
+    private final Lock runningLock;
 
     /* Lock object used in place of class object for synchronization.
      * (4187686)
@@ -69,7 +67,8 @@ class TimerQueue implements Runnable
         super();
         queue = new DelayQueue<DelayedTimer>();
         // Now start the TimerQueue thread.
-        start();
+        runningLock = new ReentrantLock();
+        startIfNeeded();
     }
 
 
@@ -87,32 +86,29 @@ class TimerQueue implements Runnable
     }
 
 
-    synchronized void start() {
-        if (running) {
-            throw new RuntimeException("Can't start a TimerQueue " +
-                                       "that is already running");
-        }
-        else {
-            final ThreadGroup threadGroup =
-                AppContext.getAppContext().getThreadGroup();
-            java.security.AccessController.doPrivileged(
-                new java.security.PrivilegedAction() {
-                public Object run() {
-                    Thread timerThread = new Thread(threadGroup, TimerQueue.this,
-                                                    "TimerQueue");
-                    timerThread.setDaemon(true);
-                    timerThread.setPriority(Thread.NORM_PRIORITY);
-                    timerThread.start();
-                    return null;
-                }
-            });
-            running = true;
+    void startIfNeeded() {
+        if (! running) {
+            runningLock.lock();
+            try {
+                final ThreadGroup threadGroup =
+                    AppContext.getAppContext().getThreadGroup();
+                java.security.AccessController.doPrivileged(
+                    new java.security.PrivilegedAction() {
+                    public Object run() {
+                        Thread timerThread = new Thread(threadGroup, TimerQueue.this,
+                                                        "TimerQueue");
+                        timerThread.setDaemon(true);
+                        timerThread.setPriority(Thread.NORM_PRIORITY);
+                        timerThread.start();
+                        return null;
+                    }
+                });
+                running = true;
+            } finally {
+                runningLock.unlock();
+            }
         }
     }
-
-     synchronized void stop() {
-         running = false;
-     }
 
     void addTimer(Timer timer, long delayMillis) {
         timer.getLock().lock();
@@ -164,6 +160,7 @@ class TimerQueue implements Runnable
 
 
     public void run() {
+        runningLock.lock();
         try {
             while (running) {
                 try {
@@ -195,14 +192,14 @@ class TimerQueue implements Runnable
             }
         }
         catch (ThreadDeath td) {
-            synchronized (this) {
-                running = false;
-                // Mark all the timers we contain as not being queued.
-                for (DelayedTimer delayedTimer : queue) {
-                    delayedTimer.getTimer().cancelEvent();
-                }
-                throw td;
+            // Mark all the timers we contain as not being queued.
+            for (DelayedTimer delayedTimer : queue) {
+                delayedTimer.getTimer().cancelEvent();
             }
+            throw td;
+        } finally {
+            running = false;
+            runningLock.unlock();
         }
     }
 
