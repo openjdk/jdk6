@@ -713,11 +713,11 @@ GetJavaProperties(JNIEnv* env)
          * Windows XP 64 bit            5               2
          *      where ((&ver.wServicePackMinor) + 2) = 1
          *       and  si.wProcessorArchitecture = 9
-         * Windows Vista family         6               0
-         * Windows Server 2008          6               0
-         *      where ((&ver.wServicePackMinor) + 2) = 1
-         * Windows 7                    6               1
-         * Windows Server 2008 R2       6               1
+         * Windows Vista family         6               0  (VER_NT_WORKSTATION)
+         * Windows Server 2008          6               0  (!VER_NT_WORKSTATION)
+         * Windows 7                    6               1  (VER_NT_WORKSTATION)
+         * Windows Server 2008 R2       6               1  (!VER_NT_WORKSTATION)
+         * Windows 8                    6               2  (VER_NT_WORKSTATION)
          *
          * This mapping will presumably be augmented as new Windows
          * versions are released.
@@ -768,19 +768,13 @@ GetJavaProperties(JNIEnv* env)
                 }
             } else if (ver.dwMajorVersion == 6) {
                 /*
-                 * From MSDN OSVERSIONINFOEX documentation:
-                 *
-                 * "Because the version numbers for Windows Server 2008
-                 * and Windows Vista are identical, you must also test
-                 * whether the wProductType member is VER_NT_WORKSTATION.
-                 * If wProductType is VER_NT_WORKSTATION, the operating
-                 * system is Windows Vista or 7; otherwise, it is Windows
-                 * Server 2008."
+                 * See table in MSDN OSVERSIONINFOEX documentation.
                  */
                 if (ver.wProductType == VER_NT_WORKSTATION) {
                     switch (ver.dwMinorVersion) {
                     case  0: sprops.os_name = "Windows Vista";        break;
                     case  1: sprops.os_name = "Windows 7";            break;
+                    case  2: sprops.os_name = "Windows 8";            break;
                     default: sprops.os_name = "Windows NT (unknown)";
                     }
                 } else {
