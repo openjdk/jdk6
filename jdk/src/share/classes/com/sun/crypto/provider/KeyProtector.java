@@ -378,34 +378,3 @@ final class CipherForKeyProtector extends javax.crypto.Cipher {
         super(cipherSpi, provider, transformation);
     }
 }
-
-final class SealedObjectForKeyProtector extends javax.crypto.SealedObject {
-
-    static final long serialVersionUID = -3650226485480866989L;
-
-    SealedObjectForKeyProtector(Serializable object, Cipher c)
-        throws IOException, IllegalBlockSizeException {
-        super(object, c);
-    }
-
-    SealedObjectForKeyProtector(SealedObject so) {
-        super(so);
-    }
-
-    AlgorithmParameters getParameters() {
-        AlgorithmParameters params = null;
-        if (super.encodedParams != null) {
-            try {
-                params = AlgorithmParameters.getInstance("PBE", "SunJCE");
-                params.init(super.encodedParams);
-            } catch (NoSuchProviderException nspe) {
-                // eat.
-            } catch (NoSuchAlgorithmException nsae) {
-                //eat.
-            } catch (IOException ioe) {
-                //eat.
-            }
-        }
-        return params;
-    }
-}
