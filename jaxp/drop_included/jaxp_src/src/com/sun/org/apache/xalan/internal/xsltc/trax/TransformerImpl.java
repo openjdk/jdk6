@@ -100,10 +100,6 @@ import org.xml.sax.ext.LexicalHandler;
 public final class TransformerImpl extends Transformer
     implements DOMCache, ErrorListener
 {
-    private final static String EMPTY_STRING = "";
-    private final static String NO_STRING    = "no";
-    private final static String YES_STRING   = "yes";
-    private final static String XML_STRING   = "xml";
 
     private final static String LEXICAL_HANDLER_PROPERTY =
 	"http://xml.org/sax/properties/lexical-handler";
@@ -157,7 +153,7 @@ public final class TransformerImpl extends Transformer
     private TransletOutputHandlerFactory _tohFactory = null;
 
     /**
-     * A reference to a internal DOM represenation of the input.
+     * A reference to a internal DOM representation of the input.
      */
     private DOM _dom = null;
 
@@ -224,7 +220,8 @@ public final class TransformerImpl extends Transformer
 	public MessageHandler(ErrorListener errorListener) {
 	    _errorListener = errorListener;
 	}
-     
+
+	@Override
 	public void displayMessage(String msg) {
 	    if(_errorListener == null) {
 		System.err.println(msg); 
@@ -296,6 +293,7 @@ public final class TransformerImpl extends Transformer
      * @param result Will contain the output from the transformation
      * @throws TransformerException
      */
+    @Override
     public void transform(Source source, Result result)
 	throws TransformerException 
     {
@@ -438,7 +436,7 @@ public final class TransformerImpl extends Transformer
 		// System Id may be in one of several forms, (1) a uri
 		// that starts with 'file:', (2) uri that starts with 'http:'
 		// or (3) just a filename on the local system.
-		URL url = null;
+		URL url;
                 if (systemId.startsWith("file:")) {
                     // if StreamResult(File) or setSystemID(File) was used,
                     // the systemId will be URI encoded as a result of File.toURI(),
@@ -516,7 +514,7 @@ public final class TransformerImpl extends Transformer
      */
     private DOM getDOM(Source source) throws TransformerException {
         try {
-            DOM dom = null;
+            DOM dom;
 
             if (source != null) {
                 DTMWSFilter wsfilter;
@@ -531,8 +529,7 @@ public final class TransformerImpl extends Transformer
 
                  if (_dtmManager == null) {
                      _dtmManager =
-                         (XSLTCDTMManager)_tfactory.getDTMManagerClass()
-                                                   .newInstance();
+                         _tfactory.createNewDTMManagerInstance();
                  }
                  dom = (DOM)_dtmManager.getDTM(source, false, wsfilter, true,
                                               false, false, 0, hasIdCall);
@@ -654,8 +651,8 @@ public final class TransformerImpl extends Transformer
             }
         } else if (source instanceof StAXSource) {
             final StAXSource staxSource = (StAXSource)source;
-            StAXEvent2SAX staxevent2sax = null;
-            StAXStream2SAX staxStream2SAX = null; 
+            StAXEvent2SAX staxevent2sax;
+            StAXStream2SAX staxStream2SAX;
             if (staxSource.getXMLEventReader() != null) {
                 final XMLEventReader xmlEventReader = staxSource.getXMLEventReader();
                 staxevent2sax = new StAXEvent2SAX(xmlEventReader);
@@ -750,6 +747,7 @@ public final class TransformerImpl extends Transformer
      *
      * @return The error event handler currently in effect
      */
+    @Override
     public ErrorListener getErrorListener() {  
 	return _errorListener; 
     }
@@ -763,6 +761,7 @@ public final class TransformerImpl extends Transformer
      * @param listener The error event listener to use
      * @throws IllegalArgumentException
      */
+    @Override
     public void setErrorListener(ErrorListener listener)
 	throws IllegalArgumentException {
         if (listener == null) {
@@ -812,6 +811,7 @@ public final class TransformerImpl extends Transformer
      *
      * @return Properties in effect for this Transformer
      */
+    @Override
     public Properties getOutputProperties() { 
 	return (Properties) _properties.clone();
     }
@@ -825,6 +825,7 @@ public final class TransformerImpl extends Transformer
      * @param name A non-null string that contains the name of the property
      * @throws IllegalArgumentException if the property name is not known
      */
+    @Override
     public String getOutputProperty(String name)
 	throws IllegalArgumentException 
     {
@@ -844,6 +845,7 @@ public final class TransformerImpl extends Transformer
      * @param properties The properties to use for the Transformer
      * @throws IllegalArgumentException Never, errors are ignored
      */
+    @Override
     public void setOutputProperties(Properties properties) 
 	throws IllegalArgumentException 
     {
@@ -880,6 +882,7 @@ public final class TransformerImpl extends Transformer
      * @param value The value to assign to the property
      * @throws IllegalArgumentException Never, errors are ignored
      */
+    @Override
     public void setOutputProperty(String name, String value)
 	throws IllegalArgumentException 
     {
@@ -1149,6 +1152,7 @@ public final class TransformerImpl extends Transformer
      * @param name The name of the parameter
      * @param value The value to assign to the parameter
      */
+    @Override
     public void setParameter(String name, Object value) {
         
         if (value == null) {
@@ -1172,6 +1176,7 @@ public final class TransformerImpl extends Transformer
      * Clear all parameters set with setParameter. Clears the translet's
      * parameter stack.
      */
+    @Override
     public void clearParameters() {  
 	if (_isIdentity && _parameters != null) {
 	    _parameters.clear();
@@ -1189,6 +1194,7 @@ public final class TransformerImpl extends Transformer
      * @param name The name of the parameter
      * @return An object that contains the value assigned to the parameter
      */
+    @Override
     public final Object getParameter(String name) {
 	if (_isIdentity) {
 	    return (_parameters != null) ? _parameters.get(name) : null;
@@ -1204,6 +1210,7 @@ public final class TransformerImpl extends Transformer
      *
      * @return  The URLResolver object currently in use
      */
+    @Override
     public URIResolver getURIResolver() {
 	return _uriResolver;
     }
@@ -1214,6 +1221,7 @@ public final class TransformerImpl extends Transformer
      *
      * @param resolver The URIResolver to use in document()
      */
+    @Override
     public void setURIResolver(URIResolver resolver) { 
 	_uriResolver = resolver;
     }
@@ -1232,6 +1240,7 @@ public final class TransformerImpl extends Transformer
      * @param href The href argument passed to the document function.
      * @param translet A reference to the translet requesting the document
      */
+    @Override
     public DOM retrieveDocument(String baseURI, String href, Translet translet) {
 	try {        
             // Argument to document function was: document('');
@@ -1274,6 +1283,7 @@ public final class TransformerImpl extends Transformer
      * @throws TransformerException if the application chooses to discontinue
      * the transformation (always does in our case).
      */
+    @Override
     public void error(TransformerException e)
 	throws TransformerException 
     {
@@ -1302,6 +1312,7 @@ public final class TransformerImpl extends Transformer
      * @throws TransformerException if the application chooses to discontinue
      * the transformation (always does in our case).
      */
+    @Override
     public void fatalError(TransformerException e)
 	throws TransformerException 
     {
@@ -1330,6 +1341,7 @@ public final class TransformerImpl extends Transformer
      * @throws TransformerException if the application chooses to discontinue
      * the transformation (never does in our case).
      */
+    @Override
     public void warning(TransformerException e)
 	throws TransformerException 
     {
@@ -1350,6 +1362,7 @@ public final class TransformerImpl extends Transformer
      * created
      * @since 1.5
      */
+    @Override
     public void reset() {
 
         _method = null;

@@ -154,8 +154,7 @@ public final class DocumentCache implements DOMCache {
     public DocumentCache(int size) throws SAXException {
         this(size, null);
         try {
-            _dtmManager = (XSLTCDTMManager)XSLTCDTMManager.getDTMManagerClass()
-                                                          .newInstance();
+            _dtmManager = XSLTCDTMManager.createNewDTMManagerInstance();
         } catch (Exception e) {
             throw new SAXException(e);
         }
@@ -252,6 +251,7 @@ public final class DocumentCache implements DOMCache {
      * Returns a document either by finding it in the cache or
      * downloading it and putting it in the cache.
      */
+    @Override
     public DOM retrieveDocument(String baseURI, String href, Translet trs) {
         CachedDocument doc;
 
