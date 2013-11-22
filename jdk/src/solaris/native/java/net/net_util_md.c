@@ -84,8 +84,7 @@ static int useExclBind = 0;
  * of the parameter is assumed to be an 'int'. If the parameter
  * cannot be obtained return the specified default value.
  */
-static int
-getParam(char *driver, char *param, int dflt)
+int net_getParam(char *driver, char *param, int dflt)
 {
     struct strioctl stri;
     char buf [64];
@@ -1202,8 +1201,8 @@ NET_SetSockOpt(int fd, int level, int  opt, const void *arg,
             int *bufsize, maxbuf;
 
             if (!init_max_buf) {
-                tcp_max_buf = getParam("/dev/tcp", "tcp_max_buf", 64*1024);
-                udp_max_buf = getParam("/dev/udp", "udp_max_buf", 64*1024);
+                tcp_max_buf = net_getParam("/dev/tcp", "tcp_max_buf", 64*1024);
+                udp_max_buf = net_getParam("/dev/udp", "udp_max_buf", 64*1024);
                 init_max_buf = 1;
             }
 

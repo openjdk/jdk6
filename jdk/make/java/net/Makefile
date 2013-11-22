@@ -75,7 +75,7 @@ FILES_export = \
     java/net/ProtocolException.java \
     sun/net/spi/DefaultProxySelector.java
 
-ifeq ($(PLATFORM), windows) 
+ifeq ($(PLATFORM), windows)
     FILES_export += java/net/TwoStacksPlainSocketImpl.java
     FILES_export += java/net/DualStackPlainSocketImpl.java
     FILES_export += java/net/TwoStacksPlainDatagramSocketImpl.java
@@ -87,7 +87,8 @@ endif
 #
 # Find platform specific native code
 #
-vpath %.c $(PLATFORM_SRC)/native/sun/net/dns $(PLATFORM_SRC)/native/sun/net/www/protocol/http $(PLATFORM_SRC)/native/sun/net/spi
+vpath %.c $(PLATFORM_SRC)/native/sun/net/dns $(PLATFORM_SRC)/native/sun/net/www/protocol/http \
+	$(PLATFORM_SRC)/native/sun/net/spi $(PLATFORM_SRC)/native/sun/net
 
 #
 # Include rules
