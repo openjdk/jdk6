@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -69,17 +69,14 @@ Java_sun_awt_image_BufImgSurfaceData_initIDs
     }
 
     clsICMCD = (*env)->NewWeakGlobalRef(env, cd);
-    initICMCDmID = (*env)->GetMethodID(env, cd, "<init>", "(J)V");
-    pDataID = (*env)->GetFieldID(env, cd, "pData", "J");
-
-    rgbID = (*env)->GetFieldID(env, icm, "rgb", "[I");
-    allGrayID = (*env)->GetFieldID(env, icm, "allgrayopaque", "Z");
-    mapSizeID = (*env)->GetFieldID(env, icm, "map_size", "I");
-    colorDataID = (*env)->GetFieldID(env, icm, "colorData",
-        "Lsun/awt/image/BufImgSurfaceData$ICMColorData;");
-    if (allGrayID == 0 || rgbID == 0 || mapSizeID == 0 || pDataID == 0|| colorDataID == 0 || initICMCDmID == 0) {
-        JNU_ThrowInternalError(env, "Could not get field IDs");
-    }
+    JNU_CHECK_EXCEPTION(env);
+    CHECK_NULL(initICMCDmID = (*env)->GetMethodID(env, cd, "<init>", "(J)V"));
+    CHECK_NULL(pDataID = (*env)->GetFieldID(env, cd, "pData", "J"));
+    CHECK_NULL(rgbID = (*env)->GetFieldID(env, icm, "rgb", "[I"));
+    CHECK_NULL(allGrayID = (*env)->GetFieldID(env, icm, "allgrayopaque", "Z"));
+    CHECK_NULL(mapSizeID = (*env)->GetFieldID(env, icm, "map_size", "I"));
+    CHECK_NULL(colorDataID = (*env)->GetFieldID(env, icm, "colorData",
+                                           "Lsun/awt/image/BufImgSurfaceData$ICMColorData;"));
 }
 
 /*
@@ -116,6 +113,7 @@ Java_sun_awt_image_BufImgSurfaceData_initRaster(JNIEnv *env, jobject bisd,
     bisdo->sdOps.Unlock = NULL;
     bisdo->sdOps.Dispose = BufImg_Dispose;
     bisdo->array = (*env)->NewWeakGlobalRef(env, array);
+    JNU_CHECK_EXCEPTION(env);
     bisdo->offset = offset;
     bisdo->bitoffset = bitoffset;
     bisdo->scanStr = scanStr;
@@ -127,6 +125,7 @@ Java_sun_awt_image_BufImgSurfaceData_initRaster(JNIEnv *env, jobject bisd,
     } else {
         jobject lutarray = (*env)->GetObjectField(env, icm, rgbID);
         bisdo->lutarray = (*env)->NewWeakGlobalRef(env, lutarray);
+        JNU_CHECK_EXCEPTION(env);
         bisdo->lutsize = (*env)->GetIntField(env, icm, mapSizeID);
         bisdo->icm = (*env)->NewWeakGlobalRef(env, icm);
     }
@@ -170,8 +169,8 @@ static jint BufImg_Lock(JNIEnv *env,
     {
         bipriv->cData = BufImg_SetupICM(env, bisdo);
         if (bipriv->cData == NULL) {
-            JNU_ThrowNullPointerException(env, "Could not initialize "
-                                          "inverse tables");
+            (*env)->ExceptionClear(env);
+            JNU_ThrowNullPointerException(env, "Could not initialize inverse tables");
             return SD_FAILURE;
         }
     } else {
@@ -197,6 +196,7 @@ static void BufImg_GetRasInfo(JNIEnv *env,
     if ((bipriv->lockFlags & (SD_LOCK_RD_WR)) != 0) {
         bipriv->base =
             (*env)->GetPrimitiveArrayCritical(env, bisdo->array, NULL);
+        CHECK_NULL(bipriv->base);
     }
     if ((bipriv->lockFlags & (SD_LOCK_LUT)) != 0) {
         bipriv->lutbase =
@@ -287,6 +287,7 @@ static ColorData *BufImg_SetupICM(JNIEnv *env,
             = (*env)->GetBooleanField(env, bisdo->icm, allGrayID);
         int *pRgb = (int *)
             ((*env)->GetPrimitiveArrayCritical(env, bisdo->lutarray, NULL));
+        CHECK_NULL_RETURN(pRgb, (ColorData*)NULL);
         cData->img_clr_tbl = initCubemap(pRgb, bisdo->lutsize, 32);
         if (allGray == JNI_TRUE) {
             initInverseGrayLut(pRgb, bisdo->lutsize, cData);
@@ -299,6 +300,7 @@ static ColorData *BufImg_SetupICM(JNIEnv *env,
         if (JNU_IsNull(env, colorData)) {
             jlong pData = ptr_to_jlong(cData);
             colorData = (*env)->NewObjectA(env, clsICMCD, initICMCDmID, (jvalue *)&pData);
+            JNU_CHECK_EXCEPTION_RETURN(env, (ColorData*)NULL);
             (*env)->SetObjectField(env, bisdo->icm, colorDataID, colorData);
         }
     }
