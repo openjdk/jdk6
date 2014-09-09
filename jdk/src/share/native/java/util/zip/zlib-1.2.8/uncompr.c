@@ -3,9 +3,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -17,13 +17,13 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 /* uncompr.c -- decompress a memory buffer
- * Copyright (C) 1995-2003 Jean-loup Gailly.
+ * Copyright (C) 1995-2003, 2010 Jean-loup Gailly.
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -40,8 +40,6 @@
    been saved previously by the compressor and transmitted to the decompressor
    by some mechanism outside the scope of this compression library.)
    Upon exit, destLen is the actual size of the compressed buffer.
-     This function can be used to decompress a whole file at once if the
-   input file is mmap'ed.
 
      uncompress returns Z_OK if success, Z_MEM_ERROR if there was not
    enough memory, Z_BUF_ERROR if there was not enough room in the output
@@ -56,7 +54,7 @@ int ZEXPORT uncompress (dest, destLen, source, sourceLen)
     z_stream stream;
     int err;
 
-    stream.next_in = (Bytef*)source;
+    stream.next_in = (z_const Bytef *)source;
     stream.avail_in = (uInt)sourceLen;
     /* Check for source > 64K on 16-bit machine: */
     if ((uLong)stream.avail_in != sourceLen) return Z_BUF_ERROR;
