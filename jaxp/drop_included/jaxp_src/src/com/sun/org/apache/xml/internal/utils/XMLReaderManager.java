@@ -121,8 +121,8 @@ public class XMLReaderManager {
                     try {
                         reader.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, _secureProcessing);
                     } catch (SAXNotRecognizedException e) {
-                        System.err.println("Warning:  " + reader.getClass().getName() + ": "
-                                + e.getMessage());
+                        XMLSecurityManager.printWarning(reader.getClass().getName(),
+                                XMLConstants.FEATURE_SECURE_PROCESSING, e);
                     }
                 } catch (Exception e) {
                    try {
@@ -159,21 +159,23 @@ public class XMLReaderManager {
                 m_readers.set(reader);
                 m_inUse.put(reader, Boolean.TRUE);
             }
-        } 
+        }
 
+        String lastProperty = "";
         try {
             if (_xmlSecurityManager != null) {
                 for (XMLSecurityManager.Limit limit : XMLSecurityManager.Limit.values()) {
+                    lastProperty = limit.apiProperty();
                     reader.setProperty(limit.apiProperty(),
                             _xmlSecurityManager.getLimitValueAsString(limit));
                 }
                 if (_xmlSecurityManager.printEntityCountInfo()) {
+                    lastProperty = XalanConstants.JDK_ENTITY_COUNT_INFO;
                     reader.setProperty(XalanConstants.JDK_ENTITY_COUNT_INFO, XalanConstants.JDK_YES);
                 }
             }
         } catch (SAXException se) {
-            System.err.println("Warning:  " + reader.getClass().getName() + ": "
-                        + se.getMessage());
+            XMLSecurityManager.printWarning(reader.getClass().getName(), lastProperty, se);
         }
 
         return reader;
