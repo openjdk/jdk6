@@ -2872,7 +2872,9 @@ final public class LdapCtx extends ComponentDirContext
             r = new LdapReferralException(resolvedName, resolvedObj, remainName,
                 msg, envprops, fullDN, handleReferrals, reqCtls);
             // only one set of URLs is present
-            r.setReferralInfo((Vector)res.referrals.elementAt(0), false);
+            r.setReferralInfo(res.referrals == null ? null :
+                    (Vector) res.referrals.elementAt(0), false);
+
 
             if (hopCount > 1) {
                 r.setHopCount(hopCount);
@@ -2941,7 +2943,7 @@ final public class LdapCtx extends ComponentDirContext
              *     assume name resolution has not yet completed.
              */
             if (((res.entries == null) || (res.entries.size() == 0)) &&
-                (res.referrals.size() == 1)) {
+                ((res.referrals != null) && (res.referrals.size() == 1))) {
 
                 r.setReferralInfo((Vector)res.referrals, false);
 
