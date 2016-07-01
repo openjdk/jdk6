@@ -603,7 +603,7 @@ SIZE AwtFont::TextSize(AwtFont* font, int columns, int rows)
 int AwtFont::getFontDescriptorNumber(JNIEnv *env, jobject font,
                                      jobject fontDescriptor)
 {
-    int i, num;
+    int i, num = 0;
     jobject refFontDescriptor;
     jobjectArray array;
 
