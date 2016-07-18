@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -360,5 +360,9 @@ public class RootDocImpl extends DocImpl implements RootDoc {
      */
     public Locale getLocale() {
         return env.doclocale.locale;
+    }
+
+    public JavaScriptScanner initJavaScriptScanner(boolean allowScriptInComments) {
+        return env.initJavaScriptScanner(allowScriptInComments);
     }
 }

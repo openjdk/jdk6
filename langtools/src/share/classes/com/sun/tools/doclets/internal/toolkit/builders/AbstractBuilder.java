@@ -108,7 +108,14 @@ public abstract class AbstractBuilder {
             configuration.root.printError("Unknown element: " + component);
             throw new DocletAbortException();
         } catch (InvocationTargetException e) {
-            e.getCause().printStackTrace();
+            Throwable cause = e.getCause();
+            if (cause instanceof FatalError) {
+                throw (FatalError) cause;
+            } else if (cause instanceof DocletAbortException) {
+                throw (DocletAbortException) cause;
+            } else {
+                cause.printStackTrace();
+            }
         } catch (Exception e) {
             e.printStackTrace();
             configuration.root.printError("Exception " +

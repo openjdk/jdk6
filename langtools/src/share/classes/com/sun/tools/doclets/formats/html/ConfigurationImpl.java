@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,8 @@
 
 package com.sun.tools.doclets.formats.html;
 
+import com.sun.tools.javadoc.JavaScriptScanner;
+import com.sun.tools.javadoc.RootDocImpl;
 import com.sun.tools.doclets.internal.toolkit.*;
 import com.sun.tools.doclets.internal.toolkit.util.*;
 
@@ -164,6 +166,11 @@ public class ConfigurationImpl extends Configuration {
     public boolean createoverview = false;
 
     /**
+     * Whether or not to check for JavaScript in doc comments.
+     */
+    private boolean allowScriptInComments;
+
+    /**
      * Unique Resource Handler for this package.
      */
     public final MessageRetriever standardmessage;
@@ -259,8 +266,11 @@ public class ConfigurationImpl extends Configuration {
                 nooverview = true;
             } else  if (opt.equals("-overview")) {
                 overview = true;
+            } else if (opt.equals("--allow-script-in-comments")) {
+                allowScriptInComments = true;
             }
         }
+
         if (root.specifiedClasses().length > 0) {
             Map map = new HashMap();
             PackageDoc pd;
@@ -274,6 +284,30 @@ public class ConfigurationImpl extends Configuration {
         }
         setCreateOverview();
         setTopFile(root);
+
+        if (root instanceof RootDocImpl) {
+            JavaScriptScanner jss = ((RootDocImpl) root).initJavaScriptScanner(isAllowScriptInComments());
+            if (jss != null) {
+                // In a more object-oriented world, this would be done by methods on the Option objects.
+                // Note that -windowtitle silently removes any and all HTML elements, and so does not need
+                // to be handled here.
+                checkJavaScript(jss, "-header", header);
+                checkJavaScript(jss, "-footer", footer);
+                checkJavaScript(jss, "-top", top);
+                checkJavaScript(jss, "-bottom", bottom);
+                checkJavaScript(jss, "-doctitle", doctitle);
+                checkJavaScript(jss, "-packagesheader", packagesheader);
+            }
+        }
+    }
+
+    private void checkJavaScript(JavaScriptScanner jss, final String opt, String value) {
+        jss.parse(value, new JavaScriptScanner.Reporter() {
+                public void report() {
+                    root.printError(getText("doclet.JavaScript_in_option", opt));
+                    throw new FatalError();
+                }
+            });
     }
 
     /**
@@ -307,7 +341,9 @@ public class ConfigurationImpl extends Configuration {
             option.equals("-serialwarn") ||
             option.equals("-use") ||
             option.equals("-nonavbar") ||
-            option.equals("-nooverview")) {
+            option.equals("-nooverview") ||
+            option.startsWith("-xdoclint:") ||
+            option.equals("--allow-script-in-comments")) {
             return 1;
         } else if (option.equals("-help")) {
             System.out.println(getText("doclet.usage"));
@@ -502,5 +538,14 @@ public class ConfigurationImpl extends Configuration {
             return ((com.sun.tools.javadoc.RootDocImpl)root).getLocale();
         else
             return Locale.getDefault();
+    }
+
+    /**
+     * Returns whether or not to allow JavaScript in comments.
+     * Default is off; can be set true from a command line option.
+     * @return the allowScriptInComments
+     */
+    public boolean isAllowScriptInComments() {
+        return allowScriptInComments;
     }
 }

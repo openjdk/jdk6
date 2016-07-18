@@ -81,6 +81,8 @@ public abstract class AbstractDoclet {
         }
         try {
             doclet.startGeneration(root);
+        } catch (FatalError e) {
+            return false;
         } catch (Exception exc) {
             exc.printStackTrace();
             return false;

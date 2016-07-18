@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -76,7 +76,7 @@ public class DocEnv {
     JavadocEnter enter;
 
     /** The name table. */
-    Name.Table names;
+    private final Name.Table names;
 
     /** The encoding name. */
     private String encoding;
@@ -97,6 +97,7 @@ public class DocEnv {
     Check chk;
     Types types;
     JavaFileManager fileManager;
+    JavaScriptScanner javaScriptScanner;
 
     /** Allow documenting from class files? */
     boolean docClasses = false;
@@ -764,5 +765,14 @@ public class DocEnv {
         if ((flags & Flags.VOLATILE) != 0)
             result |= Modifier.VOLATILE;
         return result;
+    }
+
+    JavaScriptScanner initJavaScriptScanner(boolean allowScriptInComments) {
+        if (allowScriptInComments) {
+            javaScriptScanner = null;
+        } else {
+            javaScriptScanner = new JavaScriptScanner();
+        }
+        return javaScriptScanner;
     }
 }
