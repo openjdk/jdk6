@@ -97,8 +97,20 @@ public class URLClassLoader extends SecureClassLoader {
         if (security != null) {
             security.checkCreateClassLoader();
         }
-        ucp = new URLClassPath(urls);
-        acc = AccessController.getContext();
+        this.acc = AccessController.getContext();
+        ucp = new URLClassPath(urls, acc);
+    }
+
+    URLClassLoader(URL[] urls, ClassLoader parent,
+                   AccessControlContext acc) {
+        super(parent);
+        // this is to make the stack depth consistent with 1.1
+        SecurityManager security = System.getSecurityManager();
+        if (security != null) {
+            security.checkCreateClassLoader();
+        }
+        this.acc = acc;
+        ucp = new URLClassPath(urls, acc);
     }
 
     /**
@@ -128,8 +140,19 @@ public class URLClassLoader extends SecureClassLoader {
         if (security != null) {
             security.checkCreateClassLoader();
         }
-        ucp = new URLClassPath(urls);
-        acc = AccessController.getContext();
+        this.acc = AccessController.getContext();
+        ucp = new URLClassPath(urls, acc);
+    }
+
+    URLClassLoader(URL[] urls, AccessControlContext acc) {
+        super();
+        // this is to make the stack depth consistent with 1.1
+        SecurityManager security = System.getSecurityManager();
+        if (security != null) {
+            security.checkCreateClassLoader();
+        }
+        this.acc = acc;
+        ucp = new URLClassPath(urls, acc);
     }
 
     /**
@@ -160,8 +183,8 @@ public class URLClassLoader extends SecureClassLoader {
         if (security != null) {
             security.checkCreateClassLoader();
         }
-        ucp = new URLClassPath(urls, factory);
         acc = AccessController.getContext();
+        ucp = new URLClassPath(urls, factory, acc);
     }
 
     /**
@@ -532,12 +555,12 @@ public class URLClassLoader extends SecureClassLoader {
     public static URLClassLoader newInstance(final URL[] urls,
                                              final ClassLoader parent) {
         // Save the caller's context
-        AccessControlContext acc = AccessController.getContext();
+        final AccessControlContext acc = AccessController.getContext();
         // Need a privileged block to create the class loader
         URLClassLoader ucl = AccessController.doPrivileged(
             new PrivilegedAction<URLClassLoader>() {
                 public URLClassLoader run() {
-                    return new FactoryURLClassLoader(urls, parent);
+                    return new FactoryURLClassLoader(urls, parent, acc);
                 }
             });
         // Now set the context on the loader using the one we saved,
@@ -559,12 +582,12 @@ public class URLClassLoader extends SecureClassLoader {
      */
     public static URLClassLoader newInstance(final URL[] urls) {
         // Save the caller's context
-        AccessControlContext acc = AccessController.getContext();
+        final AccessControlContext acc = AccessController.getContext();
         // Need a privileged block to create the class loader
         URLClassLoader ucl = AccessController.doPrivileged(
             new PrivilegedAction<URLClassLoader>() {
                 public URLClassLoader run() {
-                    return new FactoryURLClassLoader(urls);
+                    return new FactoryURLClassLoader(urls, acc);
                 }
             });
 
@@ -591,12 +614,13 @@ public class URLClassLoader extends SecureClassLoader {
 
 final class FactoryURLClassLoader extends URLClassLoader {
 
-    FactoryURLClassLoader(URL[] urls, ClassLoader parent) {
-        super(urls, parent);
+    FactoryURLClassLoader(URL[] urls, ClassLoader parent,
+                          AccessControlContext acc) {
+        super(urls, parent, acc);
     }
 
-    FactoryURLClassLoader(URL[] urls) {
-        super(urls);
+    FactoryURLClassLoader(URL[] urls, AccessControlContext acc) {
+        super(urls, acc);
     }
 
     public final synchronized Class<?> loadClass(String name, boolean resolve)
