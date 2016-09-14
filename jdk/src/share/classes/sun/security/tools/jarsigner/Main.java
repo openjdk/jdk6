@@ -588,6 +588,7 @@ public class Main {
             }
 
             Manifest man = jf.getManifest();
+            boolean hasSignature = false;
 
             // The map to record display info, only used when -verbose provided
             //      key: signer info string
@@ -604,6 +605,10 @@ public class Main {
                 while (e.hasMoreElements()) {
                     JarEntry je = e.nextElement();
                     String name = je.getName();
+
+                    hasSignature = hasSignature
+                            || SignatureFileVerifier.isBlockOrSF(name);
+
                     CodeSigner[] signers = je.getCodeSigners();
                     boolean isSigned = (signers != null);
                     anySigned |= isSigned;
@@ -743,8 +748,11 @@ public class Main {
                 System.out.println(rb.getString("no.manifest."));
 
             if (!anySigned) {
-                System.out.println(rb.getString(
-                      "jar.is.unsigned.signatures.missing.or.not.parsable."));
+                if (hasSignature) {
+                    System.out.println(rb.getString("jar.treated.unsigned"));
+                } else {
+                    System.out.println(rb.getString("jar.is.unsigned"));
+                }
             } else {
                 boolean warningAppeared = false;
                 boolean errorAppeared = false;
