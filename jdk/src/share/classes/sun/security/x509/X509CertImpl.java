@@ -37,6 +37,7 @@ import java.security.*;
 import java.security.cert.*;
 import java.security.cert.Certificate;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.security.auth.x500.X500Principal;
 
@@ -1870,5 +1871,53 @@ public class X509CertImpl extends X509Certificate implements DerEncoder {
             }
         }
         return false;
+    }
+
+    private ConcurrentHashMap<String,String> fingerprints =
+        new ConcurrentHashMap<String, String>(2);
+
+    public String getFingerprint(String algorithm) {
+        String value = fingerprints.get(algorithm);
+        if (value == null) {
+            value = getFingerprint(algorithm, this);
+            fingerprints.put(algorithm, value);
+        }
+        return value;
+    }
+
+    /**
+     * Gets the requested finger print of the certificate. The result
+     * only contains 0-9 and A-F. No small case, no colon.
+     */
+    public static String getFingerprint(String algorithm,
+                                        X509Certificate cert) {
+        String fingerPrint = "";
+        try {
+            byte[] encCertInfo = cert.getEncoded();
+            MessageDigest md = MessageDigest.getInstance(algorithm);
+            byte[] digest = md.digest(encCertInfo);
+            StringBuffer buf = new StringBuffer();
+            for (int i = 0; i < digest.length; i++) {
+                byte2hex(digest[i], buf);
+            }
+            fingerPrint = buf.toString();
+        } catch (NoSuchAlgorithmException nsae) {
+	    // ignored
+        } catch (CertificateEncodingException cee) {
+            // ignored
+        }
+        return fingerPrint;
+    }
+
+    /**
+     * Converts a byte to hex digit and writes to the supplied buffer
+     */
+    private static void byte2hex(byte b, StringBuffer buf) {
+        char[] hexChars = { '0', '1', '2', '3', '4', '5', '6', '7', '8',
+                '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+        int high = ((b & 0xf0) >> 4);
+        int low = (b & 0x0f);
+        buf.append(hexChars[high]);
+        buf.append(hexChars[low]);
     }
 }
