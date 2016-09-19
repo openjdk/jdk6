@@ -698,30 +698,33 @@ final class ClientHandshaker extends Handshaker {
                 String typeName;
 
                 switch (certRequest.types[i]) {
-                case CertificateRequest.cct_rsa_sign:
-                    typeName = "RSA";
-                    break;
+                    case CertificateRequest.cct_rsa_sign:
+                        typeName = "RSA";
+                        break;
 
-                case CertificateRequest.cct_dss_sign:
-                    typeName = "DSA";
-                    break;
+                    case CertificateRequest.cct_dss_sign:
+                        typeName = "DSA";
+                            break;
 
-                case CertificateRequest.cct_ecdsa_sign:
-                    // ignore if we do not have EC crypto available
-                    typeName = JsseJce.isEcAvailable() ? "EC" : null;
-                    break;
+                    case CertificateRequest.cct_ecdsa_sign:
+                        // ignore if we do not have EC crypto available
+                        typeName = JsseJce.isEcAvailable() ? "EC" : null;
+                        break;
 
-                // Fixed DH/ECDH client authentication not supported
-                case CertificateRequest.cct_rsa_fixed_dh:
-                case CertificateRequest.cct_dss_fixed_dh:
-                case CertificateRequest.cct_rsa_fixed_ecdh:
-                case CertificateRequest.cct_ecdsa_fixed_ecdh:
-                // Any other values (currently not used in TLS)
-                case CertificateRequest.cct_rsa_ephemeral_dh:
-                case CertificateRequest.cct_dss_ephemeral_dh:
-                default:
-                    typeName = null;
-                    break;
+                    // Fixed DH/ECDH client authentication not supported
+                    //
+                    // case CertificateRequest.cct_rsa_fixed_dh:
+                    // case CertificateRequest.cct_dss_fixed_dh:
+                    // case CertificateRequest.cct_rsa_fixed_ecdh:
+                    // case CertificateRequest.cct_ecdsa_fixed_ecdh:
+                    //
+                    // Any other values (currently not used in TLS)
+                    //
+                    // case CertificateRequest.cct_rsa_ephemeral_dh:
+                    // case CertificateRequest.cct_dss_ephemeral_dh:
+                    default:
+                        typeName = null;
+                        break;
                 }
 
                 if ((typeName != null) && (!keytypesTmp.contains(typeName))) {
@@ -1244,6 +1247,17 @@ final class ClientHandshaker extends Handshaker {
         ClientHello clientHelloMessage = new ClientHello(
                 sslContext.getSecureRandom(), maxProtocolVersion,
                 sessionId, cipherSuites);
+
+        // add elliptic curves and point format extensions
+        if (cipherSuites.containsEC()) {
+            SupportedEllipticCurvesExtension ece =
+                SupportedEllipticCurvesExtension.createExtension(algorithmConstraints);
+            if (ece != null) {
+                clientHelloMessage.extensions.add(ece);
+                clientHelloMessage.extensions.add(
+						  SupportedEllipticPointFormatsExtension.DEFAULT);
+            }
+        }
 
         // reset the client random cookie
         clnt_random = clientHelloMessage.clnt_random;

@@ -199,6 +199,7 @@ final class JsseJce {
                 JsseJce.getKeyAgreement("ECDH");
                 JsseJce.getKeyFactory("EC");
                 JsseJce.getKeyPairGenerator("EC");
+                JsseJce.getAlgorithmParameters("EC");
                 ecAvailable = true;
             } catch (Exception e) {
                 ecAvailable = false;
@@ -304,6 +305,15 @@ final class JsseJce {
             return KeyFactory.getInstance(algorithm);
         } else {
             return KeyFactory.getInstance(algorithm, cryptoProvider);
+        }
+    }
+
+    static AlgorithmParameters getAlgorithmParameters(String algorithm)
+            throws NoSuchAlgorithmException {
+        if (cryptoProvider == null) {
+            return AlgorithmParameters.getInstance(algorithm);
+        } else {
+            return AlgorithmParameters.getInstance(algorithm, cryptoProvider);
         }
     }
 
