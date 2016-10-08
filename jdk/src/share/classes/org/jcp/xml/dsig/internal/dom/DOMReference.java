@@ -51,7 +51,6 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
 import org.jcp.xml.dsig.internal.DigesterOutputStream;
-import com.sun.org.apache.xml.internal.security.algorithms.MessageDigestAlgorithm;
 import com.sun.org.apache.xml.internal.security.exceptions.Base64DecodingException;
 import com.sun.org.apache.xml.internal.security.signature.XMLSignatureInput;
 import com.sun.org.apache.xml.internal.security.utils.Base64;
@@ -65,12 +64,6 @@ import com.sun.org.apache.xml.internal.security.utils.UnsyncBufferedOutputStream
  */
 public final class DOMReference extends DOMStructure
     implements Reference, DOMURIReference {
-
-    /**
-     * The maximum number of transforms per reference, if secure validation
-     * is enabled.
-     */
-    public static final int MAXIMUM_TRANSFORM_COUNT = 5;
 
    /**
     * Look up useC14N11 system property. If true, an explicit C14N11 transform
@@ -206,10 +199,10 @@ public final class DOMReference extends DOMStructure
                 transformElem = DOMUtils.getNextSiblingElement(transformElem);
 
                 transformCount++;
-                if (secVal && (transformCount > MAXIMUM_TRANSFORM_COUNT)) {
-                    String error = "A maxiumum of " + MAXIMUM_TRANSFORM_COUNT +
-                                   " transforms per Reference are allowed" +
-                                   " with secure validation";
+                if (secVal && Policy.restrictNumTransforms(transforms.size())) {
+                    String error = "A maximum of " + Policy.maxTransforms()
+                        + " transforms per Reference are allowed when"
+                        + " secure validation is enabled";
                     throw new MarshalException(error);
                 }
             }
@@ -220,11 +213,9 @@ public final class DOMReference extends DOMStructure
         Element dmElem = nextSibling;
         this.digestMethod = DOMDigestMethod.unmarshal(dmElem);
         String digestMethodAlgorithm = this.digestMethod.getAlgorithm();
-        if (secVal
-            && MessageDigestAlgorithm.ALGO_ID_DIGEST_NOT_RECOMMENDED_MD5.equals(digestMethodAlgorithm))
-        {
+        if (secVal && Policy.restrictAlg(digestMethodAlgorithm)) {
              throw new MarshalException("It is forbidden to use algorithm " +
-                                        digestMethod +
+                                        digestMethodAlgorithm +
                                         " when secure validation is enabled");
         }
 
