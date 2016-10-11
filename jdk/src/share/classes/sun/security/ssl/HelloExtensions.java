@@ -582,9 +582,9 @@ final class SupportedEllipticCurvesExtension extends HelloExtension {
     private static int getPreferredCurve(int[] curves,
                                          AlgorithmConstraints constraints) {
         for (int curveId : curves) {
-            if (constraints.permits(
+            if (isSupported(curveId) && constraints.permits(
                     EnumSet.of(CryptoPrimitive.KEY_AGREEMENT),
-                    "EC", idToParams.get(curveId))) {
+                                "EC", idToParams.get(curveId))) {
                 return curveId;
             }
         }
