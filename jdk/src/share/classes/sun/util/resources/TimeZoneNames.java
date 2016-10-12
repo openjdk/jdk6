@@ -139,6 +139,8 @@ public final class TimeZoneNames extends TimeZoneNamesBundle {
                                            "Lord Howe Daylight Time", "LHDT"};
         String MHT[] = new String[] {"Marshall Islands Time", "MHT",
                                      "Marshall Islands Summer Time", "MHST"};
+        String MMT[] = new String[] {"Myanmar Time", "MMT",
+				     "Myanmar Summer Time", "MMST"};
         String MSK[] = new String[] {"Moscow Standard Time", "MSK",
                                      "Moscow Daylight Time", "MSD"};
         String MST[] = new String[] {"Mountain Standard Time", "MST",
@@ -566,8 +568,7 @@ public final class TimeZoneNames extends TimeZoneNamesBundle {
             {"Asia/Qatar", ARAST},
             {"Asia/Qyzylorda", new String[] {"Qyzylorda Time", "QYZT",
                                              "Qyzylorda Summer Time", "QYZST"}},
-            {"Asia/Rangoon", new String[] {"Myanmar Time", "MMT",
-                                           "Myanmar Summer Time", "MMST"}},
+            {"Asia/Rangoon", MMT},
             {"Asia/Riyadh", ARAST},
             {"Asia/Saigon", ICT},
             {"Asia/Sakhalin", new String[] {"Sakhalin Time", "SAKT",
@@ -594,6 +595,7 @@ public final class TimeZoneNames extends TimeZoneNamesBundle {
             {"Asia/Vientiane", ICT},
             {"Asia/Vladivostok", VLAT},
             {"Asia/Yakutsk", YAKT},
+            {"Asia/Yangon", MMT},
             {"Asia/Yekaterinburg", new String[] {"Yekaterinburg Time", "YEKT",
                                                  "Yekaterinburg Summer Time", "YEKST"}},
             {"Asia/Yerevan", ARMT},

@@ -139,6 +139,8 @@ public final class TimeZoneNames_ko extends TimeZoneNamesBundle {
                                            "\ub85c\ub4dc \ud558\uc6b0 \uc77c\uad11\uc808\uc57d\uc2dc\uac04", "LHDT"};
         String MHT[] = new String[] {"\ub9c8\uc15c\uc81c\ub3c4 \uc2dc\uac04", "MHT",
                                      "\ub9c8\uc15c\uc81c\ub3c4 \uc77c\uad11\uc808\uc57d\uc2dc\uac04", "MHST"};
+	String MMT[] = new String[] {"\ubbf8\uc580\ub9c8 \uc2dc\uac04", "MMT",
+                                     "\ubbf8\uc580\ub9c8 \uc77c\uad11\uc808\uc57d\uc2dc\uac04", "MMST"};
         String MSK[] = new String[] {"\ubaa8\uc2a4\ud06c\ubc14 \ud45c\uc900\uc2dc", "MSK",
                                      "\ubaa8\uc2a4\ud06c\ubc14 \uc77c\uad11\uc808\uc57d\uc2dc\uac04", "MSD"};
         String MST[] = new String[] {"\uc0b0\uc9c0 \ud45c\uc900\uc2dc", "MST",
@@ -566,8 +568,7 @@ public final class TimeZoneNames_ko extends TimeZoneNamesBundle {
             {"Asia/Qatar", ARAST},
             {"Asia/Qyzylorda", new String[] {"Qyzylorda \ud45c\uc900\uc2dc", "QYZT",
                                              "Qyzylorda \uc77c\uad11\uc808\uc57d\uc2dc\uac04", "QYZST"}},
-            {"Asia/Rangoon", new String[] {"\ubbf8\uc580\ub9c8 \uc2dc\uac04", "MMT",
-                                           "\ubbf8\uc580\ub9c8 \uc77c\uad11\uc808\uc57d\uc2dc\uac04", "MMST"}},
+            {"Asia/Rangoon", MMT},
             {"Asia/Riyadh", ARAST},
             {"Asia/Saigon", ICT},
             {"Asia/Sakhalin", new String[] {"\uc0ac\ud560\ub9b0 \uc2dc\uac04", "SAKT",
@@ -594,6 +595,7 @@ public final class TimeZoneNames_ko extends TimeZoneNamesBundle {
             {"Asia/Vientiane", ICT},
             {"Asia/Vladivostok", VLAT},
             {"Asia/Yakutsk", YAKT},
+            {"Asia/Yangon", MMT},
             {"Asia/Yekaterinburg", new String[] {"\uc608\uce74\ud14c\ub9b0\ubc84\uadf8 \uc2dc\uac04", "YEKT",
                                                  "\uc608\uce74\ud14c\ub9b0\ubc84\uadf8 \uc77c\uad11\uc808\uc57d\uc2dc\uac04", "YEKST"}},
             {"Asia/Yerevan", ARMT},
