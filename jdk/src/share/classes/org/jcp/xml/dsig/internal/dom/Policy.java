@@ -31,8 +31,10 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.security.Security;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -42,10 +44,11 @@ import java.util.Set;
 public final class Policy {
 
     // all restrictions are initialized to be unconstrained
-    private static Set<URI> disallowedAlgs = new HashSet<>();
+    private static Set<URI> disallowedAlgs = new HashSet<URI>();
     private static int maxTrans = Integer.MAX_VALUE;
     private static int maxRefs = Integer.MAX_VALUE;
-    private static Set<String> disallowedRefUriSchemes = new HashSet<>();
+    private static Set<String> disallowedRefUriSchemes = new HashSet<String>();
+    private static Map<String, Integer> minKeyMap = new HashMap<String, Integer>();
     private static boolean noDuplicateIds = false;
     private static boolean noRMLoops = false;
 
@@ -75,57 +78,60 @@ public final class Policy {
         for (String entry : entries) {
             String[] tokens = entry.split("\\s");
             String type = tokens[0];
-            switch(type) {
-                case "disallowAlg":
-                    if (tokens.length != 2) {
-                        error(entry);
-                    }
-                    disallowedAlgs.add(URI.create(tokens[1]));
-                    break;
-                case "maxTransforms":
-                    if (tokens.length != 2) {
-                        error(entry);
-                    }
-                    maxTrans = Integer.parseInt(tokens[1]);
-                    if (maxTrans < 0) {
-                        throw new NumberFormatException(String.format("Illegal leading minus sign " +
-                                                                      "on unsigned string %s.", tokens[1]));
-                    }
-                    break;
-                case "maxReferences":
-                    if (tokens.length != 2) {
-                        error(entry);
-                    }
-                    maxRefs = Integer.parseInt(tokens[1]);
-                    if (maxRefs < 0) {
-                        throw new NumberFormatException(String.format("Illegal leading minus sign " +
-                                                                      "on unsigned string %s.", tokens[1]));
-                    }
-                    break;
-                case "disallowReferenceUriSchemes":
-                    if (tokens.length == 1) {
-                        error(entry);
-                    }
-                    for (int i = 1; i < tokens.length; i++) {
-                        String scheme = tokens[i];
-                        disallowedRefUriSchemes.add(
-                            scheme.toLowerCase(Locale.ROOT));
-                    }
-                    break;
-                case "noDuplicateIds":
-                    if (tokens.length != 1) {
-                        error(entry);
-                    }
-                    noDuplicateIds = true;
-                    break;
-                case "noRetrievalMethodLoops":
-                    if (tokens.length != 1) {
-                        error(entry);
-                    }
-                    noRMLoops = true;
-                    break;
-                default:
+            if (type.equals("disallowAlg")) {
+                if (tokens.length != 2) {
                     error(entry);
+                }
+                disallowedAlgs.add(URI.create(tokens[1]));
+            } else if (type.equals("maxTransforms")) {
+                if (tokens.length != 2) {
+                    error(entry);
+                }
+                maxTrans = Integer.parseInt(tokens[1]);
+                if (maxTrans < 0) {
+                    throw new NumberFormatException(String.format("Illegal leading minus sign " +
+                                                                  "on unsigned string %s.", tokens[1]));
+                }
+            } else if (type.equals("maxReferences")) {
+                if (tokens.length != 2) {
+                    error(entry);
+                }
+                maxRefs = Integer.parseInt(tokens[1]);
+                if (maxRefs < 0) {
+                    throw new NumberFormatException(String.format("Illegal leading minus sign " +
+                                                                  "on unsigned string %s.", tokens[1]));
+                }
+            } else if (type.equals("disallowReferenceUriSchemes")) {
+                if (tokens.length == 1) {
+                    error(entry);
+                }
+                for (int i = 1; i < tokens.length; i++) {
+                    String scheme = tokens[i];
+                    disallowedRefUriSchemes.add(
+                        scheme.toLowerCase(Locale.ROOT));
+                }
+            } else if (type.equals("minKeySize")) {
+                if (tokens.length != 3) {
+                    error(entry);
+                }
+                Integer v = Integer.parseInt(tokens[2]);
+                if (v < 0) {
+                    throw new NumberFormatException(String.format("Illegal leading minus sign " +
+                                                                  "on unsigned string %s.", tokens[2]));
+                }
+                minKeyMap.put(tokens[1], v);
+            } else if (type.equals("noDuplicateIds")) {
+                if (tokens.length != 1) {
+                    error(entry);
+                }
+                noDuplicateIds = true;
+            } else if (type.equals("noRetrievalMethodLoops")) {
+                if (tokens.length != 1) {
+                    error(entry);
+                }
+                noRMLoops = true;
+            } else {
+                error(entry);
             }
         }
     }
@@ -158,6 +164,18 @@ public final class Policy {
         return false;
     }
 
+    public static boolean restrictKey(String type, int size) {
+        return (size < getMinKeyOrDefault(type, 0));
+    }
+
+    private static Integer getMinKeyOrDefault(Object key, Integer defaultValue) {
+	Integer v;
+	return (((v = minKeyMap.get(key)) != null) || minKeyMap.containsKey(key))
+            ? v
+	    : defaultValue;
+    }
+
+
     public static boolean restrictDuplicateIds() {
         return noDuplicateIds;
     }
@@ -180,6 +198,10 @@ public final class Policy {
 
     public static Set<String> disabledReferenceUriSchemes() {
         return Collections.<String>unmodifiableSet(disallowedRefUriSchemes);
+    }
+
+    public static int minKeySize(String type) {
+        return getMinKeyOrDefault(type, 0);
     }
 
     private static void error(String entry) {
