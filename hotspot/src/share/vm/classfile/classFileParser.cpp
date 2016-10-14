@@ -2914,6 +2914,11 @@ instanceKlassHandle ClassFileParser::parseClassFile(Symbol* name,
     objArrayHandle methods_parameter_annotations(THREAD, methods_parameter_annotations_oop);
     objArrayHandle methods_default_annotations(THREAD, methods_default_annotations_oop);
 
+    if (_class_name == vmSymbols::java_lang_Object()) {
+      check_property(local_interfaces == Universe::the_empty_system_obj_array(),
+                     "java.lang.Object cannot implement an interface in class file %s",
+                     CHECK_(nullHandle));
+    }
     // We check super class after class file is parsed and format is checked
     if (super_class_index > 0 && super_klass.is_null()) {
       Symbol*  sk  = cp->klass_name_at(super_class_index);
