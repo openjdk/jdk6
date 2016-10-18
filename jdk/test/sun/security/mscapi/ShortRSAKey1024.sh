@@ -52,6 +52,15 @@ BITS=$1
 
 OS=`uname -s`
 case "$OS" in
+  SunOS | Linux | Darwin | CYGWIN* )
+    FS="/"
+    ;;
+  Windows_* )
+    FS="\\"
+    ;;
+esac
+
+case "$OS" in
     Windows* | CYGWIN* )
 
         echo "Removing the keypair if it already exists (for unknown reason)..."
@@ -62,7 +71,7 @@ case "$OS" in
             -alias 7106773.$BITS
 
         echo "Creating a temporary RSA keypair in the Windows-My store..."
-        ${TESTJAVA}/bin/keytool \
+        ${TESTJAVA}${FS}bin${FS}keytool \
             -genkeypair \
             -storetype Windows-My \
             -keyalg RSA \
@@ -79,21 +88,22 @@ case "$OS" in
 
         echo
         echo "Running the test..."
-        ${TESTJAVA}/bin/javac -d . ${TESTSRC}\\ShortRSAKeyWithinTLS.java
-        ${TESTJAVA}/bin/java ${TESTVMOPTS} ShortRSAKeyWithinTLS 7106773.$BITS $BITS \
+        ${TESTJAVA}${FS}bin${FS}javac -d . \
+            ${TESTSRC}${FS}ShortRSAKeyWithinTLS.java
+        ${TESTJAVA}${FS}bin${FS}java ShortRSAKeyWithinTLS 7106773.$BITS $BITS \
             TLSv1.2 TLS_DHE_RSA_WITH_AES_128_CBC_SHA
 
         rc=$?
 
         echo
         echo "Removing the temporary RSA keypair from the Windows-My store..."
-        ${TESTJAVA}/bin/keytool \
+        ${TESTJAVA}${FS}bin${FS}keytool \
             -delete \
             -storetype Windows-My \
             -debug \
             -alias 7106773.$BITS
 
-        echo done.
+        echo "Done".
         exit $rc
         ;;
 
