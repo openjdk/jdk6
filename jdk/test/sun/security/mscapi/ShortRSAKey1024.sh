@@ -64,7 +64,7 @@ case "$OS" in
     Windows* | CYGWIN* )
 
         echo "Removing the keypair if it already exists (for unknown reason)..."
-        ${TESTJAVA}/bin/keytool \
+        ${TESTJAVA}${FS}bin${FS}keytool \
             -delete \
             -storetype Windows-My \
             -debug \
