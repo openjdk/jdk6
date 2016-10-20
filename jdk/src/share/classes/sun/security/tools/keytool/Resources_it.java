@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -65,10 +65,16 @@ public class Resources_it extends java.util.ListResourceBundle {
         {"Generates.certificate.from.a.certificate.request",
                 "Genera un certificato da una richiesta di certificato"}, //-gencert
         {"Generates.CRL", "Genera CRL"}, //-gencrl
+        {"Generated.keyAlgName.secret.key",
+                "Generata chiave segreta {0}"}, //-genseckey
+        {"Generated.keysize.bit.keyAlgName.secret.key",
+                "Generata chiave segreta {1} a {0} bit"}, //-genseckey
         {"Imports.entries.from.a.JDK.1.1.x.style.identity.database",
                 "Importa le voci da un database delle identit\u00E0 di tipo JDK 1.1.x"}, //-identitydb
         {"Imports.a.certificate.or.a.certificate.chain",
                 "Importa un certificato o una catena di certificati"}, //-importcert
+        {"Imports.a.password",
+                "Importa una password"}, //-importpass
         {"Imports.one.or.all.entries.from.another.keystore",
                 "Importa una o tutte le voci da un altro keystore"}, //-importkeystore
         {"Clones.a.key.entry",
@@ -220,6 +226,8 @@ public class Resources_it extends java.util.ListResourceBundle {
         {"Must.specify.alias", "\u00C8 necessario specificare l'alias"},
         {"Keystore.password.must.be.at.least.6.characters",
                 "La password del keystore deve contenere almeno 6 caratteri"},
+        {"Enter.the.password.to.be.stored.",
+                "Immettere la password da memorizzare:  "},
         {"Enter.keystore.password.", "Immettere la password del keystore:  "},
         {"Enter.source.keystore.password.", "Immettere la password del keystore di origine:  "},
         {"Enter.destination.keystore.password.", "Immettere la password del keystore di destinazione:  "},
@@ -326,6 +334,7 @@ public class Resources_it extends java.util.ListResourceBundle {
         {"New.prompt.", "Nuova {0}: "},
         {"Passwords.must.differ", "Le password non devono coincidere"},
         {"Re.enter.new.prompt.", "Reimmettere un nuovo valore per {0}: "},
+        {"Re.enter.passpword.", "Reimmettere la password: "},
         {"Re.enter.new.password.", "Immettere nuovamente la nuova password: "},
         {"They.don.t.match.Try.again", "Non corrispondono. Riprovare."},
         {"Enter.prompt.alias.name.", "Immettere nome alias {0}:  "},
