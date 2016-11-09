@@ -23,7 +23,7 @@
 
 /*
  * @test
- * @bug      4665566 4855876 8012375 8015998
+ * @bug      4665566 4855876 8012375 8015998 8024756
  * @summary  Verify that the output has the right javascript.
  * @author   jamieh
  * @library  ../lib/
@@ -97,9 +97,13 @@ public class TestJavascript extends JavadocTester {
 
         //Make sure title javascript only runs if is-external is not true
         {BUG_ID + FS + "pkg" + FS + "C.html",
-                "    if (location.href.indexOf('is-external=true') == -1) {" + NL +
-                "        parent.document.title=\"C\";" + NL +
-                        "    }"},
+            "    try {" + NL +
+            "        if (location.href.indexOf('is-external=true') == -1) {" + NL +
+            "            parent.document.title=\"C\";" + NL +
+            "        }" + NL +
+            "    }" + NL +
+            "    catch(err) {" + NL +
+            "    }"},
     };
 
     private static final String[][] NEGATED_TEST = NO_TEST;
