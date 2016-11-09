@@ -157,12 +157,7 @@ include $(BUILDDIR)/common/Classes.gmk
 #
 
 ifdef OPENJDK
-ifdef UNLIMITED_CRYPTO
-POLICY = install-unlimited
-else
-POLICY = install-limited
-endif
-all: build-jar install-jar build-policy $(POLICY)
+all: build-jar install-jar build-policy install-unlimited install-limited
 else  # OPENJDK
 ifeq ($(strip $(FILES_java)),)
 all:
@@ -258,6 +253,8 @@ prebuild:
 #
 
 POLICY_DESTDIR			= $(LIBDIR)/security
+LIMITED_JARS_DESTDIR            = $(POLICY_DESTDIR)/policy/limited
+UNLIMITED_JARS_DESTDIR          = $(POLICY_DESTDIR)/policy/unlimited
 UNSIGNED_POLICY_BUILDDIR	= $(UNSIGNED_DIR)/policy
 
 build-policy: unlimited limited
@@ -434,11 +431,11 @@ endif
 install-limited: \
 	    $(INSTALL_POLICYDIR)/limited/US_export_policy.jar	\
 	    $(INSTALL_POLICYDIR)/limited/local_policy.jar
-	$(MKDIR) -p $(POLICY_DESTDIR)
+	$(MKDIR) -p $(LIMITED_JARS_DESTDIR)
 	$(RM) \
-	    $(POLICY_DESTDIR)/US_export_policy.jar		\
-	    $(POLICY_DESTDIR)/local_policy.jar
-	$(CP) $^ $(POLICY_DESTDIR)
+	    $(LIMITED_JARS_DESTDIR)/US_export_policy.jar		\
+	    $(LIMITED_JARS_DESTDIR)/local_policy.jar
+	$(CP) $^ $(LIMITED_JARS_DESTDIR)
 ifndef OPENJDK
 	$(release-warning)
 endif
@@ -446,11 +443,11 @@ endif
 install-unlimited: \
 	    $(INSTALL_POLICYDIR)/unlimited/US_export_policy.jar	\
 	    $(INSTALL_POLICYDIR)/unlimited/local_policy.jar
-	$(MKDIR) -p $(POLICY_DESTDIR)
+	$(MKDIR) -p $(UNLIMITED_JARS_DESTDIR)
 	$(RM) \
-	    $(POLICY_DESTDIR)/US_export_policy.jar		\
-	    $(POLICY_DESTDIR)/local_policy.jar
-	$(CP) $^ $(POLICY_DESTDIR)
+	    $(UNLIMITED_JARS_DESTDIR)/US_export_policy.jar		\
+	    $(UNLIMITED_JARS_DESTDIR)/local_policy.jar
+	$(CP) $^ $(UNLIMITED_JARS_DESTDIR)
 ifndef OPENJDK
 	$(release-warning)
 endif

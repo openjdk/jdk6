@@ -1,5 +1,5 @@
 #
-# Copyright (c) 1998, 2005, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -24,42 +24,20 @@
 #
 
 #
-# Create all the build tools
+# Makefile for building the customizesecurityfile tool
 #
 
-BUILDDIR = ..
+BUILDDIR = ../..
+PACKAGE = build.tools.customizesecurityfile
+PRODUCT = tools
+PROGRAM = customizesecurityfile
 include $(BUILDDIR)/common/Defs.gmk
 
-SUBDIRS =                   \
-  addjsum                   \
-  buildmetaindex            \
-  commentchecker            \
-  compile_font_config       \
-  compile_properties        \
-  dir_diff                  \
-  dtdbuilder                \
-  fontchecker               \
-  generate_break_iterator   \
-  GenerateCharacter         \
-  generatecurrencydata      \
-  hasher_classes            \
-  jarreorder                \
-  jarsplit                  \
-  javazic                   \
-  jdwpgen                   \
-  makeclasslist             \
-  spp                       \
-  strip_properties          \
-  customizesecurityfile
+BUILDTOOL_SOURCE_ROOT = $(BUILDDIR)/tools/src
+BUILDTOOL_MAIN        = $(PKGDIR)/CryptoLevel.java
 
-ifndef DISABLE_NIMBUS
-  SUBDIRS += generate_nimbus
-endif
-
-all build clean clobber::
-	$(SUBDIRS-loop)
-
-clean clobber::
-	$(RM) -r $(BUILDTOOLCLASSDIR)
-	$(RM) -r $(BUILDTOOLJARDIR)
+#
+# Build tool jar rules.
+#
+include $(BUILDDIR)/common/BuildToolJar.gmk
 

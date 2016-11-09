@@ -30,6 +30,9 @@ JAVAC_MAX_WARNINGS = false
 JAVAC_LINT_OPTIONS = -Xlint:all,-deprecation
 include $(BUILDDIR)/common/Defs.gmk
 
+CRYPTOLEVEL_JARFILE = $(BUILDTOOLJARDIR)/customizesecurityfile.jar
+TOOL_CRYPTOLEVEL = $(BOOT_JAVA_CMD) -jar $(CRYPTOLEVEL_JARFILE)
+
 #
 # Rules
 #
@@ -56,7 +59,6 @@ ifeq ($(PLATFORM), windows)
   endif
 endif
 endif # PLATFORM
-
 
 PROPS_BUILD = $(LIBDIR)/security/java.security
 
@@ -89,7 +91,13 @@ policy: classes  $(POLICY_BUILD)
 cacerts: classes $(CACERTS_BUILD)
 
 $(PROPS_BUILD): $(PROPS_SRC)
-	$(install-file)
+	$(MKDIR) -p $(@D)
+	$(CP) $^ $@.tmp
+	if [ "x$(UNLIMITED_CRYPTO)" = "xtrue" ] ; then \
+	  $(TOOL_CRYPTOLEVEL) $@.tmp $@.tmp2 unlimited; \
+	  $(MV) $@.tmp2 $@.tmp; \
+	fi 
+	$(MV) $@.tmp $@
 
 $(SUNPKCS11_BUILD): $(SUNPKCS11_SRC)
 	$(install-file)
