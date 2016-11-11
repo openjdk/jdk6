@@ -354,14 +354,16 @@ public class HtmlWriter extends PrintWriter {
      *
      * @return a content for the SCRIPT tag
      */
-    protected Content getFramesetJavaScript(){
+    protected Content getFramesetJavaScript() {
         HtmlTree script = new HtmlTree(HtmlTag.SCRIPT);
         script.addAttr(HtmlAttr.TYPE, "text/javascript");
-        String scriptCode = DocletConstants.NL + "    targetPage = \"\" + window.location.search;" + DocletConstants.NL +
-                "    if (targetPage != \"\" && targetPage != \"undefined\")" + DocletConstants.NL +
-                "        targetPage = targetPage.substring(1);" + DocletConstants.NL +
-                "    if (targetPage.indexOf(\":\") != -1 || (targetPage != \"\" && !validURL(targetPage)))" + DocletConstants.NL +
-                "        targetPage = \"undefined\";" + DocletConstants.NL +
+        String scriptCode = DocletConstants.NL +
+                "    tmpTargetPage = \"\" + window.location.search;" + DocletConstants.NL +
+                "    if (tmpTargetPage != \"\" && tmpTargetPage != \"undefined\")" + DocletConstants.NL +
+                "        tmpTargetPage = tmpTargetPage.substring(1);" + DocletConstants.NL +
+                "    if (tmpTargetPage.indexOf(\":\") != -1 || (tmpTargetPage != \"\" && !validURL(tmpTargetPage)))" + DocletConstants.NL +
+                "        tmpTargetPage = \"undefined\";" + DocletConstants.NL +
+                "    targetPage = tmpTargetPage;" + DocletConstants.NL +
                 "    function validURL(url) {" + DocletConstants.NL +
                 "        var pos = url.indexOf(\".html\");" + DocletConstants.NL +
                 "        if (pos == -1 || pos != url.length - 5)" + DocletConstants.NL +
