@@ -52,7 +52,7 @@ class JarVerifier {
     private Hashtable verifiedSigners;
 
     /* a table mapping names to code signers, for jar entries that have
-       passed the .SF/.DSA -> MANIFEST check */
+       passed the .SF/.DSA/.EC -> MANIFEST check */
     private Hashtable sigFileSigners;
 
     /* a hash table to hold .SF bytes */
@@ -123,7 +123,7 @@ class JarVerifier {
         /*
          * Assumptions:
          * 1. The manifest should be the first entry in the META-INF directory.
-         * 2. The .SF/.DSA files follow the manifest, before any normal entries
+         * 2. The .SF/.DSA/.EC files follow the manifest, before any normal entries
          * 3. Any of the following will throw a SecurityException:
          *    a. digest mismatch between a manifest section and
          *       the SF section.
@@ -141,7 +141,7 @@ class JarVerifier {
                 }
 
                 if (SignatureFileVerifier.isBlockOrSF(uname)) {
-                    /* We parse only DSA or RSA PKCS7 blocks. */
+                    /* We parse only DSA, RSA or EC PKCS7 blocks. */
                     parsingBlockOrSF = true;
                     baos.reset();
                     mev.setEntry(null, je);

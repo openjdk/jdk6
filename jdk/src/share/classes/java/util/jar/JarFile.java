@@ -300,6 +300,7 @@ class JarFile extends ZipFile {
                     String name = names[i].toUpperCase(Locale.ENGLISH);
                     if (name.endsWith(".DSA") ||
                         name.endsWith(".RSA") ||
+                        name.endsWith(".EC") ||
                         name.endsWith(".SF")) {
                         // Assume since we found a signature-related file
                         // that the jar is signed and that we therefore

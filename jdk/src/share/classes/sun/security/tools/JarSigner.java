@@ -846,9 +846,9 @@ public class JarSigner {
         }
 
         if (sigfile.length() > 8) {
-            sigfile = sigfile.substring(0, 8).toUpperCase();
+            sigfile = sigfile.substring(0, 8).toUpperCase(Locale.ENGLISH);
         } else {
-            sigfile = sigfile.toUpperCase();
+            sigfile = sigfile.toUpperCase(Locale.ENGLISH);
         }
 
         StringBuilder tmpSigFile = new StringBuilder(sigfile.length());
@@ -898,8 +898,8 @@ public class JarSigner {
         ZipOutputStream zos = new ZipOutputStream(ps);
 
         /* First guess at what they might be - we don't xclude RSA ones. */
-        String sfFilename = (META_INF + sigfile + ".SF").toUpperCase();
-        String bkFilename = (META_INF + sigfile + ".DSA").toUpperCase();
+        String sfFilename = (META_INF + sigfile + ".SF").toUpperCase(Locale.ENGLISH);
+        String bkFilename = (META_INF + sigfile + ".DSA").toUpperCase(Locale.ENGLISH);
 
         Manifest manifest = new Manifest();
         Map<String,Attributes> mfEntries = manifest.getEntries();
@@ -1276,6 +1276,7 @@ public class JarSigner {
      * . META-INF/*.SF
      * . META-INF/*.DSA
      * . META-INF/*.RSA
+     * . META-INF/*.EC
      */
     private boolean signatureRelated(String name) {
         return SignatureFileVerifier.isSigningRelated(name);
@@ -1974,7 +1975,6 @@ class SignatureFile {
             }
             BigInteger serial = certChain[0].getSerialNumber();
 
-            String digestAlgorithm;
             String signatureAlgorithm;
             String keyAlgorithm = privateKey.getAlgorithm();
             /*
@@ -1984,22 +1984,24 @@ class SignatureFile {
             if (sigalg == null) {
 
                 if (keyAlgorithm.equalsIgnoreCase("DSA"))
-                    digestAlgorithm = "SHA1";
+                    signatureAlgorithm = "SHA1withDSA";
                 else if (keyAlgorithm.equalsIgnoreCase("RSA"))
-                    digestAlgorithm = "SHA256";
-                else {
+                    signatureAlgorithm = "SHA256withRSA";
+                else if (keyAlgorithm.equalsIgnoreCase("EC"))
+                    signatureAlgorithm = "SHA256withECDSA";
+                else
                     throw new RuntimeException("private key is not a DSA or "
                                                + "RSA key");
-                }
-                signatureAlgorithm = digestAlgorithm + "with" + keyAlgorithm;
             } else {
                 signatureAlgorithm = sigalg;
             }
 
             // check common invalid key/signature algorithm combinations
-            String sigAlgUpperCase = signatureAlgorithm.toUpperCase();
+            String sigAlgUpperCase = signatureAlgorithm.toUpperCase(Locale.ENGLISH);
             if ((sigAlgUpperCase.endsWith("WITHRSA") &&
                 !keyAlgorithm.equalsIgnoreCase("RSA")) ||
+                (sigAlgUpperCase.endsWith("WITHECDSA") &&
+                !keyAlgorithm.equalsIgnoreCase("EC")) ||
                 (sigAlgUpperCase.endsWith("WITHDSA") &&
                 !keyAlgorithm.equalsIgnoreCase("DSA"))) {
                 throw new SignatureException
