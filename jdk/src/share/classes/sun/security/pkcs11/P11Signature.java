@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -679,6 +679,11 @@ final class P11Signature extends SignatureSpi {
             DerValue[] values = in.getSequence(2);
             BigInteger r = values[0].getPositiveBigInteger();
             BigInteger s = values[1].getPositiveBigInteger();
+
+            // Check for trailing signature data
+            if (in.available() != 0) {
+                throw new IOException("Incorrect signature length");
+            }
             byte[] br = toByteArray(r, 20);
             byte[] bs = toByteArray(s, 20);
             if ((br == null) || (bs == null)) {
@@ -698,6 +703,11 @@ final class P11Signature extends SignatureSpi {
             DerValue[] values = in.getSequence(2);
             BigInteger r = values[0].getPositiveBigInteger();
             BigInteger s = values[1].getPositiveBigInteger();
+
+            // Check for trailing signature data
+            if (in.available() != 0) {
+                throw new IOException("Incorrect signature length");
+            }
             // trim leading zeroes
             byte[] br = P11Util.trimZeroes(r.toByteArray());
             byte[] bs = P11Util.trimZeroes(s.toByteArray());
