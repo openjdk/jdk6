@@ -151,66 +151,69 @@ public final class KeyTool {
     private String startDate = null;
 
     enum Command {
-        CERTREQ("Generates a certificate request",
+        CERTREQ("Generates.a.certificate.request",
             ALIAS, SIGALG, FILEOUT, KEYPASS, KEYSTORE,
             STOREPASS, STORETYPE, PROVIDERNAME, PROVIDERCLASS,
             PROVIDERARG, PROVIDERPATH, V, PROTECTED),
-        CHANGEALIAS("Changes an entry's alias",
+        CHANGEALIAS("Changes.an.entry.s.alias",
             ALIAS, DESTALIAS, KEYPASS, KEYSTORE, STOREPASS,
             STORETYPE, PROVIDERNAME, PROVIDERCLASS, PROVIDERARG,
             PROVIDERPATH, V, PROTECTED),
-        DELETE("Deletes an entry",
+        DELETE("Deletes.an.entry",
             ALIAS, KEYSTORE, STOREPASS, STORETYPE,
             PROVIDERNAME, PROVIDERCLASS, PROVIDERARG,
             PROVIDERPATH, V, PROTECTED),
-        EXPORTCERT("Exports certificate",
+        EXPORTCERT("Exports.certificate",
             RFC, ALIAS, FILEOUT, KEYSTORE, STOREPASS,
             STORETYPE, PROVIDERNAME, PROVIDERCLASS, PROVIDERARG,
             PROVIDERPATH, V, PROTECTED),
-        GENKEYPAIR("Generates a key pair",
+        GENKEYPAIR("Generates.a.key.pair",
             ALIAS, KEYALG, KEYSIZE, SIGALG, DNAME,
             VALIDITY, KEYPASS, KEYSTORE,
             STOREPASS, STORETYPE, PROVIDERNAME, PROVIDERCLASS,
             PROVIDERARG, PROVIDERPATH, V, PROTECTED),
-        GENSECKEY("Generates a secret key",
+        GENSECKEY("Generates.a.secret.key",
             ALIAS, KEYPASS, KEYALG, KEYSIZE, KEYSTORE,
             STOREPASS, STORETYPE, PROVIDERNAME, PROVIDERCLASS,
             PROVIDERARG, PROVIDERPATH, V, PROTECTED),
-        IDENTITYDB("Imports entries from a JDK 1.1.x-style identity database",
-            FILEIN, STORETYPE, KEYSTORE, STOREPASS, PROVIDERNAME,
-            PROVIDERCLASS, PROVIDERARG, PROVIDERPATH, V),
-        IMPORTCERT("Imports a certificate or a certificate chain",
+        IMPORTCERT("Imports.a.certificate.or.a.certificate.chain",
             NOPROMPT, TRUSTCACERTS, PROTECTED, ALIAS, FILEIN,
             KEYPASS, KEYSTORE, STOREPASS, STORETYPE,
             PROVIDERNAME, PROVIDERCLASS, PROVIDERARG,
             PROVIDERPATH, V),
-        IMPORTKEYSTORE("Imports one or all entries from another keystore",
+        IMPORTKEYSTORE("Imports.one.or.all.entries.from.another.keystore",
             SRCKEYSTORE, DESTKEYSTORE, SRCSTORETYPE,
             DESTSTORETYPE, SRCSTOREPASS, DESTSTOREPASS,
             SRCPROTECTED, SRCPROVIDERNAME, DESTPROVIDERNAME,
             SRCALIAS, DESTALIAS, SRCKEYPASS, DESTKEYPASS,
             NOPROMPT, PROVIDERCLASS, PROVIDERARG, PROVIDERPATH,
             V),
-        KEYCLONE("Clones a key entry",
-            ALIAS, DESTALIAS, KEYPASS, NEW, STORETYPE,
-            KEYSTORE, STOREPASS, PROVIDERNAME, PROVIDERCLASS,
-            PROVIDERARG, PROVIDERPATH, V),
-        KEYPASSWD("Changes the key password of an entry",
+        KEYPASSWD("Changes.the.key.password.of.an.entry",
             ALIAS, KEYPASS, NEW, KEYSTORE, STOREPASS,
             STORETYPE, PROVIDERNAME, PROVIDERCLASS, PROVIDERARG,
             PROVIDERPATH, V),
-        LIST("Lists entries in a keystore",
+        LIST("Lists.entries.in.a.keystore",
             RFC, ALIAS, KEYSTORE, STOREPASS, STORETYPE,
             PROVIDERNAME, PROVIDERCLASS, PROVIDERARG,
             PROVIDERPATH, V, PROTECTED),
-        PRINTCERT("Prints the content of a certificate",
+        PRINTCERT("Prints.the.content.of.a.certificate",
             FILEIN, V),
-        SELFCERT("Generates a self-signed certificate",
+        STOREPASSWD("Changes.the.store.password.of.a.keystore",
+            NEW, KEYSTORE, STOREPASS, STORETYPE, PROVIDERNAME,
+            PROVIDERCLASS, PROVIDERARG, PROVIDERPATH, V),
+
+        // Undocumented start here, KEYCLONE is used a marker in -help;
+
+        KEYCLONE("Clones.a.key.entry",
+            ALIAS, DESTALIAS, KEYPASS, NEW, STORETYPE,
+            KEYSTORE, STOREPASS, PROVIDERNAME, PROVIDERCLASS,
+            PROVIDERARG, PROVIDERPATH, V),
+        SELFCERT("Generates.a.self.signed.certificate",
             ALIAS, SIGALG, DNAME, STARTDATE, VALIDITY, KEYPASS,
             STORETYPE, KEYSTORE, STOREPASS, PROVIDERNAME,
             PROVIDERCLASS, PROVIDERARG, PROVIDERPATH, V),
-        STOREPASSWD("Changes the store password of a keystore",
-            NEW, KEYSTORE, STOREPASS, STORETYPE, PROVIDERNAME,
+        IDENTITYDB("Imports.entries.from.a.JDK.1.1.x.style.identity.database",
+            FILEIN, STORETYPE, KEYSTORE, STOREPASS, PROVIDERNAME,
             PROVIDERCLASS, PROVIDERARG, PROVIDERPATH, V);
 
         final String description;
@@ -226,43 +229,43 @@ public final class KeyTool {
     };
 
     enum Option {
-        ALIAS("alias", "<alias>", "alias name of the entry to process"),
-        DESTALIAS("destalias", "<destalias>", "destination alias"),
-        DESTKEYPASS("destkeypass", "<arg>", "destination key password"),
-        DESTKEYSTORE("destkeystore", "<destkeystore>", "destination keystore name"),
-        DESTPROTECTED("destprotected", null, "destination keystore password protected"),
-        DESTPROVIDERNAME("destprovidername", "<destprovidername>", "destination keystore provider name"),
-        DESTSTOREPASS("deststorepass", "<arg>", "destination keystore password"),
-        DESTSTORETYPE("deststoretype", "<deststoretype>", "destination keystore type"),
-        DNAME("dname", "<dname>", "distinguished name"),
-        FILEOUT("file", "<filename>", "output file name"),
-        FILEIN("file", "<filename>", "input file name"),
-        KEYALG("keyalg", "<keyalg>", "key algorithm name"),
-        KEYPASS("keypass", "<arg>", "key password"),
-        KEYSIZE("keysize", "<keysize>", "key bit size"),
-        KEYSTORE("keystore", "<keystore>", "keystore name"),
-        NEW("new", "<arg>", "new password"),
-        NOPROMPT("noprompt", null, "do not prompt"),
-        PROTECTED("protected", null, "password through protected mechanism"),
-        PROVIDERARG("providerarg", "<arg>", "provider argument"),
-        PROVIDERCLASS("providerclass", "<providerclass>", "provider class name"),
-        PROVIDERNAME("providername", "<providername>", "provider name"),
-        PROVIDERPATH("providerpath", "<pathlist>", "provider classpath"),
-        RFC("rfc", null, "output in RFC style"),
-        SIGALG("sigalg", "<sigalg>", "signature algorithm name"),
-        SRCALIAS("srcalias", "<srcalias>", "source alias"),
-        SRCKEYPASS("srckeypass", "<arg>", "source key password"),
-        SRCKEYSTORE("srckeystore", "<srckeystore>", "source keystore name"),
-        SRCPROTECTED("srcprotected", null, "source keystore password protected"),
-        SRCPROVIDERNAME("srcprovidername", "<srcprovidername>", "source keystore provider name"),
-        SRCSTOREPASS("srcstorepass", "<arg>", "source keystore password"),
-        SRCSTORETYPE("srcstoretype", "<srcstoretype>", "source keystore type"),
-        STARTDATE("startdate", "<startdate>", "certificate validity start date/time"),
-        STOREPASS("storepass", "<arg>", "keystore password"),
-        STORETYPE("storetype", "<storetype>", "keystore type"),
-        TRUSTCACERTS("trustcacerts", null, "trust certificates from cacerts"),
-        V("v", null, "verbose output"),
-        VALIDITY("validity", "<valDays>", "validity number of days");
+        ALIAS("alias", "<alias>", "alias.name.of.the.entry.to.process"),
+        DESTALIAS("destalias", "<destalias>", "destination.alias"),
+        DESTKEYPASS("destkeypass", "<arg>", "destination.key.password"),
+        DESTKEYSTORE("destkeystore", "<destkeystore>", "destination.keystore.name"),
+        DESTPROTECTED("destprotected", null, "destination.keystore.password.protected"),
+        DESTPROVIDERNAME("destprovidername", "<destprovidername>", "destination.keystore.provider.name"),
+        DESTSTOREPASS("deststorepass", "<arg>", "destination.keystore.password"),
+        DESTSTORETYPE("deststoretype", "<deststoretype>", "destination.keystore.type"),
+        DNAME("dname", "<dname>", "distinguished.name"),
+        FILEOUT("file", "<filename>", "output.file.name"),
+        FILEIN("file", "<filename>", "input.file.name"),
+        KEYALG("keyalg", "<keyalg>", "key.algorithm.name"),
+        KEYPASS("keypass", "<arg>", "key.password"),
+        KEYSIZE("keysize", "<keysize>", "key.bit.size"),
+        KEYSTORE("keystore", "<keystore>", "keystore.name"),
+        NEW("new", "<arg>", "new.password"),
+        NOPROMPT("noprompt", null, "do.not.prompt"),
+        PROTECTED("protected", null, "password.through.protected.mechanism"),
+        PROVIDERARG("providerarg", "<arg>", "provider.argument"),
+        PROVIDERCLASS("providerclass", "<providerclass>", "provider.class.name"),
+        PROVIDERNAME("providername", "<providername>", "provider.name"),
+        PROVIDERPATH("providerpath", "<pathlist>", "provider.classpath"),
+        RFC("rfc", null, "output.in.RFC.style"),
+        SIGALG("sigalg", "<sigalg>", "signature.algorithm.name"),
+        SRCALIAS("srcalias", "<srcalias>", "source.alias"),
+        SRCKEYPASS("srckeypass", "<arg>", "source.key.password"),
+        SRCKEYSTORE("srckeystore", "<srckeystore>", "source.keystore.name"),
+        SRCPROTECTED("srcprotected", null, "source.keystore.password.protected"),
+        SRCPROVIDERNAME("srcprovidername", "<srcprovidername>", "source.keystore.provider.name"),
+        SRCSTOREPASS("srcstorepass", "<arg>", "source.keystore.password"),
+        SRCSTORETYPE("srcstoretype", "<srcstoretype>", "source.keystore.type"),
+        STARTDATE("startdate", "<startdate>", "certificate.validity.start.date.time"),
+        STOREPASS("storepass", "<arg>", "keystore.password"),
+        STORETYPE("storetype", "<storetype>", "keystore.type"),
+        TRUSTCACERTS("trustcacerts", null, "trust.certificates.from.cacerts"),
+        V("v", null, "verbose.output"),
+        VALIDITY("validity", "<valDays>", "validity.number.of.days");
 
         final String name, arg, description;
         Option(String name, String arg, String description) {
@@ -307,7 +310,7 @@ public final class KeyTool {
                 doCommands(out);
             }
         } catch (Exception e) {
-            System.out.println(rb.getString("keytool error: ") + e);
+            System.out.println(rb.getString("keytool.error.") + e);
             if (verbose) {
                 e.printStackTrace(System.out);
             }
@@ -479,13 +482,13 @@ public final class KeyTool {
             } else if (collator.compare(flags, "-srcprotected") == 0) {
                 srcprotectedPath = true;
             } else  {
-                System.err.println(rb.getString("Illegal option:  ") + flags);
+                System.err.println(rb.getString("Illegal.option.") + flags);
                 tinyHelp();
             }
         }
 
         if (i<args.length) {
-            System.err.println(rb.getString("Illegal option:  ") + args[i]);
+            System.err.println(rb.getString("Illegal.option.") + args[i]);
             tinyHelp();
         }
 
@@ -493,7 +496,7 @@ public final class KeyTool {
             if (help) {
                 usage();
             } else {
-                System.err.println(rb.getString("Usage error: no command provided"));
+                System.err.println(rb.getString("Usage.error.no.command.provided"));
                 tinyHelp();
             }
         } else if (help) {
@@ -530,7 +533,7 @@ public final class KeyTool {
 
         if (token && !nullStream) {
             System.err.println(MessageFormat.format(rb.getString
-                ("-keystore must be NONE if -storetype is {0}"), storetype));
+                (".keystore.must.be.NONE.if.storetype.is.{0}"), storetype));
             System.err.println();
             tinyHelp();
         }
@@ -538,38 +541,31 @@ public final class KeyTool {
         if (token &&
             (command == KEYPASSWD || command == STOREPASSWD)) {
             throw new UnsupportedOperationException(MessageFormat.format(rb.getString
-                        ("-storepasswd and -keypasswd commands not supported " +
-                        "if -storetype is {0}"), storetype));
+                        (".storepasswd.and.keypasswd.commands.not.supported.if.storetype.is.{0}"), storetype));
         }
 
         if (P12KEYSTORE.equalsIgnoreCase(storetype) && command == KEYPASSWD) {
             throw new UnsupportedOperationException(rb.getString
-                        ("-keypasswd commands not supported " +
-                        "if -storetype is PKCS12"));
+                        (".keypasswd.commands.not.supported.if.storetype.is.PKCS12"));
         }
 
         if (token && (keyPass != null || newPass != null || destKeyPass != null)) {
             throw new IllegalArgumentException(MessageFormat.format(rb.getString
-                ("-keypass and -new " +
-                "can not be specified if -storetype is {0}"), storetype));
+                (".keypass.and.new.can.not.be.specified.if.storetype.is.{0}"), storetype));
         }
 
         if (protectedPath) {
             if (storePass != null || keyPass != null ||
                     newPass != null || destKeyPass != null) {
                 throw new IllegalArgumentException(rb.getString
-                        ("if -protected is specified, " +
-                        "then -storepass, -keypass, and -new " +
-                        "must not be specified"));
+                        ("if.protected.is.specified.then.storepass.keypass.and.new.must.not.be.specified"));
             }
         }
 
         if (srcprotectedPath) {
             if (srcstorePass != null || srckeyPass != null) {
                 throw new IllegalArgumentException(rb.getString
-                        ("if -srcprotected is specified, " +
-                        "then -srcstorepass and -srckeypass " +
-                        "must not be specified"));
+                        ("if.srcprotected.is.specified.then.srcstorepass.and.srckeypass.must.not.be.specified"));
             }
         }
 
@@ -577,24 +573,20 @@ public final class KeyTool {
             if (storePass != null || keyPass != null ||
                     newPass != null || destKeyPass != null) {
                 throw new IllegalArgumentException(rb.getString
-                        ("if keystore is not password protected, " +
-                        "then -storepass, -keypass, and -new " +
-                        "must not be specified"));
+                        ("if.keystore.is.not.password.protected.then.storepass.keypass.and.new.must.not.be.specified"));
             }
         }
 
         if (KeyStoreUtil.isWindowsKeyStore(srcstoretype)) {
             if (srcstorePass != null || srckeyPass != null) {
                 throw new IllegalArgumentException(rb.getString
-                        ("if source keystore is not password protected, " +
-                        "then -srcstorepass and -srckeypass " +
-                        "must not be specified"));
+                        ("if.source.keystore.is.not.password.protected.then.srcstorepass.and.srckeypass.must.not.be.specified"));
             }
         }
 
         if (validity <= (long)0) {
             throw new Exception
-                (rb.getString("Validity must be greater than zero"));
+                (rb.getString("Validity.must.be.greater.than.zero"));
         }
 
         // Try to load and install specified provider
@@ -633,7 +625,7 @@ public final class KeyTool {
                 }
                 if (!(obj instanceof Provider)) {
                     MessageFormat form = new MessageFormat
-                        (rb.getString("provName not a provider"));
+                        (rb.getString("provName.not.a.provider"));
                     Object[] source = {provName};
                     throw new Exception(form.format(source));
                 }
@@ -643,22 +635,22 @@ public final class KeyTool {
 
         if (command == LIST && verbose && rfc) {
             System.err.println(rb.getString
-                ("Must not specify both -v and -rfc with 'list' command"));
+                ("Must.not.specify.both.v.and.rfc.with.list.command"));
             tinyHelp();
         }
 
         // Make sure provided passwords are at least 6 characters long
         if (command == GENKEYPAIR && keyPass!=null && keyPass.length < 6) {
             throw new Exception(rb.getString
-                ("Key password must be at least 6 characters"));
+                ("Key.password.must.be.at.least.6.characters"));
         }
         if (newPass != null && newPass.length < 6) {
             throw new Exception(rb.getString
-                ("New password must be at least 6 characters"));
+                ("New.password.must.be.at.least.6.characters"));
         }
         if (destKeyPass != null && destKeyPass.length < 6) {
             throw new Exception(rb.getString
-                ("New password must be at least 6 characters"));
+                ("New.password.must.be.at.least.6.characters"));
         }
 
         // Check if keystore exists.
@@ -678,7 +670,7 @@ public final class KeyTool {
                     // Check if keystore file is empty
                     if (ksfile.exists() && ksfile.length() == 0) {
                         throw new Exception(rb.getString
-                        ("Keystore file exists, but is empty: ") + ksfname);
+                        ("Keystore.file.exists.but.is.empty.") + ksfname);
                     }
                     ksStream = new FileInputStream(ksfile);
                 } catch (FileNotFoundException e) {
@@ -688,7 +680,7 @@ public final class KeyTool {
                         command != IMPORTCERT &&
                         command != IMPORTKEYSTORE) {
                         throw new Exception(rb.getString
-                                ("Keystore file does not exist: ") + ksfname);
+                                ("Keystore.file.does.not.exist.") + ksfname);
                     }
                 }
             }
@@ -699,14 +691,14 @@ public final class KeyTool {
             dest = getAlias("destination");
             if ("".equals(dest)) {
                 throw new Exception(rb.getString
-                        ("Must specify destination alias"));
+                        ("Must.specify.destination.alias"));
             }
         }
 
         if (command == DELETE && alias == null) {
             alias = getAlias(null);
             if ("".equals(alias)) {
-                throw new Exception(rb.getString("Must specify alias"));
+                throw new Exception(rb.getString("Must.specify.alias"));
             }
         }
 
@@ -754,7 +746,7 @@ public final class KeyTool {
             // insist that the password be at least 6 characters
             if (ksStream == null && storePass.length < 6) {
                 throw new Exception(rb.getString
-                        ("Keystore password must be at least 6 characters"));
+                        ("Keystore.password.must.be.at.least.6.characters"));
             }
         } else if (storePass == null) {
 
@@ -777,10 +769,10 @@ public final class KeyTool {
                 do {
                     if (command == IMPORTKEYSTORE) {
                         System.err.print
-                                (rb.getString("Enter destination keystore password:  "));
+                                (rb.getString("Enter.destination.keystore.password."));
                     } else {
                         System.err.print
-                                (rb.getString("Enter keystore password:  "));
+                                (rb.getString("Enter.keystore.password."));
                     }
                     System.err.flush();
                     storePass = Password.readPassword(System.in);
@@ -790,20 +782,19 @@ public final class KeyTool {
                     // insist that the password be at least 6 characters
                     if (!nullStream && (storePass == null || storePass.length < 6)) {
                         System.err.println(rb.getString
-                                ("Keystore password is too short - " +
-                                "must be at least 6 characters"));
+                                ("Keystore.password.is.too.short.must.be.at.least.6.characters"));
                         storePass = null;
                     }
 
                     // If the keystore file does not exist and needs to be
                     // created, the storepass should be prompted twice.
                     if (storePass != null && !nullStream && ksStream == null) {
-                        System.err.print(rb.getString("Re-enter new password: "));
+                        System.err.print(rb.getString("Re.enter.new.password."));
                         char[] storePassAgain = Password.readPassword(System.in);
                         passwords.add(storePassAgain);
                         if (!Arrays.equals(storePass, storePassAgain)) {
                             System.err.println
-                                (rb.getString("They don't match. Try again"));
+                                (rb.getString("They.don.t.match.Try.again"));
                             storePass = null;
                         }
                     }
@@ -814,14 +805,14 @@ public final class KeyTool {
 
                 if (storePass == null) {
                     System.err.println
-                        (rb.getString("Too many failures - try later"));
+                        (rb.getString("Too.many.failures.try.later"));
                     return;
                 }
             } else if (!protectedPath
                     && !KeyStoreUtil.isWindowsKeyStore(storetype)
                     && !(command == PRINTCERT)) {
                 // here we have EXPORTCERT and LIST (info valid until STOREPASSWD)
-                System.err.print(rb.getString("Enter keystore password:  "));
+                System.err.print(rb.getString("Enter.keystore.password."));
                 System.err.flush();
                 storePass = Password.readPassword(System.in);
                 passwords.add(storePass);
@@ -840,8 +831,7 @@ public final class KeyTool {
 
         if (storePass != null && P12KEYSTORE.equalsIgnoreCase(storetype)) {
             MessageFormat form = new MessageFormat(rb.getString(
-                "Warning:  Different store and key passwords not supported " +
-                "for PKCS12 KeyStores. Ignoring user-specified <command> value."));
+                "Warning.Different.store.and.key.passwords.not.supported.for.PKCS12.KeyStores.Ignoring.user.specified.command.value."));
             if (keyPass != null && !Arrays.equals(storePass, keyPass)) {
                 Object[] source = {"-keypass"};
                 System.err.println(form.format(source));
@@ -886,10 +876,10 @@ public final class KeyTool {
             }
             if (verbose && filename != null) {
                 MessageFormat form = new MessageFormat(rb.getString
-                        ("Certification request stored in file <filename>"));
+                        ("Certification.request.stored.in.file.filename."));
                 Object[] source = {filename};
                 System.err.println(form.format(source));
-                System.err.println(rb.getString("Submit this to your CA"));
+                System.err.println(rb.getString("Submit.this.to.your.CA"));
             }
         } else if (command == DELETE) {
             doDeleteEntry(alias);
@@ -910,7 +900,7 @@ public final class KeyTool {
             }
             if (filename != null) {
                 MessageFormat form = new MessageFormat(rb.getString
-                        ("Certificate stored in file <filename>"));
+                        ("Certificate.stored.in.file.filename."));
                 Object[] source = {filename};
                 System.err.println(form.format(source));
             }
@@ -949,10 +939,10 @@ public final class KeyTool {
                     kssave = installReply(importAlias, inStream);
                     if (kssave) {
                         System.err.println(rb.getString
-                            ("Certificate reply was installed in keystore"));
+                            ("Certificate.reply.was.installed.in.keystore"));
                     } else {
                         System.err.println(rb.getString
-                            ("Certificate reply was not installed in keystore"));
+                            ("Certificate.reply.was.not.installed.in.keystore"));
                     }
                 } else if (!keyStore.containsAlias(importAlias) ||
                         keyStore.entryInstanceOf(importAlias,
@@ -960,10 +950,10 @@ public final class KeyTool {
                     kssave = addTrustedCert(importAlias, inStream);
                     if (kssave) {
                         System.err.println(rb.getString
-                            ("Certificate was added to keystore"));
+                            ("Certificate.was.added.to.keystore"));
                     } else {
                         System.err.println(rb.getString
-                            ("Certificate was not added to keystore"));
+                            ("Certificate.was.not.added.to.keystore"));
                     }
                 }
             } finally {
@@ -983,14 +973,13 @@ public final class KeyTool {
             }
             if (keyStore.containsAlias(alias) == false) {
                 MessageFormat form = new MessageFormat
-                    (rb.getString("Alias <alias> does not exist"));
+                    (rb.getString("Alias.alias.does.not.exist"));
                 Object[] source = {alias};
                 throw new Exception(form.format(source));
             }
             if (!keyStore.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class)) {
                 MessageFormat form = new MessageFormat(rb.getString(
-                        "Alias <alias> references an entry type that is not a private key entry.  " +
-                        "The -keyclone command only supports cloning of private key entries"));
+                        "Alias.alias.references.an.entry.type.that.is.not.a.private.key.entry.The.keyclone.command.only.supports.cloning.of.private.key"));
                 Object[] source = {alias};
                 throw new Exception(form.format(source));
             }
@@ -1044,7 +1033,7 @@ public final class KeyTool {
         if (kssave) {
             if (verbose) {
                 MessageFormat form = new MessageFormat
-                        (rb.getString("[Storing ksfname]"));
+                        (rb.getString(".Storing.ksfname."));
                 Object[] source = {nullStream ? "keystore" : ksfname};
                 System.err.println(form.format(source));
             }
@@ -1089,7 +1078,7 @@ public final class KeyTool {
         Certificate cert = keyStore.getCertificate(alias);
         if (cert == null) {
             MessageFormat form = new MessageFormat
-                (rb.getString("alias has no public key (certificate)"));
+                (rb.getString("alias.has.no.public.key.certificate."));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -1107,7 +1096,7 @@ public final class KeyTool {
                 sigAlgName = "SHA1WithRSA";
             } else {
                 throw new Exception(rb.getString
-                        ("Cannot derive signature algorithm"));
+                    ("Cannot.derive.signature.algorithm"));
             }
         }
 
@@ -1128,7 +1117,7 @@ public final class KeyTool {
     private void doDeleteEntry(String alias) throws Exception {
         if (keyStore.containsAlias(alias) == false) {
             MessageFormat form = new MessageFormat
-                (rb.getString("Alias <alias> does not exist"));
+                (rb.getString("Alias.alias.does.not.exist"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -1150,7 +1139,7 @@ public final class KeyTool {
         }
         if (keyStore.containsAlias(alias) == false) {
             MessageFormat form = new MessageFormat
-                (rb.getString("Alias <alias> does not exist"));
+                (rb.getString("Alias.alias.does.not.exist"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -1158,7 +1147,7 @@ public final class KeyTool {
         X509Certificate cert = (X509Certificate)keyStore.getCertificate(alias);
         if (cert == null) {
             MessageFormat form = new MessageFormat
-                (rb.getString("Alias <alias> has no certificate"));
+                (rb.getString("Alias.alias.has.no.certificate"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -1179,15 +1168,15 @@ public final class KeyTool {
             int count;
             for (count = 0; count < 3; count++) {
                 MessageFormat form = new MessageFormat(rb.getString
-                        ("Enter key password for <alias>"));
+                        ("Enter.key.password.for.alias."));
                 Object[] source = {alias};
                 System.err.println(form.format(source));
                 if (orig == null) {
                     System.err.print(rb.getString
-                            ("\t(RETURN if same as keystore password):  "));
+                            (".RETURN.if.same.as.keystore.password."));
                 } else {
                     form = new MessageFormat(rb.getString
-                            ("\t(RETURN if same as for <otherAlias>)"));
+                            (".RETURN.if.same.as.for.otherAlias."));
                     Object[] src = {orig};
                     System.err.print(form.format(src));
                 }
@@ -1197,27 +1186,27 @@ public final class KeyTool {
                 if (entered == null) {
                     return origPass;
                 } else if (entered.length >= 6) {
-                    System.err.print(rb.getString("Re-enter new password: "));
+                    System.err.print(rb.getString("Re.enter.new.password."));
                     char[] passAgain = Password.readPassword(System.in);
                     passwords.add(passAgain);
                     if (!Arrays.equals(entered, passAgain)) {
                         System.err.println
-                            (rb.getString("They don't match. Try again"));
+                            (rb.getString("They.don.t.match.Try.again"));
                         continue;
                     }
                     return entered;
                 } else {
                     System.err.println(rb.getString
-                        ("Key password is too short - must be at least 6 characters"));
+                        ("Key.password.is.too.short.must.be.at.least.6.characters"));
                 }
             }
             if (count == 3) {
                 if (command == KEYCLONE) {
                     throw new Exception(rb.getString
-                        ("Too many failures. Key entry not cloned"));
+                        ("Too.many.failures.Key.entry.not.cloned"));
                 } else {
                     throw new Exception(rb.getString
-                            ("Too many failures - key not added to keystore"));
+                            ("Too.many.failures.key.not.added.to.keystore"));
                 }
             }
         }
@@ -1235,7 +1224,7 @@ public final class KeyTool {
         }
         if (keyStore.containsAlias(alias)) {
             MessageFormat form = new MessageFormat(rb.getString
-                ("Secret key not generated, alias <alias> already exists"));
+                ("Secret.key.not.generated.alias.alias.already.exists"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -1250,7 +1239,7 @@ public final class KeyTool {
             keygen.init(168);
         } else {
             throw new Exception(rb.getString
-                ("Please provide -keysize for secret key generation"));
+                ("Please.provide.keysize.for.secret.key.generation"));
         }
 
         secKey = keygen.generateKey();
@@ -1283,7 +1272,7 @@ public final class KeyTool {
 
         if (keyStore.containsAlias(alias)) {
             MessageFormat form = new MessageFormat(rb.getString
-                ("Key pair not generated, alias <alias> already exists"));
+                ("Key.pair.not.generated.alias.alias.already.exists"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -1297,7 +1286,7 @@ public final class KeyTool {
                 sigAlgName = "SHA256withECDSA";
             } else {
                 throw new Exception(rb.getString
-                        ("Cannot derive signature algorithm"));
+                        ("Cannot.derive.signature.algorithm"));
             }
         }
         CertAndKeyGen keypair =
@@ -1321,8 +1310,7 @@ public final class KeyTool {
 
         if (verbose) {
             MessageFormat form = new MessageFormat(rb.getString
-                ("Generating keysize bit keyAlgName key pair and self-signed certificate " +
-                    "(sigAlgName) with a validity of validality days\n\tfor: x500Name"));
+                ("Generating.keysize.bit.keyAlgName.key.pair.and.self.signed.certificate.sigAlgName.with.a.validity.of.validality.days.for"));
             Object[] source = {new Integer(keysize),
                                 privKey.getAlgorithm(),
                                 chain[0].getSigAlgName(),
@@ -1352,7 +1340,7 @@ public final class KeyTool {
 
         if (keyStore.containsAlias(dest)) {
             MessageFormat form = new MessageFormat
-                (rb.getString("Destination alias <dest> already exists"));
+                (rb.getString("Destination.alias.dest.already.exists"));
             Object[] source = {dest};
             throw new Exception(form.format(source));
         }
@@ -1393,7 +1381,7 @@ public final class KeyTool {
 
         if (keyPassNew == null) {
             MessageFormat form = new MessageFormat
-                (rb.getString("key password for <alias>"));
+                (rb.getString("key.password.for.alias."));
             Object[] source = {alias};
             keyPassNew = getNewPasswd(form.format(source), keyPass);
         }
@@ -1428,7 +1416,7 @@ public final class KeyTool {
                 // ignore if keystore entry with same alias name already exists
                 if (keyStore.containsAlias(id.getName())) {
                     MessageFormat form = new MessageFormat
-                        (rb.getString("Keystore entry for <id.getName()> already exists"));
+                        (rb.getString("Keystore.entry.for.id.getName.already.exists"));
                     Object[] source = {id.getName()};
                     System.err.println(form.format(source));
                     continue;
@@ -1457,7 +1445,7 @@ public final class KeyTool {
 
                     if (id instanceof SystemSigner) {
                         MessageFormat form = new MessageFormat(rb.getString
-                            ("Creating keystore entry for <id.getName()> ..."));
+                            ("Creating.keystore.entry.for.id.getName."));
                         Object[] source = {id.getName()};
                         System.err.println(form.format(source));
                         if (chain==null) {
@@ -1476,7 +1464,7 @@ public final class KeyTool {
         }
         if (!kssave) {
             System.err.println(rb.getString
-                ("No entries from identity database added"));
+                ("No.entries.from.identity.database.added"));
         }
     }
 
@@ -1494,32 +1482,32 @@ public final class KeyTool {
 
         if (keyStore.containsAlias(alias) == false) {
             MessageFormat form = new MessageFormat
-                (rb.getString("Alias <alias> does not exist"));
+                (rb.getString("Alias.alias.does.not.exist"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
 
         if (verbose || rfc || debug) {
             MessageFormat form = new MessageFormat
-                (rb.getString("Alias name: alias"));
+                (rb.getString("Alias.name.alias"));
             Object[] source = {alias};
             out.println(form.format(source));
 
             if (!token) {
                 form = new MessageFormat(rb.getString
-                    ("Creation date: keyStore.getCreationDate(alias)"));
+                    ("Creation.date.keyStore.getCreationDate.alias."));
                 Object[] src = {keyStore.getCreationDate(alias)};
                 out.println(form.format(src));
             }
         } else {
             if (!token) {
                 MessageFormat form = new MessageFormat
-                    (rb.getString("alias, keyStore.getCreationDate(alias), "));
+                    (rb.getString("alias.keyStore.getCreationDate.alias."));
                 Object[] source = {alias, keyStore.getCreationDate(alias)};
                 out.print(form.format(source));
             } else {
                 MessageFormat form = new MessageFormat
-                    (rb.getString("alias, "));
+                    (rb.getString("alias."));
                 Object[] source = {alias};
                 out.print(form.format(source));
             }
@@ -1529,7 +1517,7 @@ public final class KeyTool {
             if (verbose || rfc || debug) {
                 Object[] source = {"SecretKeyEntry"};
                 out.println(new MessageFormat(
-                        rb.getString("Entry type: <type>")).format(source));
+                        rb.getString("Entry.type.type.")).format(source));
             } else {
                 out.println("SecretKeyEntry, ");
             }
@@ -1537,7 +1525,7 @@ public final class KeyTool {
             if (verbose || rfc || debug) {
                 Object[] source = {"PrivateKeyEntry"};
                 out.println(new MessageFormat(
-                        rb.getString("Entry type: <type>")).format(source));
+                        rb.getString("Entry.type.type.")).format(source));
             } else {
                 out.println("PrivateKeyEntry, ");
             }
@@ -1547,10 +1535,10 @@ public final class KeyTool {
             if (chain != null) {
                 if (verbose || rfc || debug) {
                     out.println(rb.getString
-                        ("Certificate chain length: ") + chain.length);
+                        ("Certificate.chain.length.") + chain.length);
                     for (int i = 0; i < chain.length; i ++) {
                         MessageFormat form = new MessageFormat
-                                (rb.getString("Certificate[(i + 1)]:"));
+                                (rb.getString("Certificate.i.1."));
                         Object[] source = {new Integer((i + 1))};
                         out.println(form.format(source));
                         if (verbose && (chain[i] instanceof X509Certificate)) {
@@ -1564,7 +1552,7 @@ public final class KeyTool {
                 } else {
                     // Print the digest of the user cert only
                     out.println
-                        (rb.getString("Certificate fingerprint (SHA1): ") +
+                        (rb.getString("Certificate.fingerprint.SHA1.") +
                         getCertFingerPrint("SHA1", chain[0]));
                 }
             }
@@ -1573,20 +1561,20 @@ public final class KeyTool {
             // We have a trusted certificate entry
             Certificate cert = keyStore.getCertificate(alias);
             if (verbose && (cert instanceof X509Certificate)) {
-                out.println(rb.getString("Entry type: trustedCertEntry\n"));
+                out.println(rb.getString("Entry.type.trustedCertEntry."));
                 printX509Cert((X509Certificate)cert, out);
             } else if (rfc) {
-                out.println(rb.getString("Entry type: trustedCertEntry\n"));
+                out.println(rb.getString("Entry.type.trustedCertEntry."));
                 dumpCert(cert, out);
             } else if (debug) {
                 out.println(cert.toString());
             } else {
-                out.println(rb.getString("trustedCertEntry,"));
-                out.println(rb.getString("Certificate fingerprint (SHA1): ")
+                out.println(rb.getString("trustedCertEntry."));
+                out.println(rb.getString("Certificate.fingerprint.SHA1.")
                             + getCertFingerPrint("SHA1", cert));
             }
         } else {
-            out.println(rb.getString("Unknown Entry Type"));
+            out.println(rb.getString("Unknown.Entry.Type"));
         }
     }
 
@@ -1603,7 +1591,7 @@ public final class KeyTool {
                 KeyStoreUtil.isWindowsKeyStore(srcstoretype)) {
             if (!NONE.equals(srcksfname)) {
                 System.err.println(MessageFormat.format(rb.getString
-                    ("-keystore must be NONE if -storetype is {0}"), srcstoretype));
+                    (".keystore.must.be.NONE.if.storetype.is.{0}"), srcstoretype));
                 System.err.println();
                 tinyHelp();
             }
@@ -1613,13 +1601,13 @@ public final class KeyTool {
                 File srcksfile = new File(srcksfname);
                     if (srcksfile.exists() && srcksfile.length() == 0) {
                         throw new Exception(rb.getString
-                                ("Source keystore file exists, but is empty: ") +
+                                ("Source.keystore.file.exists.but.is.empty.") +
                                 srcksfname);
                 }
                 is = new FileInputStream(srcksfile);
             } else {
                 throw new Exception(rb.getString
-                        ("Please specify -srckeystore"));
+                        ("Please.specify.srckeystore"));
             }
         }
 
@@ -1634,7 +1622,7 @@ public final class KeyTool {
             if (srcstorePass == null
                     && !srcprotectedPath
                     && !KeyStoreUtil.isWindowsKeyStore(srcstoretype)) {
-                System.err.print(rb.getString("Enter source keystore password:  "));
+                System.err.print(rb.getString("Enter.source.keystore.password."));
                 System.err.flush();
                 srcstorePass = Password.readPassword(System.in);
                 passwords.add(srcstorePass);
@@ -1645,8 +1633,7 @@ public final class KeyTool {
                 if (srckeyPass != null && srcstorePass != null &&
                         !Arrays.equals(srcstorePass, srckeyPass)) {
                     MessageFormat form = new MessageFormat(rb.getString(
-                        "Warning:  Different store and key passwords not supported " +
-                        "for PKCS12 KeyStores. Ignoring user-specified <command> value."));
+                        "Warning.Different.store.and.key.passwords.not.supported.for.PKCS12.KeyStores.Ignoring.user.specified.command.value."));
                     Object[] source = {"-srckeypass"};
                     System.err.println(form.format(source));
                     srckeyPass = srcstorePass;
@@ -1666,15 +1653,15 @@ public final class KeyTool {
             // but change 2 lines
             System.err.println();
             System.err.println(rb.getString
-                ("*****************  WARNING WARNING WARNING  *****************"));
+                (".WARNING.WARNING.WARNING."));
             System.err.println(rb.getString
-                ("* The integrity of the information stored in the srckeystore*"));
+                (".The.integrity.of.the.information.stored.in.the.srckeystore."));
             System.err.println(rb.getString
-                ("* has NOT been verified!  In order to verify its integrity, *"));
+                (".has.NOT.been.verified.In.order.to.verify.its.integrity."));
             System.err.println(rb.getString
-                ("* you must provide the srckeystore password.                *"));
+                (".you.must.provide.the.srckeystore.password."));
             System.err.println(rb.getString
-                ("*****************  WARNING WARNING WARNING  *****************"));
+                (".WARNING.WARNING.WARNING."));
             System.err.println();
         }
 
@@ -1693,8 +1680,7 @@ public final class KeyTool {
         } else {
             if (dest != null || srckeyPass != null || destKeyPass != null) {
                 throw new Exception(rb.getString(
-                        "if alias not specified, destalias, srckeypass, " +
-                        "and destkeypass must not be specified"));
+                        "if.alias.not.specified.destalias.srckeypass.and.destkeypass.must.not.be.specified"));
             }
             doImportKeyStoreAll(loadSourceKeyStore());
         }
@@ -1722,16 +1708,16 @@ public final class KeyTool {
             Object[] source = {alias};
             if (noprompt) {
                 System.err.println(new MessageFormat(rb.getString(
-                        "Warning: Overwriting existing alias <alias> in destination keystore")).format(source));
+                        "Warning.Overwriting.existing.alias.alias.in.destination.keystore")).format(source));
             } else {
                 String reply = getYesNoReply(new MessageFormat(rb.getString(
-                        "Existing entry alias <alias> exists, overwrite? [no]:  ")).format(source));
+                        "Existing.entry.alias.alias.exists.overwrite.no.")).format(source));
                 if ("NO".equals(reply)) {
                     newAlias = inputStringFromStdin(rb.getString
-                            ("Enter new alias name\t(RETURN to cancel import for this entry):  "));
+                            ("Enter.new.alias.name.RETURN.to.cancel.import.for.this.entry."));
                     if ("".equals(newAlias)) {
                         System.err.println(new MessageFormat(rb.getString(
-                                "Entry for alias <alias> not imported.")).format(
+                                "Entry.for.alias.alias.not.imported.")).format(
                                 source));
                         return 0;
                     }
@@ -1760,7 +1746,7 @@ public final class KeyTool {
         } catch (KeyStoreException kse) {
             Object[] source2 = {alias, kse.toString()};
             MessageFormat form = new MessageFormat(rb.getString(
-                    "Problem importing entry for alias <alias>: <exception>.\nEntry for alias <alias> not imported."));
+                    "Problem.importing.entry.for.alias.alias.exception.Entry.for.alias.alias.not.imported."));
             System.err.println(form.format(source2));
             return 2;
         }
@@ -1777,7 +1763,7 @@ public final class KeyTool {
             if (result == 1) {
                 ok++;
                 Object[] source = {alias};
-                MessageFormat form = new MessageFormat(rb.getString("Entry for alias <alias> successfully imported."));
+                MessageFormat form = new MessageFormat(rb.getString("Entry.for.alias.alias.successfully.imported."));
                 System.err.println(form.format(source));
             } else if (result == 2) {
                 if (!noprompt) {
@@ -1790,7 +1776,7 @@ public final class KeyTool {
         }
         Object[] source = {ok, count-ok};
         MessageFormat form = new MessageFormat(rb.getString(
-                "Import command completed:  <ok> entries successfully imported, <fail> entries failed or cancelled"));
+                "Import.command.completed.ok.entries.successfully.imported.fail.entries.failed.or.cancelled"));
         System.err.println(form.format(source));
     }
 
@@ -1807,17 +1793,17 @@ public final class KeyTool {
             out.println();
         }
 
-        out.println(rb.getString("Keystore type: ") + keyStore.getType());
-        out.println(rb.getString("Keystore provider: ") +
+        out.println(rb.getString("Keystore.type.") + keyStore.getType());
+        out.println(rb.getString("Keystore.provider.") +
                 keyStore.getProvider().getName());
         out.println();
 
         MessageFormat form;
         form = (keyStore.size() == 1) ?
                 new MessageFormat(rb.getString
-                        ("Your keystore contains keyStore.size() entry")) :
+                        ("Your.keystore.contains.keyStore.size.entry")) :
                 new MessageFormat(rb.getString
-                        ("Your keystore contains keyStore.size() entries"));
+                        ("Your.keystore.contains.keyStore.size.entries"));
         Object[] source = {new Integer(keyStore.size())};
         out.println(form.format(source));
         out.println();
@@ -1827,11 +1813,11 @@ public final class KeyTool {
             String alias = e.nextElement();
             doPrintEntry(alias, out, false);
             if (verbose || rfc) {
-                out.println(rb.getString("\n"));
+                out.println(rb.getString("NEWLINE"));
                 out.println(rb.getString
-                        ("*******************************************"));
+                        ("STAR"));
                 out.println(rb.getString
-                        ("*******************************************\n\n"));
+                        ("STARNN"));
             }
         }
     }
@@ -1847,10 +1833,10 @@ public final class KeyTool {
         try {
             c = cf.generateCertificates(in);
         } catch (CertificateException ce) {
-            throw new Exception(rb.getString("Failed to parse input"), ce);
+            throw new Exception(rb.getString("Failed.to.parse.input"), ce);
         }
         if (c.isEmpty()) {
-            throw new Exception(rb.getString("Empty input"));
+            throw new Exception(rb.getString("Empty.input"));
         }
         Certificate[] certs = c.toArray(new Certificate[c.size()]);
         for (int i=0; i<certs.length; i++) {
@@ -1858,11 +1844,11 @@ public final class KeyTool {
             try {
                 x509Cert = (X509Certificate)certs[i];
             } catch (ClassCastException cce) {
-                throw new Exception(rb.getString("Not X.509 certificate"));
+                throw new Exception(rb.getString("Not.X.509.certificate"));
             }
             if (certs.length > 1) {
                 MessageFormat form = new MessageFormat
-                        (rb.getString("Certificate[(i + 1)]:"));
+                        (rb.getString("Certificate.i.1."));
                 Object[] source = {new Integer(i + 1)};
                 out.println(form.format(source));
             }
@@ -1903,7 +1889,7 @@ public final class KeyTool {
                 sigAlgName = "SHA1withECDSA";
             } else {
                 throw new Exception
-                        (rb.getString("Cannot derive signature algorithm"));
+                        (rb.getString("Cannot.derive.signature.algorithm"));
             }
         }
 
@@ -1911,13 +1897,13 @@ public final class KeyTool {
         Certificate oldCert = keyStore.getCertificate(alias);
         if (oldCert == null) {
             MessageFormat form = new MessageFormat
-                (rb.getString("alias has no public key"));
+                (rb.getString("alias.has.no.public.key"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
         if (!(oldCert instanceof X509Certificate)) {
             MessageFormat form = new MessageFormat
-                (rb.getString("alias has no X.509 certificate"));
+                (rb.getString("alias.has.no.X.509.certificate"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -1983,7 +1969,7 @@ public final class KeyTool {
                              new Certificate[] { newCert } );
 
         if (verbose) {
-            System.err.println(rb.getString("New certificate (self-signed):"));
+            System.err.println(rb.getString("New.certificate.self.signed."));
             System.err.print(newCert.toString());
             System.err.println();
         }
@@ -2019,7 +2005,7 @@ public final class KeyTool {
         Certificate userCert = keyStore.getCertificate(alias);
         if (userCert == null) {
             MessageFormat form = new MessageFormat
-                (rb.getString("alias has no public key (certificate)"));
+                (rb.getString("alias.has.no.public.key.certificate."));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -2027,7 +2013,7 @@ public final class KeyTool {
         // Read the certificates in the reply
         Collection<? extends Certificate> c = cf.generateCertificates(in);
         if (c.isEmpty()) {
-            throw new Exception(rb.getString("Reply has no certificates"));
+            throw new Exception(rb.getString("Reply.has.no.certificates"));
         }
         Certificate[] replyCerts = c.toArray(new Certificate[c.size()]);
         Certificate[] newChain;
@@ -2060,11 +2046,11 @@ public final class KeyTool {
         throws Exception
     {
         if (alias == null) {
-            throw new Exception(rb.getString("Must specify alias"));
+            throw new Exception(rb.getString("Must.specify.alias"));
         }
         if (keyStore.containsAlias(alias)) {
             MessageFormat form = new MessageFormat(rb.getString
-                ("Certificate not imported, alias <alias> already exists"));
+                ("Certificate.not.imported.alias.alias.already.exists"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -2074,9 +2060,9 @@ public final class KeyTool {
         try {
             cert = (X509Certificate)cf.generateCertificate(in);
         } catch (ClassCastException cce) {
-            throw new Exception(rb.getString("Input not an X.509 certificate"));
+            throw new Exception(rb.getString("Input.not.an.X.509.certificate"));
         } catch (CertificateException ce) {
-            throw new Exception(rb.getString("Input not an X.509 certificate"));
+            throw new Exception(rb.getString("Input.not.an.X.509.certificate"));
         }
 
         // if certificate is self-signed, make sure it verifies
@@ -2096,27 +2082,27 @@ public final class KeyTool {
         String trustalias = keyStore.getCertificateAlias(cert);
         if (trustalias != null) {
             MessageFormat form = new MessageFormat(rb.getString
-                ("Certificate already exists in keystore under alias <trustalias>"));
+                ("Certificate.already.exists.in.keystore.under.alias.trustalias."));
             Object[] source = {trustalias};
             System.err.println(form.format(source));
             reply = getYesNoReply
-                (rb.getString("Do you still want to add it? [no]:  "));
+                (rb.getString("Do.you.still.want.to.add.it.no."));
         } else if (selfSigned) {
             if (trustcacerts && (caks != null) &&
                     ((trustalias=caks.getCertificateAlias(cert)) != null)) {
                 MessageFormat form = new MessageFormat(rb.getString
-                        ("Certificate already exists in system-wide CA keystore under alias <trustalias>"));
+                        ("Certificate.already.exists.in.system.wide.CA.keystore.under.alias.trustalias."));
                 Object[] source = {trustalias};
                 System.err.println(form.format(source));
                 reply = getYesNoReply
-                        (rb.getString("Do you still want to add it to your own keystore? [no]:  "));
+                        (rb.getString("Do.you.still.want.to.add.it.to.your.own.keystore.no."));
             }
             if (trustalias == null) {
                 // Print the cert and ask user if they really want to add
                 // it to their keystore
                 printX509Cert(cert, System.out);
                 reply = getYesNoReply
-                        (rb.getString("Trust this certificate? [no]:  "));
+                        (rb.getString("Trust.this.certificate.no."));
             }
         }
         if (reply != null) {
@@ -2140,7 +2126,7 @@ public final class KeyTool {
             // their keystore
             printX509Cert(cert, System.out);
             reply = getYesNoReply
-                (rb.getString("Trust this certificate? [no]:  "));
+                (rb.getString("Trust.this.certificate.no."));
             if ("YES".equals(reply)) {
                 keyStore.setCertificateEntry(alias, cert);
                 return true;
@@ -2167,26 +2153,26 @@ public final class KeyTool {
 
         for (int count = 0; count < 3; count++) {
             MessageFormat form = new MessageFormat
-                (rb.getString("New prompt: "));
+                (rb.getString("New.prompt."));
             Object[] source = {prompt};
             System.err.print(form.format(source));
             entered = Password.readPassword(System.in);
             passwords.add(entered);
             if (entered == null || entered.length < 6) {
                 System.err.println(rb.getString
-                    ("Password is too short - must be at least 6 characters"));
+                    ("Password.is.too.short.must.be.at.least.6.characters"));
             } else if (Arrays.equals(entered, oldPasswd)) {
-                System.err.println(rb.getString("Passwords must differ"));
+                System.err.println(rb.getString("Passwords.must.differ"));
             } else {
                 form = new MessageFormat
-                        (rb.getString("Re-enter new prompt: "));
+                        (rb.getString("Re.enter.new.prompt."));
                 Object[] src = {prompt};
                 System.err.print(form.format(src));
                 reentered = Password.readPassword(System.in);
                 passwords.add(reentered);
                 if (!Arrays.equals(entered, reentered)) {
                     System.err.println
-                        (rb.getString("They don't match. Try again"));
+                        (rb.getString("They.don.t.match.Try.again"));
                 } else {
                     Arrays.fill(reentered, ' ');
                     return entered;
@@ -2201,7 +2187,7 @@ public final class KeyTool {
                 reentered = null;
             }
         }
-        throw new Exception(rb.getString("Too many failures - try later"));
+        throw new Exception(rb.getString("Too.many.failures.try.later"));
     }
 
     /**
@@ -2212,11 +2198,11 @@ public final class KeyTool {
     private String getAlias(String prompt) throws Exception {
         if (prompt != null) {
             MessageFormat form = new MessageFormat
-                (rb.getString("Enter prompt alias name:  "));
+                (rb.getString("Enter.prompt.alias.name."));
             Object[] source = {prompt};
             System.err.print(form.format(source));
         } else {
-            System.err.print(rb.getString("Enter alias name:  "));
+            System.err.print(rb.getString("Enter.alias.name."));
         }
         return (new BufferedReader(new InputStreamReader(
                                         System.in))).readLine();
@@ -2247,17 +2233,17 @@ public final class KeyTool {
         do {
             if (otherKeyPass != null) {
                 MessageFormat form = new MessageFormat(rb.getString
-                        ("Enter key password for <alias>"));
+                        ("Enter.key.password.for.alias."));
                 Object[] source = {alias};
                 System.err.println(form.format(source));
 
                 form = new MessageFormat(rb.getString
-                        ("\t(RETURN if same as for <otherAlias>)"));
+                        (".RETURN.if.same.as.for.otherAlias."));
                 Object[] src = {otherAlias};
                 System.err.print(form.format(src));
             } else {
                 MessageFormat form = new MessageFormat(rb.getString
-                        ("Enter key password for <alias>"));
+                        ("Enter.key.password.for.alias."));
                 Object[] source = {alias};
                 System.err.print(form.format(source));
             }
@@ -2271,7 +2257,7 @@ public final class KeyTool {
         } while ((keyPass == null) && count < 3);
 
         if (keyPass == null) {
-            throw new Exception(rb.getString("Too many failures - try later"));
+            throw new Exception(rb.getString("Too.many.failures.try.later"));
         }
 
         return keyPass;
@@ -2302,7 +2288,7 @@ public final class KeyTool {
         */
 
         MessageFormat form = new MessageFormat
-                (rb.getString("*PATTERN* printX509Cert"));
+                (rb.getString(".PATTERN.printX509Cert"));
         Object[] source = {cert.getSubjectDN().toString(),
                         cert.getIssuerDN().toString(),
                         cert.getSerialNumber().toString(16),
@@ -2323,7 +2309,7 @@ public final class KeyTool {
                 for (String extOID : cert.getCriticalExtensionOIDs()) {
                     if (extnum == 0) {
                         out.println();
-                        out.println(rb.getString("Extensions: "));
+                        out.println(rb.getString("Extensions."));
                         out.println();
                     }
                     out.println("#"+(++extnum)+": "+
@@ -2334,7 +2320,7 @@ public final class KeyTool {
                 for (String extOID : cert.getNonCriticalExtensionOIDs()) {
                     if (extnum == 0) {
                         out.println();
-                        out.println(rb.getString("Extensions: "));
+                        out.println(rb.getString("Extensions."));
                         out.println();
                     }
                     Extension ext = impl.getExtension(new ObjectIdentifier(extOID));
@@ -2391,32 +2377,32 @@ public final class KeyTool {
         do {
             if (maxRetry-- < 0) {
                 throw new RuntimeException(rb.getString(
-                        "Too many retries, program terminated"));
+                        "Too.many.retries.program.terminated"));
             }
             commonName = inputString(in,
-                    rb.getString("What is your first and last name?"),
+                    rb.getString("What.is.your.first.and.last.name."),
                     commonName);
             organizationalUnit = inputString(in,
                     rb.getString
-                        ("What is the name of your organizational unit?"),
+                        ("What.is.the.name.of.your.organizational.unit."),
                     organizationalUnit);
             organization = inputString(in,
-                    rb.getString("What is the name of your organization?"),
+                    rb.getString("What.is.the.name.of.your.organization."),
                     organization);
             city = inputString(in,
-                    rb.getString("What is the name of your City or Locality?"),
+                    rb.getString("What.is.the.name.of.your.City.or.Locality."),
                     city);
             state = inputString(in,
-                    rb.getString("What is the name of your State or Province?"),
+                    rb.getString("What.is.the.name.of.your.State.or.Province."),
                     state);
             country = inputString(in,
                     rb.getString
-                        ("What is the two-letter country code for this unit?"),
+                        ("What.is.the.two.letter.country.code.for.this.unit."),
                     country);
             name = new X500Name(commonName, organizationalUnit, organization,
                                 city, state, country);
             MessageFormat form = new MessageFormat
-                (rb.getString("Is <name> correct?"));
+                (rb.getString("Is.name.correct."));
             Object[] source = {name};
             userInput = inputString
                 (in, form.format(source), rb.getString("no"));
@@ -2433,7 +2419,7 @@ public final class KeyTool {
     {
         System.err.println(prompt);
         MessageFormat form = new MessageFormat
-                (rb.getString("  [defaultValue]:  "));
+                (rb.getString(".defaultValue."));
         Object[] source = {defaultValue};
         System.err.print(form.format(source));
         System.err.flush();
@@ -2504,14 +2490,14 @@ public final class KeyTool {
 
         if (keyStore.containsAlias(alias) == false) {
             MessageFormat form = new MessageFormat
-                (rb.getString("Alias <alias> does not exist"));
+                (rb.getString("Alias.alias.does.not.exist"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
         if (!keyStore.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class) &&
                 !keyStore.entryInstanceOf(alias, KeyStore.SecretKeyEntry.class)) {
             MessageFormat form = new MessageFormat
-                (rb.getString("Alias <alias> has no key"));
+                (rb.getString("Alias.alias.has.no.key"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -2553,7 +2539,7 @@ public final class KeyTool {
 
         if (ks.containsAlias(alias) == false) {
             MessageFormat form = new MessageFormat
-                (rb.getString("Alias <alias> does not exist"));
+                (rb.getString("Alias.alias.does.not.exist"));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -2631,15 +2617,15 @@ public final class KeyTool {
     private void printWarning() {
         System.err.println();
         System.err.println(rb.getString
-            ("*****************  WARNING WARNING WARNING  *****************"));
+            (".WARNING.WARNING.WARNING."));
         System.err.println(rb.getString
-            ("* The integrity of the information stored in your keystore  *"));
+            (".The.integrity.of.the.information.stored.in.your.keystore."));
         System.err.println(rb.getString
-            ("* has NOT been verified!  In order to verify its integrity, *"));
+            (".has.NOT.been.verified.In.order.to.verify.its.integrity."));
         System.err.println(rb.getString
-            ("* you must provide your keystore password.                  *"));
+            (".you.must.provide.your.keystore.password."));
         System.err.println(rb.getString
-            ("*****************  WARNING WARNING WARNING  *****************"));
+            (".WARNING.WARNING.WARNING."));
         System.err.println();
     }
 
@@ -2669,7 +2655,7 @@ public final class KeyTool {
         }
         if (i == replyCerts.length) {
             MessageFormat form = new MessageFormat(rb.getString
-                ("Certificate reply does not contain public key for <alias>"));
+                ("Certificate.reply.does.not.contain.public.key.for.alias."));
             Object[] source = {alias};
             throw new Exception(form.format(source));
         }
@@ -2696,7 +2682,7 @@ public final class KeyTool {
             }
             if (j == replyCerts.length) {
                 throw new Exception
-                    (rb.getString("Incomplete certificate chain in reply"));
+                    (rb.getString("Incomplete.certificate.chain.in.reply"));
             }
         }
 
@@ -2707,7 +2693,7 @@ public final class KeyTool {
                 replyCerts[i].verify(pubKey);
             } catch (Exception e) {
                 throw new Exception(rb.getString
-                        ("Certificate chain in reply does not verify: ") +
+                        ("Certificate.chain.in.reply.does.not.verify.") +
                         e.getMessage());
             }
         }
@@ -2739,12 +2725,12 @@ public final class KeyTool {
             if (!verified) {
                 System.err.println();
                 System.err.println
-                        (rb.getString("Top-level certificate in reply:\n"));
+                    (rb.getString("Top.level.certificate.in.reply."));
                 printX509Cert((X509Certificate)topCert, System.out);
                 System.err.println();
-                System.err.print(rb.getString("... is not trusted. "));
+                System.err.print(rb.getString(".is.not.trusted."));
                 String reply = getYesNoReply
-                        (rb.getString("Install reply anyway? [no]:  "));
+                        (rb.getString("Install.reply.anyway.no."));
                 if ("NO".equals(reply)) {
                     return null;
                 }
@@ -2783,14 +2769,14 @@ public final class KeyTool {
             PublicKey replyPubKey = certToVerify.getPublicKey();
             if (!origPubKey.equals(replyPubKey)) {
                 throw new Exception(rb.getString
-                        ("Public keys in reply and keystore don't match"));
+                        ("Public.keys.in.reply.and.keystore.don.t.match"));
             }
 
             // If the two certs are identical, we're done: no need to import
             // anything
             if (certToVerify.equals(userCert)) {
                 throw new Exception(rb.getString
-                        ("Certificate reply and certificate in keystore are identical"));
+                        ("Certificate.reply.and.certificate.in.keystore.are.identical"));
             }
         }
 
@@ -2827,7 +2813,7 @@ public final class KeyTool {
             return newChain;
         } else {
             throw new Exception
-                (rb.getString("Failed to establish chain from reply"));
+                (rb.getString("Failed.to.establish.chain.from.reply"));
         }
     }
 
@@ -2892,7 +2878,7 @@ public final class KeyTool {
         do {
             if (maxRetry-- < 0) {
                 throw new RuntimeException(rb.getString(
-                        "Too many retries, program terminated"));
+                        "Too.many.retries.program.terminated"));
             }
             System.err.print(prompt);
             System.err.flush();
@@ -2906,7 +2892,7 @@ public final class KeyTool {
                        collator.compare(reply, rb.getString("yes")) == 0) {
                 reply = "YES";
             } else {
-                System.err.println(rb.getString("Wrong answer, try again"));
+                System.err.println(rb.getString("Wrong.answer.try.again"));
                 reply = null;
             }
         } while (reply == null);
@@ -2976,7 +2962,8 @@ public final class KeyTool {
     private static Date getStartDate(String s) throws IOException {
         Calendar c = new GregorianCalendar();
         if (s != null) {
-            IOException ioe = new IOException("Illegal startdate value");
+            IOException ioe = new IOException(
+                    rb.getString("Illegal.startdate.value"));
             int len = s.length();
             if (len == 0) {
                 throw ioe;
@@ -3057,11 +3044,11 @@ public final class KeyTool {
     private void usage() {
         if (command != null) {
             System.err.println("keytool " + command +
-                    rb.getString(" [OPTION]..."));
+                    rb.getString(".OPTION."));
             System.err.println();
             System.err.println(rb.getString(command.description));
             System.err.println();
-            System.err.println(rb.getString("Options:"));
+            System.err.println(rb.getString("Options."));
             System.err.println();
 
             // Left and right sides of the options list
@@ -3088,12 +3075,12 @@ public final class KeyTool {
             }
             System.err.println();
             System.err.println(rb.getString(
-                    "Use \"keytool -help\" for all available commands"));
+                    "Use.keytool.help.for.all.available.commands"));
         } else {
             System.err.println(rb.getString(
-                    "Key and Certificate Management Tool"));
+                    "Key.and.Certificate.Management.Tool"));
             System.err.println();
-            System.err.println(rb.getString("Commands:"));
+            System.err.println(rb.getString("Commands."));
             System.err.println();
             for (Command c: Command.values()) {
                 if (c != IDENTITYDB
@@ -3104,7 +3091,7 @@ public final class KeyTool {
             }
             System.err.println();
             System.err.println(rb.getString(
-                    "Use \"keytool -command_name -help\" for usage of command_name"));
+                    "Use.keytool.command.name.help.for.usage.of.command.name"));
         }
     }
 
@@ -3120,7 +3107,7 @@ public final class KeyTool {
     private void errorNeedArgument(String flag) {
         Object[] source = {flag};
         System.err.println(new MessageFormat(
-                rb.getString("Command option <flag> needs an argument.")).format(source));
+                rb.getString("Command.option.flag.needs.an.argument.")).format(source));
         tinyHelp();
     }
 }

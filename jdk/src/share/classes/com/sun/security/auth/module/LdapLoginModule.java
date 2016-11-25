@@ -969,8 +969,8 @@ public class LdapLoginModule implements LoginModule {
                 "to acquire authentication information from the user");
 
         Callback[] callbacks = new Callback[2];
-        callbacks[0] = new NameCallback(rb.getString("username: "));
-        callbacks[1] = new PasswordCallback(rb.getString("password: "), false);
+        callbacks[0] = new NameCallback(rb.getString("username."));
+        callbacks[1] = new PasswordCallback(rb.getString("password."), false);
 
         try {
             callbackHandler.handle(callbacks);

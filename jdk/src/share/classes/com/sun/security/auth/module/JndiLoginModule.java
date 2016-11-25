@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -688,9 +688,9 @@ public class JndiLoginModule implements LoginModule {
 
         Callback[] callbacks = new Callback[2];
         callbacks[0] = new NameCallback(protocol + " "
-                                            + rb.getString("username: "));
+                                            + rb.getString("username."));
         callbacks[1] = new PasswordCallback(protocol + " " +
-                                                rb.getString("password: "),
+                                                rb.getString("password."),
                                             false);
 
         try {

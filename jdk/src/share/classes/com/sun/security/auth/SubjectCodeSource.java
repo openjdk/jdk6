@@ -394,7 +394,7 @@ class SubjectCodeSource extends CodeSource implements java.io.Serializable {
                                         principals.listIterator();
             while (li.hasNext()) {
                 PolicyParser.PrincipalEntry pppe = li.next();
-                returnMe = returnMe + rb.getString("\n") +
+                returnMe = returnMe + rb.getString("NEWLINE") +
                         pppe.principalClass + " " +
                         pppe.principalName;
             }

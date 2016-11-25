@@ -228,9 +228,7 @@ public class PolicyTool {
                     if (pubKey == null) {
                         newWarning = true;
                         MessageFormat form = new MessageFormat(rb.getString
-                            ("Warning: A public key for alias " +
-                            "'signers[i]' does not exist.  " +
-                            "Make sure a KeyStore is properly configured."));
+                            ("Warning.A.public.key.for.alias.signers.i.does.not.exist.Make.sure.a.KeyStore.is.properly.configured."));
                         Object[] source = {signers[i]};
                         warnings.addElement(form.format(source));
                     }
@@ -248,7 +246,7 @@ public class PolicyTool {
                 } catch (ClassNotFoundException fnfe) {
                     newWarning = true;
                     MessageFormat form = new MessageFormat(rb.getString
-                                ("Warning: Class not found: class"));
+                                ("Warning.Class.not.found.class"));
                     Object[] source = {pe.getPrincipalClass()};
                     warnings.addElement(form.format(source));
                 }
@@ -264,13 +262,13 @@ public class PolicyTool {
                 } catch (ClassNotFoundException fnfe) {
                     newWarning = true;
                     MessageFormat form = new MessageFormat(rb.getString
-                                ("Warning: Class not found: class"));
+                                ("Warning.Class.not.found.class"));
                     Object[] source = {pe.permission};
                     warnings.addElement(form.format(source));
                 } catch (InvocationTargetException ite) {
                     newWarning = true;
                     MessageFormat form = new MessageFormat(rb.getString
-                        ("Warning: Invalid argument(s) for constructor: arg"));
+                        ("Warning.Invalid.argument.s.for.constructor.arg"));
                     Object[] source = {pe.permission};
                     warnings.addElement(form.format(source));
                 }
@@ -285,9 +283,7 @@ public class PolicyTool {
                         if (pubKey == null) {
                             newWarning = true;
                             MessageFormat form = new MessageFormat(rb.getString
-                                ("Warning: A public key for alias " +
-                                "'signers[i]' does not exist.  " +
-                               "Make sure a KeyStore is properly configured."));
+                                ("Warning.A.public.key.for.alias.signers.i.does.not.exist.Make.sure.a.KeyStore.is.properly.configured."));
                             Object[] source = {signers[i]};
                             warnings.addElement(form.format(source));
                         }
@@ -615,7 +611,7 @@ public class PolicyTool {
                 Thread.currentThread().getContextClassLoader());
         if (!PRIN.isAssignableFrom(pc)) {
             MessageFormat form = new MessageFormat(rb.getString
-                        ("Illegal Principal Type: type"));
+                        ("Illegal.Principal.Type.type"));
             Object[] source = {type};
             throw new InstantiationException(form.format(source));
         }
@@ -694,7 +690,7 @@ public class PolicyTool {
                 policyFileName = args[n];
             } else {
                 MessageFormat form = new MessageFormat(rb.getString
-                                ("Illegal option: option"));
+                                ("Illegal.option.option"));
                 Object[] source = { flags };
                 System.err.println(form.format(source));
                 usage();
@@ -703,10 +699,10 @@ public class PolicyTool {
     }
 
     static void usage() {
-        System.out.println(rb.getString("Usage: policytool [options]"));
+        System.out.println(rb.getString("Usage.policytool.options."));
         System.out.println();
         System.out.println(rb.getString
-                ("  [-file <file>]    policy file location"));
+                (".file.file.policy.file.location"));
         System.out.println();
 
         System.exit(1);
@@ -906,23 +902,23 @@ class ToolWindow extends Frame {
     public static final String SAVE_POLICY_FILE         =
                         PolicyTool.rb.getString("Save");
     public static final String SAVE_AS_POLICY_FILE      =
-                        PolicyTool.rb.getString("Save As");
+                        PolicyTool.rb.getString("Save.As");
     public static final String VIEW_WARNINGS            =
-                        PolicyTool.rb.getString("View Warning Log");
+                        PolicyTool.rb.getString("View.Warning.Log");
     public static final String QUIT                     =
                         PolicyTool.rb.getString("Exit");
     public static final String ADD_POLICY_ENTRY         =
-                        PolicyTool.rb.getString("Add Policy Entry");
+                        PolicyTool.rb.getString("Add.Policy.Entry");
     public static final String EDIT_POLICY_ENTRY        =
-                        PolicyTool.rb.getString("Edit Policy Entry");
+                        PolicyTool.rb.getString("Edit.Policy.Entry");
     public static final String REMOVE_POLICY_ENTRY      =
-                        PolicyTool.rb.getString("Remove Policy Entry");
+                        PolicyTool.rb.getString("Remove.Policy.Entry");
     public static final String EDIT_KEYSTORE            =
                         PolicyTool.rb.getString("Edit");
     public static final String ADD_PUBKEY_ALIAS         =
-                        PolicyTool.rb.getString("Add Public Key Alias");
+                        PolicyTool.rb.getString("Add.Public.Key.Alias");
     public static final String REMOVE_PUBKEY_ALIAS      =
-                        PolicyTool.rb.getString("Remove Public Key Alias");
+                        PolicyTool.rb.getString("Remove.Public.Key.Alias");
 
     /* gridbag index for components in the main window (MW) */
     public static final int MW_FILENAME_LABEL           = 0;
@@ -971,13 +967,13 @@ class ToolWindow extends Frame {
 
 
         // policy entry listing
-        Label label = new Label(PolicyTool.rb.getString("Policy File:"));
+        Label label = new Label(PolicyTool.rb.getString("Policy.File."));
         addNewComponent(this, label, MW_FILENAME_LABEL,
                         0, 0, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                         TOP_BOTTOM_PADDING);
         TextField tf = new TextField(50);
         tf.getAccessibleContext().setAccessibleName(
-                PolicyTool.rb.getString("Policy File:"));
+                PolicyTool.rb.getString("Policy.File."));
         tf.setEditable(false);
         addNewComponent(this, tf, MW_FILENAME_TEXTFIELD,
                         1, 0, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
@@ -1059,7 +1055,7 @@ class ToolWindow extends Frame {
 
             // display the error
             MessageFormat form = new MessageFormat(PolicyTool.rb.getString
-                ("Could not open policy file: policyFile: e.toString()"));
+                ("Could.not.open.policy.file.policyFile.e.toString."));
             Object[] source = {policyFile, e.toString()};
             displayErrorDialog(null, form.format(source));
         }
@@ -1136,7 +1132,7 @@ class ToolWindow extends Frame {
      */
     void displayToolWindow(String args[]) {
 
-        setTitle(PolicyTool.rb.getString("Policy Tool"));
+        setTitle(PolicyTool.rb.getString("Policy.Tool"));
         setResizable(true);
         addWindowListener(new ToolWindowListener(this));
         setBounds(135, 80, 500, 500);
@@ -1149,9 +1145,7 @@ class ToolWindow extends Frame {
 
         if (tool.newWarning == true) {
             displayStatusDialog(this, PolicyTool.rb.getString
-                ("Errors have occurred while opening the " +
-                "policy configuration.  View the Warning Log " +
-                "for more information."));
+                ("Errors.have.occurred.while.opening.the.policy.configuration.View.the.Warning.Log.for.more.information."));
         }
     }
 
@@ -1234,7 +1228,7 @@ class ToolWindow extends Frame {
         ta.setEditable(false);
         for (int i = 0; i < tool.warnings.size(); i++) {
             ta.append(tool.warnings.elementAt(i));
-            ta.append(PolicyTool.rb.getString("\n"));
+            ta.append(PolicyTool.rb.getString("NEWLINE"));
         }
         addNewComponent(wd, ta, 0,
                         0, 0, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
@@ -1335,22 +1329,22 @@ class ToolDialog extends Dialog {
     /* popup menus */
     public static final String PERM             =
         PolicyTool.rb.getString
-        ("Permission:                                                       ");
+        ("Permission.");
 
     public static final String PRIN_TYPE        =
-        PolicyTool.rb.getString("Principal Type:");
+        PolicyTool.rb.getString("Principal.Type.");
     public static final String PRIN_NAME        =
-        PolicyTool.rb.getString("Principal Name:");
+        PolicyTool.rb.getString("Principal.Name.");
 
     /* more popu menus */
     public static final String PERM_NAME        =
         PolicyTool.rb.getString
-        ("Target Name:                                                    ");
+        ("Target.Name.");
 
     /* and more popup menus */
     public static final String PERM_ACTIONS             =
       PolicyTool.rb.getString
-      ("Actions:                                                             ");
+      ("Actions.");
 
     /* gridbag index for display OverWriteFile (OW) components */
     public static final int OW_LABEL                    = 0;
@@ -1543,7 +1537,7 @@ class ToolDialog extends Dialog {
 
         // ask the user if they want to over write the existing file
         MessageFormat form = new MessageFormat(PolicyTool.rb.getString
-                ("OK to overwrite existing file filename?"));
+                ("OK.to.overwrite.existing.file.filename."));
         Object[] source = {filename};
         Label label = new Label(form.format(source));
         tw.addNewComponent(this, label, OW_LABEL,
@@ -1587,12 +1581,12 @@ class ToolDialog extends Dialog {
         PolicyEntry entries[] = null;
         TaggedList prinList = new TaggedList(3, false);
         prinList.getAccessibleContext().setAccessibleName(
-                PolicyTool.rb.getString("Principal List"));
+                PolicyTool.rb.getString("Principal.List"));
         prinList.addActionListener
                 (new EditPrinButtonListener(tool, tw, this, edit));
         TaggedList permList = new TaggedList(10, false);
         permList.getAccessibleContext().setAccessibleName(
-                PolicyTool.rb.getString("Permission List"));
+                PolicyTool.rb.getString("Permission.List"));
         permList.addActionListener
                 (new EditPermButtonListener(tool, tw, this, edit));
 
@@ -1629,7 +1623,7 @@ class ToolDialog extends Dialog {
         }
 
         // codebase label and textfield
-        Label label = new Label(PolicyTool.rb.getString("CodeBase:"));
+        Label label = new Label(PolicyTool.rb.getString("CodeBase."));
         tw.addNewComponent(this, label, PE_CODEBASE_LABEL,
                 0, 0, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH);
         TextField tf;
@@ -1637,19 +1631,19 @@ class ToolDialog extends Dialog {
                 new TextField(entries[listIndex].getGrantEntry().codeBase, 60) :
                 new TextField(60));
         tf.getAccessibleContext().setAccessibleName(
-                PolicyTool.rb.getString("Code Base"));
+                PolicyTool.rb.getString("Code.Base"));
         tw.addNewComponent(this, tf, PE_CODEBASE_TEXTFIELD,
                 1, 0, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH);
 
         // signedby label and textfield
-        label = new Label(PolicyTool.rb.getString("SignedBy:"));
+        label = new Label(PolicyTool.rb.getString("SignedBy."));
         tw.addNewComponent(this, label, PE_SIGNEDBY_LABEL,
                            0, 1, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH);
         tf = (edit ?
                 new TextField(entries[listIndex].getGrantEntry().signedBy, 60) :
                 new TextField(60));
         tf.getAccessibleContext().setAccessibleName(
-                PolicyTool.rb.getString("Signed By:"));
+                PolicyTool.rb.getString("Signed.By."));
         tw.addNewComponent(this, tf, PE_SIGNEDBY_TEXTFIELD,
                            1, 1, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH);
 
@@ -1657,19 +1651,19 @@ class ToolDialog extends Dialog {
         Panel panel = new Panel();
         panel.setLayout(new GridBagLayout());
 
-        Button button = new Button(PolicyTool.rb.getString("Add Principal"));
+        Button button = new Button(PolicyTool.rb.getString("Add.Principal"));
         button.addActionListener
                 (new AddPrinButtonListener(tool, tw, this, edit));
         tw.addNewComponent(panel, button, PE_ADD_PRIN_BUTTON,
                 0, 0, 1, 1, 100.0, 0.0, GridBagConstraints.HORIZONTAL);
 
-        button = new Button(PolicyTool.rb.getString("Edit Principal"));
+        button = new Button(PolicyTool.rb.getString("Edit.Principal"));
         button.addActionListener(new EditPrinButtonListener
                                                 (tool, tw, this, edit));
         tw.addNewComponent(panel, button, PE_EDIT_PRIN_BUTTON,
                 1, 0, 1, 1, 100.0, 0.0, GridBagConstraints.HORIZONTAL);
 
-        button = new Button(PolicyTool.rb.getString("Remove Principal"));
+        button = new Button(PolicyTool.rb.getString("Remove.Principal"));
         button.addActionListener(new RemovePrinButtonListener
                                         (tool, tw, this, edit));
         tw.addNewComponent(panel, button, PE_REMOVE_PRIN_BUTTON,
@@ -1679,7 +1673,7 @@ class ToolDialog extends Dialog {
                 1, 2, 1, 1, 0.0, 0.0, GridBagConstraints.HORIZONTAL);
 
         // principal label and list
-        label = new Label(PolicyTool.rb.getString("Principals:"));
+        label = new Label(PolicyTool.rb.getString("Principals."));
         tw.addNewComponent(this, label, PE_PRIN_LABEL,
                            0, 3, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                            ToolWindow.BOTTOM_PADDING);
@@ -1691,20 +1685,20 @@ class ToolDialog extends Dialog {
         panel = new Panel();
         panel.setLayout(new GridBagLayout());
 
-        button = new Button(PolicyTool.rb.getString("  Add Permission"));
+        button = new Button(PolicyTool.rb.getString(".Add.Permission"));
         button.addActionListener(new AddPermButtonListener
                                                 (tool, tw, this, edit));
         tw.addNewComponent(panel, button, PE_ADD_PERM_BUTTON,
                 0, 0, 1, 1, 100.0, 0.0, GridBagConstraints.HORIZONTAL);
 
-        button = new Button(PolicyTool.rb.getString("  Edit Permission"));
+        button = new Button(PolicyTool.rb.getString(".Edit.Permission"));
         button.addActionListener(new EditPermButtonListener
                                                 (tool, tw, this, edit));
         tw.addNewComponent(panel, button, PE_EDIT_PERM_BUTTON,
                 1, 0, 1, 1, 100.0, 0.0, GridBagConstraints.HORIZONTAL);
 
 
-        button = new Button(PolicyTool.rb.getString("Remove Permission"));
+        button = new Button(PolicyTool.rb.getString("Remove.Permission"));
         button.addActionListener(new RemovePermButtonListener
                                         (tool, tw, this, edit));
         tw.addNewComponent(panel, button, PE_REMOVE_PERM_BUTTON,
@@ -1810,7 +1804,7 @@ class ToolDialog extends Dialog {
 
             // KeyStore label and textfield
             Label label = new Label
-                        (PolicyTool.rb.getString("KeyStore URL:"));
+                        (PolicyTool.rb.getString("KeyStore.URL."));
             tw.addNewComponent(this, label, KSD_NAME_LABEL,
                                0, 0, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                                ToolWindow.BOTTOM_PADDING);
@@ -1818,45 +1812,45 @@ class ToolDialog extends Dialog {
 
             // URL to U R L, so that accessibility reader will pronounce well
             tf.getAccessibleContext().setAccessibleName(
-                PolicyTool.rb.getString("KeyStore U R L:"));
+                PolicyTool.rb.getString("KeyStore.U.R.L."));
             tw.addNewComponent(this, tf, KSD_NAME_TEXTFIELD,
                                1, 0, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                                ToolWindow.BOTTOM_PADDING);
 
             // KeyStore type and textfield
-            label = new Label(PolicyTool.rb.getString("KeyStore Type:"));
+            label = new Label(PolicyTool.rb.getString("KeyStore.Type."));
             tw.addNewComponent(this, label, KSD_TYPE_LABEL,
                                0, 1, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                                ToolWindow.BOTTOM_PADDING);
             tf = new TextField(tool.getKeyStoreType(), 30);
             tf.getAccessibleContext().setAccessibleName(
-                PolicyTool.rb.getString("KeyStore Type:"));
+                PolicyTool.rb.getString("KeyStore.Type."));
             tw.addNewComponent(this, tf, KSD_TYPE_TEXTFIELD,
                                1, 1, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                                ToolWindow.BOTTOM_PADDING);
 
             // KeyStore provider and textfield
             label = new Label(PolicyTool.rb.getString
-                                ("KeyStore Provider:"));
+                                ("KeyStore.Provider."));
             tw.addNewComponent(this, label, KSD_PROVIDER_LABEL,
                                0, 2, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                                ToolWindow.BOTTOM_PADDING);
             tf = new TextField(tool.getKeyStoreProvider(), 30);
             tf.getAccessibleContext().setAccessibleName(
-                PolicyTool.rb.getString("KeyStore Provider:"));
+                PolicyTool.rb.getString("KeyStore.Provider."));
             tw.addNewComponent(this, tf, KSD_PROVIDER_TEXTFIELD,
                                1, 2, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                                ToolWindow.BOTTOM_PADDING);
 
             // KeyStore password URL and textfield
             label = new Label(PolicyTool.rb.getString
-                                ("KeyStore Password URL:"));
+                                ("KeyStore.Password.URL."));
             tw.addNewComponent(this, label, KSD_PWD_URL_LABEL,
                                0, 3, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                                ToolWindow.BOTTOM_PADDING);
             tf = new TextField(tool.getKeyStorePwdURL(), 30);
             tf.getAccessibleContext().setAccessibleName(
-                PolicyTool.rb.getString("KeyStore Password U R L:"));
+                PolicyTool.rb.getString("KeyStore.Password.U.R.L."));
             tw.addNewComponent(this, tf, KSD_PWD_URL_TEXTFIELD,
                                1, 3, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                                ToolWindow.BOTTOM_PADDING);
@@ -1911,8 +1905,8 @@ class ToolDialog extends Dialog {
 
         // description label
         Label label = (edit ?
-                new Label(PolicyTool.rb.getString("  Edit Principal:")) :
-                new Label(PolicyTool.rb.getString("  Add New Principal:")));
+                new Label(PolicyTool.rb.getString(".Edit.Principal.")) :
+                new Label(PolicyTool.rb.getString(".Add.New.Principal.")));
         tw.addNewComponent(newTD, label, PRD_DESC_LABEL,
                            0, 0, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                            ToolWindow.TOP_BOTTOM_PADDING);
@@ -2018,8 +2012,8 @@ class ToolDialog extends Dialog {
 
         // description label
         Label label = (edit ?
-                new Label(PolicyTool.rb.getString("  Edit Permission:")) :
-                new Label(PolicyTool.rb.getString("  Add New Permission:")));
+                new Label(PolicyTool.rb.getString(".Edit.Permission.")) :
+                new Label(PolicyTool.rb.getString(".Add.New.Permission.")));
         tw.addNewComponent(newTD, label, PD_DESC_LABEL,
                            0, 0, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                            ToolWindow.TOP_BOTTOM_PADDING);
@@ -2086,13 +2080,13 @@ class ToolDialog extends Dialog {
                            ToolWindow.LR_PADDING);
 
         // signedby label and textfield
-        label = new Label(PolicyTool.rb.getString("Signed By:"));
+        label = new Label(PolicyTool.rb.getString("Signed.By."));
         tw.addNewComponent(newTD, label, PD_SIGNEDBY_LABEL,
                            0, 4, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                            ToolWindow.LR_PADDING);
         tf = (edit ? new TextField(editMe.signedBy, 40) : new TextField(40));
         tf.getAccessibleContext().setAccessibleName(
-                PolicyTool.rb.getString("Signed By:"));
+                PolicyTool.rb.getString("Signed.By."));
         tw.addNewComponent(newTD, tf, PD_SIGNEDBY_TEXTFIELD,
                            1, 4, 1, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                            ToolWindow.LR_PADDING);
@@ -2137,12 +2131,10 @@ class ToolDialog extends Dialog {
         if ((pclass.equals(PolicyParser.PrincipalEntry.WILDCARD_CLASS)) &&
             (!pname.equals(PolicyParser.PrincipalEntry.WILDCARD_NAME))) {
             throw new Exception
-                        (PolicyTool.rb.getString("Cannot Specify Principal " +
-                        "with a Wildcard Class without a Wildcard Name"));
+                        (PolicyTool.rb.getString("Cannot.Specify.Principal.with.a.Wildcard.Class.without.a.Wildcard.Name"));
         } else if (pname.equals("")) {
             throw new Exception
-                        (PolicyTool.rb.getString("Cannot Specify Principal " +
-                        "without a Name"));
+                        (PolicyTool.rb.getString("Cannot.Specify.Principal.without.a.Name"));
         } else if (pclass.equals("")) {
             // make this consistent with what PolicyParser does
             // when it sees an empty principal class
@@ -2190,7 +2182,7 @@ class ToolDialog extends Dialog {
         if (permission.equals("") ||
             (!permission.equals(ALL_PERM_CLASS) && name == null)) {
             throw new InvalidParameterException(PolicyTool.rb.getString
-                ("Permission and Target Name must have a value"));
+                ("Permission.and.Target.Name.must.have.a.value"));
         }
 
         // When the permission is FilePermission, we need to check the name
@@ -2207,12 +2199,7 @@ class ToolDialog extends Dialog {
             char result = tw.displayYesNoDialog(this,
                     PolicyTool.rb.getString("Warning"),
                     PolicyTool.rb.getString(
-                        "Warning: File name may include escaped backslash characters. " +
-                        "It is not necessary to escape backslash characters " +
-                        "(the tool escapes characters as necessary when writing " +
-                        "the policy contents to the persistent store).\n\n" +
-                        "Click on Retain to retain the entered name, or click on " +
-                        "Edit to edit the name."),
+                        "Warning.File.name.may.include.escaped.backslash.characters.It.is.not.necessary.to.escape.backslash.characters.the.tool.escapes"),
                     PolicyTool.rb.getString("Retain"),
                     PolicyTool.rb.getString("Edit")
                     );
@@ -2246,9 +2233,7 @@ class ToolDialog extends Dialog {
                     if (pubKey == null) {
                         MessageFormat form = new MessageFormat
                             (PolicyTool.rb.getString
-                            ("Warning: A public key for alias " +
-                            "'signers[i]' does not exist.  " +
-                            "Make sure a KeyStore is properly configured."));
+                            ("Warning.A.public.key.for.alias.signers.i.does.not.exist.Make.sure.a.KeyStore.is.properly.configured."));
                         Object[] source = {signers[i]};
                         tool.warnings.addElement(form.format(source));
                         tw.displayStatusDialog(this, form.format(source));
@@ -2278,7 +2263,7 @@ class ToolDialog extends Dialog {
 
         // ask the user do they really want to do this?
         Label label = new Label
-                (PolicyTool.rb.getString("Remove this Policy Entry?"));
+                (PolicyTool.rb.getString("Remove.this.Policy.Entry."));
         tw.addNewComponent(this, label, CRPE_LABEL1,
                            0, 0, 2, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                            ToolWindow.BOTTOM_PADDING);
@@ -2343,7 +2328,7 @@ class ToolDialog extends Dialog {
 
         // pop up a dialog box for the user to enter a filename.
         FileDialog fd = new FileDialog
-                (tw, PolicyTool.rb.getString("Save As"), FileDialog.SAVE);
+                (tw, PolicyTool.rb.getString("Save.As"), FileDialog.SAVE);
         fd.addWindowListener(new WindowAdapter() {
             public void windowClosing(WindowEvent e) {
                 e.getWindow().setVisible(false);
@@ -2365,7 +2350,7 @@ class ToolDialog extends Dialog {
         if (saveAsFile.exists()) {
             // display a dialog box for the user to enter policy info
             ToolDialog td = new ToolDialog
-                (PolicyTool.rb.getString("Overwrite File"), tool, tw, true);
+                (PolicyTool.rb.getString("Overwrite.File"), tool, tw, true);
             td.displayOverWriteFileDialog(filename, nextEvent);
         } else {
             try {
@@ -2374,7 +2359,7 @@ class ToolDialog extends Dialog {
 
                 // display status
                 MessageFormat form = new MessageFormat(PolicyTool.rb.getString
-                        ("Policy successfully written to filename"));
+                        ("Policy.successfully.written.to.filename"));
                 Object[] source = {filename};
                 tw.displayStatusDialog(null, form.format(source));
 
@@ -2391,7 +2376,7 @@ class ToolDialog extends Dialog {
             } catch (FileNotFoundException fnfe) {
                 if (filename == null || filename.equals("")) {
                     tw.displayErrorDialog(null, new FileNotFoundException
-                                (PolicyTool.rb.getString("null filename")));
+                                (PolicyTool.rb.getString("null.filename")));
                 } else {
                     tw.displayErrorDialog(null, fnfe);
                 }
@@ -2414,7 +2399,7 @@ class ToolDialog extends Dialog {
             setLayout(new GridBagLayout());
 
             Label label = new Label
-                (PolicyTool.rb.getString("Save changes?"));
+                (PolicyTool.rb.getString("Save.changes."));
             tw.addNewComponent(this, label, USC_LABEL,
                                0, 0, 3, 1, 0.0, 0.0, GridBagConstraints.BOTH,
                                ToolWindow.L_TOP_BOTTOM_PADDING);
@@ -2539,9 +2524,7 @@ class ToolDialog extends Dialog {
                 // inform user of warnings
                 if (tool.newWarning == true) {
                     tw.displayStatusDialog(null, PolicyTool.rb.getString
-                        ("Errors have occurred while opening the " +
-                        "policy configuration.  View the Warning Log " +
-                        "for more information."));
+                        ("Errors.have.occurred.while.opening.the.policy.configuration.View.the.Warning.Log.for.more.information."));
                 }
 
             } catch (Exception e) {
@@ -2560,7 +2543,7 @@ class ToolDialog extends Dialog {
 
                 // display the error
                 MessageFormat form = new MessageFormat(PolicyTool.rb.getString
-                    ("Could not open policy file: policyFile: e.toString()"));
+                    ("Could.not.open.policy.file.policyFile.e.toString."));
                 Object[] source = {policyFile, e.toString()};
                 tw.displayErrorDialog(null, form.format(source));
             }
@@ -2712,7 +2695,7 @@ class PolicyListListener implements ActionListener {
 
         // display the permission list for a policy entry
         ToolDialog td = new ToolDialog
-                (PolicyTool.rb.getString("Policy Entry"), tool, tw, true);
+                (PolicyTool.rb.getString("Policy.Entry"), tool, tw, true);
         td.displayPolicyEntryDialog(true);
     }
 }
@@ -2737,7 +2720,7 @@ class FileMenuListener implements ActionListener {
 
             // ask user if they want to save changes
             ToolDialog td = new ToolDialog
-                (PolicyTool.rb.getString("Save Changes"), tool, tw, true);
+                (PolicyTool.rb.getString("Save.Changes"), tool, tw, true);
             td.displayUserSave(ToolDialog.QUIT);
 
             // the above method will perform the QUIT as long as the
@@ -2748,7 +2731,7 @@ class FileMenuListener implements ActionListener {
 
             // ask user if they want to save changes
             ToolDialog td = new ToolDialog
-                (PolicyTool.rb.getString("Save Changes"), tool, tw, true);
+                (PolicyTool.rb.getString("Save.Changes"), tool, tw, true);
             td.displayUserSave(ToolDialog.NEW);
 
             // the above method will perform the NEW as long as the
@@ -2759,7 +2742,7 @@ class FileMenuListener implements ActionListener {
 
             // ask user if they want to save changes
             ToolDialog td = new ToolDialog
-                (PolicyTool.rb.getString("Save Changes"), tool, tw, true);
+                (PolicyTool.rb.getString("Save.Changes"), tool, tw, true);
             td.displayUserSave(ToolDialog.OPEN);
 
             // the above method will perform the OPEN as long as the
@@ -2776,7 +2759,7 @@ class FileMenuListener implements ActionListener {
             if (filename == null || filename.length() == 0) {
                 // user wants to SAVE AS
                 ToolDialog td = new ToolDialog
-                        (PolicyTool.rb.getString("Save As"), tool, tw, true);
+                        (PolicyTool.rb.getString("Save.As"), tool, tw, true);
                 td.displaySaveAsDialog(ToolDialog.NOACTION);
             } else {
                 try {
@@ -2786,13 +2769,13 @@ class FileMenuListener implements ActionListener {
                     // display status
                     MessageFormat form = new MessageFormat
                         (PolicyTool.rb.getString
-                        ("Policy successfully written to filename"));
+                        ("Policy.successfully.written.to.filename"));
                     Object[] source = {filename};
                     tw.displayStatusDialog(null, form.format(source));
                 } catch (FileNotFoundException fnfe) {
                     if (filename == null || filename.equals("")) {
                         tw.displayErrorDialog(null, new FileNotFoundException
-                                (PolicyTool.rb.getString("null filename")));
+                                (PolicyTool.rb.getString("null.filename")));
                     } else {
                         tw.displayErrorDialog(null, fnfe);
                     }
@@ -2805,7 +2788,7 @@ class FileMenuListener implements ActionListener {
 
             // user wants to SAVE AS
             ToolDialog td = new ToolDialog
-                (PolicyTool.rb.getString("Save As"), tool, tw, true);
+                (PolicyTool.rb.getString("Save.As"), tool, tw, true);
             td.displaySaveAsDialog(ToolDialog.NOACTION);
 
         } else if (PolicyTool.collator.compare(e.getActionCommand(),
@@ -2835,7 +2818,7 @@ class MainWindowListener implements ActionListener {
 
             // display a dialog box for the user to enter policy info
             ToolDialog td = new ToolDialog
-                (PolicyTool.rb.getString("Policy Entry"), tool, tw, true);
+                (PolicyTool.rb.getString("Policy.Entry"), tool, tw, true);
             td.displayPolicyEntryDialog(false);
 
         } else if (PolicyTool.collator.compare(e.getActionCommand(),
@@ -2846,13 +2829,13 @@ class MainWindowListener implements ActionListener {
             int index = list.getSelectedIndex();
             if (index < 0) {
                 tw.displayErrorDialog(null, new Exception
-                        (PolicyTool.rb.getString("No Policy Entry selected")));
+                        (PolicyTool.rb.getString("No.Policy.Entry.selected")));
                 return;
             }
 
             // ask the user if they really want to remove the policy entry
             ToolDialog td = new ToolDialog(PolicyTool.rb.getString
-                ("Remove Policy Entry"), tool, tw, true);
+                ("Remove.Policy.Entry"), tool, tw, true);
             td.displayConfirmRemovePolicyEntry();
 
         } else if (PolicyTool.collator.compare(e.getActionCommand(),
@@ -2863,13 +2846,13 @@ class MainWindowListener implements ActionListener {
             int index = list.getSelectedIndex();
             if (index < 0) {
                 tw.displayErrorDialog(null, new Exception
-                        (PolicyTool.rb.getString("No Policy Entry selected")));
+                        (PolicyTool.rb.getString("No.Policy.Entry.selected")));
                 return;
             }
 
             // display the permission list for a policy entry
             ToolDialog td = new ToolDialog
-                (PolicyTool.rb.getString("Policy Entry"), tool, tw, true);
+                (PolicyTool.rb.getString("Policy.Entry"), tool, tw, true);
             td.displayPolicyEntryDialog(true);
 
         } else if (PolicyTool.collator.compare(e.getActionCommand(),
@@ -2911,7 +2894,7 @@ class OverWriteFileOKButtonListener implements ActionListener {
             // display status
             MessageFormat form = new MessageFormat
                 (PolicyTool.rb.getString
-                ("Policy successfully written to filename"));
+                ("Policy.successfully.written.to.filename"));
             Object[] source = {filename};
             tw.displayStatusDialog(null, form.format(source));
 
@@ -2930,7 +2913,7 @@ class OverWriteFileOKButtonListener implements ActionListener {
         } catch (FileNotFoundException fnfe) {
             if (filename == null || filename.equals("")) {
                 tw.displayErrorDialog(null, new FileNotFoundException
-                                (PolicyTool.rb.getString("null filename")));
+                                (PolicyTool.rb.getString("null.filename")));
             } else {
                 tw.displayErrorDialog(null, fnfe);
             }
@@ -2982,9 +2965,7 @@ class AddEntryDoneButtonListener implements ActionListener {
                     if (pubKey == null) {
                         MessageFormat form = new MessageFormat
                             (PolicyTool.rb.getString
-                            ("Warning: A public key for alias " +
-                            "'signers[i]' does not exist.  " +
-                            "Make sure a KeyStore is properly configured."));
+                            ("Warning.A.public.key.for.alias.signers.i.does.not.exist.Make.sure.a.KeyStore.is.properly.configured."));
                         Object[] source = {signers[i]};
                         tool.warnings.addElement(form.format(source));
                         tw.displayStatusDialog(td, form.format(source));
@@ -3052,7 +3033,7 @@ class ChangeKeyStoreOKButtonListener implements ActionListener {
             tool.modified = true;
         } catch (Exception ex) {
             MessageFormat form = new MessageFormat(PolicyTool.rb.getString
-                ("Unable to open KeyStore: ex.toString()"));
+                ("Unable.to.open.KeyStore.ex.toString."));
             Object[] source = {ex.toString()};
             tw.displayErrorDialog(td, form.format(source));
             return;
@@ -3148,7 +3129,7 @@ class NewPolicyPrinOKButtonListener implements ActionListener {
                 } catch (ClassNotFoundException cnfe) {
                     MessageFormat form = new MessageFormat
                                 (PolicyTool.rb.getString
-                                ("Warning: Class not found: class"));
+                                ("Warning.Class.not.found.class"));
                     Object[] source = {pppe.getPrincipalClass()};
                     tool.warnings.addElement(form.format(source));
                     tw.displayStatusDialog(infoDialog, form.format(source));
@@ -3209,7 +3190,7 @@ class NewPolicyPermOKButtonListener implements ActionListener {
                 tool.verifyPermission(pppe.permission, pppe.name, pppe.action);
             } catch (ClassNotFoundException cnfe) {
                 MessageFormat form = new MessageFormat(PolicyTool.rb.getString
-                                ("Warning: Class not found: class"));
+                                ("Warning.Class.not.found.class"));
                 Object[] source = {pppe.permission};
                 tool.warnings.addElement(form.format(source));
                 tw.displayStatusDialog(infoDialog, form.format(source));
@@ -3265,7 +3246,7 @@ class RemovePrinButtonListener implements ActionListener {
 
         if (prinIndex < 0) {
             tw.displayErrorDialog(td, new Exception
-                (PolicyTool.rb.getString("No principal selected")));
+                (PolicyTool.rb.getString("No.principal.selected")));
             return;
         }
         // remove the principal from the display
@@ -3300,7 +3281,7 @@ class RemovePermButtonListener implements ActionListener {
 
         if (permIndex < 0) {
             tw.displayErrorDialog(td, new Exception
-                (PolicyTool.rb.getString("No permission selected")));
+                (PolicyTool.rb.getString("No.permission.selected")));
             return;
         }
         // remove the permission from the display
@@ -3342,7 +3323,7 @@ class EditPrinButtonListener implements ActionListener {
 
         if (prinIndex < 0) {
             tw.displayErrorDialog(td, new Exception
-                (PolicyTool.rb.getString("No principal selected")));
+                (PolicyTool.rb.getString("No.principal.selected")));
             return;
         }
         td.displayPrincipalDialog(editPolicyEntry, true);
@@ -3381,7 +3362,7 @@ class EditPermButtonListener implements ActionListener {
 
         if (permIndex < 0) {
             tw.displayErrorDialog(td, new Exception
-                (PolicyTool.rb.getString("No permission selected")));
+                (PolicyTool.rb.getString("No.permission.selected")));
             return;
         }
         td.displayPermissionDialog(editPolicyEntry, true);
@@ -3683,7 +3664,7 @@ class UserSaveYesButtonListener implements ActionListener {
                 // display status
                 MessageFormat form = new MessageFormat
                         (PolicyTool.rb.getString
-                        ("Policy successfully written to filename"));
+                        ("Policy.successfully.written.to.filename"));
                 Object[] source = {filename};
                 tw.displayStatusDialog(null, form.format(source));
 
@@ -3917,7 +3898,7 @@ class AuthPerm extends Perm {
                 "getLoginConfiguration",
                 "setLoginConfiguration",
                 "createLoginConfiguration.<" +
-                        PolicyTool.rb.getString("configuration type") + ">",
+                        PolicyTool.rb.getString("configuration.type") + ">",
                 "refreshLoginConfiguration"
                 },
         null);
@@ -4134,7 +4115,7 @@ class RuntimePerm extends Perm {
                 "setSecurityManage",
                 "createSecurityManager",
                 "getenv.<" +
-                    PolicyTool.rb.getString("environment variable name") + ">",
+                    PolicyTool.rb.getString("environment.variable.name") + ">",
                 "exitVM",
                 "shutdownHooks",
                 "setFactory",
@@ -4146,11 +4127,11 @@ class RuntimePerm extends Perm {
                 "readFileDescriptor",
                 "writeFileDescriptor",
                 "loadLibrary.<" +
-                    PolicyTool.rb.getString("library name") + ">",
+                    PolicyTool.rb.getString("library.name") + ">",
                 "accessClassInPackage.<" +
-                    PolicyTool.rb.getString("package name")+">",
+                    PolicyTool.rb.getString("package.name")+">",
                 "defineClassInPackage.<" +
-                    PolicyTool.rb.getString("package name")+">",
+                    PolicyTool.rb.getString("package.name")+">",
                 "accessDeclaredMembers",
                 "queuePrintJob",
                 "getStackTrace",
@@ -4173,15 +4154,15 @@ class SecurityPerm extends Perm {
                 "getPolicy",
                 "setPolicy",
                 "createPolicy.<" +
-                    PolicyTool.rb.getString("policy type") + ">",
+                    PolicyTool.rb.getString("policy.type") + ">",
                 "getProperty.<" +
-                    PolicyTool.rb.getString("property name") + ">",
+                    PolicyTool.rb.getString("property.name") + ">",
                 "setProperty.<" +
-                    PolicyTool.rb.getString("property name") + ">",
+                    PolicyTool.rb.getString("property.name") + ">",
                 "insertProvider.<" +
-                    PolicyTool.rb.getString("provider name") + ">",
+                    PolicyTool.rb.getString("provider.name") + ">",
                 "removeProvider.<" +
-                    PolicyTool.rb.getString("provider name") + ">",
+                    PolicyTool.rb.getString("provider.name") + ">",
                 //"setSystemScope",
                 //"setIdentityPublicKey",
                 //"setIdentityInfo",
@@ -4189,11 +4170,11 @@ class SecurityPerm extends Perm {
                 //"removeIdentityCertificate",
                 //"printIdentity",
                 "clearProviderProperties.<" +
-                    PolicyTool.rb.getString("provider name") + ">",
+                    PolicyTool.rb.getString("provider.name") + ">",
                 "putProviderProperty.<" +
-                    PolicyTool.rb.getString("provider name") + ">",
+                    PolicyTool.rb.getString("provider.name") + ">",
                 "removeProviderProperty.<" +
-                    PolicyTool.rb.getString("provider name") + ">",
+                    PolicyTool.rb.getString("provider.name") + ">",
                 //"getSignerPrivateKey",
                 //"setSignerKeyPair"
                 },

@@ -258,7 +258,7 @@ public class LoginContext {
 
         if (name == null)
             throw new LoginException
-                (ResourcesMgr.getString("Invalid null input: name"));
+                (ResourcesMgr.getString("Invalid.null.input.name"));
 
         // get the Configuration
         if (config == null) {
@@ -282,7 +282,7 @@ public class LoginContext {
             entries = config.getAppConfigurationEntry(OTHER);
             if (entries == null) {
                 MessageFormat form = new MessageFormat(ResourcesMgr.getString
-                        ("No LoginModules configured for name"));
+                        ("No.LoginModules.configured.for.name"));
                 Object[] source = {name};
                 throw new LoginException(form.format(source));
             }
@@ -396,7 +396,7 @@ public class LoginContext {
         init(name);
         if (subject == null)
             throw new LoginException
-                (ResourcesMgr.getString("invalid null Subject provided"));
+                (ResourcesMgr.getString("invalid.null.Subject.provided"));
         this.subject = subject;
         subjectProvided = true;
         loadDefaultCallbackHandler();
@@ -432,7 +432,7 @@ public class LoginContext {
         init(name);
         if (callbackHandler == null)
             throw new LoginException(ResourcesMgr.getString
-                                ("invalid null CallbackHandler provided"));
+                                ("invalid.null.CallbackHandler.provided"));
         this.callbackHandler = new SecureCallbackHandler
                                 (java.security.AccessController.getContext(),
                                 callbackHandler);
@@ -473,7 +473,7 @@ public class LoginContext {
         this(name, subject);
         if (callbackHandler == null)
             throw new LoginException(ResourcesMgr.getString
-                                ("invalid null CallbackHandler provided"));
+                                ("invalid.null.CallbackHandler.provided"));
         this.callbackHandler = new SecureCallbackHandler
                                 (java.security.AccessController.getContext(),
                                 callbackHandler);
@@ -636,7 +636,7 @@ public class LoginContext {
     public void logout() throws LoginException {
         if (subject == null) {
             throw new LoginException(ResourcesMgr.getString
-                ("null subject - logout called before login"));
+                ("null.subject.logout.called.before.login"));
         }
 
         // module invoked in doPrivileged
@@ -802,21 +802,20 @@ public class LoginContext {
 
             } catch (NoSuchMethodException nsme) {
                 MessageFormat form = new MessageFormat(ResourcesMgr.getString
-                        ("unable to instantiate LoginModule, module, because " +
-                        "it does not provide a no-argument constructor"));
+                        ("unable.to.instantiate.LoginModule.module.because.it.does.not.provide.a.no.argument.constructor"));
                 Object[] source = {moduleStack[i].entry.getLoginModuleName()};
                 throwException(null, new LoginException(form.format(source)));
             } catch (InstantiationException ie) {
                 throwException(null, new LoginException(ResourcesMgr.getString
-                        ("unable to instantiate LoginModule: ") +
+                        ("unable.to.instantiate.LoginModule.") +
                         ie.getMessage()));
             } catch (ClassNotFoundException cnfe) {
                 throwException(null, new LoginException(ResourcesMgr.getString
-                        ("unable to find LoginModule class: ") +
+                        ("unable.to.find.LoginModule.class.") +
                         cnfe.getMessage()));
             } catch (IllegalAccessException iae) {
                 throwException(null, new LoginException(ResourcesMgr.getString
-                        ("unable to access LoginModule: ") +
+                        ("unable.to.access.LoginModule.") +
                         iae.getMessage()));
             } catch (InvocationTargetException ite) {
 
@@ -925,7 +924,7 @@ public class LoginContext {
         } else if (success == false) {
             // no module succeeded -- all modules were IGNORED
             throwException(new LoginException
-                (ResourcesMgr.getString("Login Failure: all modules ignored")),
+                (ResourcesMgr.getString("Login.Failure.all.modules.ignored")),
                 null);
         } else {
             // success
