@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,13 @@ public class NewSize7 {
                 " -alias a -dname cn=c -storepass changeit" +
                 " -keypass changeit -keyalg rsa").split(" "));
         KeyStore ks = KeyStore.getInstance("JKS");
-        ks.load(new FileInputStream(FILE), null);
+        FileInputStream fin = null;
+        try {
+            fin = new FileInputStream(FILE);
+            ks.load(fin, null);
+        } finally {
+            if (fin != null) { fin.close(); }
+        }
         new File(FILE).delete();
         RSAPublicKey r = (RSAPublicKey)ks.getCertificate("a").getPublicKey();
         if (r.getModulus().bitLength() != 2048) {
