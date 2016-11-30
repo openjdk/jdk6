@@ -152,7 +152,7 @@ public class MsgAppletViewer_sv extends ListResourceBundle {
             {"appletprops.label.unsignedapplet", "Till\u00E5t osignerade appletar:"},
             {"appletprops.choice.unsignedapplet.no", "Nej"},
             {"appletprops.choice.unsignedapplet.yes", "Ja"},
-            {"appletprops.button.apply", "Till\u00E4mpa"},
+            {"appletprops.button.apply", "Anv\u00E4nd"},
             {"appletprops.button.cancel", "Avbryt"},
             {"appletprops.button.reset", "\u00C5terst\u00E4ll"},
             {"appletprops.apply.exception", "Kunde inte spara egenskaper: {0}"},
