@@ -25,12 +25,7 @@
 package sun.tools.jconsole.inspector;
 
 import java.awt.*;
-import java.awt.dnd.*;
 import java.awt.event.*;
-import java.awt.datatransfer.*;
-import java.io.*;
-import java.util.*;
-import javax.swing.plaf.*;
 import javax.swing.event.*;
 import javax.swing.*;
 
@@ -43,16 +38,8 @@ public class XTextField extends JPanel
     implements DocumentListener,
                ActionListener {
 
-    private static final Color selF = Color.red;
-    private static final Color selB = Color.yellow;
-    private Color fore=null, back=null;
-    private HashMap items = null; //used for popup menu selection
     private XObject selectedObject;
-    private XObject currentObject;
-    private Class expectedClass;
-    private Object value;
     protected JTextField textField;
-    private JButton browseObjects;
 
     private static boolean allowNullSelection = false;
 
@@ -80,13 +67,12 @@ public class XTextField extends JPanel
     }
 
     public XTextField(Object value,
-                      Class expectedClass,
+                      Class<?> expectedClass,
                       int colWidth,
                       boolean isCallable,
                       JButton button,
                       XOperations operation) {
         super(new BorderLayout());
-        this.expectedClass = expectedClass;
         this.button = button;
         this.operation = operation;
         add(textField = new JTextField(value.toString(),colWidth),
@@ -111,17 +97,13 @@ public class XTextField extends JPanel
         return allowNullSelection;
     }
 
-    protected void init(Object value, Class expectedClass) {
-        this.expectedClass = expectedClass;
-        this.value = value;
-        boolean fieldEditable =  Utils.isEditableType(expectedClass.getName());
+    protected void init(Object value, Class<?> expectedClass) {
+         boolean fieldEditable =  Utils.isEditableType(expectedClass.getName());
         clearObject();
         if (value != null) {
-            currentObject = new XObject(value);
             textField.setText(value.toString());
         }
         else {
-            currentObject = XObject.NULL_OBJECT;
             //null String value for the moment
             textField.setText("");
         }
@@ -139,33 +121,10 @@ public class XTextField extends JPanel
         }
     }
 
-
-
-
-
-    private synchronized void setObject(XObject object) {
-        clearObject();
-        selectedObject = object;
-        currentObject = object;
-        setSelectedColors();
-        textField.setText(object.getText());
-        textField.getDocument().addDocumentListener(this);
-        paintImmediately(getVisibleRect());
-    }
-
     private synchronized void clearObject() {
         textField.getDocument().removeDocumentListener(this);
         selectedObject = null;
-        currentObject = null;
         setDefaultColors();
-    }
-
-    private synchronized void setSelectedColors() {
-        // fore = textField.getForeground();
-        // back = textField.getBackground();
-
-        //textField.setForeground(Color.red);
-        // textField.setBackground(Color.yellow);
     }
 
     private synchronized void setDefaultColors() {
@@ -192,12 +151,6 @@ public class XTextField extends JPanel
             return null;
         }
     }
-
-    private JPopupMenu buildEditPopupMenu() {
-        JPopupMenu menu = new JPopupMenu();
-        return menu;
-    }
-
 
     // ACTIONLISTENER IMPLEMENTATION
     public void actionPerformed(ActionEvent e) {

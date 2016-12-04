@@ -128,6 +128,6 @@ public class MemoryPoolStat {
      * null if no GC occurs.
      */
     public MemoryUsage getAfterGcUsage() {
-        return beforeGcUsage;
+        return afterGcUsage;
     }
 }

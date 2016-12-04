@@ -26,7 +26,6 @@
 package sun.tools.jconsole.inspector;
 
 import javax.swing.*;
-import javax.swing.event.*;
 import javax.swing.table.*;
 import javax.swing.tree.*;
 import java.awt.BorderLayout;
@@ -49,19 +48,20 @@ import javax.management.*;
 import javax.management.openmbean.CompositeData;
 import javax.management.openmbean.TabularData;
 
-import sun.tools.jconsole.Resources;
+import sun.tools.jconsole.Messages;
 
 @SuppressWarnings("serial")
 public class XMBeanNotifications extends JTable implements NotificationListener {
 
     private final static String[] columnNames =  {
-        Resources.getText("TimeStamp"),
-        Resources.getText("Type"),
-        Resources.getText("UserData"),
-        Resources.getText("SeqNum"),
-        Resources.getText("Message"),
-        Resources.getText("Event"),
-        Resources.getText("Source")};
+        Messages.TIME_STAMP,
+        Messages.TYPE,
+        Messages.USER_DATA,
+        Messages.SEQ_NUM,
+        Messages.MESSAGE,
+        Messages.EVENT,
+        Messages.SOURCE
+     };
 
     private HashMap<ObjectName, XMBeanNotificationsListener> listeners =
         new HashMap<ObjectName, XMBeanNotificationsListener>();
@@ -178,7 +178,7 @@ public class XMBeanNotifications extends JTable implements NotificationListener 
         }
 
         if(cell != null)
-            toolTip = Resources.getText("Double click to expand/collapse")+". "
+            toolTip = Messages.DOUBLE_CLICK_TO_EXPAND_FORWARD_SLASH_COLLAPSE+". "
                 + cell.toString();
         else {
             Object val =
@@ -564,7 +564,6 @@ public class XMBeanNotifications extends JTable implements NotificationListener 
     }
 
     class XMBeanNotificationsListener implements NotificationListener {
-        private String[] columnNames;
         private XMBean xmbean;
         private DefaultMutableTreeNode node;
         private long received;
@@ -578,7 +577,6 @@ public class XMBeanNotifications extends JTable implements NotificationListener 
             this.notifications = notifications;
             this.xmbean = xmbean;
             this.node = node;
-            this.columnNames = columnNames;
             register(node);
         }
 
