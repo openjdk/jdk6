@@ -46,8 +46,6 @@ import static java.awt.event.KeyEvent.*;
  */
 public class JConsoleResources_ja extends JConsoleResources {
 
-    private static final String cr = System.getProperty("line.separator");
-
     /**
      * Returns the contents of this <code>ResourceBundle</code>.
      *
@@ -56,7 +54,7 @@ public class JConsoleResources_ja extends JConsoleResources {
      * @return the contents of this <code>ResourceBundle</code>.
      */
     protected Object[][] getContents0() {
-        return new Object[][] {
+        Object[][] temp = new Object[][] {
         // NOTE 1: The value strings in this file containing "{0}" are
         //         processed by the java.text.MessageFormat class.  Any
         //         single quotes appearing in these strings need to be
@@ -426,6 +424,16 @@ public class JConsoleResources_ja extends JConsoleResources {
              "\u4F7F\u7528\u65B9\u6CD5: {0} [ -interval=n ] [ -notile ] [ -pluginpath <path> ] [ -version ] [ connection ... ]\n\n  -interval   \u66F4\u65B0\u9593\u9694\u3092n\u79D2\u306B\u8A2D\u5B9A\u3059\u308B(\u30C7\u30D5\u30A9\u30EB\u30C8\u306F4\u79D2)\n  -notile     \u30A6\u30A3\u30F3\u30C9\u30A6\u3092\u6700\u521D\u306B\u4E26\u3079\u3066\u8868\u793A\u3057\u306A\u3044(2\u3064\u4EE5\u4E0A\u306E\u63A5\u7D9A\u306B\u3064\u3044\u3066)\n  -pluginpath JConsole\u304C\u30D7\u30E9\u30B0\u30A4\u30F3\u3092\u53C2\u7167\u3059\u308B\u305F\u3081\u306B\u4F7F\u7528\u3059\u308B\u30D1\u30B9\u3092\u6307\u5B9A\u3059\u308B\n  -version    \u30D7\u30ED\u30B0\u30E9\u30E0\u30FB\u30D0\u30FC\u30B8\u30E7\u30F3\u3092\u5370\u5237\u3059\u308B\n\n  connection = pid || host:port || JMX URL (service:jmx:<protocol>://...)\n  pid         \u30BF\u30FC\u30B2\u30C3\u30C8\u30FB\u30D7\u30ED\u30BB\u30B9\u306E\u30D7\u30ED\u30BB\u30B9ID\n  host        \u30EA\u30E2\u30FC\u30C8\u30FB\u30DB\u30B9\u30C8\u540D\u307E\u305F\u306FIP\u30A2\u30C9\u30EC\u30B9\n  port        \u30EA\u30E2\u30FC\u30C8\u63A5\u7D9A\u7528\u306E\u30DD\u30FC\u30C8\u756A\u53F7\n\n  -J          JConsole\u304C\u5B9F\u884C\u4E2D\u306EJava\u4EEE\u60F3\u30DE\u30B7\u30F3\u3078\u306E\n              \u5165\u529B\u5F15\u6570\u3092\u6307\u5B9A\u3059\u308B"},
         // END OF MATERIAL TO LOCALIZE
         };
+
+        String ls = System.getProperty("line.separator");
+        for(int i=0;i<temp.length;i++) {
+            if (temp[i][1] instanceof String){
+            temp[i][1] = temp[i][1].toString().replaceAll("\n",ls);
+            }
+        }
+
+        return temp;
+
     }
 
     public synchronized Object[][] getContents() {

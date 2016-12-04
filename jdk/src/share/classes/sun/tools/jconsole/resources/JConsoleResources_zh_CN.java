@@ -46,8 +46,6 @@ import static java.awt.event.KeyEvent.*;
  */
 public class JConsoleResources_zh_CN extends JConsoleResources {
 
-    private static final String cr = System.getProperty("line.separator");
-
     /**
      * Returns the contents of this <code>ResourceBundle</code>.
      *
@@ -56,7 +54,7 @@ public class JConsoleResources_zh_CN extends JConsoleResources {
      * @return the contents of this <code>ResourceBundle</code>.
      */
     protected Object[][] getContents0() {
-        return new Object[][] {
+        Object[][] temp = new Object[][] {
         // NOTE 1: The value strings in this file containing "{0}" are
         //         processed by the java.text.MessageFormat class.  Any
         //         single quotes appearing in these strings need to be
@@ -426,6 +424,16 @@ public class JConsoleResources_zh_CN extends JConsoleResources {
              "\u7528\u6CD5: {0} [ -interval=n ] [ -notile ] [ -pluginpath <path> ] [ -version ] [ connection ... ]\n\n  -interval   \u5C06\u66F4\u65B0\u95F4\u9694\u8BBE\u7F6E\u4E3A n \u79D2 (\u9ED8\u8BA4\u503C\u4E3A 4 \u79D2)\n  -notile     \u521D\u59CB\u4E0D\u5E73\u94FA\u7A97\u53E3 (\u5BF9\u4E8E\u4E24\u4E2A\u6216\u591A\u4E2A\u8FDE\u63A5)\n  -pluginpath \u6307\u5B9A jconsole \u7528\u4E8E\u67E5\u627E\u63D2\u4EF6\u7684\u8DEF\u5F84\n  -version    \u8F93\u51FA\u7A0B\u5E8F\u7248\u672C\n\n  connection = pid || host:port || JMX URL (service:jmx:<\u534F\u8BAE>://...)\n  pid         \u76EE\u6807\u8FDB\u7A0B\u7684\u8FDB\u7A0B ID\n  host        \u8FDC\u7A0B\u4E3B\u673A\u540D\u6216 IP \u5730\u5740\n  port        \u8FDC\u7A0B\u8FDE\u63A5\u7684\u7AEF\u53E3\u53F7\n\n  -J          \u6307\u5B9A\u8FD0\u884C jconsole \u7684 Java \u865A\u62DF\u673A\n              \u7684\u8F93\u5165\u53C2\u6570"},
         // END OF MATERIAL TO LOCALIZE
         };
+
+        String ls = System.getProperty("line.separator");
+        for(int i=0;i<temp.length;i++) {
+            if (temp[i][1] instanceof String){
+            temp[i][1] = temp[i][1].toString().replaceAll("\n",ls);
+            }
+        }
+
+        return temp;
+
     }
 
     public synchronized Object[][] getContents() {
