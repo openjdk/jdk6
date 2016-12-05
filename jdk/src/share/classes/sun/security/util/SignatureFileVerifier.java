@@ -41,6 +41,7 @@ import sun.security.timestamp.TimestampToken;
 import sun.misc.BASE64Decoder;
 
 import sun.security.jca.Providers;
+import sun.security.x509.AlgorithmId;
 
 public class SignatureFileVerifier {
 
@@ -612,7 +613,8 @@ public class SignatureFileVerifier {
         throws NoSuchAlgorithmException, SignatureException {
 
         MessageDigest md =
-            MessageDigest.getInstance(token.getHashAlgorithm().getName());
+            MessageDigest.getInstance(AlgorithmId.getStandardDigestName(
+                    token.getHashAlgorithm().getName()));
 
         if (!Arrays.equals(token.getHashedMessage(), md.digest(signature))) {
             throw new SignatureException("Signature timestamp (#" +

@@ -272,24 +272,6 @@ public class SignerInfo implements DerEncoder {
         return certList;
     }
 
-    // Copied from com.sun.crypto.provider.OAEPParameters.
-    private static String convertToStandardName(String internalName) {
-        if (internalName.equals("SHA")) {
-            return "SHA-1";
-        } else if (internalName.equals("SHA224")) {
-            return "SHA-224";
-        } else if (internalName.equals("SHA256")) {
-            return "SHA-256";
-        } else if (internalName.equals("SHA384")) {
-            return "SHA-384";
-        } else if (internalName.equals("SHA512")) {
-            return "SHA-512";
-        } else {
-            return internalName;
-        }
-    }
-
-
     /* Returns null if verify fails, this signerInfo if
        verify succeeds. */
     SignerInfo verify(PKCS7 block, byte[] data)
@@ -329,7 +311,7 @@ public class SignerInfo implements DerEncoder {
                     return null;
 
                 MessageDigest md = MessageDigest.getInstance(
-                        convertToStandardName(digestAlgname));
+                        AlgorithmId.getStandardDigestName(digestAlgname));
                 byte[] computedMessageDigest = md.digest(data);
 
                 if (messageDigest.length != computedMessageDigest.length)
