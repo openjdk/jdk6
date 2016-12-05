@@ -131,8 +131,8 @@ public abstract class FileSystemView {
         }
 
         File[] roots = getRoots();
-        for (int i = 0; i < roots.length; i++) {
-            if (roots[i].equals(f)) {
+        for (File root : roots) {
+            if (root.equals(f)) {
                 return true;
             }
         }
@@ -247,8 +247,8 @@ public abstract class FileSystemView {
                     return true;
                 }
             File[] children = getFiles(folder, false);
-            for (int i = 0; i < children.length; i++) {
-                if (file.equals(children[i])) {
+            for (File child : children) {
+                if (file.equals(child)) {
                     return true;
                 }
             }
@@ -271,9 +271,9 @@ public abstract class FileSystemView {
     public File getChild(File parent, String fileName) {
         if (parent instanceof ShellFolder) {
             File[] children = getFiles(parent, false);
-            for (int i = 0; i < children.length; i++) {
-                if (children[i].getName().equals(fileName)) {
-                    return children[i];
+            for (File child : children) {
+                if (child.getName().equals(fileName)) {
+                    return child;
                 }
             }
         }
@@ -439,7 +439,7 @@ public abstract class FileSystemView {
      * Gets the list of shown (i.e. not hidden) files.
      */
     public File[] getFiles(File dir, boolean useFileHiding) {
-        Vector files = new Vector();
+        Vector<File> files = new Vector<File>();
 
 
         // add all files in dir
@@ -478,7 +478,7 @@ public abstract class FileSystemView {
             }
         }
 
-        return (File[])files.toArray(new File[files.size()]);
+        return files.toArray(new File[files.size()]);
     }
 
 
@@ -585,7 +585,7 @@ class UnixFileSystemView extends FileSystemView {
         if(containingDir == null) {
             throw new IOException("Containing directory is null:");
         }
-        File newFolder = null;
+        File newFolder;
         // Unix - using OpenWindows' default folder name. Can't find one for Motif/CDE.
         newFolder = createFileObject(containingDir, newFolderString);
         int i = 1;
@@ -609,11 +609,7 @@ class UnixFileSystemView extends FileSystemView {
     }
 
     public boolean isDrive(File dir) {
-        if (isFloppyDrive(dir)) {
-            return true;
-        } else {
-            return false;
-        }
+        return isFloppyDrive(dir);
     }
 
     public boolean isFloppyDrive(File dir) {
@@ -696,9 +692,8 @@ class WindowsFileSystemView extends FileSystemView {
         if(containingDir == null) {
             throw new IOException("Containing directory is null:");
         }
-        File newFolder = null;
         // Using NT's default folder name
-        newFolder = createFileObject(containingDir, newFolderString);
+        File newFolder = createFileObject(containingDir, newFolderString);
         int i = 2;
         while (newFolder.exists() && (i < 100)) {
             newFolder = createFileObject(containingDir, MessageFormat.format(
@@ -766,9 +761,8 @@ class GenericFileSystemView extends FileSystemView {
         if(containingDir == null) {
             throw new IOException("Containing directory is null:");
         }
-        File newFolder = null;
         // Using NT's default folder name
-        newFolder = createFileObject(containingDir, newFolderString);
+        File newFolder = createFileObject(containingDir, newFolderString);
 
         if(newFolder.exists()) {
             throw new IOException("Directory already exists:" + newFolder.getAbsolutePath());

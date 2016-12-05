@@ -593,7 +593,7 @@ public class RepaintManager
      */
     private synchronized boolean extendDirtyRegion(
         Component c, int x, int y, int w, int h) {
-        Rectangle r = (Rectangle)dirtyComponents.get(c);
+        Rectangle r = dirtyComponents.get(c);
         if (r != null) {
             // A non-null r implies c is already marked as dirty,
             // and that the parent is valid. Therefore we can
@@ -609,9 +609,9 @@ public class RepaintManager
      *  dirty.
      */
     public Rectangle getDirtyRegion(JComponent aComponent) {
-        Rectangle r = null;
+        Rectangle r;
         synchronized(this) {
-            r = (Rectangle)dirtyComponents.get(aComponent);
+            r = dirtyComponents.get(aComponent);
         }
         if(r == null)
             return new Rectangle(0,0,0,0);
@@ -890,7 +890,7 @@ public class RepaintManager
 
         dx = rootDx = 0;
         dy = rootDy = 0;
-        tmp.setBounds((Rectangle) dirtyComponents.get(dirtyComponent));
+        tmp.setBounds(dirtyComponents.get(dirtyComponent));
 
         // System.out.println("Collect dirty component for bound " + tmp +
         //                                   "component bounds is " + cBounds);;
@@ -937,7 +937,7 @@ public class RepaintManager
             Rectangle r;
             tmp.setLocation(tmp.x + rootDx - dx,
                             tmp.y + rootDy - dy);
-            r = (Rectangle)dirtyComponents.get(rootDirtyComponent);
+            r = dirtyComponents.get(rootDirtyComponent);
             SwingUtilities.computeUnion(tmp.x,tmp.y,tmp.width,tmp.height,r);
         }
 
@@ -1013,7 +1013,7 @@ public class RepaintManager
 
     private Image _getOffscreenBuffer(Component c, int proposedWidth, int proposedHeight) {
         Dimension maxSize = getDoubleBufferMaximumSize();
-        DoubleBufferInfo doubleBuffer = null;
+        DoubleBufferInfo doubleBuffer;
         int width, height;
 
         if (standardDoubleBuffer == null) {
@@ -1082,7 +1082,7 @@ public class RepaintManager
         Iterator gcs = volatileMap.keySet().iterator();
         while (gcs.hasNext()) {
             GraphicsConfiguration gc = (GraphicsConfiguration)gcs.next();
-            VolatileImage image = (VolatileImage)volatileMap.get(gc);
+            VolatileImage image = volatileMap.get(gc);
             if (image.getWidth() > width || image.getHeight() > height) {
                 image.flush();
                 gcs.remove();
@@ -1250,7 +1250,7 @@ public class RepaintManager
      */
     void beginPaint() {
         boolean multiThreadedPaint = false;
-        int paintDepth = 0;
+        int paintDepth;
         Thread currentThread = Thread.currentThread();
         synchronized(this) {
             paintDepth = this.paintDepth;

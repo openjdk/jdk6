@@ -191,7 +191,7 @@ public class UIManager implements Serializable
         MultiUIDefaults multiUIDefaults = new MultiUIDefaults(tables);
         LookAndFeel lookAndFeel;
         LookAndFeel multiLookAndFeel = null;
-        Vector auxLookAndFeels = null;
+        Vector<LookAndFeel> auxLookAndFeels = null;
         SwingPropertyChangeSupport changeSupport;
 
         LookAndFeelInfo[] installedLAFs;
@@ -357,7 +357,7 @@ public class UIManager implements Serializable
     private static LookAndFeelInfo[] installedLAFs;
 
     static {
-        ArrayList iLAFs = new ArrayList(4);
+        ArrayList<LookAndFeelInfo> iLAFs = new ArrayList<LookAndFeelInfo>(4);
         iLAFs.add(new LookAndFeelInfo(
                       "Metal", "javax.swing.plaf.metal.MetalLookAndFeel"));
         iLAFs.add(new LookAndFeelInfo(
@@ -381,8 +381,7 @@ public class UIManager implements Serializable
             iLAFs.add(new LookAndFeelInfo("GTK+",
                   "com.sun.java.swing.plaf.gtk.GTKLookAndFeel"));
         }
-        installedLAFs = (LookAndFeelInfo[])iLAFs.toArray(
-                        new LookAndFeelInfo[iLAFs.size()]);
+        installedLAFs = iLAFs.toArray(new LookAndFeelInfo[iLAFs.size()]);
     }
 
 
@@ -625,7 +624,7 @@ public class UIManager implements Serializable
      * @see #getSystemLookAndFeelClassName
      */
     public static String getCrossPlatformLookAndFeelClassName() {
-        String laf = (String)AccessController.doPrivileged(
+        String laf = AccessController.doPrivileged(
                              new GetPropertyAction("swing.crossplatformlaf"));
         if (laf != null) {
             return laf;
@@ -1064,9 +1063,9 @@ public class UIManager implements Serializable
             // for that.
             return;
         }
-        Vector v = getLAFState().auxLookAndFeels;
+        Vector<LookAndFeel> v = getLAFState().auxLookAndFeels;
         if (v == null) {
-            v = new Vector();
+            v = new Vector<LookAndFeel>();
         }
 
         if (!v.contains(laf)) {
@@ -1100,7 +1099,7 @@ public class UIManager implements Serializable
 
         boolean result;
 
-        Vector v = getLAFState().auxLookAndFeels;
+        Vector<LookAndFeel> v = getLAFState().auxLookAndFeels;
         if ((v == null) || (v.size() == 0)) {
             return false;
         }
@@ -1136,14 +1135,14 @@ public class UIManager implements Serializable
     static public LookAndFeel[] getAuxiliaryLookAndFeels() {
         maybeInitialize();
 
-        Vector v = getLAFState().auxLookAndFeels;
+        Vector<LookAndFeel> v = getLAFState().auxLookAndFeels;
         if ((v == null) || (v.size() == 0)) {
             return null;
         }
         else {
             LookAndFeel[] rv = new LookAndFeel[v.size()];
             for (int i = 0; i < rv.length; i++) {
-                rv[i] = (LookAndFeel)v.elementAt(i);
+                rv[i] = v.elementAt(i);
             }
             return rv;
         }
@@ -1210,7 +1209,7 @@ public class UIManager implements Serializable
             final Properties props = new Properties();
 
             java.security.AccessController.doPrivileged(
-                new java.security.PrivilegedAction() {
+                new java.security.PrivilegedAction<Object>() {
                 public Object run() {
                     try {
                         File file = new File(makeSwingPropertiesFilename());
@@ -1269,7 +1268,7 @@ public class UIManager implements Serializable
          * property.  For example given "swing.installedlafs=motif,windows"
          * lafs = {"motif", "windows"}.
          */
-        Vector lafs = new Vector();
+        Vector<String> lafs = new Vector<String>();
         StringTokenizer st = new StringTokenizer(ilafsString, ",", false);
         while (st.hasMoreTokens()) {
             lafs.addElement(st.nextToken());
@@ -1279,9 +1278,8 @@ public class UIManager implements Serializable
          * list.  If they both exist then add a LookAndFeelInfo to
          * the installedLafs array.
          */
-        Vector ilafs = new Vector(lafs.size());
-        for(int i = 0; i < lafs.size(); i++) {
-            String laf = (String)lafs.elementAt(i);
+        Vector<LookAndFeelInfo> ilafs = new Vector<LookAndFeelInfo>(lafs.size());
+        for (String laf : lafs) {
             String name = swingProps.getProperty(makeInstalledLAFKey(laf, "name"), laf);
             String cls = swingProps.getProperty(makeInstalledLAFKey(laf, "class"));
             if (cls != null) {
@@ -1291,7 +1289,7 @@ public class UIManager implements Serializable
 
         LookAndFeelInfo[] installedLAFs = new LookAndFeelInfo[ilafs.size()];
         for(int i = 0; i < ilafs.size(); i++) {
-            installedLAFs[i] = (LookAndFeelInfo)(ilafs.elementAt(i));
+            installedLAFs[i] = ilafs.elementAt(i);
         }
         getLAFState().installedLAFs = installedLAFs;
     }
@@ -1336,7 +1334,7 @@ public class UIManager implements Serializable
             return;
         }
 
-        Vector auxLookAndFeels = new Vector();
+        Vector<LookAndFeel> auxLookAndFeels = new Vector<LookAndFeel>();
 
         StringTokenizer p = new StringTokenizer(auxLookAndFeelNames,",");
         String factoryName;
@@ -1437,7 +1435,7 @@ public class UIManager implements Serializable
                         Component c = e.getComponent();
 
                         if ((!(c instanceof JComponent) ||
-                             (c != null && !((JComponent)c).isEnabled())) &&
+                             (c != null && !c.isEnabled())) &&
                                 JComponent.KeyboardState.shouldProcess(e) &&
                                 SwingUtilities.processKeyBindings(e)) {
                             e.consume();

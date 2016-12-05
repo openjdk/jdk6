@@ -74,11 +74,11 @@ import sun.util.CoreResourceBundleControl;
  */
 public class UIDefaults extends Hashtable<Object,Object>
 {
-    private static final Object PENDING = new String("Pending");
+    private static final Object PENDING = "Pending";
 
     private SwingPropertyChangeSupport changeSupport;
 
-    private Vector resourceBundles;
+    private Vector<String> resourceBundles;
 
     private Locale defaultLocale = Locale.getDefault();
 
@@ -88,7 +88,7 @@ public class UIDefaults extends Hashtable<Object,Object>
      * Access to this should be done while holding a lock on the
      * UIDefaults, eg synchronized(this).
      */
-    private Map resourceCache;
+    private Map<Locale, Map<String, Object>> resourceCache;
 
     /**
      * Creates an empty defaults table.
@@ -108,7 +108,7 @@ public class UIDefaults extends Hashtable<Object,Object>
      */
     public UIDefaults(int initialCapacity, float loadFactor) {
         super(initialCapacity, loadFactor);
-        resourceCache = new HashMap();
+        resourceCache = new HashMap<Locale, Map<String, Object>>();
     }
 
 
@@ -283,24 +283,24 @@ public class UIDefaults extends Hashtable<Object,Object>
             if( defaultLocale == null )
                 return null;
             else
-                l = (Locale)defaultLocale;
+                l = defaultLocale;
         }
 
         synchronized(this) {
-            return getResourceCache(l).get((String)key);
+            return getResourceCache(l).get(key);
         }
     }
 
     /**
      * Returns a Map of the known resources for the given locale.
      */
-    private Map getResourceCache(Locale l) {
-        Map values = (Map)resourceCache.get(l);
+    private Map<String, Object> getResourceCache(Locale l) {
+        Map<String, Object> values = resourceCache.get(l);
 
         if (values == null) {
             values = new TextAndMnemonicHashMap();
             for (int i=resourceBundles.size()-1; i >= 0; i--) {
-                String bundleName = (String)resourceBundles.get(i);
+                String bundleName = resourceBundles.get(i);
                 try {
                     Control c = CoreResourceBundleControl.getRBControlInstance(bundleName);
                     ResourceBundle b;
@@ -755,7 +755,7 @@ public class UIDefaults extends Hashtable<Object,Object>
         Object cl = get("ClassLoader");
         ClassLoader uiClassLoader =
             (cl != null) ? (ClassLoader)cl : target.getClass().getClassLoader();
-        Class uiClass = getUIClass(target.getUIClassID(), uiClassLoader);
+        Class<? extends ComponentUI> uiClass = getUIClass(target.getUIClassID(), uiClassLoader);
         Object uiObject = null;
 
         if (uiClass == null) {
@@ -765,8 +765,7 @@ public class UIDefaults extends Hashtable<Object,Object>
             try {
                 Method m = (Method)get(uiClass);
                 if (m == null) {
-                    Class acClass = javax.swing.JComponent.class;
-                    m = uiClass.getMethod("createUI", new Class[]{acClass});
+                    m = uiClass.getMethod("createUI", new Class[]{JComponent.class});
                     put(uiClass, m);
                 }
                 uiObject = MethodUtil.invoke(m, null, new Object[]{target});
@@ -866,7 +865,7 @@ public class UIDefaults extends Hashtable<Object,Object>
             return;
         }
         if( resourceBundles == null ) {
-            resourceBundles = new Vector(5);
+            resourceBundles = new Vector<String>(5);
         }
         if (!resourceBundles.contains(bundleName)) {
             resourceBundles.add( bundleName );
@@ -1068,7 +1067,7 @@ public class UIDefaults extends Hashtable<Object,Object>
             className = c;
             methodName = m;
             if (o != null) {
-                args = (Object[])o.clone();
+                args = o.clone();
             }
         }
 
@@ -1086,10 +1085,10 @@ public class UIDefaults extends Hashtable<Object,Object>
             if (acc == null && System.getSecurityManager() != null) {
                 throw new SecurityException("null AccessControlContext");
             } 
-            return AccessController.doPrivileged(new PrivilegedAction() {
+            return AccessController.doPrivileged(new PrivilegedAction<Object>() {
                 public Object run() {
                     try {
-                        Class c;
+                        Class<?> c;
                         Object cl;
                         // See if we should use a separate ClassLoader
                         if (table == null || !((cl = table.get("ClassLoader"))

@@ -388,7 +388,7 @@ public class JViewport extends JComponent implements Accessible
                 // could be bigger than invalid size.
                 validateView();
             }
-            int     dx = 0, dy = 0;
+            int dx, dy;
 
             dx = positionAdjustment(getWidth(), contentRect.width, contentRect.x);
             dy = positionAdjustment(getHeight(), contentRect.height, contentRect.y);
@@ -681,10 +681,7 @@ public class JViewport extends JComponent implements Accessible
      * @see JComponent#isPaintingOrigin()
      */
     boolean isPaintingOrigin() {
-        if (scrollMode == BACKINGSTORE_SCROLL_MODE) {
-            return true;
-        }
-        return false;
+        return scrollMode == BACKINGSTORE_SCROLL_MODE;
     }
 
 
@@ -902,11 +899,7 @@ public class JViewport extends JComponent implements Accessible
       */
     public void setScrollMode(int mode) {
         scrollMode = mode;
-        if (mode == BACKINGSTORE_SCROLL_MODE) {
-            backingStore = true;
-        } else {
-            backingStore = false;
-        }
+        backingStore = mode == BACKINGSTORE_SCROLL_MODE;
     }
 
     /**
@@ -957,10 +950,10 @@ public class JViewport extends JComponent implements Accessible
         }
     }
 
-    private final boolean isBlitting() {
+    private boolean isBlitting() {
         Component view = getView();
         return (scrollMode == BLIT_SCROLL_MODE) &&
-               (view instanceof JComponent) && ((JComponent)view).isOpaque();
+               (view instanceof JComponent) && view.isOpaque();
     }
 
 
@@ -1378,8 +1371,7 @@ public class JViewport extends JComponent implements Accessible
      * @since 1.4
      */
     public ChangeListener[] getChangeListeners() {
-        return (ChangeListener[])listenerList.getListeners(
-                ChangeListener.class);
+        return listenerList.getListeners(ChangeListener.class);
     }
 
     /**

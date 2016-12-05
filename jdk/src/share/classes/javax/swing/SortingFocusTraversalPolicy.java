@@ -79,7 +79,7 @@ public class SortingFocusTraversalPolicy
      * sorted list should be reused if possible.
      */
     private Container cachedRoot;
-    private List cachedCycle;
+    private List<Component> cachedCycle;
 
     // Delegate our fitness test to ContainerOrder so that we only have to
     // code the algorithm once.
@@ -103,7 +103,7 @@ public class SortingFocusTraversalPolicy
     }
 
     private void enumerateAndSortCycle(Container focusCycleRoot,
-                                       List cycle, Map defaults) {
+                                       List<Component> cycle, Map defaults) {
         List defaultRoots = null;
 
         if (!focusCycleRoot.isShowing()) {
@@ -165,7 +165,7 @@ public class SortingFocusTraversalPolicy
         }
     }
 
-    private void enumerateCycle(Container container, List cycle) {
+    private void enumerateCycle(Container container, List<Component> cycle) {
         if (!(container.isVisible() && container.isDisplayable())) {
             return;
         }
@@ -173,8 +173,7 @@ public class SortingFocusTraversalPolicy
         cycle.add(container);
 
         Component[] components = container.getComponents();
-        for (int i = 0; i < components.length; i++) {
-            Component comp = components[i];
+        for (Component comp : components) {
             if ((comp instanceof Container)
                 && !((Container)comp).isFocusTraversalPolicyProvider()
                 && !((Container)comp).isFocusCycleRoot()
@@ -437,7 +436,7 @@ public class SortingFocusTraversalPolicy
      * @throws IllegalArgumentException if aContainer is null
      */
     public Component getFirstComponent(Container aContainer) {
-        List cycle;
+        List<Component> cycle;
 
         if (log.isLoggable(Level.FINE)) log.fine("### Getting first component in " + aContainer.getName());
         if (aContainer == null) {
@@ -447,7 +446,7 @@ public class SortingFocusTraversalPolicy
         if (this.cachedRoot == aContainer) {
             cycle = this.cachedCycle;
         } else {
-            cycle = new ArrayList();
+            cycle = new ArrayList<Component>();
             enumerateAndSortCycle(aContainer, cycle, null);
         }
 
@@ -456,8 +455,7 @@ public class SortingFocusTraversalPolicy
             return null;
         }
 
-        for (int i= 0; i < cycle.size(); i++) {
-            Component comp = (Component)cycle.get(i);
+        for (Component comp : cycle) {
             if (accept(comp)) {
                 return comp;
             } else if (comp instanceof Container && !(comp == aContainer) && ((Container)comp).isFocusTraversalPolicyProvider()) {
@@ -479,7 +477,7 @@ public class SortingFocusTraversalPolicy
      * @throws IllegalArgumentException if aContainer is null
      */
     public Component getLastComponent(Container aContainer) {
-        List cycle;
+        List<Component> cycle;
         if (log.isLoggable(Level.FINE)) log.fine("### Getting last component in " + aContainer.getName());
 
         if (aContainer == null) {
@@ -489,7 +487,7 @@ public class SortingFocusTraversalPolicy
         if (this.cachedRoot == aContainer) {
             cycle = this.cachedCycle;
         } else {
-            cycle = new ArrayList();
+            cycle = new ArrayList<Component>();
             enumerateAndSortCycle(aContainer, cycle, null);
         }
 
@@ -500,8 +498,7 @@ public class SortingFocusTraversalPolicy
         }
         if (log.isLoggable(Level.FINE)) log.fine("### Cycle is " + cycle);
 
-        for (int i= cycle.size()-1; i >= 0; i--) {
-            Component comp = (Component)cycle.get(i);
+        for (Component comp : cycle) {
             if (accept(comp)) {
                 return comp;
             } else if (comp instanceof Container && !(comp == aContainer) && ((Container)comp).isFocusTraversalPolicyProvider()) {

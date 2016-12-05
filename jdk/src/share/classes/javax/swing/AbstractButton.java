@@ -1312,8 +1312,7 @@ public abstract class AbstractButton extends JComponent implements ItemSelectabl
             // Make sure the change actually took effect
             if (!selected && isSelected()) {
                 if (getModel() instanceof DefaultButtonModel) {
-                    ButtonGroup group = (ButtonGroup)
-                            ((DefaultButtonModel)getModel()).getGroup();
+                    ButtonGroup group = ((DefaultButtonModel)getModel()).getGroup();
                     if (group != null) {
                         group.clearSelection();
                     }
@@ -1883,8 +1882,7 @@ public abstract class AbstractButton extends JComponent implements ItemSelectabl
      * @since 1.4
      */
     public ChangeListener[] getChangeListeners() {
-        return (ChangeListener[])(listenerList.getListeners(
-            ChangeListener.class));
+        return listenerList.getListeners(ChangeListener.class);
     }
 
     /**
@@ -1941,8 +1939,7 @@ public abstract class AbstractButton extends JComponent implements ItemSelectabl
      * @since 1.4
      */
     public ActionListener[] getActionListeners() {
-        return (ActionListener[])(listenerList.getListeners(
-            ActionListener.class));
+        return listenerList.getListeners(ActionListener.class);
     }
 
     /**
@@ -2134,7 +2131,7 @@ public abstract class AbstractButton extends JComponent implements ItemSelectabl
      * @since 1.4
      */
     public ItemListener[] getItemListeners() {
-        return (ItemListener[])listenerList.getListeners(ItemListener.class);
+        return listenerList.getListeners(ItemListener.class);
     }
 
    /**
@@ -2978,7 +2975,7 @@ public abstract class AbstractButton extends JComponent implements ItemSelectabl
             paintViewR.height = AbstractButton.this.getHeight() - (paintViewInsets.top + paintViewInsets.bottom);
 
             String clippedText = SwingUtilities.layoutCompoundLabel(
-                (JComponent)AbstractButton.this,
+                AbstractButton.this,
                 getFontMetrics(getFont()),
                 text,
                 icon,

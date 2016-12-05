@@ -854,7 +854,7 @@ implements ItemSelectable,ListDataListener,ActionListener, Accessible {
      * @since 1.4
      */
     public ItemListener[] getItemListeners() {
-        return (ItemListener[])listenerList.getListeners(ItemListener.class);
+        return listenerList.getListeners(ItemListener.class);
     }
 
     /**
@@ -892,8 +892,7 @@ implements ItemSelectable,ListDataListener,ActionListener, Accessible {
      * @since 1.4
      */
     public ActionListener[] getActionListeners() {
-        return (ActionListener[])listenerList.getListeners(
-                ActionListener.class);
+        return listenerList.getListeners(ActionListener.class);
     }
 
     /**
@@ -932,8 +931,7 @@ implements ItemSelectable,ListDataListener,ActionListener, Accessible {
      * @since 1.4
      */
     public PopupMenuListener[] getPopupMenuListeners() {
-        return (PopupMenuListener[])listenerList.getListeners(
-                PopupMenuListener.class);
+        return listenerList.getListeners(PopupMenuListener.class);
     }
 
     /**
@@ -1663,7 +1661,7 @@ implements ItemSelectable,ListDataListener,ActionListener, Accessible {
             if (editor != null) {
                 Component comp = editor.getEditorComponent();
                 if (comp instanceof Accessible) {
-                    AccessibleContext ac = ((Accessible)comp).getAccessibleContext();
+                    AccessibleContext ac = comp.getAccessibleContext();
                     if (ac != null) { // may be null
                         ac.setAccessibleName(getAccessibleName());
                         ac.setAccessibleDescription(getAccessibleDescription());
@@ -1736,7 +1734,7 @@ implements ItemSelectable,ListDataListener,ActionListener, Accessible {
 
                 // Fire a FOCUSED lost PropertyChangeEvent for the
                 // previously selected list item.
-                PropertyChangeEvent pce = null;
+                PropertyChangeEvent pce;
 
                 if (previousSelectedAccessible != null) {
                     pce = new PropertyChangeEvent(previousSelectedAccessible,
