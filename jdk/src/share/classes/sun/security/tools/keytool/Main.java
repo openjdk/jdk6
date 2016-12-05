@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,7 @@
  * questions.
  */
 
-package sun.security.tools;
+package sun.security.tools.keytool;
 
 import java.io.*;
 import java.math.BigInteger;
@@ -65,6 +65,8 @@ import java.net.URLClassLoader;
 
 import sun.misc.BASE64Decoder;
 import sun.misc.BASE64Encoder;
+import sun.security.tools.KeyStoreUtil;
+import sun.security.tools.PathList;
 import sun.security.util.ObjectIdentifier;
 import sun.security.pkcs10.PKCS10;
 import sun.security.provider.IdentityDatabase;
@@ -81,8 +83,8 @@ import javax.crypto.SecretKey;
 import sun.security.x509.*;
 
 import static java.security.KeyStore.*;
-import static sun.security.tools.KeyTool.Command.*;
-import static sun.security.tools.KeyTool.Option.*;
+import static sun.security.tools.keytool.Main.Command.*;
+import static sun.security.tools.keytool.Main.Option.*;
 
 /**
  * This tool manages keystores.
@@ -97,7 +99,7 @@ import static sun.security.tools.KeyTool.Option.*;
  * @since 1.2
  */
 
-public final class KeyTool {
+public final class Main {
 
     private boolean debug = false;
     private Command command = null;
@@ -281,7 +283,6 @@ public final class KeyTool {
 
     private static final Class[] PARAM_STRING = { String.class };
 
-    private static final String JKS = "jks";
     private static final String NONE = "NONE";
     private static final String P11KEYSTORE = "PKCS11";
     private static final String P12KEYSTORE = "PKCS12";
@@ -289,17 +290,18 @@ public final class KeyTool {
 
     // for i18n
     private static final java.util.ResourceBundle rb =
-        java.util.ResourceBundle.getBundle("sun.security.util.Resources");
+        java.util.ResourceBundle.getBundle(
+            "sun.security.tools.keytool.Resources");
     private static final Collator collator = Collator.getInstance();
     static {
         // this is for case insensitive string comparisons
         collator.setStrength(Collator.PRIMARY);
     };
 
-    private KeyTool() { }
+    private Main() { }
 
     public static void main(String[] args) throws Exception {
-        KeyTool kt = new KeyTool();
+        Main kt = new Main();
         kt.run(args, System.out);
     }
 
@@ -856,7 +858,7 @@ public final class KeyTool {
         }
 
         if (trustcacerts) {
-            caks = getCacertsKeyStore();
+            caks = KeyStoreUtil.getCacertsKeyStore();
         }
 
         // Perform the specified command
@@ -2892,33 +2894,6 @@ public final class KeyTool {
             }
         } while (reply == null);
         return reply;
-    }
-
-    /**
-     * Returns the keystore with the configured CA certificates.
-     */
-    public static KeyStore getCacertsKeyStore()
-        throws Exception
-    {
-        String sep = File.separator;
-        File file = new File(System.getProperty("java.home") + sep
-                             + "lib" + sep + "security" + sep
-                             + "cacerts");
-        if (!file.exists()) {
-            return null;
-        }
-        FileInputStream fis = null;
-        KeyStore caks = null;
-        try {
-            fis = new FileInputStream(file);
-            caks = KeyStore.getInstance(JKS);
-            caks.load(fis, null);
-        } finally {
-            if (fis != null) {
-                fis.close();
-            }
-        }
-        return caks;
     }
 
     /**

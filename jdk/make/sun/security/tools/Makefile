@@ -37,7 +37,7 @@ AUTO_FILES_JAVA_DIRS = sun/security/tools
 # Resources
 #
 LOCALE_SET_DEFINITION = jdk
-RESOURCE_BUNDLES_JAVA = sun/security/tools/JarSignerResources.java
+RESOURCE_BUNDLES_JAVA = sun/security/tools/jarsigner/Resources.java
 
 #
 # Rules
