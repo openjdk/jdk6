@@ -262,7 +262,8 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
                 }
 
                 // Convert constraint conditions into Constraint classes
-                Constraint c, lastConstraint = null;
+                Constraint c = null;
+                Constraint lastConstraint = null;
                 // Allow only one jdkCA entry per constraint entry
                 boolean jdkCALimit = false;
 
@@ -290,9 +291,6 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
                         }
                         c = new jdkCAConstraint(algorithm);
                         jdkCALimit = true;
-                    } else {
-                        throw new IllegalArgumentException("Error in security" +
-                                " property. Constraint unknown: " + entry);
                     }
 
                     // Link multiple conditions for a single constraint
@@ -302,7 +300,9 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
                             constraintsMap.put(algorithm,
                                     new HashSet<Constraint>());
                         }
-                        constraintsMap.get(algorithm).add(c);
+                        if (c != null) {
+                            constraintsMap.get(algorithm).add(c);
+                        }
                     } else {
                         lastConstraint.nextConstraint = c;
                     }
