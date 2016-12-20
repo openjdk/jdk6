@@ -63,7 +63,7 @@ case "$OS" in
         echo
         echo "Running the test..."
         ${TESTJAVA}/bin/javac -d . ${TESTSRC}\\ShortRSAKeyWithinTLS.java
-        ${TESTJAVA}/bin/java ShortRSAKeyWithinTLS 7106773.1024 1024 \
+        ${TESTJAVA}/bin/java ${TESTVMOPTS} ShortRSAKeyWithinTLS 7106773.1024 1024 \
             TLSv1.2 TLS_DHE_RSA_WITH_AES_128_CBC_SHA
 
         rc=$?
