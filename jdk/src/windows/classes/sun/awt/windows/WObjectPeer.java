@@ -24,6 +24,9 @@
  */
 package sun.awt.windows;
 
+import java.util.Map;
+import java.util.WeakHashMap;
+
 abstract class WObjectPeer {
 
     static {
@@ -40,6 +43,8 @@ abstract class WObjectPeer {
 
     // used to synchronize the state of this peer
     private final Object stateLock = new Object();
+
+    private volatile Map<WObjectPeer, WObjectPeer> childPeers;
 
     public static WObjectPeer getPeerForTarget(Object t) {
         WObjectPeer peer = (WObjectPeer) WToolkit.targetToPeer(t);
@@ -73,6 +78,9 @@ abstract class WObjectPeer {
         }
 
         if (call_disposeImpl) {
+            if (childPeers != null) {
+                disposeChildPeers();
+            }
             disposeImpl();
         }
     }
@@ -84,4 +92,33 @@ abstract class WObjectPeer {
      * Initialize JNI field and method IDs
      */
     private static native void initIDs();
+
+    // if a child peer existence depends on this peer, add it to this collection
+    final void addChildPeer(WObjectPeer child) {
+        synchronized (getStateLock()) {
+            if (childPeers == null) {
+                childPeers = new WeakHashMap<WObjectPeer, WObjectPeer>();
+            }
+            if (isDisposed()) {
+                throw new IllegalStateException("Parent peer is disposed");
+            }
+            childPeers.put(child, this);
+        }
+    }
+
+    // called to dispose dependent child peers
+    private void disposeChildPeers() {
+        synchronized (getStateLock()) {
+            for (WObjectPeer child : childPeers.keySet()) {
+                if (child != null) {
+                    try {
+                        child.dispose();
+                    }
+                    catch (Exception e) {
+                        // ignored
+                    }
+                }
+            }
+        }
+    }
 }
