@@ -45,6 +45,8 @@ import sun.misc.JavaSecurityAccess;
 import sun.misc.SharedSecrets;
 import sun.security.action.GetPropertyAction;
 
+import com.sun.java.swing.SwingUtilities3;
+
 
 /**
  * This class manages repaint requests, allowing the number
@@ -311,6 +313,11 @@ public class RepaintManager
      */
     public synchronized void addInvalidComponent(JComponent invalidComponent)
     {
+        RepaintManager delegate = getDelegate(invalidComponent);
+        if (delegate != null) {
+            delegate.addInvalidComponent(invalidComponent);
+            return;
+        }
         Component validateRoot = null;
 
         /* Find the first JComponent ancestor of this component whose
@@ -381,6 +388,11 @@ public class RepaintManager
      * @see #addInvalidComponent
      */
     public synchronized void removeInvalidComponent(JComponent component) {
+        RepaintManager delegate = getDelegate(component);
+        if (delegate != null) {
+            delegate.removeInvalidComponent(component);
+            return;
+        }
         if(invalidComponents != null) {
             int index = invalidComponents.indexOf(component);
             if(index != -1) {
@@ -472,6 +484,11 @@ public class RepaintManager
      */
     public void addDirtyRegion(JComponent c, int x, int y, int w, int h)
     {
+        RepaintManager delegate = getDelegate(c);
+        if (delegate != null) {
+            delegate.addDirtyRegion(c, x, y, w, h);
+            return;
+        }
         addDirtyRegion0(c, x, y, w, h);
     }
 
@@ -609,6 +626,10 @@ public class RepaintManager
      *  dirty.
      */
     public Rectangle getDirtyRegion(JComponent aComponent) {
+        RepaintManager delegate = getDelegate(aComponent);
+        if (delegate != null) {
+            return delegate.getDirtyRegion(aComponent);
+        }
         Rectangle r;
         synchronized(this) {
             r = dirtyComponents.get(aComponent);
@@ -624,6 +645,11 @@ public class RepaintManager
      * completely painted during the next paintDirtyRegions() call.
      */
     public void markCompletelyDirty(JComponent aComponent) {
+        RepaintManager delegate = getDelegate(aComponent);
+        if (delegate != null) {
+            delegate.markCompletelyDirty(aComponent);
+            return;
+        }
         addDirtyRegion(aComponent,0,0,Integer.MAX_VALUE,Integer.MAX_VALUE);
     }
 
@@ -632,6 +658,11 @@ public class RepaintManager
      * get painted during the next paintDirtyRegions() call.
      */
     public void markCompletelyClean(JComponent aComponent) {
+        RepaintManager delegate = getDelegate(aComponent);
+        if (delegate != null) {
+            delegate.markCompletelyClean(aComponent);
+            return;
+        }
         synchronized(this) {
                 dirtyComponents.remove(aComponent);
         }
@@ -644,6 +675,10 @@ public class RepaintManager
      * if it return true.
      */
     public boolean isCompletelyDirty(JComponent aComponent) {
+        RepaintManager delegate = getDelegate(aComponent);
+        if (delegate != null) {
+            return delegate.isCompletelyDirty(aComponent);
+        }
         Rectangle r;
 
         r = getDirtyRegion(aComponent);
@@ -972,6 +1007,10 @@ public class RepaintManager
      * repaint manager.
      */
     public Image getOffscreenBuffer(Component c,int proposedWidth,int proposedHeight) {
+        RepaintManager delegate = getDelegate(c);
+        if (delegate != null) {
+            return delegate.getOffscreenBuffer(c, proposedWidth, proposedHeight);
+        }
         return _getOffscreenBuffer(c, proposedWidth, proposedHeight);
     }
 
@@ -989,6 +1028,11 @@ public class RepaintManager
    */
     public Image getVolatileOffscreenBuffer(Component c,
                                             int proposedWidth,int proposedHeight) {
+        RepaintManager delegate = getDelegate(c);
+        if (delegate != null) {
+            return delegate.getVolatileOffscreenBuffer(c, proposedWidth,
+                                                        proposedHeight);
+        }
         GraphicsConfiguration config = c.getGraphicsConfiguration();
         if (config == null) {
             config = GraphicsEnvironment.getLocalGraphicsEnvironment().
@@ -1621,5 +1665,12 @@ public class RepaintManager
             validateInvalidComponents();
             prePaintDirtyRegions();
         }
+    }
+    private RepaintManager getDelegate(Component c) {
+        RepaintManager delegate = SwingUtilities3.getDelegateRepaintManager(c);
+        if (this == delegate) {
+            delegate = null;
+        }
+        return delegate;
     }
 }
