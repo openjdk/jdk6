@@ -35,9 +35,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -67,14 +68,17 @@ public final class ProcessTools {
      * @param processBuilder The process builder
      * @return Returns the initialized process
      * @throws IOException
+     * @throws BrokenBarrierException
      */
     public static Process startProcess(String name,
                                        ProcessBuilder processBuilder)
-    throws IOException {
+    throws IOException, BrokenBarrierException {
         Process p = null;
         try {
             p = startProcess(name, processBuilder, -1, TimeUnit.NANOSECONDS);
-        } catch (InterruptedException | TimeoutException e) {
+        } catch (InterruptedException e) {
+            // can't ever happen
+        } catch (TimeoutException e) {
             // can't ever happen
         }
         return p;
@@ -91,27 +95,44 @@ public final class ProcessTools {
      * @throws IOException
      * @throws InterruptedException
      * @throws TimeoutException
+     * @throws BrokenBarrierException
      */
     public static Process startProcess(String name,
                                        ProcessBuilder processBuilder,
                                        long timeout,
                                        TimeUnit unit)
-    throws IOException, InterruptedException, TimeoutException {
+    throws IOException, InterruptedException, TimeoutException, BrokenBarrierException {
         Process p = processBuilder.start();
         StreamPumper stdout = new StreamPumper(p.getInputStream());
         StreamPumper stderr = new StreamPumper(p.getErrorStream());
 
         stdout.addPump(new LineForwarder(name, System.out));
         stderr.addPump(new LineForwarder(name, System.err));
-        final Phaser phs = new Phaser(1);
+        final CyclicBarrier cb = new CyclicBarrier(1);
         Future<Void> stdoutTask = stdout.process();
         Future<Void> stderrTask = stderr.process();
 
         try {
             if (timeout > -1) {
-                phs.awaitAdvanceInterruptibly(0, timeout, unit);
+                cb.await(timeout, unit);
             }
-        } catch (TimeoutException | InterruptedException e) {
+        } catch (TimeoutException e) {
+            System.err.println("Failed to start a process (thread dump follows)");
+            for(Map.Entry<Thread, StackTraceElement[]> s : Thread.getAllStackTraces().entrySet()) {
+                printStack(s.getKey(), s.getValue());
+            }
+            stdoutTask.cancel(true);
+            stderrTask.cancel(true);
+            throw e;
+        } catch (InterruptedException e) {
+            System.err.println("Failed to start a process (thread dump follows)");
+            for(Map.Entry<Thread, StackTraceElement[]> s : Thread.getAllStackTraces().entrySet()) {
+                printStack(s.getKey(), s.getValue());
+            }
+            stdoutTask.cancel(true);
+            stderrTask.cancel(true);
+            throw e;
+        } catch (BrokenBarrierException e) {
             System.err.println("Failed to start a process (thread dump follows)");
             for(Map.Entry<Thread, StackTraceElement[]> s : Thread.getAllStackTraces().entrySet()) {
                 printStack(s.getKey(), s.getValue());
@@ -221,7 +242,7 @@ public final class ProcessTools {
             throws Exception {
         String javapath = JDKToolFinder.getJDKTool("java");
 
-        ArrayList<String> args = new ArrayList<>();
+        ArrayList<String> args = new ArrayList<String>();
         args.add(javapath);
         Collections.addAll(args, getPlatformSpecificVMArgs());
         Collections.addAll(args, command);

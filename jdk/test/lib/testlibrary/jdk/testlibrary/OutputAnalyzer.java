@@ -408,7 +408,7 @@ public final class OutputAnalyzer {
     }
 
     private List<String> asLines(String buffer) {
-        List<String> l = new ArrayList<>();
+        List<String> l = new ArrayList<String>();
         String[] a = buffer.split(Utils.NEW_LINE);
         for (String string : a) {
             l.add(string);
