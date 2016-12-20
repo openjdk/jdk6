@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2010 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 
 import com.sun.net.httpserver.*;
@@ -59,6 +59,11 @@ public class TimestampCheck {
     static final String defaultPolicyId = "2.3.4.5";
 
     static class Handler implements HttpHandler {
+
+        private final HttpServer httpServer;
+        private final String keystore;
+
+        @Override
         public void handle(HttpExchange t) throws IOException {
             int len = 0;
             for (String h: t.getRequestHeaders().keySet()) {
@@ -136,7 +141,13 @@ public class TimestampCheck {
             // Write TSResponse
             System.err.println("\nResponse\n===================");
             KeyStore ks = KeyStore.getInstance("JKS");
-            ks.load(new FileInputStream(TSKS), "changeit".toCharArray());
+            FileInputStream fis = null;
+            try {
+                fis = new FileInputStream(keystore);
+                ks.load(fis, "changeit".toCharArray());
+            } finally {
+                if (fis != null) { fis.close(); }
+            }
 
             String alias = "ts";
             if (path == 6) alias = "tsbad1";
@@ -240,35 +251,73 @@ public class TimestampCheck {
 
             return out.toByteArray();
         }
-    }
 
-    public static void main(String[] args) throws Exception {
-
-        Handler h = new Handler();
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        int port = server.getAddress().getPort();
-        HttpContext ctx = server.createContext("/", h);
-        server.start();
-
-        String cmd = null;
-        // Use -J-Djava.security.egd=file:/dev/./urandom to speed up
-        // nonce generation in timestamping request. Not avaibale on
-        // Windows and defaults to thread seed generator, not too bad.
-        if (System.getProperty("java.home").endsWith("jre")) {
-            cmd = System.getProperty("java.home") + "/../bin/jarsigner" +
-                " -J-Djava.security.egd=file:/dev/./urandom" +
-                " -debug -keystore " + TSKS + " -storepass changeit" +
-                " -tsa http://localhost:" + port + "/%d" +
-                " -signedjar new_%d.jar " + JAR + " old";
-        } else {
-            cmd = System.getProperty("java.home") + "/bin/jarsigner" +
-                " -J-Djava.security.egd=file:/dev/./urandom" +
-                " -debug -keystore " + TSKS + " -storepass changeit" +
-                " -tsa http://localhost:" + port + "/%d" +
-                " -signedjar new_%d.jar " + JAR + " old";
+        private Handler(HttpServer httpServer, String keystore) {
+            this.httpServer = httpServer;
+            this.keystore = keystore;
         }
 
+        /**
+         * Initialize TSA instance.
+         *
+         * Extended Key Info extension of certificate that is used for
+         * signing TSA responses should contain timeStamping value.
+         */
+        static Handler init(int port, String keystore) throws IOException {
+            HttpServer httpServer = HttpServer.create(
+                    new InetSocketAddress(port), 0);
+            Handler tsa = new Handler(httpServer, keystore);
+            httpServer.createContext("/", tsa);
+            return tsa;
+        }
+
+        /**
+         * Start TSA service.
+         */
+        void start() {
+            httpServer.start();
+        }
+
+        /**
+         * Stop TSA service.
+         */
+        void stop() {
+            httpServer.stop(0);
+        }
+
+        /**
+         * Return server port number.
+         */
+        int getPort() {
+            return httpServer.getAddress().getPort();
+        }
+
+        public void close() throws Exception {
+            stop();
+        }
+    }
+    public static void main(String[] args) throws Exception {
+        Handler tsa = null;
         try {
+            tsa = Handler.init(0, TSKS);
+            tsa.start();
+            int port = tsa.getPort();
+
+            String cmd;
+            // Use -J-Djava.security.egd=file:/dev/./urandom to speed up
+            // nonce generation in timestamping request. Not avaibale on
+            // Windows and defaults to thread seed generator, not too bad.
+            if (System.getProperty("java.home").endsWith("jre")) {
+                cmd = System.getProperty("java.home") + "/../bin/jarsigner";
+            } else {
+                cmd = System.getProperty("java.home") + "/bin/jarsigner";
+            }
+
+            cmd += " -J-Djava.security.egd=file:/dev/./urandom"
+                    + " -debug -keystore " + TSKS + " -storepass changeit"
+                    + " -tsa http://localhost:" + port + "/%d"
+                    + " -signedjar new_%d.jar " + JAR + " old";
+
             if (args.length == 0) {         // Run this test
                 jarsigner(cmd, 0, true);    // Success, normal call
                 jarsigner(cmd, 1, false);   // These 4 should fail
@@ -290,19 +339,19 @@ public class TimestampCheck {
                 System.in.read();
             }
         } finally {
-            server.stop(0);
+            if (tsa != null) { tsa.close(); }
         }
     }
 
     static void checkTimestamp(String file, String policyId, String digestAlg)
             throws Exception {
-	JarFile jf = null;
+        JarFile jf = null;
         try {
-	    jf = new JarFile(file);
+            jf = new JarFile(file);
             JarEntry je = jf.getJarEntry("META-INF/OLD.RSA");
-	    InputStream is = null;
-	    try {
-		is = jf.getInputStream(je);
+            InputStream is = null;
+            try {
+                is = jf.getInputStream(je);
                 byte[] content = IOUtils.readFully(is, -1, true);
                 PKCS7 p7 = new PKCS7(content);
                 SignerInfo[] si = p7.getSignerInfos();
@@ -321,11 +370,11 @@ public class TimestampCheck {
                     throw new Exception("policyId different");
                 }
             } finally {
-		if (is != null) { is.close(); }
-	    }
+                if (is != null) { is.close(); }
+            }
         } finally {
-	    if (jf != null) { jf.close(); }
-	}
+            if (jf != null) { jf.close(); }
+        }
     }
 
     /**
