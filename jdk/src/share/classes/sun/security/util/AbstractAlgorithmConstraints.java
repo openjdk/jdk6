@@ -48,6 +48,7 @@ public abstract class AbstractAlgorithmConstraints
             final String propertyName) {
         String property = AccessController.doPrivileged(
             new PrivilegedAction<String>() {
+                @Override
                 public String run() {
                     return Security.getProperty(propertyName);
                 }
