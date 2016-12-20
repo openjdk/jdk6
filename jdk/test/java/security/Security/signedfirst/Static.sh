@@ -58,6 +58,10 @@ case "$OS" in
     PATHSEP=":"
     FILESEP="/"
     ;;
+  CYGWIN* )
+    PATHSEP=";"
+    FILESEP="/"
+    ;;
   Windows* )
     PATHSEP=";"
     FILESEP="\\"
@@ -74,14 +78,14 @@ rm StaticSignedProvFirst.class
 
 # compile the test program
 ${TESTJAVA}${FILESEP}bin${FILESEP}javac \
-	-classpath ${TESTCLASSES}${PATHSEP}${TESTSRC}${FILESEP}exp.jar \
+	-classpath "${TESTCLASSES}${PATHSEP}${TESTSRC}${FILESEP}exp.jar" \
 	-d ${TESTCLASSES}${FILESEP} \
 	${TESTSRC}${FILESEP}StaticSignedProvFirst.java
 
 # run the test
 cd ${TESTSRC}${FILESEP}
 ${TESTJAVA}${FILESEP}bin${FILESEP}java \
-	-classpath ${TESTCLASSES}${PATHSEP}${TESTSRC}${FILESEP}exp.jar \
+	-classpath "${TESTCLASSES}${PATHSEP}${TESTSRC}${FILESEP}exp.jar" \
 	-Djava.security.properties=file:${TESTSRC}${FILESEP}Static.props \
 	StaticSignedProvFirst
 

@@ -28,6 +28,10 @@ case "$OS" in
   SunOS | Linux | Darwin | AIX )
     exit 0
     ;;
+  CYGWIN* )
+    PS=";"
+    FS="/"
+    ;;
   Windows* )
     PS=";"
     FS="\\"

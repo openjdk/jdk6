@@ -46,6 +46,10 @@ case "$OS" in
     PATHSEP=":"
     FILESEP="/"
     ;;
+  CYGWIN* )
+    PATHSEP=";"
+    FILESEP="/"
+    ;;
   Windows* )
     PATHSEP=";"
     FILESEP="\\"
@@ -58,5 +62,5 @@ esac
 
 JAVA="${TESTJAVA}${FILESEP}bin${FILESEP}java"
 
-${JAVA} -cp ${TESTCLASSES}${PATHSEP}${TESTSRC}${FILESEP}Deadlock.jar Deadlock
+${JAVA} -cp "${TESTCLASSES}${PATHSEP}${TESTSRC}${FILESEP}Deadlock.jar" Deadlock
 
