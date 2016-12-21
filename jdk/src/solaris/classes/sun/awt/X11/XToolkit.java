@@ -1092,6 +1092,19 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
     public Map mapInputMethodHighlight(InputMethodHighlight highlight)     {
         return XInputMethod.mapInputMethodHighlight(highlight);
     }
+    @Override
+    public boolean getLockingKeyState(int key) {
+        if (! (key == KeyEvent.VK_CAPS_LOCK || key == KeyEvent.VK_NUM_LOCK ||
+               key == KeyEvent.VK_SCROLL_LOCK || key == KeyEvent.VK_KANA_LOCK)) {
+            throw new IllegalArgumentException("invalid key for Toolkit.getLockingKeyState");
+        }
+        awtLock();
+        try {
+            return getModifierState( key );
+        } finally {
+            awtUnlock();
+        }
+    }
 
     public  Clipboard getSystemClipboard() {
         SecurityManager security = System.getSecurityManager();
@@ -1543,6 +1556,66 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
                 return 0;
             }
             return code;
+        } finally {
+            awtUnlock();
+        }
+    }
+    static boolean getModifierState( int jkc ) {
+        int iKeyMask = 0;
+        long ks = XKeysym.javaKeycode2Keysym( jkc );
+        int  kc = XlibWrapper.XKeysymToKeycode(getDisplay(), ks);
+        if (kc == 0) {
+            return false;
+        }
+        awtLock();
+        try {
+            XModifierKeymap modmap = new XModifierKeymap(
+                 XlibWrapper.XGetModifierMapping(getDisplay()));
+
+            int nkeys = modmap.get_max_keypermod();
+
+            long map_ptr = modmap.get_modifiermap();
+            for( int k = 0; k < 8; k++ ) {
+                for (int i = 0; i < nkeys; ++i) {
+                    int keycode = Native.getUByte(map_ptr, k * nkeys + i);
+                    if (keycode == 0) {
+                        continue; // ignore zero keycode
+                    }
+                    if (kc == keycode) {
+                        iKeyMask = 1 << k;
+                        break;
+                    }
+                }
+                if( iKeyMask != 0 ) {
+                    break;
+                }
+            }
+            XlibWrapper.XFreeModifiermap(modmap.pData);
+            if (iKeyMask == 0 ) {
+                return false;
+            }
+            // Now we know to which modifier is assigned the keycode
+            // correspondent to the keysym correspondent to the java
+            // keycode. We are going to check a state of this modifier.
+            // If a modifier is a weird one, we cannot help it.
+            long window = 0;
+            try{
+                // get any application window
+                window = ((Long)(winMap.firstKey())).longValue();
+            }catch(NoSuchElementException nex) {
+                // get root window
+                window = getDefaultRootWindow();
+            }
+            boolean res = XlibWrapper.XQueryPointer(getDisplay(), window,
+                                            XlibWrapper.larg1, //root
+                                            XlibWrapper.larg2, //child
+                                            XlibWrapper.larg3, //root_x
+                                            XlibWrapper.larg4, //root_y
+                                            XlibWrapper.larg5, //child_x
+                                            XlibWrapper.larg6, //child_y
+                                            XlibWrapper.larg7);//mask
+            int mask = Native.getInt(XlibWrapper.larg7);
+            return ((mask & iKeyMask) != 0);
         } finally {
             awtUnlock();
         }
