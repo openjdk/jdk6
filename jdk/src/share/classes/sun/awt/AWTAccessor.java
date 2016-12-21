@@ -89,7 +89,7 @@ public final class AWTAccessor {
         /*
          * Update the image of a non-opaque (translucent) window.
          */
-        void updateWindow(Window window, BufferedImage backBuffer);
+        void updateWindow(Window window);
         /**
          * Sets the synchronous status of focus requests on lightweight
          * components in the specified window to the specified value.

@@ -2163,7 +2163,7 @@ class XWindowPeer extends XPanelPeer implements WindowPeer,
     }
 
     @Override
-    public void updateWindow(BufferedImage backBuffer) {
+    public void updateWindow() {
         // no-op
     }
 }

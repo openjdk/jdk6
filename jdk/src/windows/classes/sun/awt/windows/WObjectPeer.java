@@ -38,6 +38,9 @@ abstract class WObjectPeer {
     // set from JNI if any errors in creating the peer occur
     protected Error createError = null;
 
+    // used to synchronize the state of this peer
+    private final Object stateLock = new Object();
+
     public static WObjectPeer getPeerForTarget(Object t) {
         WObjectPeer peer = (WObjectPeer) WToolkit.targetToPeer(t);
         return peer;
@@ -49,6 +52,10 @@ abstract class WObjectPeer {
 
     public Object getTarget() {
         return target;
+    }
+
+    public final Object getStateLock() {
+        return stateLock;
     }
 
     /*
