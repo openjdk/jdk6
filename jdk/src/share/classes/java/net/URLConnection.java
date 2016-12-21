@@ -575,7 +575,7 @@ public abstract class URLConnection {
      * @since 1.4
      */
     public Map<String,List<String>> getHeaderFields() {
-        return Collections.EMPTY_MAP;
+        return Collections.emptyMap();
     }
 
     /**
@@ -616,6 +616,7 @@ public abstract class URLConnection {
      *          <code>Default</code> argument is returned if the field is
      *          missing or malformed.
      */
+    @SuppressWarnings("deprecation")
     public long getHeaderFieldDate(String name, long Default) {
         String value = getHeaderField(name);
         try {
@@ -1110,7 +1111,7 @@ public abstract class URLConnection {
             throw new IllegalStateException("Already connected");
 
         if (requests == null)
-            return Collections.EMPTY_MAP;
+            return Collections.emptyMap();
 
         return requests.getHeaders(null);
     }
@@ -1193,7 +1194,7 @@ public abstract class URLConnection {
         factory = fac;
     }
 
-    private static Hashtable handlers = new Hashtable();
+    private static Hashtable<String, ContentHandler> handlers = new Hashtable<String, ContentHandler>();
     private static final ContentHandler UnknownContentHandlerP = new UnknownContentHandler();
 
     /**
@@ -1208,7 +1209,7 @@ public abstract class URLConnection {
         if (contentType == null)
             throw new UnknownServiceException("no content-type");
         try {
-            handler = (ContentHandler) handlers.get(contentType);
+            handler = handlers.get(contentType);
             if (handler != null)
                 return handler;
         } catch(Exception e) {
@@ -1274,7 +1275,7 @@ public abstract class URLConnection {
 
             try {
                 String clsName = packagePrefix + "." + contentHandlerClassName;
-                Class cls = null;
+                Class<?> cls = null;
                 try {
                     cls = Class.forName(clsName);
                 } catch (ClassNotFoundException e) {

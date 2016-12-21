@@ -28,6 +28,7 @@
 #
 
 BUILDDIR = ../../../../..
+JAVAC_MAX_WARNINGS = true
 PACKAGE = sun.net.spi.nameservice.dns
 PRODUCT = sun
 include $(BUILDDIR)/common/Defs.gmk

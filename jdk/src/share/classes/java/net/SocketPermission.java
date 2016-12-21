@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -492,6 +492,7 @@ implements java.io.Serializable
      * @param action the action string
      * @return the action mask
      */
+    @SuppressWarnings("fallthrough")
     private static int getMask(String action) {
 
         if (action == null) {
@@ -1358,7 +1359,7 @@ final class SocketPermissionCollection extends PermissionCollection
 implements Serializable
 {
     // Not serialized; see serialization section at end of class
-    private transient List perms;
+    private transient List<SocketPermission> perms;
 
     /**
      * Create an empty SocketPermissions object.
@@ -1366,7 +1367,7 @@ implements Serializable
      */
 
     public SocketPermissionCollection() {
-        perms = new ArrayList();
+        perms = new ArrayList<SocketPermission>();
     }
 
     /**
@@ -1394,7 +1395,7 @@ implements Serializable
         // optimization to ensure perms most likely to be tested
         // show up early (4301064)
         synchronized (this) {
-            perms.add(0, permission);
+            perms.add(0, (SocketPermission)permission);
         }
     }
 
@@ -1423,7 +1424,7 @@ implements Serializable
             int len = perms.size();
             //System.out.println("implies "+np);
             for (int i = 0; i < len; i++) {
-                SocketPermission x = (SocketPermission) perms.get(i);
+                SocketPermission x = perms.get(i);
                 //System.out.println("  trying "+x);
                 if (((needed & x.getMask()) != 0) && x.impliesIgnoreMask(np)) {
                     effective |=  x.getMask();
@@ -1443,10 +1444,11 @@ implements Serializable
      * @return an enumeration of all the SocketPermission objects.
      */
 
-    public Enumeration elements() {
+    @SuppressWarnings("unchecked")
+    public Enumeration<Permission> elements() {
         // Convert Iterator into Enumeration
         synchronized (this) {
-            return Collections.enumeration(perms);
+            return Collections.enumeration((List<Permission>)(List)perms);
         }
     }
 
@@ -1480,7 +1482,7 @@ implements Serializable
         // Don't call out.defaultWriteObject()
 
         // Write out Vector
-        Vector permissions = new Vector(perms.size());
+        Vector<SocketPermission> permissions = new Vector<SocketPermission>(perms.size());
 
         synchronized (this) {
             permissions.addAll(perms);
@@ -1502,8 +1504,9 @@ implements Serializable
         ObjectInputStream.GetField gfields = in.readFields();
 
         // Get the one we want
-        Vector permissions = (Vector)gfields.get("permissions", null);
-        perms = new ArrayList(permissions.size());
+        @SuppressWarnings("unchecked")
+        Vector<SocketPermission> permissions = (Vector<SocketPermission>)gfields.get("permissions", null);
+        perms = new ArrayList<SocketPermission>(permissions.size());
         perms.addAll(permissions);
     }
 }

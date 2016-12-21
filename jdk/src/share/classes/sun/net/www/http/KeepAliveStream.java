@@ -85,7 +85,7 @@ class KeepAliveStream extends MeteredStream implements Hurryable {
         // NOTE: Don't close super class
         try {
             if (expected > count) {
-                long nskip = (long) (expected - count);
+                long nskip = expected - count;
                 if (nskip <= available()) {
                     long n = 0;
                     while (n < nskip) {

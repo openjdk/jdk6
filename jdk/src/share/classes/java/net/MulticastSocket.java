@@ -26,7 +26,6 @@
 package java.net;
 
 import java.io.IOException;
-import java.io.InterruptedIOException;
 import java.util.Enumeration;
 
 /**
@@ -493,9 +492,9 @@ class MulticastSocket extends DatagramSocket {
              */
             try {
                 NetworkInterface ni = NetworkInterface.getByInetAddress(ia);
-                Enumeration addrs = ni.getInetAddresses();
+                Enumeration<InetAddress> addrs = ni.getInetAddresses();
                 while (addrs.hasMoreElements()) {
-                    InetAddress addr = (InetAddress)(addrs.nextElement());
+                    InetAddress addr = addrs.nextElement();
                     if (addr.equals(infAddress)) {
                         return infAddress;
                     }
