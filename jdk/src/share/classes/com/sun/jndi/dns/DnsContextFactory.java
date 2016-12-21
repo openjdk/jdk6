@@ -135,7 +135,7 @@ public class DnsContextFactory implements InitialContextFactory {
             throw new ConfigurationException("DNS pseudo-URL required");
         }
 
-        List servers = new ArrayList();
+        List<String> servers = new ArrayList<String>();
 
         for (int i = 0; i < urls.length; i++) {
             String server = urls[i].getHost();
@@ -145,7 +145,7 @@ public class DnsContextFactory implements InitialContextFactory {
                 // No server or port given, so look to underlying platform.
                 // ResolverConfiguration does some limited caching, so the
                 // following is reasonably efficient even if called rapid-fire.
-                List platformServers = filterNameServers(
+                List<String> platformServers = filterNameServers(
                     ResolverConfiguration.open().nameservers(), false);
                 if (!platformServers.isEmpty()) {
                     servers.addAll(platformServers);
@@ -160,8 +160,7 @@ public class DnsContextFactory implements InitialContextFactory {
                         ? server
                         : server + ":" + port);
         }
-        return (String[]) servers.toArray(
-                                        new String[servers.size()]);
+        return servers.toArray(new String[servers.size()]);
     }
 
     /*
@@ -224,34 +223,27 @@ public class DnsContextFactory implements InitialContextFactory {
      * @param oneIsEnough return output once there exists one ok
      * @return the filtered list, all non-permitted input removed
      */
-    private static List filterNameServers(List input, boolean oneIsEnough) {
+    private static List<String> filterNameServers(List<String> input, boolean oneIsEnough) {
         SecurityManager security = System.getSecurityManager();
         if (security == null || input == null || input.isEmpty()) {
             return input;
         } else {
-            List output = new ArrayList();
-            for (Object o: input) {
-                if (o instanceof String) {
-                    String platformServer = (String)o;
-                    int colon = platformServer.indexOf(':',
-                            platformServer.indexOf(']') + 1);
-
-                    int p = (colon < 0)
-                        ? DEFAULT_PORT
-                        : Integer.parseInt(
-                            platformServer.substring(colon + 1));
-                    String s = (colon < 0)
-                        ? platformServer
-                        : platformServer.substring(0, colon);
-                    try {
-                        security.checkConnect(s, p);
-                        output.add(platformServer);
-                        if (oneIsEnough) {
-                            return output;
-                        }
-                    } catch (SecurityException se) {
-                        continue;
+            List<String> output = new ArrayList<String>();
+            for (String platformServer : input) {
+                int colon = platformServer.indexOf(':', platformServer.indexOf(']') + 1);
+                int p = (colon < 0)
+                    ? DEFAULT_PORT
+                    : Integer.parseInt(platformServer.substring(colon + 1));
+                String s = (colon < 0)
+                    ? platformServer : platformServer.substring(0, colon);
+                try {
+                    security.checkConnect(s, p);
+                    output.add(platformServer);
+                    if (oneIsEnough) {
+                        return output;
                     }
+                } catch (SecurityException se) {
+                    continue;
                 }
             }
             return output;
