@@ -403,6 +403,36 @@ public final class AWTAccessor {
     }
 
     /**
+     * An accessor for the KeyEvent class
+     */
+    public interface KeyEventAccessor {
+        /**
+         * Sets rawCode field for KeyEvent
+         */
+        void setRawCode(KeyEvent ev, long rawCode);
+
+        /**
+         * Sets primaryLevelUnicode field for KeyEvent
+         */
+        void setPrimaryLevelUnicode(KeyEvent ev, long primaryLevelUnicode);
+
+        /**
+         * Sets extendedKeyCode field for KeyEvent
+         */
+        void setExtendedKeyCode(KeyEvent ev, long extendedKeyCode);
+
+        /**
+         * Returns an extended key code for the event.
+         */
+        int getExtendedKeyCode(KeyEvent ev);
+
+        /**
+         * Returns an extended key code for a unicode character.
+         */
+        int getExtendedKeyCodeForChar(int c);
+    }
+
+    /**
      * An accessor for the ClientPropertyKey class
      */
     public interface ClientPropertyKeyAccessor {
@@ -445,6 +475,7 @@ public final class AWTAccessor {
     private static MenuBarAccessor menuBarAccessor;
     private static MenuItemAccessor menuItemAccessor;
     private static MenuAccessor menuAccessor;
+    private static KeyEventAccessor keyEventAccessor;
     private static ClientPropertyKeyAccessor clientPropertyKeyAccessor;
     private static DefaultKeyboardFocusManagerAccessor defaultKeyboardFocusManagerAccessor;
 
@@ -671,6 +702,23 @@ public final class AWTAccessor {
             unsafe.ensureClassInitialized(MenuAccessor.class);
         }
         return menuAccessor;
+    }
+
+    /**
+     * Set an accessor object for the java.awt.event.KeyEvent class.
+     */
+    public static void setKeyEventAccessor(KeyEventAccessor kea) {
+        keyEventAccessor = kea;
+    }
+
+    /**
+     * Retrieve the accessor object for the java.awt.event.KeyEvent class.
+     */
+    public static KeyEventAccessor getKeyEventAccessor() {
+        if (keyEventAccessor == null) {
+            unsafe.ensureClassInitialized(KeyEventAccessor.class);
+        }
+        return keyEventAccessor;
     }
 
     /**

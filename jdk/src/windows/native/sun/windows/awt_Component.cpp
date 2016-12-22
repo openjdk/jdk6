@@ -229,6 +229,8 @@ BOOL AwtComponent::sm_rtl = PRIMARYLANGID(GetInputLanguage()) == LANG_ARABIC ||
 BOOL AwtComponent::sm_rtlReadingOrder =
     PRIMARYLANGID(GetInputLanguage()) == LANG_ARABIC;
 
+BOOL AwtComponent::sm_PrimaryDynamicTableBuilt = FALSE;
+
 HWND AwtComponent::sm_cursorOn;
 BOOL AwtComponent::m_QueryNewPaletteCalled = FALSE;
 
@@ -275,6 +277,11 @@ AwtComponent::AwtComponent()
     m_bSubclassed = FALSE;
 
     m_MessagesProcessing = 0;
+    if (!sm_PrimaryDynamicTableBuilt) {
+        // do it once.
+        AwtComponent::BuildPrimaryDynamicTable();
+        sm_PrimaryDynamicTableBuilt = TRUE;
+    }
 }
 
 AwtComponent::~AwtComponent()
@@ -3191,6 +3198,19 @@ static const CharToVKEntry charToDeadVKTable[] = {
     {0,0}
 };
 
+// The full map of the current keyboard state including
+// windows virtual key, scancode, java virtual key, and unicode
+// for this key sans modifiers.
+// All but first element may be 0.
+// XXX in the update releases this is an addition to the unchanged existing code
+struct DynPrimaryKeymapEntry {
+    UINT wkey;
+    UINT scancode;
+    UINT jkey;
+    WCHAR unicode;
+};
+
+static DynPrimaryKeymapEntry dynPrimaryKeymap[256];
 
 void
 AwtComponent::InitDynamicKeyMapTable()
@@ -3199,6 +3219,8 @@ AwtComponent::InitDynamicKeyMapTable()
 
     if (!kbdinited) {
         AwtComponent::BuildDynamicKeyMapTable();
+        // We cannot build it here since JNI is not available yet:
+        //AwtComponent::BuildPrimaryDynamicTable();
         kbdinited = TRUE;
     }
 }
@@ -3424,7 +3446,11 @@ UINT AwtComponent::WindowsKeyToJavaKey(UINT windowsKey, UINT modifiers)
 
     for (int j = 0; dynamicKeyMapTable[j].windowsKey != 0; j++) {
         if (dynamicKeyMapTable[j].windowsKey == windowsKey) {
-            return dynamicKeyMapTable[j].javaKey;
+            if (dynamicKeyMapTable[j].javaKey != java_awt_event_KeyEvent_VK_UNDEFINED) {
+                return dynamicKeyMapTable[j].javaKey;
+            }else{
+                break;
+            }
         }
     }
 
@@ -3485,6 +3511,122 @@ BOOL AwtComponent::IsNumPadKey(UINT vkey, BOOL extended)
     }
 
     return FALSE;
+}
+static void
+resetKbdState( BYTE kstate[256]) {
+    BYTE tmpState[256];
+    WCHAR wc[2];
+    memmove(tmpState, kstate, sizeof(kstate));
+    tmpState[VK_SHIFT] = 0;
+    tmpState[VK_CONTROL] = 0;
+    tmpState[VK_MENU] = 0;
+
+    ::ToUnicodeEx(VK_SPACE,::MapVirtualKey(VK_SPACE, 0), tmpState, wc, 2, 0,  GetKeyboardLayout(0));
+}
+
+// XXX in the update releases this is an addition to the unchanged existing code
+// After the call, a table will have a unicode associated with a windows virtual keycode
+// sans modifiers. With some further simplification, one can
+// derive java keycode from it, and anyway we will pass this unicode value
+// all the way up in a comment to a KeyEvent.
+void
+AwtComponent::BuildPrimaryDynamicTable() {
+    JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
+    // XXX: how about that?
+    //CriticalSection::Lock l(GetLock());
+    //if (GetPeer(env) == NULL) {
+    //    /* event received during termination. */
+    //    return;
+    //}
+
+    HKL hkl = GetKeyboardLayout();
+    UINT sc = 0;
+    BYTE kbdState[AwtToolkit::KB_STATE_SIZE];
+    memset(kbdState, 0, sizeof (kbdState));
+
+    // Use JNI call to obtain java key code. We should keep a list
+    // of currently available keycodes in a single place.
+    static jclass extKeyCodesCls;
+    if( extKeyCodesCls == NULL) {
+        jclass extKeyCodesClsLocal = env->FindClass("sun/awt/ExtendedKeyCodes");
+        DASSERT(extKeyCodesClsLocal);
+        if (extKeyCodesClsLocal == NULL) {
+            /* exception already thrown */
+            return;
+        }
+        extKeyCodesCls = (jclass)env->NewGlobalRef(extKeyCodesClsLocal);
+        env->DeleteLocalRef(extKeyCodesClsLocal);
+    }
+    static jmethodID getExtendedKeyCodeForChar;
+    if (getExtendedKeyCodeForChar == NULL) {
+        getExtendedKeyCodeForChar =
+                  env->GetStaticMethodID(extKeyCodesCls, "getExtendedKeyCodeForChar", "(I)I");
+        DASSERT(getExtendedKeyCodeForChar);
+    }
+    jint extJKC; //extended Java key code
+
+    for (UINT i = 0; i < 256; i++) {
+        dynPrimaryKeymap[i].wkey = i;
+        dynPrimaryKeymap[i].jkey = java_awt_event_KeyEvent_VK_UNDEFINED;
+        dynPrimaryKeymap[i].unicode = 0;
+
+        if ((sc = MapVirtualKey (i, 0)) == 0) {
+            dynPrimaryKeymap[i].scancode = 0;
+            continue;
+        }
+        dynPrimaryKeymap[i].scancode = sc;
+
+        // XXX process cases like VK_SHIFT etc.
+        kbdState[i] = 0x80; // "key pressed".
+        WCHAR wc[16];
+        int k = ::ToUnicodeEx(i, sc, kbdState, wc, 16, 0, hkl);
+        if (k == 1) {
+            // unicode
+            dynPrimaryKeymap[i].unicode = wc[0];
+            if (dynPrimaryKeymap[i].jkey == java_awt_event_KeyEvent_VK_UNDEFINED) {
+            // Convert unicode to java keycode.
+                //dynPrimaryKeymap[i].jkey = ((UINT)(wc[0]) + 0x01000000);
+                //
+                //XXX If this key in on the keypad, we should force a special value equal to
+                //XXX an old java keycode: but how to say if it is a keypad key?
+                //XXX We'll do it in WmKeyUp/Down.
+                extJKC = env->CallStaticIntMethod(extKeyCodesCls,
+                                                  getExtendedKeyCodeForChar, (jint)(wc[0]));
+                dynPrimaryKeymap[i].jkey = extJKC;
+            }
+        }else if (k == -1) {
+            // dead key: use charToDeadVKTable
+            dynPrimaryKeymap[i].unicode = wc[0];
+            resetKbdState( kbdState );
+            for (const CharToVKEntry *map = charToDeadVKTable;  map->c != 0;  ++map) {
+                if (wc[0] == map->c) {
+                    dynPrimaryKeymap[i].jkey = map->javaKey;
+                    break;
+                }
+            }
+        } else if (k == 0) {
+            // reset
+            resetKbdState( kbdState );
+        }else {
+            printf ("++++Whats that? wkey 0x%x (%d)\n", i,i);
+        }
+        kbdState[i] = 0; // "key unpressed"
+    }
+}
+void
+AwtComponent::UpdateDynPrimaryKeymap(UINT wkey, UINT jkeyLegacy, jint keyLocation, UINT modifiers)
+{
+    if( wkey && wkey < 256 ) {
+        if(keyLocation == java_awt_event_KeyEvent_KEY_LOCATION_NUMPAD) {
+            // At the creation time,
+            // dynPrimaryKeymap cannot distinguish between e.g. "/" and "NumPad /"
+            dynPrimaryKeymap[wkey].jkey = jkeyLegacy;
+        }
+        if(dynPrimaryKeymap[wkey].jkey ==  java_awt_event_KeyEvent_VK_UNDEFINED) {
+            // E.g. it is non-unicode key
+            dynPrimaryKeymap[wkey].jkey = jkeyLegacy;
+        }
+    }
 }
 
 UINT AwtComponent::WindowsKeyToJavaChar(UINT wkey, UINT modifiers, TransOps ops)
@@ -3639,10 +3781,12 @@ MsgRouting AwtComponent::WmKeyDown(UINT wkey, UINT repCnt,
     jint keyLocation = GetKeyLocation(wkey, flags);
     UINT jkey = WindowsKeyToJavaKey(wkey, modifiers);
     UINT character = WindowsKeyToJavaChar(wkey, modifiers, SAVE);
+    UpdateDynPrimaryKeymap(wkey, jkey, keyLocation, modifiers);
+
 
     SendKeyEventToFocusOwner(java_awt_event_KeyEvent_KEY_PRESSED,
                              TimeHelper::windowsToUTC(msg.time), jkey, character,
-                             modifiers, keyLocation, &msg);
+                             modifiers, keyLocation, (jlong)wkey, &msg);
 
     // bugid 4724007: Windows does not create a WM_CHAR for the Del key
     // for some reason, so we need to create the KEY_TYPED event on the
@@ -3654,7 +3798,7 @@ MsgRouting AwtComponent::WmKeyDown(UINT wkey, UINT repCnt,
                                  TimeHelper::windowsToUTC(msg.time),
                                  java_awt_event_KeyEvent_VK_UNDEFINED,
                                  character, modifiers,
-                                 java_awt_event_KeyEvent_KEY_LOCATION_UNKNOWN);
+                                 java_awt_event_KeyEvent_KEY_LOCATION_UNKNOWN, (jlong)0);
     }
 
     return mrConsume;
@@ -3679,10 +3823,11 @@ MsgRouting AwtComponent::WmKeyUp(UINT wkey, UINT repCnt,
     jint keyLocation = GetKeyLocation(wkey, flags);
     UINT jkey = WindowsKeyToJavaKey(wkey, modifiers);
     UINT character = WindowsKeyToJavaChar(wkey, modifiers, LOAD);
+    UpdateDynPrimaryKeymap(wkey, jkey, keyLocation, modifiers);
 
     SendKeyEventToFocusOwner(java_awt_event_KeyEvent_KEY_RELEASED,
                              TimeHelper::windowsToUTC(msg.time), jkey, character,
-                             modifiers, keyLocation, &msg);
+                             modifiers, keyLocation, (jlong)wkey, &msg);
     return mrConsume;
 }
 
@@ -3698,6 +3843,7 @@ MsgRouting AwtComponent::WmInputLangChange(UINT charset, HKL hKeyboardLayout)
     m_idLang = LOWORD(hKeyboardLayout); // lower word of HKL is LANGID
     m_CodePage = LangToCodePage(m_idLang);
     BuildDynamicKeyMapTable();  // compute new mappings for VK_OEM
+    BuildPrimaryDynamicTable();
     return mrConsume;           // do not propagate to children
 }
 
@@ -3728,7 +3874,7 @@ MsgRouting AwtComponent::WmIMEChar(UINT character, UINT repCnt, UINT flags, BOOL
                              TimeHelper::windowsToUTC(msg.time),
                              java_awt_event_KeyEvent_VK_UNDEFINED,
                              unicodeChar, modifiers,
-                             java_awt_event_KeyEvent_KEY_LOCATION_UNKNOWN,
+                             java_awt_event_KeyEvent_KEY_LOCATION_UNKNOWN, (jlong)0,
                              &msg);
     return mrConsume;
 }
@@ -3813,7 +3959,7 @@ MsgRouting AwtComponent::WmChar(UINT character, UINT repCnt, UINT flags,
                              TimeHelper::windowsToUTC(msg.time),
                              java_awt_event_KeyEvent_VK_UNDEFINED,
                              unicodeChar, modifiers,
-                             java_awt_event_KeyEvent_KEY_LOCATION_UNKNOWN,
+                             java_awt_event_KeyEvent_KEY_LOCATION_UNKNOWN, (jlong)0,
                              &msg);
     return mrConsume;
 }
@@ -4839,7 +4985,7 @@ void AwtComponent::RemoveChild(UINT id) {
 }
 
 void AwtComponent::SendKeyEvent(jint id, jlong when, jint raw, jint cooked,
-                                jint modifiers, jint keyLocation, MSG *pMsg)
+                                jint modifiers, jint keyLocation, jlong nativeCode, MSG *pMsg)
 {
     JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
     CriticalSection::Lock l(GetLock());
@@ -4876,6 +5022,18 @@ void AwtComponent::SendKeyEvent(jint id, jlong when, jint raw, jint cooked,
     if (safe_ExceptionOccurred(env)) env->ExceptionDescribe();
     DASSERT(!safe_ExceptionOccurred(env));
     DASSERT(keyEvent != NULL);
+    env->SetLongField(keyEvent, AwtKeyEvent::rawCodeID, nativeCode);
+    if( nativeCode && nativeCode < 256 ) {
+        env->SetLongField(keyEvent, AwtKeyEvent::primaryLevelUnicodeID, (jlong)(dynPrimaryKeymap[nativeCode].unicode));
+        env->SetLongField(keyEvent, AwtKeyEvent::extendedKeyCodeID, (jlong)(dynPrimaryKeymap[nativeCode].jkey));
+        if( nativeCode < 255 ) {
+            env->SetLongField(keyEvent, AwtKeyEvent::scancodeID, (jlong)(dynPrimaryKeymap[nativeCode].scancode));
+        }else if( pMsg != NULL ) {
+            // unknown key with virtual keycode 0xFF.
+            // Its scancode is not in the table, pickup it from the message.
+            env->SetLongField(keyEvent, AwtKeyEvent::scancodeID, (jlong)(HIWORD(pMsg->lParam) & 0xFF));
+        }
+    }
     if (pMsg != NULL) {
         AwtAWTEvent::saveMSG(env, pMsg, keyEvent);
     }
@@ -4889,6 +5047,7 @@ void
 AwtComponent::SendKeyEventToFocusOwner(jint id, jlong when,
                                        jint raw, jint cooked,
                                        jint modifiers, jint keyLocation,
+                                       jlong nativeCode,
                                        MSG *msg)
 {
     /*
@@ -4898,7 +5057,7 @@ AwtComponent::SendKeyEventToFocusOwner(jint id, jlong when,
     HWND hwndTarget = ((sm_focusOwner != NULL) ? sm_focusOwner : AwtComponent::GetFocusedWindow());
 
     if (hwndTarget == GetHWnd()) {
-        SendKeyEvent(id, when, raw, cooked, modifiers, keyLocation, msg);
+        SendKeyEvent(id, when, raw, cooked, modifiers, keyLocation, nativeCode, msg);
     } else {
         AwtComponent *target = NULL;
         if (hwndTarget != NULL) {
@@ -4909,7 +5068,7 @@ AwtComponent::SendKeyEventToFocusOwner(jint id, jlong when,
         }
         if (target != NULL) {
             target->SendKeyEvent(id, when, raw, cooked, modifiers,
-              keyLocation, msg);
+              keyLocation, nativeCode, msg);
         }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,6 +31,7 @@ import java.awt.event.*;
 import java.applet.*;
 import java.beans.*;
 import javax.swing.event.*;
+import sun.awt.AWTAccessor;
 import sun.awt.EmbeddedFrame;
 
 /**
@@ -212,19 +213,36 @@ class KeyboardManager {
               Thread.dumpStack();
          }
 
+         // There may be two keystrokes associated with a low-level key event;
+         // in this case a keystroke made of an extended key code has a priority.
          KeyStroke ks;
+         KeyStroke ksE = null;
 
 
          if(e.getID() == KeyEvent.KEY_TYPED) {
-               ks=KeyStroke.getKeyStroke(e.getKeyChar());
+             ks=KeyStroke.getKeyStroke(e.getKeyChar());
          } else {
+             int ekc = AWTAccessor.getKeyEventAccessor().getExtendedKeyCode(e);
+               if(e.getKeyCode() != ekc) {
+                   ksE=KeyStroke.getKeyStroke(ekc, e.getModifiers(), !pressed);
+               }
                ks=KeyStroke.getKeyStroke(e.getKeyCode(), e.getModifiers(), !pressed);
          }
 
          Hashtable keyMap = containerMap.get(topAncestor);
          if (keyMap != null) { // this container isn't registered, so bail
 
-             Object tmp = keyMap.get(ks);
+             Object tmp = null;
+             // extended code has priority
+             if( ksE != null ) {
+                 tmp = keyMap.get(ksE);
+                 if( tmp != null ) {
+                     ks = ksE;
+                 }
+             }
+             if( tmp == null ) {
+                 tmp = keyMap.get(ks);
+             }
 
              if (tmp == null) {
                // don't do anything
@@ -269,7 +287,12 @@ class KeyboardManager {
                  while (iter.hasMoreElements()) {
                      JMenuBar mb = (JMenuBar)iter.nextElement();
                      if ( mb.isShowing() && mb.isEnabled() ) { // don't want to give these out
-                         fireBinding(mb, ks, e, pressed);
+                         if( !(ks.equals(ksE)) ) {
+                             fireBinding(mb, ksE, e, pressed);
+                         }
+                         if(ks.equals(ksE) || !e.isConsumed()) {
+                             fireBinding(mb, ks, e, pressed);
+                         }
                          if (e.isConsumed()) {
                              return true;
                          }

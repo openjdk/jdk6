@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,12 +25,12 @@
 
 package java.awt.event;
 
-import java.awt.Event;
 import java.awt.Component;
 import java.awt.GraphicsEnvironment;
 import java.awt.Toolkit;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import sun.awt.AWTAccessor;
 
 /**
  * An event which indicates that a keystroke occurred in a component.
@@ -887,6 +887,12 @@ public class KeyEvent extends InputEvent {
      */
     int keyLocation;
 
+    //set from native code.
+    private transient long rawCode = 0;
+    private transient long primaryLevelUnicode = 0;
+    private transient long scancode = 0; // for MS Windows only
+    private transient long extendedKeyCode = 0;
+
     /*
      * JDK 1.1 serialVersionUID
      */
@@ -898,6 +904,31 @@ public class KeyEvent extends InputEvent {
         if (!GraphicsEnvironment.isHeadless()) {
             initIDs();
         }
+
+        AWTAccessor.setKeyEventAccessor(
+            new AWTAccessor.KeyEventAccessor() {
+                public void setRawCode(KeyEvent ev, long rawCode) {
+                    ev.rawCode = rawCode;
+                }
+
+                public void setPrimaryLevelUnicode(KeyEvent ev,
+                                                   long primaryLevelUnicode) {
+                    ev.primaryLevelUnicode = primaryLevelUnicode;
+                }
+
+                public void setExtendedKeyCode(KeyEvent ev,
+                                               long extendedKeyCode) {
+                    ev.extendedKeyCode = extendedKeyCode;
+                }
+
+                public int getExtendedKeyCode(KeyEvent ev) {
+                    return ev.getExtendedKeyCode();
+                }
+
+                public int getExtendedKeyCodeForChar(int c) {
+                    return KeyEvent.getExtendedKeyCodeForChar(c);
+                }
+            });
     }
 
     /**
@@ -1287,6 +1318,9 @@ public class KeyEvent extends InputEvent {
             return numpad + "-" + c;
         }
 
+        if ((keyCode & 0x01000000) != 0) {
+            return String.valueOf((char)(keyCode ^ 0x01000000 ));
+        }
         String unknown = Toolkit.getProperty("AWT.unknown", "Unknown");
         return unknown + " keyCode: 0x" + Integer.toString(keyCode, 16);
     }
@@ -1523,8 +1557,43 @@ public class KeyEvent extends InputEvent {
             str.append("KEY_LOCATION_UNKNOWN");
             break;
         }
+        str.append(",rawCode=").append(rawCode);
+        str.append(",primaryLevelUnicode=").append(primaryLevelUnicode);
+        str.append(",scancode=").append(scancode);
+        str.append(",extendedKeyCode=0x").append(Long.toHexString(extendedKeyCode));
 
         return str.toString();
+    }
+    /**
+     * Returns an extended key code for the event.
+     * The extended key code is a unique id assigned to  a key on the keyboard
+     * just like {@code keyCode}. However, unlike {@code keyCode}, this value depends on the
+     * current keyboard layout. For instance, pressing the left topmost letter key
+     * in a common English layout produces the same value as {@code keyCode}, {@code VK_Q}.
+     * Pressing the same key in a regular Russian layout gives another code, unique for the
+     * letter "Cyrillic I short".
+     *
+     * @since 1.7
+     *
+     */
+    int getExtendedKeyCode() {
+        return (int)extendedKeyCode;
+    }
+    /**
+     * Returns an extended key code for a unicode character.
+     *
+     * @return for a unicode character with a corresponding {@code VK_} constant -- this
+     *   {@code VK_} constant; for a character appearing on the primary
+     *   level of a known keyboard layout -- a unique integer.
+     *   If a character does not appear on the primary level of a known keyboard,
+     *   {@code VK_UNDEFINED} is returned.
+     *
+     * @since 1.7
+     *
+     */
+    static int getExtendedKeyCodeForChar(int c) {
+        // Return a keycode (if any) associated with a character.
+        return sun.awt.ExtendedKeyCodes.getExtendedKeyCodeForChar(c);
     }
 
     /**
