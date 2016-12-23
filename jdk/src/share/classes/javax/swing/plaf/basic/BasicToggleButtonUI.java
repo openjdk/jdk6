@@ -54,7 +54,7 @@ public class BasicToggleButtonUI extends BasicButtonUI {
     // ********************************
     public static ComponentUI createUI(JComponent b) {
         AppContext appContext = AppContext.getAppContext();
-        BasicToggleButtonUI toggleButtonUI = 
+        BasicToggleButtonUI toggleButtonUI =
                 (BasicToggleButtonUI) appContext.get(BASIC_TOGGLE_BUTTON_UI_KEY);
         if (toggleButtonUI == null) {
             toggleButtonUI = new BasicToggleButtonUI();
@@ -134,31 +134,31 @@ public class BasicToggleButtonUI extends BasicButtonUI {
 
         if(!model.isEnabled()) {
             if(model.isSelected()) {
-               icon = (Icon) b.getDisabledSelectedIcon();
+               icon = b.getDisabledSelectedIcon();
             } else {
-               icon = (Icon) b.getDisabledIcon();
+               icon = b.getDisabledIcon();
             }
         } else if(model.isPressed() && model.isArmed()) {
-            icon = (Icon) b.getPressedIcon();
+            icon = b.getPressedIcon();
             if(icon == null) {
                 // Use selected icon
-                icon = (Icon) b.getSelectedIcon();
+                icon = b.getSelectedIcon();
             }
         } else if(model.isSelected()) {
             if(b.isRolloverEnabled() && model.isRollover()) {
-                icon = (Icon) b.getRolloverSelectedIcon();
+                icon = b.getRolloverSelectedIcon();
                 if (icon == null) {
-                    icon = (Icon) b.getSelectedIcon();
+                    icon = b.getSelectedIcon();
                 }
             } else {
-                icon = (Icon) b.getSelectedIcon();
+                icon = b.getSelectedIcon();
             }
         } else if(b.isRolloverEnabled() && model.isRollover()) {
-            icon = (Icon) b.getRolloverIcon();
+            icon = b.getRolloverIcon();
         }
 
         if(icon == null) {
-            icon = (Icon) b.getIcon();
+            icon = b.getIcon();
         }
 
         icon.paintIcon(b, g, iconRect.x, iconRect.y);

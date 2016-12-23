@@ -2101,8 +2101,6 @@ public abstract class BasicLookAndFeel extends LookAndFeel implements Serializab
      * <code>soundFile</code> passed into this method, it will
      * return <code>null</code>.
      *
-     * @param baseClass    used as the root class/location to get the
-     *                     soundFile from
      * @param soundFile    the name of the audio file to be retrieved
      *                     from disk
      * @return             A byte[] with audio data or null
@@ -2119,9 +2117,9 @@ public abstract class BasicLookAndFeel extends LookAndFeel implements Serializab
          * Class.getResourceAsStream just returns raw
          * bytes, which we can convert to a sound.
          */
-        byte[] buffer = (byte[])AccessController.doPrivileged(
-                                                 new PrivilegedAction() {
-                public Object run() {
+        byte[] buffer = AccessController.doPrivileged(
+                                                 new PrivilegedAction<byte[]>() {
+                public byte[] run() {
                     try {
                         InputStream resource = BasicLookAndFeel.this.
                             getClass().getResourceAsStream(soundFile);
@@ -2183,9 +2181,9 @@ public abstract class BasicLookAndFeel extends LookAndFeel implements Serializab
                                     UIManager.get("AuditoryCues.playList");
             if (audioStrings != null) {
                 // create a HashSet to help us decide to play or not
-                HashSet audioCues = new HashSet();
-                for (int i = 0; i < audioStrings.length; i++) {
-                    audioCues.add(audioStrings[i]);
+                HashSet<Object> audioCues = new HashSet<Object>();
+                for (Object audioString : audioStrings) {
+                    audioCues.add(audioString);
                 }
                 // get the name of the Action
                 String actionName = (String)audioAction.getValue(Action.NAME);
@@ -2236,7 +2234,7 @@ public abstract class BasicLookAndFeel extends LookAndFeel implements Serializab
      * This class contains listener that watches for all the mouse
      * events that can possibly invoke popup on the component
      */
-    class AWTEventHelper implements AWTEventListener,PrivilegedAction {
+    class AWTEventHelper implements AWTEventListener,PrivilegedAction<Object> {
         AWTEventHelper() {
             super();
             AccessController.doPrivileged(this);

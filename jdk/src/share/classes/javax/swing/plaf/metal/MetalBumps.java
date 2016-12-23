@@ -114,8 +114,7 @@ class MetalBumps implements Icon {
 
     public void paintIcon( Component c, Graphics g, int x, int y ) {
         GraphicsConfiguration gc = (g instanceof Graphics2D) ?
-                                     (GraphicsConfiguration)((Graphics2D)g).
-                                     getDeviceConfiguration() : null;
+                ((Graphics2D) g).getDeviceConfiguration() : null;
 
         if ((buffer == null) || !buffer.hasSameConfiguration(gc, topColor, shadowColor, backColor)) {
             buffer = createBuffer(gc, topColor, shadowColor, backColor);

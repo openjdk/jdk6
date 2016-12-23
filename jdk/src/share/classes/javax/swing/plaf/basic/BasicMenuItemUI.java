@@ -742,7 +742,7 @@ public class BasicMenuItemUI extends MenuItemUI
         for(i=0,j=path.length; i<j ;i++){
             for (int k=0; k<=i; k++)
                 System.out.print("  ");
-            MenuElement me = (MenuElement) path[i];
+            MenuElement me = path[i];
             if(me instanceof JMenuItem)
                 System.out.println(((JMenuItem)me).getText() + ", ");
             else if (me == null)

@@ -106,7 +106,7 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
      * Map of defaults table entries. This is populated via the load
      * method.
      */
-    private Map defaultsMap;
+    private Map<String, Object> defaultsMap;
 
     private Handler _handler;
 
@@ -326,8 +326,8 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
             children = ((Container)c).getComponents();
         }
         if (children != null) {
-            for(int i = 0; i < children.length; i++) {
-                updateStyles(children[i]);
+            for (Component child : children) {
+                updateStyles(child);
             }
         }
     }
@@ -599,7 +599,7 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
         }
 
         if (defaultsMap == null) {
-            defaultsMap = new HashMap();
+            defaultsMap = new HashMap<String, Object>();
         }
 
         new SynthParser().parse(input, (DefaultSynthStyleFactory) factory,
@@ -629,7 +629,7 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
         }
 
         if (defaultsMap == null) {
-            defaultsMap = new HashMap();
+            defaultsMap = new HashMap<String, Object>();
         }
 
         InputStream input = url.openStream();
@@ -805,7 +805,7 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
      */
     private static Object getAATextInfo() {
         String language = Locale.getDefault().getLanguage();
-        String desktop = (String)
+        String desktop =
             AccessController.doPrivileged(new GetPropertyAction("sun.desktop"));
 
         boolean isCjkLocale = (Locale.CHINESE.getLanguage().equals(language) ||
@@ -820,7 +820,7 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
         return aaTextInfo;
     }
 
-    private static ReferenceQueue queue = new ReferenceQueue();
+    private static ReferenceQueue<LookAndFeel> queue = new ReferenceQueue<LookAndFeel>();
 
     private static void flushUnreferenced() {
         AATextListener aatl;
@@ -830,7 +830,7 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
     }
 
     private static class AATextListener
-        extends WeakReference implements PropertyChangeListener {
+        extends WeakReference<LookAndFeel> implements PropertyChangeListener {
         private String key = SunToolkit.DESKTOPFONTHINTS;
 
         AATextListener(LookAndFeel laf) {
@@ -847,7 +847,7 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
                 return;
             }
 
-            LookAndFeel laf = (LookAndFeel) get();
+            LookAndFeel laf = get();
             if (laf == null || laf != UIManager.getLookAndFeel()) {
                 dispose();
                 return;
@@ -870,8 +870,8 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
         private static void updateWindowUI(Window window) {
             updateStyles(window);
             Window ownedWins[] = window.getOwnedWindows();
-            for (int i = 0; i < ownedWins.length; i++) {
-                updateWindowUI(ownedWins[i]);
+            for (Window w : ownedWins) {
+                updateWindowUI(w);
             }
         }
 
@@ -880,8 +880,8 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
          */
         private static void updateAllUIs() {
             Frame appFrames[] = Frame.getFrames();
-            for (int i = 0; i < appFrames.length; i++) {
-                updateWindowUI(appFrames[i]);
+            for (Frame frame : appFrames) {
+                updateWindowUI(frame);
             }
         }
 
@@ -946,7 +946,7 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
                 // register it on the new one.
                 KeyboardFocusManager manager =
                     (KeyboardFocusManager)evt.getSource();
-                if (((Boolean)newValue).equals(Boolean.FALSE)) {
+                if (newValue.equals(Boolean.FALSE)) {
                     manager.removePropertyChangeListener(_handler);
                 }
                 else {

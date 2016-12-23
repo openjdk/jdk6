@@ -142,9 +142,9 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
 
     private Component visibleComponent;
     // PENDING(api): See comment for ContainerHandler
-    private Vector htmlViews;
+    private Vector<View> htmlViews;
 
-    private Hashtable mnemonicToIndexMap;
+    private Hashtable<Integer, Integer> mnemonicToIndexMap;
 
     /**
      * InputMap used for mnemonics. Only non-null if the JTabbedPane has
@@ -554,7 +554,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
      * Installs the state needed for mnemonics.
      */
     private void initMnemonics() {
-        mnemonicToIndexMap = new Hashtable();
+        mnemonicToIndexMap = new Hashtable<Integer, Integer>();
         mnemonicInputMap = new ComponentInputMapUIResource(tabPane);
         mnemonicInputMap.setParent(SwingUtilities.getUIInputMap(tabPane,
                               JComponent.WHEN_IN_FOCUSED_WINDOW));
@@ -917,10 +917,10 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
     private static final int CROP_SEGMENT = 12;
 
     private static Polygon createCroppedTabShape(int tabPlacement, Rectangle tabRect, int cropline) {
-        int rlen = 0;
-        int start = 0;
-        int end = 0;
-        int ostart = 0;
+        int rlen;
+        int start;
+        int end;
+        int ostart;
 
         switch(tabPlacement) {
           case LEFT:
@@ -1022,7 +1022,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
             tabPane.putClientProperty("html", v);
         }
 
-        SwingUtilities.layoutCompoundLabel((JComponent) tabPane,
+        SwingUtilities.layoutCompoundLabel(tabPane,
                                            metrics, title, icon,
                                            SwingUtilities.CENTER,
                                            SwingUtilities.CENTER,
@@ -1702,7 +1702,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
      */
     protected View getTextViewForTab(int tabIndex) {
         if (htmlViews != null) {
-            return (View)htmlViews.elementAt(tabIndex);
+            return htmlViews.elementAt(tabIndex);
         }
         return null;
     }
@@ -2238,8 +2238,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
                     if (mnemonic >= 'a' && mnemonic <='z') {
                         mnemonic  -= ('a' - 'A');
                     }
-                    Integer index = (Integer)ui.mnemonicToIndexMap.
-                                 get(new Integer(mnemonic));
+                    Integer index = ui.mnemonicToIndexMap.get(Integer.valueOf(mnemonic));
                     if (index != null && pane.isEnabledAt(index.intValue())) {
                         pane.setSelectedIndex(index.intValue());
                     }
@@ -2300,8 +2299,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
             for (int i = 0; i < tabPane.getTabCount(); i++) {
                 Component component = tabPane.getComponentAt(i);
                 if (component != null) {
-                    Dimension size = zeroSize;
-                    size = minimum? component.getMinimumSize() :
+                    Dimension size = minimum ? component.getMinimumSize() :
                                 component.getPreferredSize();
 
                     if (size != null) {
@@ -2313,7 +2311,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
             // Add content border insets to minimum size
             width += cWidth;
             height += cHeight;
-            int tabExtent = 0;
+            int tabExtent;
 
             // Calculate how much space the tabs will need, based on the
             // minimum size required to display largest child + content border
@@ -3151,7 +3149,7 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
             Insets tabAreaInsets = getTabAreaInsets(tabPlacement);
             int fontHeight = metrics.getHeight();
             int selectedIndex = tabPane.getSelectedIndex();
-            int i, j;
+            int i;
             boolean verticalTabRuns = (tabPlacement == LEFT || tabPlacement == RIGHT);
             boolean leftToRight = BasicGraphicsUtils.isLeftToRight(tabPane);
             int x = tabAreaInsets.left;
@@ -3441,10 +3439,10 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
         }
 
         public String toString() {
-            return new String("viewport.viewSize="+viewport.getViewSize()+"\n"+
+            return "viewport.viewSize=" + viewport.getViewSize() + "\n" +
                               "viewport.viewRectangle="+viewport.getViewRect()+"\n"+
                               "leadingTabIndex="+leadingTabIndex+"\n"+
-                              "tabViewPosition="+tabViewPosition);
+                              "tabViewPosition=" + tabViewPosition;
         }
 
     }
@@ -3796,8 +3794,8 @@ public class BasicTabbedPaneUI extends TabbedPaneUI implements SwingConstants {
         }
     }
 
-    private Vector createHTMLVector() {
-        Vector htmlViews = new Vector();
+    private Vector<View> createHTMLVector() {
+        Vector<View> htmlViews = new Vector<View>();
         int count = tabPane.getTabCount();
         if (count>0) {
             for (int i=0 ; i<count; i++) {

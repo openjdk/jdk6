@@ -1001,7 +1001,7 @@ public class WindowsFileChooserUI extends BasicFileChooserUI {
                 } else if (s.equals("componentOrientation")) {
                     ComponentOrientation o = (ComponentOrientation)e.getNewValue();
                     JFileChooser cc = (JFileChooser)e.getSource();
-                    if (o != (ComponentOrientation)e.getOldValue()) {
+                    if (o != e.getOldValue()) {
                         cc.applyComponentOrientation(o);
                     }
                 } else if (s.equals("ancestor")) {
@@ -1141,7 +1141,7 @@ public class WindowsFileChooserUI extends BasicFileChooserUI {
      * Data model for a type-face selection combo-box.
      */
     protected class DirectoryComboBoxModel extends AbstractListModel implements ComboBoxModel {
-        Vector directories = new Vector();
+        Vector<File> directories = new Vector<File>();
         int[] depths = null;
         File selectedDirectory = null;
         JFileChooser chooser = getFileChooser();
@@ -1177,7 +1177,7 @@ public class WindowsFileChooserUI extends BasicFileChooserUI {
             // Get the canonical (full) path. This has the side
             // benefit of removing extraneous chars from the path,
             // for example /foo/bar/ becomes /foo/bar
-            File canonical = null;
+            File canonical;
             try {
                 canonical = directory.getCanonicalFile();
             } catch (IOException e) {
@@ -1190,7 +1190,7 @@ public class WindowsFileChooserUI extends BasicFileChooserUI {
                 File sf = useShellFolder ? ShellFolder.getShellFolder(canonical)
                                          : canonical;
                 File f = sf;
-                Vector path = new Vector(10);
+                Vector<File> path = new Vector<File>(10);
                 do {
                     path.addElement(f);
                 } while ((f = f.getParentFile()) != null);
@@ -1198,7 +1198,7 @@ public class WindowsFileChooserUI extends BasicFileChooserUI {
                 int pathCount = path.size();
                 // Insert chain at appropriate place in vector
                 for (int i = 0; i < pathCount; i++) {
-                    f = (File)path.get(i);
+                    f = path.get(i);
                     if (directories.contains(f)) {
                         int topIndex = directories.indexOf(f);
                         for (int j = i-1; j >= 0; j--) {
@@ -1217,12 +1217,12 @@ public class WindowsFileChooserUI extends BasicFileChooserUI {
         private void calculateDepths() {
             depths = new int[directories.size()];
             for (int i = 0; i < depths.length; i++) {
-                File dir = (File)directories.get(i);
+                File dir = directories.get(i);
                 File parent = dir.getParentFile();
                 depths[i] = 0;
                 if (parent != null) {
                     for (int j = i-1; j >= 0; j--) {
-                        if (parent.equals((File)directories.get(j))) {
+                        if (parent.equals(directories.get(j))) {
                             depths[i] = depths[j] + 1;
                             break;
                         }
@@ -1321,8 +1321,8 @@ public class WindowsFileChooserUI extends BasicFileChooserUI {
             FileFilter currentFilter = getFileChooser().getFileFilter();
             boolean found = false;
             if(currentFilter != null) {
-                for(int i=0; i < filters.length; i++) {
-                    if(filters[i] == currentFilter) {
+                for (FileFilter filter : filters) {
+                    if (filter == currentFilter) {
                         found = true;
                     }
                 }

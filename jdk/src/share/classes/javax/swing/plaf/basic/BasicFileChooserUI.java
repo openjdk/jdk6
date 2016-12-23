@@ -156,9 +156,9 @@ public class BasicFileChooserUI extends FileChooserUI {
     }
 
     public void uninstallUI(JComponent c) {
-        uninstallListeners((JFileChooser) filechooser);
-        uninstallComponents((JFileChooser) filechooser);
-        uninstallDefaults((JFileChooser) filechooser);
+        uninstallListeners(filechooser);
+        uninstallComponents(filechooser);
+        uninstallDefaults(filechooser);
 
         if(accessoryPanel != null) {
             accessoryPanel.removeAll();
@@ -494,9 +494,9 @@ public class BasicFileChooserUI extends FileChooserUI {
                             setDirectorySelected(true);
                             setDirectory(((File)objects[0]));
                         } else {
-                            ArrayList fList = new ArrayList(objects.length);
-                            for (int i = 0; i < objects.length; i++) {
-                                File f = (File)objects[i];
+                            ArrayList<File> fList = new ArrayList<File>(objects.length);
+                            for (Object object : objects) {
+                                File f = (File) object;
                                 boolean isDir = f.isDirectory();
                                 if ((chooser.isFileSelectionEnabled() && !isDir)
                                     || (chooser.isDirectorySelectionEnabled()
@@ -506,7 +506,7 @@ public class BasicFileChooserUI extends FileChooserUI {
                                 }
                             }
                             if (fList.size() > 0) {
-                                files = (File[])fList.toArray(new File[fList.size()]);
+                                files = fList.toArray(new File[fList.size()]);
                             }
                             setDirectorySelected(false);
                         }
@@ -832,7 +832,7 @@ public class BasicFileChooserUI extends FileChooserUI {
                 }
 
                 if (chooser.isMultiSelectionEnabled() && filename.startsWith("\"")) {
-                    ArrayList fList = new ArrayList();
+                    ArrayList<File> fList = new ArrayList<File>();
 
                     filename = filename.substring(1);
                     if (filename.endsWith("\"")) {
@@ -868,7 +868,7 @@ public class BasicFileChooserUI extends FileChooserUI {
                         fList.add(file);
                     } while (filename.length() > 0);
                     if (fList.size() > 0) {
-                        selectedFiles = (File[])fList.toArray(new File[fList.size()]);
+                        selectedFiles = fList.toArray(new File[fList.size()]);
                     }
                     resetGlobFilter();
                 } else {
@@ -1192,7 +1192,7 @@ public class BasicFileChooserUI extends FileChooserUI {
         }
 
         public Icon getCachedIcon(File f) {
-            return (Icon) iconCache.get(f);
+            return iconCache.get(f);
         }
 
         public void cacheIcon(File f, Icon i) {
@@ -1275,8 +1275,7 @@ public class BasicFileChooserUI extends FileChooserUI {
 
             htmlBuf.append("<html>\n<body>\n<ul>\n");
 
-            for (int i = 0; i < values.length; i++) {
-                Object obj = values[i];
+            for (Object obj : values) {
                 String val = ((obj == null) ? "" : obj.toString());
                 plainBuf.append(val + "\n");
                 htmlBuf.append("  <li>" + val + "\n");
@@ -1316,9 +1315,9 @@ public class BasicFileChooserUI extends FileChooserUI {
              */
             protected Object getRicherData(DataFlavor flavor) {
                 if (DataFlavor.javaFileListFlavor.equals(flavor)) {
-                    ArrayList files = new ArrayList();
-                    for (int i = 0; i < fileData.length; i++) {
-                        files.add(fileData[i]);
+                    ArrayList<Object> files = new ArrayList<Object>();
+                    for (Object file : this.fileData) {
+                        files.add(file);
                     }
                     return files;
                 }

@@ -495,7 +495,7 @@ public class Region {
     }
 
     static void registerUIs(UIDefaults table) {
-        for (Object key : getUItoRegionMap().keySet()) {
+        for (String key : getUItoRegionMap().keySet()) {
             table.put(key, "javax.swing.plaf.synth.SynthLookAndFeel");
         }
     }
