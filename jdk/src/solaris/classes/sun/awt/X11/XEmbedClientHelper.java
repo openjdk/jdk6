@@ -51,7 +51,9 @@ public class XEmbedClientHelper extends XEmbedHelper implements XEventDispatcher
     void install(XEmbeddedFramePeer embedded) {
         this.embedded = embedded;
 
-        if (xembedLog.isLoggable(Level.FINE)) xembedLog.fine("Installing xembedder on " + embedded);
+        if (xembedLog.isLoggable(Level.FINE)) {
+	    xembedLog.fine("Installing xembedder on " + embedded);
+	}
         XToolkit.addEventDispatcher(embedded.getWindow(), this);
         long[] info = new long[] { XEMBED_VERSION, XEMBED_MAPPED };
         long data = Native.card32ToData(info);
@@ -79,9 +81,13 @@ public class XEmbedClientHelper extends XEmbedHelper implements XEventDispatcher
 
     void handleClientMessage(XEvent xev) {
         XClientMessageEvent msg = xev.get_xclient();
-        if (xembedLog.isLoggable(Level.FINE)) xembedLog.fine(msg.toString());
+        if (xembedLog.isLoggable(Level.FINE)) {
+	    xembedLog.fine(msg.toString());
+	}
         if (msg.get_message_type() == XEmbed.getAtom()) {
-            if (xembedLog.isLoggable(Level.FINE)) xembedLog.fine("Embedded message: " + msgidToString((int)msg.get_data(1)));
+            if (xembedLog.isLoggable(Level.FINE)) {
+		xembedLog.fine("Embedded message: " + msgidToString((int)msg.get_data(1)));
+	    }
             switch ((int)msg.get_data(1)) {
               case XEMBED_EMBEDDED_NOTIFY: // Notification about embedding protocol start
                   // NOTE: May be called two times because we send _SUN_XEMBED_START

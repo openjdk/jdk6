@@ -286,7 +286,9 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
      *         <code>false</code> otherwise
      */
     public boolean dispatchEvent(AWTEvent e) {
-        if (focusLog.isLoggable(Level.FINE) && (e instanceof WindowEvent || e instanceof FocusEvent)) focusLog.fine("" + e);
+        if (focusLog.isLoggable(Level.FINE) && (e instanceof WindowEvent || e instanceof FocusEvent)) {
+            focusLog.fine("" + e);
+        }
         switch (e.getID()) {
             case WindowEvent.WINDOW_GAINED_FOCUS: {
                 WindowEvent we = (WindowEvent)e;

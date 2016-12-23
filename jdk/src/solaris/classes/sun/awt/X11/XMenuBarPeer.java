@@ -516,7 +516,9 @@ public class XMenuBarPeer extends XBaseMenuWindow implements MenuBarPeer {
      */
     public void handleKeyPress(XEvent xev) {
         XKeyEvent xkey = xev.get_xkey();
-        if (log.isLoggable(Level.FINE)) log.fine(xkey.toString());
+        if (log.isLoggable(Level.FINE)) {
+            log.fine(xkey.toString());
+        }
         if (isEventDisabled(xev)) {
             return;
         }

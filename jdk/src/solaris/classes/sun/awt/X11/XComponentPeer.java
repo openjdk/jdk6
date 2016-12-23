@@ -416,7 +416,10 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
           case SNFH_SUCCESS_PROCEED:
               // Currently we just generate focus events like we deal with lightweight instead of calling
               // XSetInputFocus on native window
-              if (focusLog.isLoggable(Level.FINER)) focusLog.finer("Proceeding with request to " + lightweightChild + " in " + target);
+              if (focusLog.isLoggable(Level.FINER)) {
+                  focusLog.finer("Proceeding with request to " +
+                                 lightweightChild + " in " + target);
+              }
               /**
                * The problems with requests in non-focused window arise because shouldNativelyFocusHeavyweight
                * checks that native window is focused while appropriate WINDOW_GAINED_FOCUS has not yet
@@ -438,17 +441,23 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
                       wpeer.setActualFocusedWindow(null);
 
                       boolean res = wpeer.requestWindowFocus();
-                      if (focusLog.isLoggable(Level.FINER)) focusLog.finer("Requested window focus: " + res);
+                      if (focusLog.isLoggable(Level.FINER)) {
+			  focusLog.finer("Requested window focus: " + res);
+		      }
                       // If parent window can be made focused and has been made focused(synchronously)
                       // then we can proceed with children, otherwise we retreat.
                       if (!(res && parentWindow.isFocused())) {
-                          focusLog.finer("Waiting for asynchronous processing of window focus request");
+			  if (focusLog.isLoggable(Level.FINER)) {
+			      focusLog.finer("Waiting for asynchronous processing of window focus request");
+			  }
                           KeyboardFocusManagerPeerImpl.removeLastFocusRequest(target);
                           return false;
                       }
                   }
               } else {
-                  if (focusLog.isLoggable(Level.FINER)) focusLog.finer("WARNING: Parent window is null");
+                  if (focusLog.isLoggable(Level.FINER)) {
+		      focusLog.finer("WARNING: Parent window is null");
+		  }
                   return false;
               }
 
@@ -466,7 +475,9 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
     }
 
     void handleJavaFocusEvent(AWTEvent e) {
-        if (focusLog.isLoggable(Level.FINER)) focusLog.finer(e.toString());
+        if (focusLog.isLoggable(Level.FINER)) {
+            focusLog.finer(e.toString());
+        }
         if (e.getID() == FocusEvent.FOCUS_GAINED) {
             focusGained((FocusEvent)e);
         } else {
@@ -778,7 +789,9 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
     }
 
     public void setBackground(Color c) {
-        if (log.isLoggable(Level.FINE)) log.fine("Set background to " + c);
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("Set background to " + c);
+        }
         synchronized (getStateLock()) {
 	    if (background == null) {
 		if (c == null) return;
@@ -792,7 +805,9 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
     }
 
     public void setForeground(Color c) {
-        if (log.isLoggable(Level.FINE)) log.fine("Set foreground to " + c);
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("Set foreground to " + c);
+        }
         synchronized (getStateLock()) {
 	    if (foreground == null) {
 		if (c == null) return;
@@ -816,7 +831,9 @@ public class XComponentPeer extends XWindow implements ComponentPeer, DropTarget
      * @since     JDK1.0
      */
     public FontMetrics getFontMetrics(Font font) {
-        if (fontLog.isLoggable(Level.FINE)) fontLog.fine("Getting font metrics for " + font);
+        if (fontLog.isLoggable(Level.FINE)) {
+            fontLog.fine("Getting font metrics for " + font);
+        }
         return sun.font.FontDesignMetrics.getMetrics(font);
     }
 

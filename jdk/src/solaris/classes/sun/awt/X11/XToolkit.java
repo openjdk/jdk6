@@ -186,7 +186,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
                 return SAVED_ERROR_HANDLER(display, event);
             }
         } catch (Throwable z) {
-            log.log(Level.FINE, "Error in GlobalErrorHandler", z);
+	    if (log.isLoggable(Level.FINE)) {
+		log.log(Level.FINE, "Error in GlobalErrorHandler", z);
+	    }
         }
         return 0;
     }
@@ -277,7 +279,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
         try {
             XlibWrapper.XSupportsLocale();
             if (XlibWrapper.XSetLocaleModifiers("") == null) {
-                log.finer("X locale modifiers are not supported, using default");
+		if (log.isLoggable(Level.FINER)) {
+		    log.finer("X locale modifiers are not supported, using default");
+		}
             }
             tryXKB();
 
@@ -292,8 +296,7 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             awtUnlock();
         }
 
-        if (log.isLoggable(Level.FINE)) {
-            PrivilegedAction<Void> a = new PrivilegedAction<Void>() {
+	PrivilegedAction<Void> a = new PrivilegedAction<Void>() {
                 public Void run() {
                     Thread shutdownThread = new Thread(ThreadGroupUtils.getRootThreadGroup(), "XToolkt-Shutdown-Thread") {
                         public void run() {
@@ -308,8 +311,7 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
                     return null;
                 }
             };
-            AccessController.doPrivileged(a);
-        }
+	AccessController.doPrivileged(a);
     }
 
     static String getCorrectXIDString(String val) {
@@ -1396,7 +1398,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
                 }
             } catch (InterruptedException ie) {
             // Note: the returned timeStamp can be incorrect in this case.
-                if (log.isLoggable(Level.FINE)) log.fine("Catched exception, timeStamp may not be correct (ie = " + ie + ")");
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("Catched exception, timeStamp may not be correct (ie = " + ie + ")");
+		}
             }
         } finally {
             awtUnlock();
@@ -1525,7 +1529,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
 
             name = "gnome." + name;
             setDesktopProperty(name, e.getValue());
-            log.fine("name = " + name + " value = " + e.getValue());
+            if (log.isLoggable(Level.FINE)) {
+                log.fine("name = " + name + " value = " + e.getValue());
+            }
 
             // XXX: we probably want to do something smarter.  In
             // particular, "Net" properties are of interest to the
@@ -2337,7 +2343,10 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             // Wait for selection notify for oops on win
             long event_number = getEventNumber();
             XAtom atom = XAtom.get("WM_S0");
-            eventLog.log(Level.FINER, "WM_S0 selection owner {0}", new Object[] {XlibWrapper.XGetSelectionOwner(getDisplay(), atom.getAtom())});
+	    if (eventLog.isLoggable(Level.FINER)) {
+		eventLog.log(Level.FINER, "WM_S0 selection owner {0}",
+			     new Object[] {XlibWrapper.XGetSelectionOwner(getDisplay(), atom.getAtom())});
+	    }
             XlibWrapper.XConvertSelection(getDisplay(), atom.getAtom(),
                                           XAtom.get("VERSION").getAtom(), oops.getAtom(),
                                           win.getWindow(), XlibWrapper.CurrentTime);
@@ -2363,7 +2372,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
                 // If selection update failed we can simply wait some time
                 // hoping some events will arrive
                 awtUnlock();
-                eventLog.log(Level.FINEST, "Emergency sleep");
+		if (eventLog.isLoggable(Level.FINEST)) {
+		    eventLog.log(Level.FINEST, "Emergency sleep");
+		}
                 try {
                     Thread.sleep(WORKAROUND_SLEEP);
                 } catch (InterruptedException ie) {
@@ -2375,7 +2386,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             return getEventNumber() - event_number > 2;
         } finally {
             removeEventDispatcher(win.getWindow(), oops_waiter);
-            eventLog.log(Level.FINER, "Exiting syncNativeQueue");
+            if (eventLog.isLoggable(Level.FINER)) {
+		eventLog.log(Level.FINER, "Exiting syncNativeQueue");
+	    }
             awtUnlock();
         }
     }

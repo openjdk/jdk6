@@ -115,7 +115,9 @@ public class SortingFocusTraversalPolicy
         boolean addDefaultComponents =
             (defaults != null && getImplicitDownCycleTraversal());
 
-        if (log.isLoggable(Level.FINE)) log.fine("### Will add defaults: " + addDefaultComponents);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("### Will add defaults: " + addDefaultComponents);
+	}
 
         // Create a list of all default Components which should be added
         // to the list
@@ -226,7 +228,9 @@ public class SortingFocusTraversalPolicy
      */
     public Component getComponentAfter(Container aContainer,
                                        Component aComponent) {
-        if (log.isLoggable(Level.FINE)) log.fine("### Searching in " + aContainer.getName() + " for component after " + aComponent.getName());
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("### Searching in " + aContainer.getName() + " for component after " + aComponent.getName());
+	}
 
         if (aContainer == null || aComponent == null) {
             throw new IllegalArgumentException("aContainer and aComponent cannot be null");
@@ -240,7 +244,9 @@ public class SortingFocusTraversalPolicy
         // See if the component is inside of policy provider
         Container ftp = getTopmostProvider(aContainer, aComponent);
         if (ftp != null) {
-            if (log.isLoggable(Level.FINE)) log.fine("### Asking FTP " + ftp.getName() + " for component after " + aComponent.getName());
+            if (log.isLoggable(Level.FINE)) {
+		log.fine("### Asking FTP " + ftp.getName() + " for component after " + aComponent.getName());
+	    }
             // FTP knows how to find component after the given. We don't.
             FocusTraversalPolicy policy = ftp.getFocusTraversalPolicy();
             Component retval = policy.getComponentAfter(ftp, aComponent);
@@ -249,7 +255,9 @@ public class SortingFocusTraversalPolicy
             }
 
             if (retval != null) {
-                if (log.isLoggable(Level.FINE)) log.fine("### FTP returned " + retval.getName());
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("### FTP returned " + retval.getName());
+		}
                 return retval;
         }
             aComponent = ftp;
@@ -263,7 +271,9 @@ public class SortingFocusTraversalPolicy
         try {
             index = Collections.binarySearch(cycle, aComponent, comparator);
         } catch (ClassCastException e) {
-            if (log.isLoggable(Level.FINE)) log.fine("### Didn't find component " + aComponent.getName() + " in a cycle " + aContainer.getName());
+            if (log.isLoggable(Level.FINE)) {
+		log.fine("### Didn't find component " + aComponent.getName() + " in a cycle " + aContainer.getName());
+	    }
             return getFirstComponent(aContainer);
         }
 
@@ -353,7 +363,9 @@ public class SortingFocusTraversalPolicy
         // See if the component is inside of policy provider
         Container ftp = getTopmostProvider(aContainer, aComponent);
         if (ftp != null) {
-            if (log.isLoggable(Level.FINE)) log.fine("### Asking FTP " + ftp.getName() + " for component after " + aComponent.getName());
+            if (log.isLoggable(Level.FINE)) {
+		log.fine("### Asking FTP " + ftp.getName() + " for component after " + aComponent.getName());
+	    }
             // FTP knows how to find component after the given. We don't.
             FocusTraversalPolicy policy = ftp.getFocusTraversalPolicy();
             Component retval = policy.getComponentBefore(ftp, aComponent);
@@ -361,7 +373,9 @@ public class SortingFocusTraversalPolicy
                 retval = null;
             }
             if (retval != null) {
-                if (log.isLoggable(Level.FINE)) log.fine("### FTP returned " + retval.getName());
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("### FTP returned " + retval.getName());
+		}
                 return retval;
         }
             aComponent = ftp;
@@ -372,7 +386,9 @@ public class SortingFocusTraversalPolicy
         Map defaults = new HashMap();
         enumerateAndSortCycle(aContainer, cycle, defaults);
 
-        if (log.isLoggable(Level.FINE)) log.fine("### Cycle is " + cycle + ", component is " + aComponent);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("### Cycle is " + cycle + ", component is " + aComponent);
+	}
 
         int index;
         try {
@@ -391,12 +407,16 @@ public class SortingFocusTraversalPolicy
             index--;
         }
 
-        if (log.isLoggable(Level.FINE)) log.fine("### Index is " + index);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("### Index is " + index);
+	}
 
         if (index >= 0) {
             Component defComp = (Component)defaults.get(new Integer(index));
             if (defComp != null && cycle.get(index) != aContainer) {
-                if (log.isLoggable(Level.FINE)) log.fine("### Returning default " + defComp.getName() + " at " + index);
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("### Returning default " + defComp.getName() + " at " + index);
+		}
                 return defComp;
             }
         }
@@ -438,7 +458,9 @@ public class SortingFocusTraversalPolicy
     public Component getFirstComponent(Container aContainer) {
         List<Component> cycle;
 
-        if (log.isLoggable(Level.FINE)) log.fine("### Getting first component in " + aContainer.getName());
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("### Getting first component in " + aContainer.getName());
+	}
         if (aContainer == null) {
             throw new IllegalArgumentException("aContainer cannot be null");
         }
@@ -478,7 +500,9 @@ public class SortingFocusTraversalPolicy
      */
     public Component getLastComponent(Container aContainer) {
         List<Component> cycle;
-        if (log.isLoggable(Level.FINE)) log.fine("### Getting last component in " + aContainer.getName());
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("### Getting last component in " + aContainer.getName());
+	}
 
         if (aContainer == null) {
             throw new IllegalArgumentException("aContainer cannot be null");
@@ -493,10 +517,14 @@ public class SortingFocusTraversalPolicy
 
         int size = cycle.size();
         if (size == 0) {
-            if (log.isLoggable(Level.FINE)) log.fine("### Cycle is empty");
+            if (log.isLoggable(Level.FINE)) {
+		log.fine("### Cycle is empty");
+	    }
             return null;
         }
-        if (log.isLoggable(Level.FINE)) log.fine("### Cycle is " + cycle);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("### Cycle is " + cycle);
+	}
 
         for (Component comp : cycle) {
             if (accept(comp)) {

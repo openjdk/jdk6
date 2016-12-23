@@ -56,28 +56,38 @@ class XAWTXSettings extends XSettings implements XMSelectionListener {
     }
 
     void initXSettings() {
-        if (log.isLoggable(Level.FINE)) log.fine("Initializing XAWT XSettings");
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("Initializing XAWT XSettings");
+        }
         settings = new XMSelection("_XSETTINGS");
         settings.addSelectionListener(this);
         initPerScreenXSettings();
     }
 
     public void ownerDeath(int screen, XMSelection sel, long deadOwner) {
-        if (log.isLoggable(Level.FINE)) log.fine("Owner " + deadOwner + " died for selection " + sel + " screen "+ screen);
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("Owner " + deadOwner + " died for selection " + sel + " screen "+ screen);
+        }
     }
 
 
     public void ownerChanged(int screen, XMSelection sel, long newOwner, long data, long timestamp) {
-        if (log.isLoggable(Level.FINE)) log.fine("New Owner "+ newOwner + " for selection = " + sel + " screen " +screen );
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("New Owner "+ newOwner + " for selection = " + sel + " screen " +screen );
+        }
     }
 
     public void selectionChanged(int screen, XMSelection sel, long owner , XPropertyEvent event) {
-        log.fine("Selection changed on sel " + sel + " screen = " + screen + " owner = " + owner + " event = " + event);
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("Selection changed on sel " + sel + " screen = " + screen + " owner = " + owner + " event = " + event);
+        }
         updateXSettings(screen,owner);
     }
 
     void initPerScreenXSettings() {
-        if (log.isLoggable(Level.FINE)) log.fine("Updating Per XSettings changes");
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("Updating Per XSettings changes");
+        }
 
         /*
          * As toolkit cannot yet cope with per-screen desktop properties,
@@ -111,7 +121,9 @@ class XAWTXSettings extends XSettings implements XMSelectionListener {
     }
 
     private Map getUpdatedSettings(final long owner) {
-        if (log.isLoggable(Level.FINE)) log.fine("owner =" + owner);
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("owner =" + owner);
+        }
         if (0 == owner) {
             return null;
         }
@@ -125,13 +137,17 @@ class XAWTXSettings extends XSettings implements XMSelectionListener {
                 int status = getter.execute(XErrorHandler.IgnoreBadWindowHandler.getInstance());
 
                 if (status != XlibWrapper.Success || getter.getData() == 0) {
-                    if (log.isLoggable(Level.FINE)) log.fine("OH OH : getter failed  status = " + status );
+                    if (log.isLoggable(Level.FINE)) {
+                        log.fine("OH OH : getter failed  status = " + status );
+                    }
                     settings = null;
                 }
 
                 long ptr = getter.getData();
 
-                if (log.isLoggable(Level.FINE)) log.fine("noItems = " + getter.getNumberOfItems());
+                if (log.isLoggable(Level.FINE)) {
+                    log.fine("noItems = " + getter.getNumberOfItems());
+                }
                 byte array[] = Native.toBytes(ptr,getter.getNumberOfItems());
                 if (array != null) {
                     settings = update(array);

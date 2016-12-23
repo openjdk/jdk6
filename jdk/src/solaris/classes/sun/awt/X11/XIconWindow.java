@@ -61,7 +61,9 @@ public class XIconWindow extends XBaseWindow {
             final long screen = adata.get_awt_visInfo().get_screen();
             final long display = XToolkit.getDisplay();
 
-            if (log.isLoggable(Level.FINEST)) log.finest(adata.toString());
+            if (log.isLoggable(Level.FINEST)) {
+		log.finest(adata.toString());
+	    }
 
             long status =
                 XlibWrapper.XGetIconSizes(display, XToolkit.getDefaultRootWindow(),
@@ -71,7 +73,10 @@ public class XIconWindow extends XBaseWindow {
             }
             int count = Native.getInt(XlibWrapper.iarg1);
             long sizes_ptr = Native.getLong(XlibWrapper.larg1); // XIconSize*
-            log.log(Level.FINEST, "count = {1}, sizes_ptr = {0}", new Object[] {Long.valueOf(sizes_ptr), Integer.valueOf(count)});
+            if (log.isLoggable(Level.FINEST)) {
+                log.log(Level.FINEST, "count = {1}, sizes_ptr = {0}",
+			new Object[] { Long.valueOf(sizes_ptr), Integer.valueOf(count) });
+            }
             XIconSize[] res = new XIconSize[count];
             for (int i = 0; i < count; i++, sizes_ptr += XIconSize.getSize()) {
                 res[i] = new XIconSize(sizes_ptr);
@@ -423,7 +428,9 @@ public class XIconWindow extends XBaseWindow {
             }
         }
         if (min != null) {
-            log.log(Level.FINER, "Icon: {0}x{1}", new Object[] { min.getWidth(null), min.getHeight(null)});
+            if (log.isLoggable(Level.FINER)) {
+		log.log(Level.FINER, "Icon: {0}x{1}", new Object[] { min.getWidth(null), min.getHeight(null)});
+            }
             setIconImage(min);
         }
     }

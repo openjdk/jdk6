@@ -952,10 +952,9 @@ public abstract class WComponentPeer extends WObjectPeer
      */
     public void applyShape(Region shape) {
         if (shapeLog.isLoggable(Level.FINER)) {
-            shapeLog.finer(
-                    "*** INFO: Setting shape: PEER: " + this
-                    + "; TARGET: " + target
-                    + "; SHAPE: " + shape);
+            shapeLog.finer("*** INFO: Setting shape: PEER: " + this
+                            + "; TARGET: " + target
+                            + "; SHAPE: " + shape);
         }
 
         if (shape != null) {

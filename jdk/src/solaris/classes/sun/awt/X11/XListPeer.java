@@ -585,10 +585,14 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
     }
 
     void mousePressed(MouseEvent mouseEvent) {
-        if (log.isLoggable(Level.FINER)) log.finer(mouseEvent.toString() + ", hsb " + hsbVis + ", vsb " + vsbVis);
+        if (log.isLoggable(Level.FINER)) {
+	    log.finer(mouseEvent.toString() + ", hsb " + hsbVis + ", vsb " + vsbVis);
+	}
         if (isEnabled() && mouseEvent.getButton() == MouseEvent.BUTTON1) {
             if (inWindow(mouseEvent.getX(), mouseEvent.getY())) {
-                if (log.isLoggable(Level.FINE)) log.fine("Mouse press in items area");
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("Mouse press in items area");
+		}
                 active = WINDOW;
                 int i = y2index(mouseEvent.getY());
                 if (i >= 0) {
@@ -625,14 +629,18 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
                     currentIndex = -1;
                 }
             } else if (inVerticalScrollbar(mouseEvent.getX(), mouseEvent.getY())) {
-                if (log.isLoggable(Level.FINE)) log.fine("Mouse press in vertical scrollbar");
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("Mouse press in vertical scrollbar");
+		}
                 active = VERSCROLLBAR;
                 vsb.handleMouseEvent(mouseEvent.getID(),
                                      mouseEvent.getModifiers(),
                                      mouseEvent.getX() - (width - SCROLLBAR_WIDTH),
                                      mouseEvent.getY());
             } else if (inHorizontalScrollbar(mouseEvent.getX(), mouseEvent.getY())) {
-                if (log.isLoggable(Level.FINE)) log.fine("Mouse press in horizontal scrollbar");
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("Mouse press in horizontal scrollbar");
+		}
                 active = HORSCROLLBAR;
                 hsb.handleMouseEvent(mouseEvent.getID(),
                                      mouseEvent.getModifiers(),
@@ -815,7 +823,9 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
 
     void keyPressed(KeyEvent e) {
         int keyCode = e.getKeyCode();
-        if (log.isLoggable(Level.FINE)) log.fine(e.toString());
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine(e.toString());
+	}
         switch(keyCode) {
           case KeyEvent.VK_UP:
           case KeyEvent.VK_KP_UP: // TODO: I assume we also want this, too
@@ -1000,7 +1010,9 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
      */
     public void notifyValue(XScrollbar obj, int type, int v, boolean isAdjusting) {
 
-        if (log.isLoggable(Level.FINE)) log.fine("Notify value changed on " + obj + " to " + v);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("Notify value changed on " + obj + " to " + v);
+	}
         int value = obj.getValue();
         if (obj == vsb) {
             scrollVertical(v - value);
@@ -1083,7 +1095,9 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
                 }
             }
         }
-        if (log.isLoggable(Level.FINER)) log.finer("Adding item '" + item + "' to " + addedIndex);
+        if (log.isLoggable(Level.FINER)) {
+	    log.finer("Adding item '" + item + "' to " + addedIndex);
+	}
 
         // Update maxLength
         boolean repaintItems = !isItemHidden(addedIndex);
@@ -1101,8 +1115,10 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
                 | ((vsb.needsRepaint())?(PAINT_VSCROLL):0);
 
         }
-        if (log.isLoggable(Level.FINEST)) log.finest("Last visible: " + getLastVisibleItem() +
-                                                     ", hsb changed : " + (hsbWasVis ^ hsbVis) + ", items changed " + repaintItems);
+        if (log.isLoggable(Level.FINEST)) {
+	    log.finest("Last visible: " + getLastVisibleItem() +
+		       ", hsb changed : " + (hsbWasVis ^ hsbVis) + ", items changed " + repaintItems);
+	}
         repaint(addedIndex, getLastVisibleItem(), options);
     }
 
@@ -1117,10 +1133,14 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
         boolean vsbWasVisible = vsbVis;
         int oldLastDisplayed = lastItemDisplayed();
 
-        if (log.isLoggable(Level.FINE)) log.fine("Deleting from " + s + " to " + e);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("Deleting from " + s + " to " + e);
+	}
 
-        if (log.isLoggable(Level.FINEST)) log.finest("Last displayed item: " + oldLastDisplayed + ", items in window " + itemsInWindow() +
-                                                     ", size " + items.size());
+        if (log.isLoggable(Level.FINEST)) {
+	    log.finest("Last displayed item: " + oldLastDisplayed + ", items in window " + itemsInWindow() +
+		       ", size " + items.size());
+	}
 
         if (items.size() == 0) {
             return;
@@ -1187,7 +1207,9 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
             options |= PAINT_FOCUS;
         }
 
-        if (log.isLoggable(Level.FINEST)) log.finest("Multiple selections: " + multipleSelections);
+        if (log.isLoggable(Level.FINEST)) {
+	    log.finest("Multiple selections: " + multipleSelections);
+	}
 
         // update vsb.val
         if (vsb.getValue() >= s) {
@@ -1440,7 +1462,9 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
      * y is the number of items to scroll
      */
     void scrollVertical(int y) {
-        if (log.isLoggable(Level.FINE)) log.fine("Scrolling vertically by " + y);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("Scrolling vertically by " + y);
+	}
         int itemsInWin = itemsInWindow();
         int h = getItemHeight();
         int pixelsToScroll = y * h;
@@ -1486,7 +1510,9 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
      * x is the number of pixels to scroll
      */
     void scrollHorizontal(int x) {
-        if (log.isLoggable(Level.FINE)) log.fine("Scrolling horizontally by " + y);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("Scrolling horizontally by " + y);
+	}
         int w = getListWidth();
         w -= ((2 * SPACE) + (2 * MARGIN));
         int h = height - (SCROLLBAR_AREA + (2 * MARGIN));
@@ -1721,7 +1747,9 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
             }
 
             if (localBuffer == null) {
-                if (log.isLoggable(Level.FINE)) log.fine("Creating buffer " + width + "x" + height);
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("Creating buffer " + width + "x" + height);
+		}
                 // use GraphicsConfig.cCVI() instead of Component.cVI(),
                 // because the latter may cause a deadlock with the tree lock
                 localBuffer =
@@ -1753,7 +1781,9 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
         }
 
         private void paint(Graphics listG, int firstItem, int lastItem, int options) {
-            if (log.isLoggable(Level.FINER)) log.finer("Repaint from " + firstItem + " to " + lastItem + " options " + options);
+            if (log.isLoggable(Level.FINER)) {
+		log.finer("Repaint from " + firstItem + " to " + lastItem + " options " + options);
+	    }
             if (firstItem > lastItem) {
                 int t = lastItem;
                 lastItem = firstItem;
@@ -1817,7 +1847,11 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
         }
 
         private void paintItems(Graphics g, int firstItem, int lastItem, int options) {
-            if (log.isLoggable(Level.FINER)) log.finer("Painting items from " + firstItem + " to " + lastItem + ", focused " + focusIndex + ", first " + getFirstVisibleItem() + ", last " + getLastVisibleItem());
+            if (log.isLoggable(Level.FINER)) {
+		log.finer("Painting items from " + firstItem + " to " + lastItem +
+			  ", focused " + focusIndex + ", first " + getFirstVisibleItem() +
+			  ", last " + getLastVisibleItem());
+	    }
 
             firstItem = Math.max(getFirstVisibleItem(), firstItem);
             if (firstItem > lastItem) {
@@ -1828,15 +1862,19 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
             firstItem = Math.max(getFirstVisibleItem(), firstItem);
             lastItem = Math.min(lastItem, items.size()-1);
 
-            if (log.isLoggable(Level.FINER)) log.finer("Actually painting items from " + firstItem + " to " + lastItem +
-                                                       ", items in window " + itemsInWindow());
+            if (log.isLoggable(Level.FINER)) {
+		log.finer("Actually painting items from " + firstItem + " to " + lastItem +
+			  ", items in window " + itemsInWindow());
+	    }
             for (int i = firstItem; i <= lastItem; i++) {
                 paintItem(g, i);
             }
         }
 
         private void paintItem(Graphics g, int index) {
-            if (log.isLoggable(Level.FINEST)) log.finest("Painting item " + index);
+            if (log.isLoggable(Level.FINEST)) {
+		log.finest("Painting item " + index);
+	    }
             // 4895367 - only paint items which are visible
             if (!isItemHidden(index)) {
                 Shape clip = g.getClip();
@@ -1844,18 +1882,24 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
                 int h = getItemHeight();
                 int y = getItemY(index);
                 int x = getItemX();
-                if (log.isLoggable(Level.FINEST)) log.finest("Setting clip " + new Rectangle(x, y, w - (SPACE*2), h-(SPACE*2)));
+                if (log.isLoggable(Level.FINEST)) {
+		    log.finest("Setting clip " + new Rectangle(x, y, w - (SPACE*2), h-(SPACE*2)));
+		}
                 g.setClip(x, y, w - (SPACE*2), h-(SPACE*2));
 
                 // Always paint the background so that focus is unpainted in
                 // multiselect mode
                 if (isSelected(index)) {
-                    if (log.isLoggable(Level.FINEST)) log.finest("Painted item is selected");
+                    if (log.isLoggable(Level.FINEST)) {
+			log.finest("Painted item is selected");
+		    }
                     g.setColor(getListForeground());
                 } else {
                     g.setColor(getListBackground());
                 }
-                if (log.isLoggable(Level.FINEST)) log.finest("Filling " + new Rectangle(x, y, w, h));
+                if (log.isLoggable(Level.FINEST)) {
+		    log.finest("Filling " + new Rectangle(x, y, w, h));
+		}
                 g.fillRect(x, y, w, h);
 
                 if (index <= getLastVisibleItem() && index < items.size()) {
@@ -1879,8 +1923,10 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
         }
 
         void paintScrollBar(XScrollbar scr, Graphics g, int x, int y, int width, int height, boolean paintAll) {
-            if (log.isLoggable(Level.FINEST)) log.finest("Painting scrollbar " + scr + " width " +
-                                                         width + " height " + height + ", paintAll " + paintAll);
+            if (log.isLoggable(Level.FINEST)) {
+		log.finest("Painting scrollbar " + scr + " width " +
+			   width + " height " + height + ", paintAll " + paintAll);
+	    }
             g.translate(x, y);
             scr.paint(g, getSystemColors(), paintAll);
             g.translate(-x, -y);
@@ -1917,22 +1963,30 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
             if (paintFocus && !hasFocus()) {
                 paintFocus = false;
             }
-            if (log.isLoggable(Level.FINE)) log.fine("Painting focus, focus index " + getFocusIndex() + ", focus is " +
-                                                     (isItemHidden(getFocusIndex())?("invisible"):("visible")) + ", paint focus is " + paintFocus);
+            if (log.isLoggable(Level.FINE)) {
+		log.fine("Painting focus, focus index " + getFocusIndex() + ", focus is " +
+			 (isItemHidden(getFocusIndex())?("invisible"):("visible")) + ", paint focus is " + paintFocus);
+	    }
             Shape clip = g.getClip();
             g.setClip(0, 0, listWidth, listHeight);
-            if (log.isLoggable(Level.FINEST)) log.finest("Setting focus clip " + new Rectangle(0, 0, listWidth, listHeight));
+            if (log.isLoggable(Level.FINEST)) {
+		log.finest("Setting focus clip " + new Rectangle(0, 0, listWidth, listHeight));
+	    }
             Rectangle rect = getFocusRect();
             if (prevFocusRect != null) {
                 // Erase focus rect
-                if (log.isLoggable(Level.FINEST)) log.finest("Erasing previous focus rect " + prevFocusRect);
+                if (log.isLoggable(Level.FINEST)) {
+		    log.finest("Erasing previous focus rect " + prevFocusRect);
+		}
                 g.setColor(getListBackground());
                 g.drawRect(prevFocusRect.x, prevFocusRect.y, prevFocusRect.width, prevFocusRect.height);
                 prevFocusRect = null;
             }
             if (paintFocus) {
                 // Paint new
-                if (log.isLoggable(Level.FINEST)) log.finest("Painting focus rect " + rect);
+                if (log.isLoggable(Level.FINEST)) {
+		    log.finest("Painting focus rect " + rect);
+		}
                 g.setColor(getListForeground());  // Focus color is always black on Linux
                 g.drawRect(rect.x, rect.y, rect.width, rect.height);
                 prevFocusRect = rect;
@@ -1941,8 +1995,10 @@ class XListPeer extends XComponentPeer implements ListPeer, XScrollbarClient {
         }
 
         public void copyArea(int x, int y, int width, int height, int dx, int dy) {
-            if (log.isLoggable(Level.FINER)) log.finer("Copying area " + x + ", " + y + " " + width +
-                                                       "x" + height + ", (" + dx + "," + dy + ")");
+            if (log.isLoggable(Level.FINER)) {
+		log.finer("Copying area " + x + ", " + y + " " + width +
+			  "x" + height + ", (" + dx + "," + dy + ")");
+	    }
             VolatileImage localBuffer = null;
             do {
                 XToolkit.awtLock();

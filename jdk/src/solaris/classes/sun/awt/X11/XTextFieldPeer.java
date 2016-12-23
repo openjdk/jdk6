@@ -257,7 +257,9 @@ public class XTextFieldPeer extends XComponentPeer implements TextFieldPeer {
     }
 
     public void setBackground(Color c) {
-        if (log.isLoggable(Level.FINE)) log.fine("target="+ target + ", old=" + background + ", new=" + c);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("target="+ target + ", old=" + background + ", new=" + c);
+	}
         background = c;
         if (xtext != null) {
             xtext.setBackground(c);

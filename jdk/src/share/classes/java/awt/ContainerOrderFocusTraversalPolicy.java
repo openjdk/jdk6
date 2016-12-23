@@ -91,9 +91,10 @@ public class ContainerOrderFocusTraversalPolicy extends FocusTraversalPolicy
      *         root of aComponent or focus traversal policy provider, or if either aContainer or
      *         aComponent is null
      */
-    public Component getComponentAfter(Container aContainer,
-                                       Component aComponent) {
-        if (log.isLoggable(Level.FINE)) log.fine("Looking for next component in " + aContainer  + " for " + aComponent);
+    public Component getComponentAfter(Container aContainer, Component aComponent) {
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("Looking for next component in " + aContainer  + " for " + aComponent);
+	}
         if (aContainer == null || aComponent == null) {
             throw new IllegalArgumentException("aContainer and aComponent cannot be null");
         }
@@ -108,13 +109,19 @@ public class ContainerOrderFocusTraversalPolicy extends FocusTraversalPolicy
             Component retval = getComponentAfter(aContainer, aComponent,
                                                  found);
             if (retval != null) {
-                if (log.isLoggable(Level.FINE)) log.fine("After component is " + retval);
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("After component is " + retval);
+		}
                 return retval;
             } else if (found.value) {
-                if (log.isLoggable(Level.FINE)) log.fine("Didn't find next component in " + aContainer + " - falling back to the first ");
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("Didn't find next component in " + aContainer + " - falling back to the first ");
+		}
                 return getFirstComponent(aContainer);
             } else {
-                if (log.isLoggable(Level.FINE)) log.fine("After component is null");
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("After component is null");
+		}
                 return null;
             }
         }
@@ -141,13 +148,19 @@ public class ContainerOrderFocusTraversalPolicy extends FocusTraversalPolicy
                 !((Container)comp).isFocusCycleRoot()) {
                 Component retval = null;
                 if (((Container)comp).isFocusTraversalPolicyProvider()) {
-                    if (log.isLoggable(Level.FINE)) log.fine("Entering FTP " + comp);
+                    if (log.isLoggable(Level.FINE)) {
+			log.fine("Entering FTP " + comp);
+		    }
                     Container cont = (Container) comp;
                     FocusTraversalPolicy policy = cont.getFocusTraversalPolicy();
-                    if (log.isLoggable(Level.FINE)) log.fine("FTP contains " + aComponent + ": " + cont.isAncestorOf(aComponent));
+                    if (log.isLoggable(Level.FINE)) {
+			log.fine("FTP contains " + aComponent + ": " + cont.isAncestorOf(aComponent));
+		    }
                     if (found.value) {
                         retval = policy.getDefaultComponent(cont);
-                        if (log.isLoggable(Level.FINE)) log.fine("Used FTP for getting default component: " + retval);
+                        if (log.isLoggable(Level.FINE)) {
+			    log.fine("Used FTP for getting default component: " + retval);
+			}
                     } else {
                         found.value = cont.isAncestorOf(aComponent);
                         if (found.value)  {
@@ -156,7 +169,9 @@ public class ContainerOrderFocusTraversalPolicy extends FocusTraversalPolicy
                             retval = null;
                             } else {
                                 retval = policy.getComponentAfter(cont, aComponent);
-                                if (log.isLoggable(Level.FINE)) log.fine("FTP found next for the component : " + retval);
+                                if (log.isLoggable(Level.FINE)) {
+				    log.fine("FTP found next for the component : " + retval);
+				}
                             }
                         }
                     }
@@ -223,13 +238,19 @@ public class ContainerOrderFocusTraversalPolicy extends FocusTraversalPolicy
             Component retval = getComponentBefore(aContainer, aComponent,
                                                   found);
             if (retval != null) {
-                if (log.isLoggable(Level.FINE)) log.fine("Before component is " + retval);
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("Before component is " + retval);
+		}
                 return retval;
             } else if (found.value) {
-                if (log.isLoggable(Level.FINE)) log.fine("Didn't find before component in " + aContainer + " - falling back to the first ");
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("Didn't find before component in " + aContainer + " - falling back to the first ");
+		}
                 return getLastComponent(aContainer);
             } else {
-                if (log.isLoggable(Level.FINE)) log.fine("Before component is null");
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("Before component is null");
+		}
                 return null;
             }
         }
@@ -250,13 +271,19 @@ public class ContainerOrderFocusTraversalPolicy extends FocusTraversalPolicy
                 !((Container)comp).isFocusCycleRoot()) {
                 Component retval = null;
                 if (((Container)comp).isFocusTraversalPolicyProvider()) {
-                    if (log.isLoggable(Level.FINE)) log.fine("Entering FTP " + comp);
+                    if (log.isLoggable(Level.FINE)) {
+			log.fine("Entering FTP " + comp);
+		    }
                     Container cont = (Container) comp;
                     FocusTraversalPolicy policy = cont.getFocusTraversalPolicy();
-                    if (log.isLoggable(Level.FINE)) log.fine("FTP contains " + aComponent + ": " + cont.isAncestorOf(aComponent));
+                    if (log.isLoggable(Level.FINE)) {
+			log.fine("FTP contains " + aComponent + ": " + cont.isAncestorOf(aComponent));
+		    }
                     if (found.value) {
                         retval = policy.getLastComponent(cont);
-                        if (log.isLoggable(Level.FINE)) log.fine("Used FTP for getting last component: " + retval);
+                        if (log.isLoggable(Level.FINE)) {
+			    log.fine("Used FTP for getting last component: " + retval);
+			}
                     } else {
                         found.value = cont.isAncestorOf(aComponent);
                         if (found.value) {
@@ -264,7 +291,9 @@ public class ContainerOrderFocusTraversalPolicy extends FocusTraversalPolicy
                                 retval = null;
                             } else {
                                 retval = policy.getComponentBefore(cont, aComponent);
-                                if (log.isLoggable(Level.FINE)) log.fine("FTP found previous for the component : " + retval);
+                                if (log.isLoggable(Level.FINE)) {
+				    log.fine("FTP found previous for the component : " + retval);
+				}
                             }
                         }
                     }
@@ -361,7 +390,9 @@ public class ContainerOrderFocusTraversalPolicy extends FocusTraversalPolicy
         if (aContainer == null) {
             throw new IllegalArgumentException("aContainer cannot be null");
         }
-        if (log.isLoggable(Level.FINE)) log.fine("Looking for the last component in " + aContainer);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("Looking for the last component in " + aContainer);
+	}
 
         synchronized(aContainer.getTreeLock()) {
             if (!(aContainer.isVisible() &&
@@ -378,15 +409,21 @@ public class ContainerOrderFocusTraversalPolicy extends FocusTraversalPolicy
                     Component retval = null;
                     Container cont = (Container)comp;
                     if (cont.isFocusTraversalPolicyProvider()) {
-                        if (log.isLoggable(Level.FINE)) log.fine("\tEntering FTP " + cont);
+                        if (log.isLoggable(Level.FINE)) {
+			    log.fine("\tEntering FTP " + cont);
+			}
                         FocusTraversalPolicy policy = cont.getFocusTraversalPolicy();
                         retval = policy.getLastComponent(cont);
                     } else {
-                        if (log.isLoggable(Level.FINE)) log.fine("\tEntering sub-container");
+                        if (log.isLoggable(Level.FINE)) {
+			    log.fine("\tEntering sub-container");
+			}
                         retval = getLastComponent((Container)comp);
                     }
                     if (retval != null) {
-                        if (log.isLoggable(Level.FINE)) log.fine("\tFound last component : " + retval);
+                        if (log.isLoggable(Level.FINE)) {
+			    log.fine("\tFound last component : " + retval);
+			}
                         return retval;
                     }
                 } else if (accept(comp)) {

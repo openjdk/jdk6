@@ -197,7 +197,9 @@ abstract class XDecoratedPeer extends XWindowPeer {
     }
 
     public void setTitle(String title) {
-        if (log.isLoggable(Level.FINE)) log.fine("Title is " + title);
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("Title is " + title);
+        }
         winAttr.title = title;
         updateWMName();
     }
@@ -245,7 +247,9 @@ abstract class XDecoratedPeer extends XWindowPeer {
 
         // If we somehow received focus events forward it instead to proxy
         // FIXME: Shouldn't we instead check for inferrior?
-        focusLog.finer("Received focus event on shell: " + xfe);
+        if (focusLog.isLoggable(Level.FINER)) {
+            focusLog.finer("Received focus event on shell: " + xfe);
+        }
 //         focusProxy.xRequestFocus();
    }
 
@@ -278,7 +282,9 @@ abstract class XDecoratedPeer extends XWindowPeer {
 
     public void handleReparentNotifyEvent(XEvent xev) {
         XReparentEvent  xe = xev.get_xreparent();
-        if (insLog.isLoggable(Level.FINE)) insLog.fine(xe.toString());
+        if (insLog.isLoggable(Level.FINE)) {
+            insLog.fine(xe.toString());
+        }
         reparent_serial = xe.get_serial();
         XToolkit.awtLock();
         try {
@@ -324,7 +330,9 @@ abstract class XDecoratedPeer extends XWindowPeer {
                     // If these insets are equal to our current insets - no actions are necessary
                     Insets dimInsets = dimensions.getInsets();
                     if (correctWM.equals(dimInsets)) {
-                        insLog.finer("Insets are the same as estimated - no additional reshapes necessary");
+			if (insLog.isLoggable(Level.FINER)) {
+			    insLog.finer("Insets are the same as estimated - no additional reshapes necessary");
+			}
                         no_reparent_artifacts = true;
                         insets_corrected = true;
                         applyGuessedInsets();
@@ -333,13 +341,13 @@ abstract class XDecoratedPeer extends XWindowPeer {
                 } else {
                     correctWM = XWM.getWM().getInsets(this, xe.get_window(), xe.get_parent());
 
-                    if (correctWM != null) {
-                        if (insLog.isLoggable(Level.FINER)) {
+		    if (insLog.isLoggable(Level.FINER)) {
+			if (correctWM != null) {
                             insLog.log(Level.FINER, "correctWM {0}",
                                        new Object[] {String.valueOf(correctWM)});
-                        }
-                    } else {
-                        insLog.log(Level.FINER, "correctWM insets are not available, waiting for configureNotify");
+			} else {
+			    insLog.log(Level.FINER, "correctWM insets are not available, waiting for configureNotify");
+			}
                     }
                 }
 
@@ -383,7 +391,9 @@ abstract class XDecoratedPeer extends XWindowPeer {
                  * must adjust the target dimensions appropriately.
                  */
             }
-            if (insLog.isLoggable(Level.FINER)) insLog.finer("Dimensions before reparent: " + dimensions);
+            if (insLog.isLoggable(Level.FINER)) {
+		insLog.finer("Dimensions before reparent: " + dimensions);
+	    }
 
             dimensions.setInsets(getRealInsets());
             insets_corrected = true;
@@ -505,8 +515,10 @@ abstract class XDecoratedPeer extends XWindowPeer {
         XToolkit.awtLock();
         try {
             if (!isReparented() || !isVisible()) {
-                insLog.log(Level.FINE, "- not reparented({0}) or not visible({1}), default reshape",
-                           new Object[] {Boolean.valueOf(isReparented()), Boolean.valueOf(visible)});
+                if (insLog.isLoggable(Level.FINE)) {
+		    insLog.log(Level.FINE, "- not reparented({0}) or not visible({1}), default reshape",
+			       new Object[] {Boolean.valueOf(isReparented()), Boolean.valueOf(visible)});
+                }
 
                 // Fix for 6323293.
                 // This actually is needed to preserve compatibility with previous releases -
@@ -780,7 +792,8 @@ abstract class XDecoratedPeer extends XWindowPeer {
                 {
                     Point xlocation = queryXLocation();
                     if (log.isLoggable(Level.FINE)) {
-                        log.log(Level.FINE, "New X location: {0}", new Object[]{String.valueOf(xlocation)});
+                        log.log(Level.FINE, "New X location: {0}",
+				new Object[]{String.valueOf(xlocation)});
                     }
                     if (xlocation != null) {
                         newLocation = xlocation;
@@ -840,8 +853,9 @@ abstract class XDecoratedPeer extends XWindowPeer {
     }
 
     public void setShellBounds(Rectangle rec) {
-        if (insLog.isLoggable(Level.FINE)) insLog.fine("Setting shell bounds on " +
-                                                       this + " to " + rec);
+        if (insLog.isLoggable(Level.FINE)) {
+	    insLog.fine("Setting shell bounds on " + this + " to " + rec);
+	}
         XToolkit.awtLock();
         try {
             updateSizeHints(rec.x, rec.y, rec.width, rec.height);
@@ -853,8 +867,9 @@ abstract class XDecoratedPeer extends XWindowPeer {
         }
     }
     public void setShellSize(Rectangle rec) {
-        if (insLog.isLoggable(Level.FINE)) insLog.fine("Setting shell size on " +
-                                                       this + " to " + rec);
+        if (insLog.isLoggable(Level.FINE)) {
+	    insLog.fine("Setting shell size on " + this + " to " + rec);
+	}
         XToolkit.awtLock();
         try {
             updateSizeHints(rec.x, rec.y, rec.width, rec.height);
@@ -865,8 +880,9 @@ abstract class XDecoratedPeer extends XWindowPeer {
         }
     }
     public void setShellPosition(Rectangle rec) {
-        if (insLog.isLoggable(Level.FINE)) insLog.fine("Setting shell position on " +
-                                                       this + " to " + rec);
+        if (insLog.isLoggable(Level.FINE)) {
+            insLog.fine("Setting shell position on " + this + " to " + rec);
+        }
         XToolkit.awtLock();
         try {
             updateSizeHints(rec.x, rec.y, rec.width, rec.height);
@@ -966,9 +982,10 @@ abstract class XDecoratedPeer extends XWindowPeer {
                 return toGlobal(0,0);
             } else {
                 Point location = target.getLocation();
-                if (insLog.isLoggable(Level.FINE))
+                if (insLog.isLoggable(Level.FINE)) {
                     insLog.log(Level.FINE, "getLocationOnScreen {0} not reparented: {1} ",
                                new Object[] {String.valueOf(this), String.valueOf(location)});
+		}
                 return location;
             }
         } finally {
@@ -1079,9 +1096,13 @@ abstract class XDecoratedPeer extends XWindowPeer {
         // by "proxy" - invisible mapped window. When we want to set X input focus to
         // toplevel set it on proxy instead.
         if (focusProxy == null) {
-            if (focusLog.isLoggable(Level.FINE)) focusLog.warning("Focus proxy is null for " + this);
+            if (focusLog.isLoggable(Level.WARNING)) {
+                focusLog.warning("Focus proxy is null for " + this);
+            }
         } else {
-            if (focusLog.isLoggable(Level.FINE)) focusLog.fine("Requesting focus to proxy: " + focusProxy);
+            if (focusLog.isLoggable(Level.FINE)) {
+                focusLog.fine("Requesting focus to proxy: " + focusProxy);
+            }
             if (timeProvided) {
                 focusProxy.xRequestFocus(time);
             } else {
@@ -1173,9 +1194,11 @@ abstract class XDecoratedPeer extends XWindowPeer {
         Window focusedWindow = XKeyboardFocusManagerPeer.getCurrentNativeFocusedWindow();
         Window activeWindow = XWindowPeer.getDecoratedOwner(focusedWindow);
 
-        focusLog.log(Level.FINER, "Current window is: active={0}, focused={1}",
+        if (focusLog.isLoggable(Level.FINER)) {
+	    focusLog.log(Level.FINER, "Current window is: active={0}, focused={1}",
                      new Object[]{ Boolean.valueOf(win == activeWindow),
                                    Boolean.valueOf(win == focusedWindow)});
+	}
 
         XWindowPeer toFocus = this;
         while (toFocus.nextTransientFor != null) {
@@ -1186,10 +1209,14 @@ abstract class XDecoratedPeer extends XWindowPeer {
             if (focusAllowedFor()) {
                 if (win == activeWindow && win != focusedWindow) {
                     // Happens when focus is on window child
-                    focusLog.fine("Focus is on child window - transfering it back");
+		    if (focusLog.isLoggable(Level.FINE)) {
+			focusLog.fine("Focus is on child window - transfering it back");
+		    }
                     handleWindowFocusInSync(-1);
                 } else {
-                    focusLog.fine("Requesting focus to this window");
+		    if (focusLog.isLoggable(Level.FINE)) {
+			focusLog.fine("Requesting focus to this window");
+		    }
                     if (timeProvided) {
                         requestXFocus(time);
                     } else {
@@ -1202,7 +1229,9 @@ abstract class XDecoratedPeer extends XWindowPeer {
             }
         }
         else if (toFocus.focusAllowedFor()) {
-            focusLog.fine("Requesting focus to " + toFocus);
+	    if (focusLog.isLoggable(Level.FINE)) {
+		focusLog.fine("Requesting focus to " + toFocus);
+	    }
             if (timeProvided) {
                 toFocus.requestXFocus(time);
             } else {

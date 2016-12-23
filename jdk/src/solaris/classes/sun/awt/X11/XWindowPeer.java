@@ -204,10 +204,10 @@ class XWindowPeer extends XPanelPeer implements WindowPeer,
         if (owner != null) {
             ownerPeer = (XWindowPeer)owner.getPeer();
             if (focusLog.isLoggable(Level.FINER)) {
-                focusLog.fine("Owner is " + owner);
-                focusLog.fine("Owner peer is " + ownerPeer);
-                focusLog.fine("Owner X window " + Long.toHexString(ownerPeer.getWindow()));
-                focusLog.fine("Owner content X window " + Long.toHexString(ownerPeer.getContentWindow()));
+                focusLog.finer("Owner is " + owner);
+                focusLog.finer("Owner peer is " + ownerPeer);
+                focusLog.finer("Owner X window " + Long.toHexString(ownerPeer.getWindow()));
+                focusLog.finer("Owner content X window " + Long.toHexString(ownerPeer.getContentWindow()));
             }
             // as owner window may be an embedded window, we must get a toplevel window
             // to set as TRANSIENT_FOR hint
@@ -216,8 +216,10 @@ class XWindowPeer extends XPanelPeer implements WindowPeer,
                 XToolkit.awtLock();
                 try {
                     // Set WM_TRANSIENT_FOR
-                    if (focusLog.isLoggable(Level.FINE)) focusLog.fine("Setting transient on " + Long.toHexString(getWindow())
-                                                                       + " for " + Long.toHexString(ownerWindow));
+                    if (focusLog.isLoggable(Level.FINE)) {
+			focusLog.fine("Setting transient on " + Long.toHexString(getWindow())
+				      + " for " + Long.toHexString(ownerWindow));
+		    }
                     setToplevelTransientFor(this, ownerPeer, false, true);
 
                     // Set group leader
@@ -800,7 +802,9 @@ class XWindowPeer extends XPanelPeer implements WindowPeer,
         // override_redirect all we can do is check whether our parent
         // is active. If it is - we can freely synthesize focus transfer.
         // Luckily, this logic is already implemented in requestWindowFocus.
-        if (focusLog.isLoggable(Level.FINE)) focusLog.fine("Requesting window focus");
+        if (focusLog.isLoggable(Level.FINE)) {
+	    focusLog.fine("Requesting window focus");
+	}
         requestWindowFocus(time, timeProvided);
     }
 
@@ -1010,7 +1014,9 @@ class XWindowPeer extends XPanelPeer implements WindowPeer,
     }
 
     private void updateAlwaysOnTop() {
-        log.log(Level.FINE, "Promoting always-on-top state {0}", Boolean.valueOf(alwaysOnTop));
+        if (log.isLoggable(Level.FINE)) {
+	    log.log(Level.FINE, "Promoting always-on-top state {0}", Boolean.valueOf(alwaysOnTop));
+        }
         XWM.getWM().setLayer(this,
                              alwaysOnTop ?
                              XLayerProtocol.LAYER_ALWAYS_ON_TOP :
@@ -1797,7 +1803,9 @@ class XWindowPeer extends XPanelPeer implements WindowPeer,
     }
 
     public void xSetVisible(boolean visible) {
-        if (log.isLoggable(Level.FINE)) log.fine("Setting visible on " + this + " to " + visible);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("Setting visible on " + this + " to " + visible);
+	}
         XToolkit.awtLock();
         try {
             this.visible = visible;
@@ -1981,7 +1989,7 @@ class XWindowPeer extends XPanelPeer implements WindowPeer,
 
     public void handleMotionNotify(XEvent xev) {
         XMotionEvent xme = xev.get_xmotion();
-        if (grabLog.isLoggable(Level.FINE)) {
+        if (grabLog.isLoggable(Level.FINER)) {
             grabLog.log(Level.FINER, "{0}, when grabbed {1}, contains {2}",
                         new Object[] {String.valueOf(xme), isGrabbed(),
                                       containsGlobal(xme.get_x_root(), xme.get_y_root())});

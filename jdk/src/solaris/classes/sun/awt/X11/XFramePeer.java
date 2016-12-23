@@ -212,7 +212,9 @@ class XFramePeer extends XDecoratedPeer implements FramePeer, XConstants {
     }
 
     public void setMaximizedBounds(Rectangle b) {
-        if (insLog.isLoggable(Level.FINE)) insLog.fine("Setting maximized bounds to " + b);
+        if (insLog.isLoggable(Level.FINE)) {
+	    insLog.fine("Setting maximized bounds to " + b);
+	}
         if (b == null) return;
         maxBounds = new Rectangle(b);
         XToolkit.awtLock();
@@ -229,7 +231,9 @@ class XFramePeer extends XDecoratedPeer implements FramePeer, XConstants {
             } else {
                 hints.set_max_height((int)XlibWrapper.DisplayHeight(XToolkit.getDisplay(), XlibWrapper.DefaultScreen(XToolkit.getDisplay())));
             }
-            if (insLog.isLoggable(Level.FINER)) insLog.finer("Setting hints, flags " + XlibWrapper.hintsToString(hints.get_flags()));
+            if (insLog.isLoggable(Level.FINER)) {
+		insLog.finer("Setting hints, flags " + XlibWrapper.hintsToString(hints.get_flags()));
+	    }
             XlibWrapper.XSetWMNormalHints(XToolkit.getDisplay(), window, hints.pData);
         } finally {
             XToolkit.awtUnlock();
@@ -240,7 +244,9 @@ class XFramePeer extends XDecoratedPeer implements FramePeer, XConstants {
 
     public void setState(int newState) {
         if (!isShowing()) {
-            stateLog.finer("Frame is not showing");
+            if (stateLog.isLoggable(Level.FINER)) {
+		stateLog.finer("Frame is not showing");
+	    }
             state = newState;
             return;
         }
@@ -251,14 +257,20 @@ class XFramePeer extends XDecoratedPeer implements FramePeer, XConstants {
         int changed = state ^ newState;
         int changeIconic = changed & Frame.ICONIFIED;
         boolean iconic = (newState & Frame.ICONIFIED) != 0;
-        stateLog.log(Level.FINER, "Changing state, old state {0}, new state {1}(iconic {2})",
-                     new Object[] {Integer.valueOf(state), Integer.valueOf(newState), Boolean.valueOf(iconic)});
+        if (stateLog.isLoggable(Level.FINER)) {
+            stateLog.log(Level.FINER, "Changing state, old state {0}, new state {1}(iconic {2})",
+			 new Object[] {Integer.valueOf(state), Integer.valueOf(newState), Boolean.valueOf(iconic)});
+	}
         if (changeIconic != 0 && iconic) {
-            if (stateLog.isLoggable(Level.FINER)) stateLog.finer("Iconifying shell " + getShell() + ", this " + this + ", screen " + getScreenNumber());
+            if (stateLog.isLoggable(Level.FINER)) {
+		stateLog.finer("Iconifying shell " + getShell() + ", this " + this + ", screen " + getScreenNumber());
+	    }
             XToolkit.awtLock();
             try {
                 int res = XlibWrapper.XIconifyWindow(XToolkit.getDisplay(), getShell(), getScreenNumber());
-                if (stateLog.isLoggable(Level.FINER)) stateLog.finer("XIconifyWindow returned " + res);
+                if (stateLog.isLoggable(Level.FINER)) {
+		    stateLog.finer("XIconifyWindow returned " + res);
+		}
             }
             finally {
                 XToolkit.awtUnlock();
@@ -268,7 +280,9 @@ class XFramePeer extends XDecoratedPeer implements FramePeer, XConstants {
             setExtendedState(newState);
         }
         if (changeIconic != 0 && !iconic) {
-            if (stateLog.isLoggable(Level.FINER)) stateLog.finer("DeIconifying " + this);
+            if (stateLog.isLoggable(Level.FINER)) {
+		stateLog.finer("DeIconifying " + this);
+	    }
             xSetVisible(true);
         }
     }
@@ -296,7 +310,9 @@ class XFramePeer extends XDecoratedPeer implements FramePeer, XConstants {
 
         int changed = state ^ newState.intValue();
         if (changed == 0) {
-            stateLog.finer("State is the same: " + state);
+            if (stateLog.isLoggable(Level.FINER)) {
+                stateLog.finer("State is the same: " + state);
+            }
             return;
         }
 
@@ -305,10 +321,14 @@ class XFramePeer extends XDecoratedPeer implements FramePeer, XConstants {
 
         if ((changed & Frame.ICONIFIED) != 0) {
             if ((state & Frame.ICONIFIED) != 0) {
-                stateLog.finer("Iconified");
+		if (stateLog.isLoggable(Level.FINER)) {
+		    stateLog.finer("Iconified");
+		}
                 handleIconify();
             } else {
-                stateLog.finer("DeIconified");
+		if (stateLog.isLoggable(Level.FINER)) {
+		    stateLog.finer("DeIconified");
+		}
                 content.purgeIconifiedExposeEvents();
                 handleDeiconify();
             }
@@ -345,7 +365,9 @@ class XFramePeer extends XDecoratedPeer implements FramePeer, XConstants {
             XWMHints hints = getWMHints();
             hints.set_flags((int)XlibWrapper.StateHint | hints.get_flags());
             hints.set_initial_state(wm_state);
-            if (stateLog.isLoggable(Level.FINE)) stateLog.fine("Setting initial WM state on " + this + " to " + wm_state);
+            if (stateLog.isLoggable(Level.FINE)) {
+		stateLog.fine("Setting initial WM state on " + this + " to " + wm_state);
+	    }
             XlibWrapper.XSetWMHints(XToolkit.getDisplay(), getWindow(), hints.pData);
         }
         finally {

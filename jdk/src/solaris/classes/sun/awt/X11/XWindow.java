@@ -387,7 +387,9 @@ public class XWindow extends XBaseWindow implements X11ComponentPeer {
                     ((Component)e.getSource()).dispatchEvent(e);
                 }
             }, PeerEvent.ULTIMATE_PRIORITY_EVENT);
-        if (focusLog.isLoggable(Level.FINER) && (e instanceof FocusEvent)) focusLog.finer("Sending " + e);
+        if (focusLog.isLoggable(Level.FINER) && (e instanceof FocusEvent)) {
+	    focusLog.finer("Sending " + e);
+	}
         XToolkit.postEvent(XToolkit.targetToAppContext(e.getSource()), pe);
     }
 
@@ -631,7 +633,9 @@ public class XWindow extends XBaseWindow implements X11ComponentPeer {
         if (isEventDisabled(xev)) {
             return;
         }
-        if (eventLog.isLoggable(Level.FINE)) eventLog.fine(xbe.toString());
+        if (eventLog.isLoggable(Level.FINE)) {
+	    eventLog.fine(xbe.toString());
+	}
         long when;
         int modifiers;
         boolean popupTrigger = false;
@@ -655,9 +659,11 @@ public class XWindow extends XBaseWindow implements X11ComponentPeer {
             /*
                multiclick checking
             */
-            if (eventLog.isLoggable(Level.FINEST)) eventLog.finest("lastWindow = " + lastWindow + ", lastButton "
-                                                                   + lastButton + ", lastTime " + lastTime + ", multiClickTime "
-                                                                   + XToolkit.getMultiClickTime());
+            if (eventLog.isLoggable(Level.FINEST)) {
+		eventLog.finest("lastWindow = " + lastWindow + ", lastButton "
+				+ lastButton + ", lastTime " + lastTime + ", multiClickTime "
+				+ XToolkit.getMultiClickTime());
+	    }
             if (lastWindow == this && lastButton == lbutton && (when - lastTime) < XToolkit.getMultiClickTime()) {
                 clickCount++;
             } else {
@@ -828,7 +834,9 @@ public class XWindow extends XBaseWindow implements X11ComponentPeer {
         super.handleXCrossingEvent(xev);
         XCrossingEvent xce = xev.get_xcrossing();
 
-        if (eventLog.isLoggable(Level.FINEST)) eventLog.finest(xce.toString());
+        if (eventLog.isLoggable(Level.FINEST)) {
+	    eventLog.finest(xce.toString());
+	}
 
         if (xce.get_type() == XConstants.EnterNotify) {
             enterNotify(xce.get_window());
@@ -913,7 +921,9 @@ public class XWindow extends XBaseWindow implements X11ComponentPeer {
                 xce.get_y(), xce.get_x_root(), xce.get_y_root(), clickCount, popupTrigger,
                 MouseEvent.NOBUTTON);
             postEventToEventQueue(me);
-            eventLog.finest("Clearing last window ref");
+	    if (eventLog.isLoggable(Level.FINEST)) {
+		eventLog.finest("Clearing last window ref");
+	    }
             lastWindowRef = null;
         }
         if (xce.get_type() == EnterNotify) {
@@ -978,10 +988,12 @@ public class XWindow extends XBaseWindow implements X11ComponentPeer {
     }
 
     private void dumpKeysymArray(XKeyEvent ev) {
-        keyEventLog.fine("  "+Long.toHexString(XlibWrapper.XKeycodeToKeysym(XToolkit.getDisplay(), ev.get_keycode(), 0))+
-                         "\n        "+Long.toHexString(XlibWrapper.XKeycodeToKeysym(XToolkit.getDisplay(), ev.get_keycode(), 1))+
-                         "\n        "+Long.toHexString(XlibWrapper.XKeycodeToKeysym(XToolkit.getDisplay(), ev.get_keycode(), 2))+
-                         "\n        "+Long.toHexString(XlibWrapper.XKeycodeToKeysym(XToolkit.getDisplay(), ev.get_keycode(), 3)));
+        if (keyEventLog.isLoggable(Level.FINE)) {
+            keyEventLog.fine("  "+Long.toHexString(XlibWrapper.XKeycodeToKeysym(XToolkit.getDisplay(), ev.get_keycode(), 0))+
+                             "\n        "+Long.toHexString(XlibWrapper.XKeycodeToKeysym(XToolkit.getDisplay(), ev.get_keycode(), 1))+
+                             "\n        "+Long.toHexString(XlibWrapper.XKeycodeToKeysym(XToolkit.getDisplay(), ev.get_keycode(), 2))+
+                             "\n        "+Long.toHexString(XlibWrapper.XKeycodeToKeysym(XToolkit.getDisplay(), ev.get_keycode(), 3)));
+        }
     }
     /**
        Return unicode character or 0 if no correspondent character found.
@@ -1006,14 +1018,20 @@ public class XWindow extends XBaseWindow implements X11ComponentPeer {
         //return (uni > 0? uni + 0x01000000 : 0);
     }
     void logIncomingKeyEvent(XKeyEvent ev) {
-        keyEventLog.fine("--XWindow.java:handleKeyEvent:"+ev);
+        if (keyEventLog.isLoggable(Level.FINE)) {
+            keyEventLog.fine("--XWindow.java:handleKeyEvent:"+ev);
+        }
         dumpKeysymArray(ev);
-        keyEventLog.fine("XXXXXXXXXXXXXX javakeycode will be most probably:0x"+ Integer.toHexString(XKeysym.getJavaKeycodeOnly(ev)));
+        if (keyEventLog.isLoggable(Level.FINE)) {
+            keyEventLog.fine("XXXXXXXXXXXXXX javakeycode will be most probably:0x"+ Integer.toHexString(XKeysym.getJavaKeycodeOnly(ev)));
+        }
     }
     public void handleKeyPress(XEvent xev) {
         super.handleKeyPress(xev);
         XKeyEvent ev = xev.get_xkey();
-        if (eventLog.isLoggable(Level.FINE)) eventLog.fine(ev.toString());
+        if (eventLog.isLoggable(Level.FINE)) {
+	    eventLog.fine(ev.toString());
+	}
         if (isEventDisabled(xev)) {
             return;
         }
@@ -1047,7 +1065,7 @@ public class XWindow extends XBaseWindow implements X11ComponentPeer {
                                      "                                         unicode key:"+Integer.toHexString((int)unicodeKey));
                 }
             }
-        }else  {
+        } else {
             // No input method instance found. For example, there's a Java Input Method.
             // Produce do-it-yourself keysym and perhaps unicode character.
             keysym[0] = xkeycodeToKeysym(ev);
@@ -1103,7 +1121,9 @@ public class XWindow extends XBaseWindow implements X11ComponentPeer {
 
 
         if (unicodeKey > 0 && !isDeadKey) {
-                keyEventLog.fine("fire _TYPED on "+unicodeKey);
+                if (keyEventLog.isLoggable(Level.FINE)) {
+                    keyEventLog.fine("fire _TYPED on "+unicodeKey);
+                }
                 postKeyEvent( java.awt.event.KeyEvent.KEY_TYPED,
                               ev.get_time(),
                               java.awt.event.KeyEvent.VK_UNDEFINED,
@@ -1121,7 +1141,9 @@ public class XWindow extends XBaseWindow implements X11ComponentPeer {
     public void handleKeyRelease(XEvent xev) {
         super.handleKeyRelease(xev);
         XKeyEvent ev = xev.get_xkey();
-        if (eventLog.isLoggable(Level.FINE)) eventLog.fine(ev.toString());
+        if (eventLog.isLoggable(Level.FINE)) {
+	    eventLog.fine(ev.toString());
+	}
         if (isEventDisabled(xev)) {
             return;
         }
