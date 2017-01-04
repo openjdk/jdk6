@@ -526,7 +526,8 @@ public class SortingFocusTraversalPolicy
 	    log.fine("### Cycle is " + cycle);
 	}
 
-        for (Component comp : cycle) {
+        for (int i= cycle.size()-1; i >= 0; i--) {
+            Component comp = (Component)cycle.get(i);
             if (accept(comp)) {
                 return comp;
             } else if (comp instanceof Container && !(comp == aContainer) && ((Container)comp).isFocusTraversalPolicyProvider()) {
