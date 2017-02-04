@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -68,7 +68,7 @@ public class Resources_sv extends java.util.ListResourceBundle {
                 "Kan inte \u00F6ppna policyfilen: {0}: {1}"},
         {"Policy.Tool", "Policyverktyg"},
         {"Errors.have.occurred.while.opening.the.policy.configuration.View.the.Warning.Log.for.more.information.",
-                "Det uppstod ett fel n\u00E4r policykonfigurationen skulle \u00F6ppnas. Se varningsloggen f\u00F6r mer information."},
+                "Ett fel intr\u00E4ffade n\u00E4r policykonfigurationen skulle \u00F6ppnas. Se varningsloggen f\u00F6r mer information."},
         {"Error", "Fel"},
         {"OK", "OK"},
         {"Status", "Status"},
@@ -80,7 +80,7 @@ public class Resources_sv extends java.util.ListResourceBundle {
         {"Target.Name.",
                 "M\u00E5l:                                                    "},
         {"Actions.",
-                "Funktioner:                                                             "},
+                "\u00C5tg\u00E4rder:                                                             "},
         {"OK.to.overwrite.existing.file.filename.",
                 "Ska den befintliga filen {0} skrivas \u00F6ver?"},
         {"Cancel", "Avbryt"},
@@ -94,10 +94,10 @@ public class Resources_sv extends java.util.ListResourceBundle {
         {".Edit.Permission", "  Redigera beh\u00F6righet"},
         {"Remove.Permission", "Ta bort beh\u00F6righet"},
         {"Done", "Utf\u00F6rd"},
-        {"KeyStore.URL.", "URL f\u00F6r nyckellager:"},
-        {"KeyStore.Type.", "Nyckellagertyp:"},
-        {"KeyStore.Provider.", "Nyckellagerleverant\u00F6r:"},
-        {"KeyStore.Password.URL.", "URL f\u00F6r l\u00F6senord till nyckellager:"},
+        {"KeyStore.URL.", "Nyckellager-&URL:"},
+        {"KeyStore.Type.", "Nyckellager&typ:"},
+        {"KeyStore.Provider.", "Nyckellager&leverant\u00F6r:"},
+        {"KeyStore.Password.URL.", "L\u00F6sen&ords-URL till nyckellager:"},
         {"Principals", "Identitetshavare"},
         {".Edit.Principal.", "  Redigera identitetshavare:"},
         {".Add.New.Principal.", "  L\u00E4gg till ny identitetshavare:"},
