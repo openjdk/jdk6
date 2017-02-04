@@ -1852,7 +1852,7 @@ public class XSLTErrorResources_it extends ListResourceBundle
 //  public static final int  ER_PARSER_ARG_CANNOT_BE_NULL = 223 ;
 
     { ER_PARSER_ARG_CANNOT_BE_NULL,
-     "L'argomento Parser non pu\u00f2 essere nullo"},
+     "L'argomento del parser non deve essere nullo"},
 
 
 // ER_FEATURE
