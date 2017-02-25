@@ -205,6 +205,11 @@ public class FtpClient extends TransferProtocolClient {
             if (readReply() == FTP_ERROR)
                 throw new FtpProtocolException("Error reading FTP pending reply\n");
         }
+        if (cmd.indexOf('\n') != -1) {
+            FtpProtocolException ex = new FtpProtocolException("Illegal FTP command");
+            ex.initCause(new IllegalArgumentException("Illegal carriage return"));
+            throw ex;
+        }
         do {
             sendServer(cmd + "\r\n");
             reply = readReply();
