@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,6 +57,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import sun.misc.ObjectInputFilter;
 import sun.rmi.runtime.Log;
 import sun.rmi.transport.LiveRef;
+import sun.rmi.transport.StreamRemoteCall;
 import sun.rmi.transport.Target;
 import sun.rmi.transport.tcp.TCPTransport;
 import sun.security.action.GetBooleanAction;
@@ -329,10 +330,14 @@ public class UnicastServerRef extends UnicastRef
             try {
                 unmarshalCustomCallData(in);
                 params = unmarshalParameters(obj, method, marshalStream);
-            } catch (java.io.IOException e) {
+            } catch (IOException e) {
+                // disable saving any refs in the inputStream for GC
+                ((StreamRemoteCall) call).discardPendingRefs();
                 throw new UnmarshalException(
                     "error unmarshalling arguments", e);
             } catch (ClassNotFoundException e) {
+                // disable saving any refs in the inputStream for GC
+                ((StreamRemoteCall) call).discardPendingRefs();
                 throw new UnmarshalException(
                     "error unmarshalling arguments", e);
             } finally {
