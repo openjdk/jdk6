@@ -42,6 +42,8 @@ import java.security.ProtectionDomain;
  */
 public class TransformerException extends Exception {
 
+    private static final long serialVersionUID = 975798773772956428L;
+
     /** Field locator specifies where the error occurred */
     SourceLocator locator;
 
