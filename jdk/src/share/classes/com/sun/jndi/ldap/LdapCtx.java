@@ -2353,7 +2353,9 @@ final public class LdapCtx extends ComponentDirContext
     private void setReferralMode(String ref, boolean update) {
         // First determine the referral mode
         if (ref != null) {
-            if (ref.equals("follow")) {
+            if (ref.equals("follow-scheme")) {
+                handleReferrals = LdapClient.LDAP_REF_FOLLOW_SCHEME;
+            } else if (ref.equals("follow")) {
                 handleReferrals = LdapClient.LDAP_REF_FOLLOW;
             } else if (ref.equals("throw")) {
                 handleReferrals = LdapClient.LDAP_REF_THROW;
@@ -2872,9 +2874,24 @@ final public class LdapCtx extends ComponentDirContext
             r = new LdapReferralException(resolvedName, resolvedObj, remainName,
                 msg, envprops, fullDN, handleReferrals, reqCtls);
             // only one set of URLs is present
-            r.setReferralInfo(res.referrals == null ? null :
-                    (Vector) res.referrals.elementAt(0), false);
-
+            Vector<String> refs;
+            if (res.referrals == null) {
+                refs = null;
+            } else if (handleReferrals == LdapClient.LDAP_REF_FOLLOW_SCHEME) {
+                refs = new Vector();
+                Vector<String> v = (Vector)res.referrals.elementAt(0);
+                for (String s : v) {
+                    if (s.startsWith("ldap:")) {
+                        refs.add(s);
+                    }
+                }
+                if (refs.isEmpty()) {
+                    refs = null;
+                }
+            } else {
+               refs = (Vector)res.referrals.elementAt(0);
+            }
+            r.setReferralInfo(refs, false);
 
             if (hopCount > 1) {
                 r.setHopCount(hopCount);
