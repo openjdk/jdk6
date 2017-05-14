@@ -482,9 +482,16 @@ public final class SunCertPathBuilder extends CertPathBuilderSpi {
                 userCheckers.add(mustCheck, policyChecker);
                 mustCheck++;
 
+                String variant = null;
+
+                if (buildParams instanceof  PKIXExtendedParameters) {
+                    variant = ((PKIXExtendedParameters)buildParams).getVariant();
+                }
+
                 // add the algorithm checker
                 userCheckers.add(mustCheck,
-                        new AlgorithmChecker(builder.trustAnchor, buildParams.getDate(), null));
+                        new AlgorithmChecker(builder.trustAnchor,
+                                buildParams.getDate(), variant));
                 mustCheck++;
 
                 if (nextState.keyParamsNeeded()) {
