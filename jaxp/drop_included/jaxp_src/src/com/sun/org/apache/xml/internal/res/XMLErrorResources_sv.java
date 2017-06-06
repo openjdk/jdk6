@@ -212,7 +212,7 @@ public class XMLErrorResources_sv extends XMLErrorResources
 
   {
     ER_NO_DTMIDS_AVAIL,
-       "Inga fler DTM-IDs \u00e4r tillg\u00e4ngliga"},
+    "Inga fler DTM-id:n \u00E4r tillg\u00E4ngliga"},
 
 
    /**  Not supported  */

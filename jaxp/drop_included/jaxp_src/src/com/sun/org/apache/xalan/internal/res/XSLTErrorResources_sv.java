@@ -431,7 +431,7 @@ public class XSLTErrorResources_sv extends ListResourceBundle
 
   {
     ER_NO_CURLYBRACE,
-      "Fel: Kan inte ha '{' inuti uttryck"},
+    "Fel: Uttryck f\u00E5r inte inneh\u00E5lla '{'"},
 
 
   /** ER_ILLEGAL_ATTRIBUTE          */
