@@ -94,7 +94,15 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
     @Override
     public final boolean permits(Set<CryptoPrimitive> primitives,
             String algorithm, AlgorithmParameters parameters) {
-        return checkAlgorithm(disabledAlgorithms, algorithm, decomposer);
+        if (!checkAlgorithm(disabledAlgorithms, algorithm, decomposer)) {
+            return false;
+        }
+
+        if (parameters != null) {
+            return algorithmConstraints.permits(algorithm, parameters);
+        }
+
+        return true;
     }
 
     /*
@@ -232,6 +240,13 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
                     constraintList = new ArrayList<Constraint>(1);
                     constraintsMap.put(algorithm, constraintList);
                 }
+                // Consider the impact of algorithm aliases.
+                for (String alias : AlgorithmDecomposer.getAliases(algorithm)) {
+                    if (constraintsMap.get(alias) == null) {
+                        constraintsMap.put(alias, constraintList);
+                    }
+                }
+
                 if (space <= 0) {
                     constraintList.add(new DisabledConstraint(algorithm));
                     continue;
@@ -339,6 +354,27 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
             return true;
         }
 
+        // Check if constraints permit this AlgorithmParameters.
+        public boolean permits(String algorithm, AlgorithmParameters aps) {
+            List<Constraint> list = getConstraints(algorithm);
+            if (list == null) {
+                return true;
+            }
+
+            for (Constraint constraint : list) {
+                if (!constraint.permits(aps)) {
+                    if (debug != null) {
+                        debug.println("keySizeConstraint: failed algorithm " +
+                                "parameters constraint check " + aps);
+                    }
+
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         // Check if constraints permit this cert.
         public void permits(String algorithm, ConstraintsParameters cp)
                 throws CertPathValidatorException {
@@ -431,6 +467,18 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
         }
 
         /**
+         * Check if the algorithm constraint permits a given cryptographic
+         * parameters.
+         *
+         * @param parameters the cryptographic parameters
+         * @return 'true' if the cryptographic parameters is allowed,
+         *         'false' ortherwise.
+         */
+        public boolean permits(AlgorithmParameters parameters) {
+            return true;
+        }
+
+        /**
          * Check if an algorithm constraint is permitted with a given
          * ConstraintsParameters.
          *
@@ -514,6 +562,7 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
          * call next() for any following constraints. If it does not, exit
          * as this constraint(s) does not restrict the operation.
          */
+        @Override
         public void permits(ConstraintsParameters cp)
                 throws CertPathValidatorException {
             if (debug != null) {
@@ -642,6 +691,7 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
             this.usages = usages;
         }
 
+        @Override
         public void permits(ConstraintsParameters cp)
                 throws CertPathValidatorException {
             for (String usage : usages) {
@@ -729,6 +779,7 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
          * constraint  Any permitted constraint will exit the linked list
          * to allow the operation.
          */
+        @Override
         public void permits(ConstraintsParameters cp)
 	    throws CertPathValidatorException {
             Key key = null;
@@ -751,6 +802,7 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
 
         // Check if key constraint disable the specified key
         // Uses old style permit()
+        @Override
         public boolean permits(Key key) {
             // If we recursively find a constraint that permits us to use
             // this key, return true and skip any other constraint checks.
@@ -762,6 +814,30 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
             }
 
             return permitsImpl(key);
+        }
+
+        @Override
+        public boolean permits(AlgorithmParameters parameters) {
+            String paramAlg = parameters.getAlgorithm();
+            if (!algorithm.equalsIgnoreCase(parameters.getAlgorithm())) {
+                // Consider the impact of the algorithm aliases.
+                Collection<String> aliases =
+                        AlgorithmDecomposer.getAliases(algorithm);
+                if (!aliases.contains(paramAlg)) {
+                    return true;
+                }
+            }
+
+            int keySize = KeyUtil.getKeySize(parameters);
+            if (keySize == 0) {
+                return false;
+            } else if (keySize > 0) {
+                return !((keySize < minSize) || (keySize > maxSize) ||
+                    (prohibitedSize == keySize));
+            }   // Otherwise, the key size is not accessible or determined.
+                // Conservatively, please don't disable such keys.
+
+            return true;
         }
 
         private boolean permitsImpl(Key key) {
@@ -792,6 +868,7 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
             algorithm = algo;
         }
 
+        @Override
         public void permits(ConstraintsParameters cp)
                 throws CertPathValidatorException {
                        throw new CertPathValidatorException(
@@ -799,6 +876,7 @@ public class DisabledAlgorithmConstraints extends AbstractAlgorithmConstraints {
                                        "algorithm: " + algorithm + extendedMsg(cp));
         }
 
+        @Override
         public boolean permits(Key key) {
             return false;
         }
