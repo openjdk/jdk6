@@ -25,6 +25,7 @@
 
 package com.sun.xml.internal.ws.util;
 
+import com.sun.xml.internal.ws.util.xml.XmlUtil;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -63,8 +64,7 @@ public class DOMUtil {
         synchronized (DOMUtil.class) {
             if (db == null) {
                 try {
-                    DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-                    dbf.setNamespaceAware(true);
+                    DocumentBuilderFactory dbf = XmlUtil.newDocumentBuilderFactory();
                     db = dbf.newDocumentBuilder();
                 } catch (ParserConfigurationException e) {
                     throw new FactoryConfigurationError(e);

@@ -36,14 +36,11 @@ import org.w3c.dom.EntityReference;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Text;
-import org.xml.sax.EntityResolver;
-import org.xml.sax.ErrorHandler;
-import org.xml.sax.SAXException;
-import org.xml.sax.SAXParseException;
-import org.xml.sax.XMLReader;
-import org.xml.sax.InputSource;
+import org.xml.sax.*;
 
+import javax.xml.XMLConstants;
 import javax.xml.namespace.QName;
+import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParserFactory;
 import javax.xml.transform.Result;
@@ -61,11 +58,15 @@ import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.URL;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.StringTokenizer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * @author WS Development Team
@@ -73,6 +74,27 @@ import java.util.StringTokenizer;
 public class XmlUtil {
     private final static String LEXICAL_HANDLER_PROPERTY =
         "http://xml.org/sax/properties/lexical-handler";
+
+    private static final String DISALLOW_DOCTYPE_DECL = "http://apache.org/xml/features/disallow-doctype-decl";
+
+    private static final String EXTERNAL_GE = "http://xml.org/sax/features/external-general-entities";
+
+    private static final String EXTERNAL_PE = "http://xml.org/sax/features/external-parameter-entities";
+
+    private static final String LOAD_EXTERNAL_DTD = "http://apache.org/xml/features/nonvalidating/load-external-dtd";
+
+    private static final Logger LOGGER = Logger.getLogger(XmlUtil.class.getName());
+
+    private static final String DISABLE_XML_SECURITY = "com.sun.xml.internal.ws.disableXmlSecurity";
+
+    private static boolean XML_SECURITY_DISABLED = AccessController.doPrivileged(
+            new PrivilegedAction<Boolean>() {
+                @Override
+                public Boolean run() {
+                    return Boolean.getBoolean(DISABLE_XML_SECURITY);
+                }
+            }
+    );
 
     public static String getPrefix(String s) {
         int i = s.indexOf(':');
@@ -317,4 +339,72 @@ public class XmlUtil {
             throw exception;
         }
     };
+
+    public static DocumentBuilderFactory newDocumentBuilderFactory() {
+        return newDocumentBuilderFactory(false);
+    }
+
+    public static DocumentBuilderFactory newDocumentBuilderFactory(boolean disableSecurity) {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        String featureToSet = XMLConstants.FEATURE_SECURE_PROCESSING;
+        try {
+            boolean securityOn = !isXMLSecurityDisabled(disableSecurity);
+            factory.setFeature(featureToSet, securityOn);
+            factory.setNamespaceAware(true);
+            if (securityOn) {
+                factory.setExpandEntityReferences(false);
+                featureToSet = DISALLOW_DOCTYPE_DECL;
+                factory.setFeature(featureToSet, true);
+                featureToSet = EXTERNAL_GE;
+                factory.setFeature(featureToSet, false);
+                featureToSet = EXTERNAL_PE;
+                factory.setFeature(featureToSet, false);
+                featureToSet = LOAD_EXTERNAL_DTD;
+                factory.setFeature(featureToSet, false);
+            }
+        } catch (ParserConfigurationException e) {
+            LOGGER.log(Level.WARNING, "Factory [{0}] doesn't support "+featureToSet+" feature!", new Object[] {factory.getClass().getName()} );
+        }
+        return factory;
+    }
+
+
+    private static boolean isXMLSecurityDisabled(boolean runtimeDisabled) {
+        return XML_SECURITY_DISABLED || runtimeDisabled;
+    }
+
+    public static SAXParserFactory newSAXParserFactory() {
+        return newSAXParserFactory(false);
+    }
+
+    public static SAXParserFactory newSAXParserFactory(boolean disableSecurity) {
+        SAXParserFactory factory = SAXParserFactory.newInstance();
+        String featureToSet = XMLConstants.FEATURE_SECURE_PROCESSING;
+        boolean issueWarning = false;
+        try {
+            boolean securityOn = !isXMLSecurityDisabled(disableSecurity);
+            factory.setFeature(featureToSet, securityOn);
+            factory.setNamespaceAware(true);
+            if (securityOn) {
+                featureToSet = DISALLOW_DOCTYPE_DECL;
+                factory.setFeature(featureToSet, true);
+                featureToSet = EXTERNAL_GE;
+                factory.setFeature(featureToSet, false);
+                featureToSet = EXTERNAL_PE;
+                factory.setFeature(featureToSet, false);
+                featureToSet = LOAD_EXTERNAL_DTD;
+                factory.setFeature(featureToSet, false);
+            }
+        } catch (ParserConfigurationException e) {
+            issueWarning = true;
+        } catch (SAXNotRecognizedException e) {
+            issueWarning = true;
+        } catch (SAXNotSupportedException e) {
+            issueWarning = true;
+        }
+        if (issueWarning) {
+            LOGGER.log(Level.WARNING, "Factory [{0}] doesn't support "+featureToSet+" feature!", new Object[]{factory.getClass().getName()});
+        }
+        return factory;
+    }
 }
