@@ -46,6 +46,7 @@ import jdk.testlibrary.Utils;
 
 /*
  * @test
+ * @bug 8165367
  * @summary Verify the restrictions for certificate path on JSSE with custom trust store.
  * @library /lib/testlibrary
  * @compile JSSEClient.java
