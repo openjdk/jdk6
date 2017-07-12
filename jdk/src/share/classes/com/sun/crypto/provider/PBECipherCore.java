@@ -288,7 +288,7 @@ final class PBECipherCore {
                 for (i=0; i<2; i++) {
                     byte tmp = salt[i];
                     salt[i] = salt[3-i];
-                    salt[3-1] = tmp;
+                    salt[3-i] = tmp;
                 }
             }
 
