@@ -179,12 +179,6 @@ DEVTOOLS_FT_DIR_EXISTS = $(shell \
 endif
 
 #
-# zlib version
-#
-ZLIB_VERSION = 1.2.8
-
-
-#
 # Localizations for the different parts of the product beyond English
 #
 

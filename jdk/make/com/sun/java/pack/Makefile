@@ -75,7 +75,7 @@ ifeq ($(STANDALONE),true)
 	     $(ZIPOBJDIR)/inftrees.$(OBJECT_SUFFIX) \
 	     $(ZIPOBJDIR)/inffast.$(OBJECT_SUFFIX)
 
-  ZINCLUDE=-I$(SHARE_SRC)/native/java/util/zip/zlib-$(ZLIB_VERSION)
+  ZINCLUDE=-I$(SHARE_SRC)/native/java/util/zip/zlib
   OTHER_CXXFLAGS += $(ZINCLUDE)
   LDDFLAGS += $(ZIPOBJS)
 else

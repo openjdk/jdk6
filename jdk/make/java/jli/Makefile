@@ -44,7 +44,7 @@ MS_RUNTIME_STATIC = true
 
 include $(BUILDDIR)/common/Defs.gmk
 
-ZIP_SRC = $(SHARE_SRC)/native/java/util/zip/zlib-$(ZLIB_VERSION)
+ZIP_SRC = $(SHARE_SRC)/native/java/util/zip/zlib
 LAUNCHER_SHARE_SRC = $(SHARE_SRC)/bin
 LAUNCHER_PLATFORM_SRC = $(PLATFORM_SRC)/bin
 
