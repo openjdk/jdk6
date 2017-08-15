@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1091,8 +1091,9 @@ public final class Main {
             // If no signature algorithm was specified at the command line,
             // we choose one that is compatible with the selected private key
             String keyAlgName = privKey.getAlgorithm();
-            if ("DSA".equalsIgnoreCase(keyAlgName)
-                   || "DSS".equalsIgnoreCase(keyAlgName)) {
+            if ("DSA".equalsIgnoreCase(keyAlgName)) {
+                sigAlgName = "SHA256WithDSA";
+            } else if ("DSS".equalsIgnoreCase(keyAlgName)) {
                 sigAlgName = "SHA1WithDSA";
             } else if ("RSA".equalsIgnoreCase(keyAlgName)) {
                 sigAlgName = "SHA1WithRSA";
