@@ -24,6 +24,8 @@
  */
 
 package java.util;
+import sun.misc.SharedSecrets;
+
 import java.io.*;
 
 /**
@@ -1034,6 +1036,9 @@ public class HashMap<K,V>
 
         // Read in number of buckets and allocate the bucket array;
         int numBuckets = s.readInt();
+        // Check Map.Entry[].class since it's the nearest public type to
+        // what we're actually creating.
+        SharedSecrets.getJavaOISAccess().checkArray(s, Map.Entry[].class, numBuckets);
         table = new Entry[numBuckets];
 
         init();  // Give subclass a chance to do its thing.

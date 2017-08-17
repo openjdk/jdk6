@@ -254,6 +254,12 @@ public class ObjectInputStream
             public ObjectInputFilter getObjectInputFilter(ObjectInputStream stream) {
                 return stream.getInternalObjectInputFilter();
             }
+
+            public void checkArray(ObjectInputStream stream, Class<?> arrayType, int arrayLength)
+                throws InvalidClassException
+            {
+                stream.checkArray(arrayType, arrayLength);
+            }
         });
     }
 
@@ -1257,6 +1263,36 @@ public class ObjectInputStream
 
     private static String objectsToString(Object o, String nullDefault) {
         return (o != null) ? o.toString() : nullDefault;
+    }
+
+    /**
+     * Checks the given array type and length to ensure that creation of such
+     * an array is permitted by this ObjectInputStream. The arrayType argument
+     * must represent an actual array type.
+     *
+     * This private method is called via SharedSecrets.
+     *
+     * @param arrayType the array type
+     * @param arrayLength the array length
+     * @throws NullPointerException if arrayType is null
+     * @throws IllegalArgumentException if arrayType isn't actually an array type
+     * @throws NegativeArraySizeException if arrayLength is negative
+     * @throws InvalidClassException if the filter rejects creation
+     */
+    private void checkArray(Class<?> arrayType, int arrayLength) throws InvalidClassException {
+        if (arrayType == null) {
+            throw new NullPointerException();
+        }
+
+        if (! arrayType.isArray()) {
+            throw new IllegalArgumentException("not an array type");
+        }
+
+        if (arrayLength < 0) {
+            throw new NegativeArraySizeException();
+        }
+
+        filterCheck(arrayType, arrayLength);
     }
 
     /**
