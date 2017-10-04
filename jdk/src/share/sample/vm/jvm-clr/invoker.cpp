@@ -143,7 +143,7 @@ int __stdcall invokeCLR( const char* szApplication){
 
     int nReturn = invokeCLR( wszApplication);
 
-    delete wszApplication;
+    delete[] wszApplication;
 
     return nReturn;
 }
