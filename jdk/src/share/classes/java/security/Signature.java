@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,11 +52,10 @@ import sun.security.jca.GetInstance.Instance;
  * authentication and integrity assurance of digital data.
  *
  * <p> The signature algorithm can be, among others, the NIST standard
- * DSA, using DSA and SHA-1. The DSA algorithm using the
- * SHA-1 message digest algorithm can be specified as <tt>SHA1withDSA</tt>.
- * In the case of RSA, there are multiple choices for the message digest
- * algorithm, so the signing algorithm could be specified as, for example,
- * <tt>MD2withRSA</tt>, <tt>MD5withRSA</tt>, or <tt>SHA1withRSA</tt>.
+ * DSA, using DSA and SHA-256. The DSA algorithm using the
+ * SHA-256 message digest algorithm can be specified as <tt>SHA256withDSA</tt>.
+ * In the case of RSA the signing algorithm could be specified as, for example,
+ * <tt>SHA256withRSA</tt>.
  * The algorithm name must be specified, as there is no default.
  *
  * <p> A Signature object can be used to generate and verify digital
