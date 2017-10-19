@@ -132,6 +132,7 @@ package.access=sun.,\
                com.sun.imageio.,\
                com.sun.istack.internal.,\
                com.sun.jmx.,\
+               com.sun.naming.internal.,\
                com.sun.proxy.,\
                com.sun.corba.se.,\
                com.sun.script.,\
@@ -151,12 +152,12 @@ package.access=sun.,\
                com.sun.org.apache.xml.internal.res.,\
                com.sun.org.apache.xml.internal.resolver.helpers.,\
                com.sun.org.apache.xml.internal.resolver.readers.,\
+               com.sun.org.apache.xml.internal.security.,\
                com.sun.org.apache.xml.internal.serializer.utils.,\
                com.sun.org.apache.xml.internal.utils.,\
-               com.sun.org.apache.xml.internal.security.,\
                com.sun.org.glassfish.,\
-               com.sun.naming.internal.,\
-               org.jcp.xml.dsig.internal.
+               org.jcp.xml.dsig.internal.,\
+               jdk.xml.internal.
 
 #
 # List of comma-separated packages that start with or equal this string
@@ -173,6 +174,7 @@ package.definition=sun.,\
                    com.sun.imageio.,\
                    com.sun.istack.internal.,\
                    com.sun.jmx.,\
+                   com.sun.naming.internal.,\
                    com.sun.proxy.,\
                    com.sun.corba.se.,\
                    com.sun.script.,\
@@ -192,12 +194,12 @@ package.definition=sun.,\
                    com.sun.org.apache.xml.internal.res.,\
                    com.sun.org.apache.xml.internal.resolver.helpers.,\
                    com.sun.org.apache.xml.internal.resolver.readers.,\
+                   com.sun.org.apache.xml.internal.security.,\
                    com.sun.org.apache.xml.internal.serializer.utils.,\
                    com.sun.org.apache.xml.internal.utils.,\
-                   com.sun.org.apache.xml.internal.security.,\
                    com.sun.org.glassfish.,\
-                   com.sun.naming.internal.,\
-                   org.jcp.xml.dsig.internal.
+                   org.jcp.xml.dsig.internal.,\
+                   jdk.xml.internal.
 
 #
 # Determines whether this properties file can be appended to
