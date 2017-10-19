@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 2001-2004 The Apache Software Foundation.
@@ -72,8 +71,18 @@ public class TransletOutputHandlerFactory {
     private ContentHandler _handler                 = null;
     private LexicalHandler _lexHandler              = null;
 
+    private boolean _overrideDefaultParser;
+
     static public TransletOutputHandlerFactory newInstance() {
-        return new TransletOutputHandlerFactory();
+        return new TransletOutputHandlerFactory(true);
+    }
+
+    static public TransletOutputHandlerFactory newInstance(boolean overrideDefaultParser) {
+        return new TransletOutputHandlerFactory(overrideDefaultParser);
+    }
+
+    public TransletOutputHandlerFactory(boolean overrideDefaultParser) {
+        _overrideDefaultParser = overrideDefaultParser;
     }
 
     public void setOutputType(int outputType) {
@@ -188,7 +197,9 @@ public class TransletOutputHandlerFactory {
                 return result;
 
             case DOM :
-                _handler = (_node != null) ? new SAX2DOM(_node, _nextSibling) : new SAX2DOM();
+                _handler = (_node != null) ?
+                        new SAX2DOM(_node, _nextSibling, _overrideDefaultParser) :
+                        new SAX2DOM(_overrideDefaultParser);
                 _lexHandler = (LexicalHandler) _handler;
                 // falls through
             case STAX :

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -164,7 +164,8 @@ class FactoryFinder {
      * @param useBSClsLoader True if cl=null actually meant bootstrap classLoader. This parameter
      * is needed since DocumentBuilderFactory/SAXParserFactory defined null as context classLoader.
      */
-    static Object newInstance(String className, ClassLoader cl, boolean doFallback, boolean useBSClsLoader)
+    static Object newInstance(String className, ClassLoader cl,
+                              boolean doFallback, boolean useBSClsLoader)
         throws ConfigurationError
     {
         // make sure we have access to restricted packages
@@ -178,6 +179,7 @@ class FactoryFinder {
         try {
             Class providerClass = getProviderClass(className, cl, doFallback, useBSClsLoader);
             Object instance = providerClass.newInstance();
+
             if (debug) {    // Extra check to avoid computing cl strings
                 dPrint("created new instance of " + providerClass +
                        " using ClassLoader: " + cl);
