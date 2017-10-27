@@ -3473,8 +3473,9 @@ JVM_ENTRY(jobject, JVM_AllocateNewArray(JNIEnv *env, jobject obj, jclass currCla
 JVM_END
 
 
-// Return the first non-null class loader up the execution stack, or null
-// if only code from the null class loader is on the stack.
+// Returns first non-privileged class loader on the stack (excluding reflection
+// generated frames) or null if only classes loaded by the boot class loader
+// and extension class loader are found on the stack.
 
 JVM_ENTRY(jobject, JVM_LatestUserDefinedLoader(JNIEnv *env))
   for (vframeStream vfst(thread); !vfst.at_end(); vfst.next()) {
@@ -3482,7 +3483,7 @@ JVM_ENTRY(jobject, JVM_LatestUserDefinedLoader(JNIEnv *env))
     vfst.skip_reflection_related_frames(); // Only needed for 1.4 reflection
     klassOop holder = vfst.method()->method_holder();
     oop loader = instanceKlass::cast(holder)->class_loader();
-    if (loader != NULL) {
+    if (loader != NULL && !SystemDictionary::is_ext_class_loader(loader)) {
       return JNIHandles::make_local(env, loader);
     }
   }
