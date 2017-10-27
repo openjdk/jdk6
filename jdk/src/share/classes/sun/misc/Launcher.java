@@ -129,8 +129,6 @@ public class Launcher {
          */
         public static ExtClassLoader getExtClassLoader() throws IOException
         {
-            final File[] dirs = getExtDirs();
-
             try {
                 // Prior implementations of this doPrivileged() block supplied
                 // aa synthesized ACC via a call to the private method
@@ -139,6 +137,7 @@ public class Launcher {
                 return AccessController.doPrivileged(
                     new PrivilegedExceptionAction<ExtClassLoader>() {
                         public ExtClassLoader run() throws IOException {
+                            final File[] dirs = getExtDirs();
                             int len = dirs.length;
                             for (int i = 0; i < len; i++) {
                                 MetaIndex.registerDirectory(dirs[i]);
