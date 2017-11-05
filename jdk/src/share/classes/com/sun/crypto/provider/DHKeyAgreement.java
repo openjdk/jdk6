@@ -25,14 +25,10 @@
 
 package com.sun.crypto.provider;
 
+import java.security.*;
 import java.util.*;
 import java.lang.*;
 import java.math.BigInteger;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.Key;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.InvalidKeySpecException;
 import javax.crypto.KeyAgreementSpi;
@@ -57,6 +53,21 @@ extends KeyAgreementSpi {
     private BigInteger init_g = null;
     private BigInteger x = BigInteger.ZERO; // the private value
     private BigInteger y = BigInteger.ZERO;
+
+    private static class AllowKDF {
+
+        private static final boolean VALUE = getValue();
+
+        private static boolean getValue() {
+            return AccessController.doPrivileged(
+                    new PrivilegedAction<Boolean>() {
+                        @Override
+                        public Boolean run() {
+                            return Boolean.getBoolean("jdk.crypto.KeyAgreement.legacyKDF");
+                        }
+                    });
+        }
+    }
 
     /**
      * Empty constructor
@@ -370,6 +381,14 @@ extends KeyAgreementSpi {
         if (algorithm == null) {
             throw new NoSuchAlgorithmException("null algorithm");
         }
+
+        if (!algorithm.equalsIgnoreCase("TlsPremasterSecret") &&
+            !AllowKDF.VALUE) {
+
+            throw new NoSuchAlgorithmException("Unsupported secret key "
+                                               + "algorithm: " + algorithm);
+        }
+
         byte[] secret = engineGenerateSecret();
         if (algorithm.equalsIgnoreCase("DES")) {
             // DES
