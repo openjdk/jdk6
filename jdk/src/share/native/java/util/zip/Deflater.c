@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2009, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -159,13 +159,11 @@ Java_java_util_zip_Deflater_deflateBytes(JNIEnv *env, jobject this, jlong addr,
 	switch (res) {
 	case Z_OK:
 	    (*env)->SetBooleanField(env, this, setParamsID, JNI_FALSE);
+	case Z_BUF_ERROR:
 	    this_off += this_len - strm->avail_in;
 	    (*env)->SetIntField(env, this, offID, this_off);
 	    (*env)->SetIntField(env, this, lenID, strm->avail_in);
-	    return len - strm->avail_out;
-	case Z_BUF_ERROR:
-	    (*env)->SetBooleanField(env, this, setParamsID, JNI_FALSE);
-	    return 0;
+	    return (jint) (len - strm->avail_out);
 	default:
 	    JNU_ThrowInternalError(env, strm->msg);
 	    return 0;
@@ -204,12 +202,11 @@ Java_java_util_zip_Deflater_deflateBytes(JNIEnv *env, jobject this, jlong addr,
 	    (*env)->SetBooleanField(env, this, finishedID, JNI_TRUE);
 	    /* fall through */
 	case Z_OK:
+	case Z_BUF_ERROR:
 	    this_off += this_len - strm->avail_in;
 	    (*env)->SetIntField(env, this, offID, this_off);
 	    (*env)->SetIntField(env, this, lenID, strm->avail_in);
 	    return len - strm->avail_out;
-	case Z_BUF_ERROR:
-	    return 0;
 	default:
 	    JNU_ThrowInternalError(env, strm->msg);
 	    return 0;
