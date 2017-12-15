@@ -177,8 +177,40 @@ abstract class Handshaker {
     static final boolean allowLegacyHelloMessages = Debug.getBooleanProperty(
                     "sun.security.ssl.allowLegacyHelloMessages", true);
 
+    // To switch off the extended_master_secret extension.
+    static final boolean useExtendedMasterSecret;
+
+    // Allow session resumption without Extended Master Secret extension.
+    static final boolean allowLegacyResumption =
+            Debug.getBooleanProperty("jdk.tls.allowLegacyResumption", true);
+
+    // Allow full handshake without Extended Master Secret extension.
+    static final boolean allowLegacyMasterSecret =
+            Debug.getBooleanProperty("jdk.tls.allowLegacyMasterSecret", true);
+
+    // Is it requested to use extended master secret extension?
+    boolean requestedToUseEMS = false;
+
     // need to dispose the object when it is invalidated
     boolean invalidated;
+
+    // Is the extended_master_secret extension supported?
+    static {
+        boolean supportExtendedMasterSecret = true;
+        try {
+            KeyGenerator kg =
+                JsseJce.getKeyGenerator("SunTlsExtendedMasterSecret");
+        } catch (NoSuchAlgorithmException nae) {
+            supportExtendedMasterSecret = false;
+        }
+
+        if (supportExtendedMasterSecret) {
+            useExtendedMasterSecret = Debug.getBooleanProperty(
+                    "jdk.tls.useExtendedMasterSecret", true);
+        } else {
+            useExtendedMasterSecret = false;
+        }
+    }
 
     Handshaker(SSLSocketImpl c, SSLContextImpl context,
             ProtocolList enabledProtocols, boolean needCertVerify,
@@ -189,7 +221,7 @@ abstract class Handshaker {
         init(context, enabledProtocols, needCertVerify, isClient,
             activeProtocolVersion, isInitialHandshake, secureRenegotiation,
             clientVerifyData, serverVerifyData);
-    }
+   }
 
     Handshaker(SSLEngineImpl engine, SSLContextImpl context,
             ProtocolList enabledProtocols, boolean needCertVerify,
@@ -1038,12 +1070,34 @@ abstract class Handshaker {
      * SHA1 hashes are of (different) constant strings, the pre-master
      * secret, and the nonces provided by the client and the server.
      */
+    @SuppressWarnings("deprecation")
     private SecretKey calculateMasterSecret(SecretKey preMasterSecret,
             ProtocolVersion requestedVersion) {
 
-        TlsMasterSecretParameterSpec spec = new TlsMasterSecretParameterSpec
-                (preMasterSecret, protocolVersion.major, protocolVersion.minor,
-                clnt_random.random_bytes, svr_random.random_bytes);
+        TlsMasterSecretParameterSpec spec;
+        String masterAlg;
+        if (session.getUseExtendedMasterSecret()) {
+            // reset to use the extended master secret algorithm
+            masterAlg = "SunTlsExtendedMasterSecret";
+
+            byte[] sessionHash;
+            // TLS 1.0/1.1
+            sessionHash = new byte[36];
+            try {
+                handshakeHash.getMD5Clone().digest(sessionHash, 0, 16);
+                handshakeHash.getSHAClone().digest(sessionHash, 16, 20);
+            } catch (DigestException de) {
+                throw new ProviderException(de);
+            }
+
+            spec = new TlsMasterSecretParameterSpec(
+                    preMasterSecret, protocolVersion.major, protocolVersion.minor, sessionHash);
+        } else {
+            masterAlg = "SunTlsMasterSecret";
+            spec = new TlsMasterSecretParameterSpec(
+                    preMasterSecret, protocolVersion.major, protocolVersion.minor,
+                    clnt_random.random_bytes, svr_random.random_bytes);
+        }
 
         if (debug != null && Debug.isOn("keygen")) {
             HexDumpEncoder      dump = new HexDumpEncoder();
@@ -1058,7 +1112,7 @@ abstract class Handshaker {
         }
 
         try {
-            KeyGenerator kg = JsseJce.getKeyGenerator("SunTlsMasterSecret");
+            KeyGenerator kg = JsseJce.getKeyGenerator(masterAlg);
             kg.init(spec);
             return kg.generateKey();
         } catch (InvalidAlgorithmParameterException e) {
