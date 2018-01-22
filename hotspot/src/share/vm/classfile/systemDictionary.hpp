@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -125,6 +125,7 @@ class SymbolPropertyTable;
   template(PhantomReference_klass,       java_lang_ref_PhantomReference, Pre) \
   template(Cleaner_klass,                sun_misc_Cleaner,               Pre) \
   template(Finalizer_klass,              java_lang_ref_Finalizer,        Pre) \
+  template(ReferenceQueue_klass,         java_lang_ref_ReferenceQueue,   Pre) \
                                                                               \
   template(Thread_klass,                 java_lang_Thread,               Pre) \
   template(ThreadGroup_klass,            java_lang_ThreadGroup,          Pre) \
