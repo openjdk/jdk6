@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -291,6 +291,22 @@ JNU_NotifyAll(JNIEnv *env, jobject object);
             return;                             \
         }                                       \
     } while (0)                                 \
+
+#define CHECK_NULL_THROW_NPE(env, x, msg)         \
+    do {                                        \
+        if ((x) == NULL) {                      \
+           JNU_ThrowNullPointerException((env), (msg));\
+           return;                              \
+        }                                       \
+    } while(0)                                  \
+
+#define CHECK_NULL_THROW_NPE_RETURN(env, x, msg, z)\
+    do {                                        \
+        if ((x) == NULL) {                      \
+           JNU_ThrowNullPointerException((env), (msg));\
+           return (z);                          \
+        }                                       \
+    } while(0)                                  \
 
 #define CHECK_NULL_RETURN(x, y)                 \
     do {                                        \
