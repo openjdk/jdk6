@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -246,7 +246,7 @@ public class ObjectInputStream
 
     static {
         /* Setup access so sun.misc can invoke package private functions. */
-        sun.misc.SharedSecrets.setJavaOISAccess(new JavaOISAccess() {
+        JavaOISAccess javaOISAccess = new JavaOISAccess() {
             public void setObjectInputFilter(ObjectInputStream stream, ObjectInputFilter filter) {
                 stream.setInternalObjectInputFilter(filter);
             }
@@ -260,7 +260,11 @@ public class ObjectInputStream
             {
                 stream.checkArray(arrayType, arrayLength);
             }
-        });
+        };
+
+        sun.misc.SharedSecrets.setJavaOISAccess(javaOISAccess);
+
+        sun.corba.SharedSecrets.setJavaOISAccess(javaOISAccess);
     }
 
     /*
