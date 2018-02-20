@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2005, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,7 +52,7 @@ import sun.net.www.ParseUtil;
 
 /**
  * This class is used by the system to launch the main application.
-Launcher */
+ */
 public class Launcher {
     private static URLStreamHandlerFactory factory = new Factory();
     private static Launcher launcher = new Launcher();
@@ -129,6 +129,17 @@ public class Launcher {
          */
         public static ExtClassLoader getExtClassLoader() throws IOException
         {
+            if (instance == null) {
+                synchronized(ExtClassLoader.class) {
+                    if (instance == null) {
+                        instance = createExtClassLoader();
+                    }
+                }
+            }
+            return instance;
+        }
+
+        private static ExtClassLoader createExtClassLoader() throws IOException {
             try {
                 // Prior implementations of this doPrivileged() block supplied
                 // aa synthesized ACC via a call to the private method
@@ -149,6 +160,7 @@ public class Launcher {
                     throw (IOException) e.getException();
             }
         }
+        private static volatile ExtClassLoader instance = null;
 
         void addExtURL(URL url) {
                 super.addURL(url);
