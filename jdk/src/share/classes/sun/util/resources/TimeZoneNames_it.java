@@ -361,7 +361,7 @@ public final class TimeZoneNames_it extends TimeZoneNamesBundle {
             {"America/Godthab", new String[] {"Ora della Groenlandia occidentale", "WGT",
                                               "Ora estiva della Groenlandia occidentale", "WGST"}},
             {"America/Goose_Bay", AST},
-            {"America/Grand_Turk", AST},
+            {"America/Grand_Turk", EST},
             {"America/Grenada", AST},
             {"America/Guadeloupe", AST},
             {"America/Guatemala", CST},
