@@ -549,7 +549,7 @@ class JarFile extends ZipFile {
         return false;
     }
 
-    private synchronized void ensureInitialization() {
+    synchronized void ensureInitialization() {
         try {
             maybeInstantiateVerifier();
         } catch (IOException e) {
