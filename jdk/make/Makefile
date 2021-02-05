@@ -1,5 +1,5 @@
 #
-# Copyright (c) 1995, 2007, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 1995, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -335,16 +335,6 @@ ifeq ($(PLATFORM), solaris)
 else
 	$(ECHO) "Rule $@ does not apply on $(PLATFORM)-$(ARCH)"
 endif
-
-#
-# Binary Plug rules and macros
-#
-include $(BUILDDIR)/common/internal/BinaryPlugs.gmk
-
-#
-# Get top level sccs_get rule
-#
-include $(BUILDDIR)/common/Rules-SCCS.gmk
 
 # JPRT rules
 include jprt.gmk

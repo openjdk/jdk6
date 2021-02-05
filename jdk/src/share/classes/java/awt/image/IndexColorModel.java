@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -128,6 +128,8 @@ public class IndexColorModel extends ColorModel {
     private int transparent_index = -1;
     private boolean allgrayopaque;
     private BigInteger validBits;
+
+    private sun.awt.image.BufImgSurfaceData.ICMColorData colorData = null;
 
     private static int[] opaqueBits = {8, 8, 8};
     private static int[] alphaBits = {8, 8, 8, 8};
@@ -1511,7 +1513,6 @@ public class IndexColorModel extends ColorModel {
      * longer referenced.
      */
     public void finalize() {
-        sun.awt.image.BufImgSurfaceData.freeNativeICMData(this);
     }
 
     /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -110,13 +110,11 @@ class BitSieve {
         int convertedStep = (step *2) + 1;
 
         // Construct the large sieve at an even offset specified by base
-        MutableBigInteger r = new MutableBigInteger();
+        MutableBigInteger b = new MutableBigInteger(base);
         MutableBigInteger q = new MutableBigInteger();
         do {
             // Calculate base mod convertedStep
-            r.copyValue(base.mag);
-            r.divideOneWord(convertedStep, q);
-            start = r.value[r.offset];
+            start = b.divideOneWord(convertedStep, q);
 
             // Take each multiple of step out of sieve
             start = convertedStep - start;

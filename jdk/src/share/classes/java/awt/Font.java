@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -325,6 +325,10 @@ public class Font implements java.io.Serializable
      * Identify a font resource of type TRUETYPE.
      * Used to specify a TrueType font resource to the
      * {@link #createFont} method.
+     * The TrueType format was extended to become the OpenType
+     * format, which adds support for fonts with Postscript outlines,
+     * this tag therefore references these fonts, as well as those
+     * with TrueType outlines.
      * @since 1.3
      */
 
