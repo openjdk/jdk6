@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)perfMemory.cpp	1.28 07/09/13 11:29:49 JVM"
-#endif
 /*
- * Copyright 2001-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +19,19 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
 # include "incls/_perfMemory.cpp.incl"
+
+// Prefix of performance data file.
+const char               PERFDATA_NAME[] = "hsperfdata";
+
+// Add 1 for the '_' character between PERFDATA_NAME and pid. The '\0' terminating
+// character will be included in the sizeof(PERFDATA_NAME) operation.
+static const size_t PERFDATA_FILENAME_LEN = sizeof(PERFDATA_NAME) +
+                                            UINT_CHARS + 1;
 
 char*                    PerfMemory::_start = NULL;
 char*                    PerfMemory::_end = NULL;
@@ -51,7 +56,7 @@ void perfMemory_exit() {
   // resources it may be dependent on. Typically, the StatSampler
   // is disengaged from the watcher thread when this method is called,
   // but it is not disengaged if this method is invoked during a
-  // VM abort. 
+  // VM abort.
   //
   if (!StatSampler::is_active())
     PerfDataManager::destroy();
@@ -74,11 +79,11 @@ void PerfMemory::initialize() {
 
   if (PerfTraceMemOps) {
     tty->print("PerfDataMemorySize = " SIZE_FORMAT ","
-	       " os::vm_allocation_granularity = " SIZE_FORMAT ","
-	       " adjusted size = " SIZE_FORMAT "\n",
-	       PerfDataMemorySize,
-	       os::vm_allocation_granularity(),
-	       capacity);
+               " os::vm_allocation_granularity = " SIZE_FORMAT ","
+               " adjusted size = " SIZE_FORMAT "\n",
+               PerfDataMemorySize,
+               os::vm_allocation_granularity(),
+               capacity);
   }
 
   // allocate PerfData memory region
@@ -106,9 +111,9 @@ void PerfMemory::initialize() {
 
     if (PerfTraceMemOps) {
       tty->print("PerfMemory created: address = " INTPTR_FORMAT ","
-		 " size = " SIZE_FORMAT "\n",
-		 (void*)_start,
-		 _capacity);
+                 " size = " SIZE_FORMAT "\n",
+                 (void*)_start,
+                 _capacity);
     }
 
     _prologue = (PerfDataPrologue *)_start;
@@ -225,13 +230,13 @@ void PerfMemory::mark_updated() {
 // Returns the complete path including the file name of performance data file.
 // Caller is expected to release the allocated memory.
 char* PerfMemory::get_perfdata_file_path() {
-  char* dest_file = NULL; 
- 
+  char* dest_file = NULL;
+
   if (PerfDataSaveFile != NULL) {
     // dest_file_name stores the validated file name if file_name
     // contains %p which will be replaced by pid.
     dest_file = NEW_C_HEAP_ARRAY(char, JVM_MAXPATHLEN);
-    if(!Arguments::copy_expand_pid(PerfDataSaveFile, strlen(PerfDataSaveFile), 
+    if(!Arguments::copy_expand_pid(PerfDataSaveFile, strlen(PerfDataSaveFile),
                                    dest_file, JVM_MAXPATHLEN)) {
       FREE_C_HEAP_ARRAY(char, dest_file);
       if (PrintMiscellaneous && Verbose) {
@@ -246,7 +251,6 @@ char* PerfMemory::get_perfdata_file_path() {
   dest_file = NEW_C_HEAP_ARRAY(char, PERFDATA_FILENAME_LEN);
   jio_snprintf(dest_file, PERFDATA_FILENAME_LEN,
                "%s_%d", PERFDATA_NAME, os::current_process_id());
-   
+
   return dest_file;
 }
-

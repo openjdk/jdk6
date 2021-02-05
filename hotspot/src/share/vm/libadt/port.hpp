@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)port.hpp	1.44 07/05/05 17:05:41 JVM"
-#endif
 /*
  * Copyright 1997-2003 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #ifndef _PORT_
@@ -36,17 +33,6 @@
 //INTERFACE
 #include <stddef.h>
 #include <stdlib.h>
-#include <string.h>
-#undef bzero
-inline void bzero(void *b, int len) { memset(b,0,len); }
-#undef bcopy
-inline void bcopy(const void *s, void *d, size_t len) { memmove(d,s,len); }
-#undef bcmp
-inline int bcmp(const void *s,const void *t,int len) { return memcmp(s,t,len);}
-extern "C" unsigned long strtoul(const char *s, char **end, int base);
-
-// Definition for sys_errlist varies from Sun 4.1 & Solaris.
-// We use the new Solaris definition.
 #include <string.h>
 
 // Access to the C++ class virtual function pointer
@@ -76,7 +62,7 @@ typedef void near *VPTR;
 
 #elif defined(__hpux)
 
-#define INTERFACE 
+#define INTERFACE
 #define IMPLEMENTATION
 #define signed
 #include <strings.h>
@@ -89,7 +75,7 @@ inline long abs( long x ) { return x < 0 ? -x : x; }
 
 #elif defined(__MOTO__)
 // Motorola's mcc
-#define INTERFACE 
+#define INTERFACE
 #define IMPLEMENTATION
 #include <stdlib.h>
 #include <memory.h>
@@ -98,7 +84,7 @@ inline int max( int a, int b) { return a > b ? a : b; }
 
 #elif defined(_AIX)
 // IBM's xlC compiler
-#define INTERFACE 
+#define INTERFACE
 #define IMPLEMENTATION
 #include <stdlib.h>
 #include <memory.h>
@@ -107,7 +93,7 @@ inline int max( int a, int b) { return a > b ? a : b; }
 
 #elif defined(_MSC_VER)
 // Microsoft Visual C++
-//#define INTERFACE 
+//#define INTERFACE
 #define IMPLEMENTATION
 #include <stdlib.h>
 #undef small
@@ -117,7 +103,7 @@ inline int max( int a, int b) { return a > b ? a : b; }
 
 #elif defined(SPARC_WORKS)
 
-#define INTERFACE 
+#define INTERFACE
 #define IMPLEMENTATION
 
 #include <stddef.h>
@@ -126,7 +112,7 @@ inline int max( int a, int b) { return a > b ? a : b; }
 
 #elif defined(SOLARIS)
 
-#define INTERFACE 
+#define INTERFACE
 #define IMPLEMENTATION
 
 #include <stddef.h>
@@ -144,7 +130,7 @@ inline int max( int a, int b) { return a > b ? a : b; }
 
 #elif defined(__cplusplus)
 // AT&Ts cfront
-#define INTERFACE 
+#define INTERFACE
 #define IMPLEMENTATION
 #include <unistd.h>
 #define signed
@@ -185,26 +171,26 @@ typedef unsigned char uint8;
 typedef unsigned char byte;
 
 // All uses of *int16 changed to 32-bit to speed up compiler on Intel
-//typedef signed short int16;	// Exactly 16bits signed 
-//typedef unsigned short uint16;	// Exactly 16bits unsigned
+//typedef signed short int16;   // Exactly 16bits signed
+//typedef unsigned short uint16;        // Exactly 16bits unsigned
 //const unsigned int min_uint16 = 0x0000;    // smallest uint16
 //const unsigned int max_uint16 = 0xFFFF;    // largest  uint16
 
-typedef unsigned int uint;	// When you need a fast >=16bit unsigned value 
-/*typedef int int; */	        // When you need a fast >=16bit value 
+typedef unsigned int uint;      // When you need a fast >=16bit unsigned value
+/*typedef int int; */           // When you need a fast >=16bit value
 const unsigned int max_uint = (uint)-1;
-typedef int32_t int32;   // Exactly 32bits signed 
-typedef uint32_t uint32; // Exactly 32bits unsigned 
+typedef int32_t int32;   // Exactly 32bits signed
+typedef uint32_t uint32; // Exactly 32bits unsigned
 
 // Bit-sized floating point and long thingies
 #ifndef __TANDEM
 // Do not define these for Tandem, because they conflict with typedefs in softieee.h.
-typedef float float32;		// 32-bit float
-typedef double float64;		// 64-bit float
+typedef float float32;          // 32-bit float
+typedef double float64;         // 64-bit float
 #endif // __TANDEM
 
-typedef jlong int64;		// Java long for my 64-bit type
-typedef julong uint64;		// Java long for my 64-bit type
+typedef jlong int64;            // Java long for my 64-bit type
+typedef julong uint64;          // Java long for my 64-bit type
 
 //-----------------------------------------------------------------------------
 // Nice constants

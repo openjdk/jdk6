@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)opcodes.hpp	1.31 07/05/05 17:06:24 JVM"
-#endif
 /*
- * Copyright 1997-2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Build a big enum of class names to give them dense integer indices
@@ -30,6 +27,7 @@
 enum Opcodes {
   Op_Node = 0,
   macro(Set)                    // Instruction selection match rule
+  macro(RegN)                   // Machine narrow oop register
   macro(RegI)                   // Machine integer register
   macro(RegP)                   // Machine pointer register
   macro(RegF)                   // Machine float   register

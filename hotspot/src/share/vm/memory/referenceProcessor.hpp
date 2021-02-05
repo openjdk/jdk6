@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)referenceProcessor.hpp	1.43 07/05/05 17:05:54 JVM"
-#endif
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +19,11 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // ReferenceProcessor class encapsulates the per-"collector" processing
-// of "weak" references for GC. The interface is useful for supporting
+// of java.lang.Reference objects for GC. The interface is useful for supporting
 // a generational abstraction, in particular when there are multiple
 // generations that are being independently collected -- possibly
 // concurrently and/or incrementally.  Note, however, that the
@@ -48,8 +45,6 @@ class AbstractRefProcTaskExecutor;
 class DiscoveredList;
 
 class ReferenceProcessor : public CHeapObj {
- friend class DiscoveredList;
- friend class DiscoveredListIterator;
  protected:
   // End of list marker
   static oop  _sentinelRef;
@@ -57,9 +52,17 @@ class ReferenceProcessor : public CHeapObj {
                      // subject to wkref discovery
   bool        _discovering_refs;      // true when discovery enabled
   bool        _discovery_is_atomic;   // if discovery is atomic wrt
-				      // other collectors in configuration
+                                      // other collectors in configuration
   bool        _discovery_is_mt;       // true if reference discovery is MT.
-  bool	      _enqueuing_is_done;     // true if all weak references enqueued
+  // If true, setting "next" field of a discovered refs list requires
+  // write barrier(s).  (Must be true if used in a collector in which
+  // elements of a discovered list may be moved during discovery: for
+  // example, a collector like Garbage-First that moves objects during a
+  // long-term concurrent marking phase that does weak reference
+  // discovery.)
+  bool        _discovered_list_needs_barrier;
+  BarrierSet* _bs;                    // Cached copy of BarrierSet.
+  bool        _enqueuing_is_done;     // true if all weak references enqueued
   bool        _processing_is_mt;      // true during phases when
                                       // reference processing is MT.
   int         _next_id;               // round-robin counter in
@@ -72,17 +75,35 @@ class ReferenceProcessor : public CHeapObj {
   // all collectors but the CMS collector).
   BoolObjectClosure* _is_alive_non_header;
 
+  // Soft ref clearing policies
+  // . the default policy
+  static ReferencePolicy*   _default_soft_ref_policy;
+  // . the "clear all" policy
+  static ReferencePolicy*   _always_clear_soft_ref_policy;
+  // . the current policy below is either one of the above
+  ReferencePolicy*          _current_soft_ref_policy;
+
   // The discovered ref lists themselves
-  int             _num_q;       // the MT'ness degree of the queues below
-  DiscoveredList* _discoveredSoftRefs; // pointer to array of oops
+
+  // The MT'ness degree of the queues below
+  int             _num_q;
+  // Arrays of lists of oops, one per thread
+  DiscoveredList* _discoveredSoftRefs;
   DiscoveredList* _discoveredWeakRefs;
   DiscoveredList* _discoveredFinalRefs;
   DiscoveredList* _discoveredPhantomRefs;
 
  public:
-  int  num_q()                           { return _num_q; }
+  int num_q()                            { return _num_q; }
   DiscoveredList* discovered_soft_refs() { return _discoveredSoftRefs; }
-  static oop* sentinel_ref()             { return &_sentinelRef; }
+  static oop  sentinel_ref()             { return _sentinelRef; }
+  static oop* adr_sentinel_ref()         { return &_sentinelRef; }
+  ReferencePolicy* setup_policy(bool always_clear) {
+    _current_soft_ref_policy = always_clear ?
+      _always_clear_soft_ref_policy : _default_soft_ref_policy;
+    _current_soft_ref_policy->setup();   // snapshot the policy threshold
+    return _current_soft_ref_policy;
+  }
 
  public:
   // Process references with a certain reachability level.
@@ -93,7 +114,7 @@ class ReferenceProcessor : public CHeapObj {
                                   OopClosure*                  keep_alive,
                                   VoidClosure*                 complete_gc,
                                   AbstractRefProcTaskExecutor* task_executor);
-                                          
+
   void process_phaseJNI(BoolObjectClosure* is_alive,
                         OopClosure*        keep_alive,
                         VoidClosure*       complete_gc);
@@ -101,46 +122,46 @@ class ReferenceProcessor : public CHeapObj {
   // Work methods used by the method process_discovered_reflist
   // Phase1: keep alive all those referents that are otherwise
   // dead but which must be kept alive by policy (and their closure).
-  void process_phase1(DiscoveredList&     refs_list_addr,
+  void process_phase1(DiscoveredList&     refs_list,
                       ReferencePolicy*    policy,
                       BoolObjectClosure*  is_alive,
                       OopClosure*         keep_alive,
                       VoidClosure*        complete_gc);
   // Phase2: remove all those references whose referents are
   // reachable.
-  inline void process_phase2(DiscoveredList&    refs_list_addr,
+  inline void process_phase2(DiscoveredList&    refs_list,
                              BoolObjectClosure* is_alive,
-                             OopClosure*        keep_alive, 
+                             OopClosure*        keep_alive,
                              VoidClosure*       complete_gc) {
     if (discovery_is_atomic()) {
       // complete_gc is ignored in this case for this phase
-      pp2_work(refs_list_addr, is_alive, keep_alive);
+      pp2_work(refs_list, is_alive, keep_alive);
     } else {
       assert(complete_gc != NULL, "Error");
-      pp2_work_concurrent_discovery(refs_list_addr, is_alive,
+      pp2_work_concurrent_discovery(refs_list, is_alive,
                                     keep_alive, complete_gc);
     }
   }
   // Work methods in support of process_phase2
-  void pp2_work(DiscoveredList&    refs_list_addr,
+  void pp2_work(DiscoveredList&    refs_list,
                 BoolObjectClosure* is_alive,
                 OopClosure*        keep_alive);
   void pp2_work_concurrent_discovery(
-                DiscoveredList&    refs_list_addr,
+                DiscoveredList&    refs_list,
                 BoolObjectClosure* is_alive,
                 OopClosure*        keep_alive,
                 VoidClosure*       complete_gc);
   // Phase3: process the referents by either clearing them
   // or keeping them alive (and their closure)
-  void process_phase3(DiscoveredList&    refs_list_addr,
+  void process_phase3(DiscoveredList&    refs_list,
                       bool               clear_referent,
                       BoolObjectClosure* is_alive,
                       OopClosure*        keep_alive,
                       VoidClosure*       complete_gc);
 
   // Enqueue references with a certain reachability level
-  void enqueue_discovered_reflist(DiscoveredList& refs_list, oop* pending_list_addr);
-                                  
+  void enqueue_discovered_reflist(DiscoveredList& refs_list, HeapWord* pending_list_addr);
+
   // "Preclean" all the discovered reference lists
   // by removing references with strongly reachable referents.
   // The first argument is a predicate on an oop that indicates
@@ -154,7 +175,7 @@ class ReferenceProcessor : public CHeapObj {
                                       OopClosure*        keep_alive,
                                       VoidClosure*       complete_gc,
                                       YieldClosure*      yield);
-                                      
+
   // Delete entries in the discovered lists that have
   // either a null referent or are not active. Such
   // Reference objects can result from the clearing
@@ -163,14 +184,16 @@ class ReferenceProcessor : public CHeapObj {
   // For a definition of "active" see java.lang.ref.Reference;
   // Refs are born active, become inactive when enqueued,
   // and never become active again. The state of being
-  // active is encoded as follows: A Ref is active 
+  // active is encoded as follows: A Ref is active
   // if and only if its "next" field is NULL.
   void clean_up_discovered_references();
   void clean_up_discovered_reflist(DiscoveredList& refs_list);
 
-  // Returns the name of the discovered reference list 
+  // Returns the name of the discovered reference list
   // occupying the i / _num_q slot.
   const char* list_name(int i);
+
+  void enqueue_discovered_reflists(HeapWord* pending_list_addr, AbstractRefProcTaskExecutor* task_executor);
 
  protected:
   // "Preclean" the given discovered reference list
@@ -181,8 +204,7 @@ class ReferenceProcessor : public CHeapObj {
                                    OopClosure*        keep_alive,
                                    VoidClosure*       complete_gc,
                                    YieldClosure*      yield);
-                                   
-  void enqueue_discovered_reflists(oop* pending_list_addr, AbstractRefProcTaskExecutor* task_executor);
+
   int next_id() {
     int id = _next_id;
     if (++_next_id == _num_q) {
@@ -192,21 +214,20 @@ class ReferenceProcessor : public CHeapObj {
   }
   DiscoveredList* get_discovered_list(ReferenceType rt);
   inline void add_to_discovered_list_mt(DiscoveredList& refs_list, oop obj,
-                                        oop* discovered_addr);
+                                        HeapWord* discovered_addr);
   void verify_ok_to_handle_reflists() PRODUCT_RETURN;
 
   void abandon_partial_discovered_list(DiscoveredList& refs_list);
-  void abandon_partial_discovered_list_arr(DiscoveredList refs_lists[]);
 
   // Calculate the number of jni handles.
   unsigned int count_jni_refs();
-  
+
   // Balances reference queues.
   void balance_queues(DiscoveredList ref_lists[]);
-  
+
   // Update (advance) the soft ref master clock field.
   void update_soft_ref_master_clock();
-  
+
  public:
   // constructor
   ReferenceProcessor():
@@ -217,6 +238,8 @@ class ReferenceProcessor : public CHeapObj {
     _discovery_is_atomic(true),
     _enqueuing_is_done(false),
     _discovery_is_mt(false),
+    _discovered_list_needs_barrier(false),
+    _bs(NULL),
     _is_alive_non_header(NULL),
     _num_q(0),
     _processing_is_mt(false),
@@ -224,18 +247,20 @@ class ReferenceProcessor : public CHeapObj {
   {}
 
   ReferenceProcessor(MemRegion span, bool atomic_discovery,
-                     bool mt_discovery, int mt_degree = 1, 
-                     bool mt_processing = false);
-   
+                     bool mt_discovery,
+                     int mt_degree = 1,
+                     bool mt_processing = false,
+                     bool discovered_list_needs_barrier = false);
+
   // Allocates and initializes a reference processor.
   static ReferenceProcessor* create_ref_processor(
-    MemRegion          span, 
+    MemRegion          span,
     bool               atomic_discovery,
     bool               mt_discovery,
     BoolObjectClosure* is_alive_non_header = NULL,
-    int                parallel_gc_threads = 1, 
-    bool               mt_processing = false);
-
+    int                parallel_gc_threads = 1,
+    bool               mt_processing = false,
+    bool               discovered_list_needs_barrier = false);
   // RefDiscoveryPolicy values
   enum {
     ReferenceBasedDiscovery = 0,
@@ -286,8 +311,7 @@ class ReferenceProcessor : public CHeapObj {
   bool discover_reference(oop obj, ReferenceType rt);
 
   // Process references found during GC (called by the garbage collector)
-  void process_discovered_references(ReferencePolicy*             policy,
-                                     BoolObjectClosure*           is_alive,
+  void process_discovered_references(BoolObjectClosure*           is_alive,
                                      OopClosure*                  keep_alive,
                                      VoidClosure*                 complete_gc,
                                      AbstractRefProcTaskExecutor* task_executor);
@@ -295,6 +319,11 @@ class ReferenceProcessor : public CHeapObj {
  public:
   // Enqueue references at end of GC (called by the garbage collector)
   bool enqueue_discovered_references(AbstractRefProcTaskExecutor* task_executor = NULL);
+
+  // If a discovery is in process that is being superceded, abandon it: all
+  // the discovered lists will be empty, and all the objects on them will
+  // have NULL discovered fields.  Must be called only at a safepoint.
+  void abandon_partial_discovery();
 
   // debugging
   void verify_no_references_recorded() PRODUCT_RETURN;
@@ -440,11 +469,11 @@ public:
   // Abstract tasks to execute.
   class ProcessTask;
   class EnqueueTask;
-  
-  // Executes a task using worker threads.  
+
+  // Executes a task using worker threads.
   virtual void execute(ProcessTask& task) = 0;
   virtual void execute(EnqueueTask& task) = 0;
-  
+
   // Switch to single threaded mode.
   virtual void set_single_threaded_mode() { };
 };
@@ -459,16 +488,16 @@ protected:
       _refs_lists(refs_lists),
       _marks_oops_alive(marks_oops_alive)
   { }
-    
+
 public:
   virtual void work(unsigned int work_id, BoolObjectClosure& is_alive,
                     OopClosure& keep_alive,
                     VoidClosure& complete_gc) = 0;
-    
+
   // Returns true if a task marks some oops as alive.
   bool marks_oops_alive() const
   { return _marks_oops_alive; }
-    
+
 protected:
   ReferenceProcessor& _ref_processor;
   DiscoveredList*     _refs_lists;
@@ -480,8 +509,8 @@ class AbstractRefProcTaskExecutor::EnqueueTask {
 protected:
   EnqueueTask(ReferenceProcessor& ref_processor,
               DiscoveredList      refs_lists[],
-              oop*                pending_list_addr,
-              oop                 sentinel_ref, 
+              HeapWord*           pending_list_addr,
+              oop                 sentinel_ref,
               int                 n_queues)
     : _ref_processor(ref_processor),
       _refs_lists(refs_lists),
@@ -489,15 +518,14 @@ protected:
       _sentinel_ref(sentinel_ref),
       _n_queues(n_queues)
   { }
-    
+
 public:
   virtual void work(unsigned int work_id) = 0;
-    
+
 protected:
   ReferenceProcessor& _ref_processor;
   DiscoveredList*     _refs_lists;
-  oop*                _pending_list_addr;
-  oop                 _sentinel_ref; 
+  HeapWord*           _pending_list_addr;
+  oop                 _sentinel_ref;
   int                 _n_queues;
 };
-

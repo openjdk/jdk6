@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)sharedHeap.hpp	1.56 07/05/05 17:05:55 JVM"
-#endif
 /*
  * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // A "SharedHeap" is an implementation of a java heap for HotSpot.  This
@@ -46,6 +43,9 @@ class KlassHandle;
 
 class SharedHeap : public CollectedHeap {
   friend class VMStructs;
+
+  friend class VM_GC_Operation;
+  friend class VM_CGC_Operation;
 
 private:
   // For claiming strong_roots tasks.
@@ -85,6 +85,14 @@ protected:
   // function.
   SharedHeap(CollectorPolicy* policy_);
 
+  // Returns true if the calling thread holds the heap lock,
+  // or the calling thread is a par gc thread and the heap_lock is held
+  // by the vm thread doing a gc operation.
+  bool heap_lock_held_for_gc();
+  // True if the heap_lock is held by the a non-gc thread invoking a gc
+  // operation.
+  bool _thread_holds_heap_lock_for_gc;
+
 public:
   static SharedHeap* heap() { return _sh; }
 
@@ -99,14 +107,6 @@ public:
   virtual void ref_processing_init();
 
   void set_perm(PermGen* perm_gen) { _perm_gen = perm_gen; }
-
-  // A helper function that fills an allocated-but-not-yet-initialized
-  // region with a garbage object.
-  static void fill_region_with_object(MemRegion mr);
-
-  // Minimum garbage fill object size
-  static size_t min_fill_size()          { return (size_t)align_object_size(oopDesc::header_size()); }
-  static size_t min_fill_size_in_bytes() { return min_fill_size() * HeapWordSize; }
 
   // This function returns the "GenRemSet" object that allows us to scan
   // generations; at least the perm gen, possibly more in a fully
@@ -144,20 +144,20 @@ public:
   // Such a call will involve claiming some fine-grained tasks, such as
   // scanning of threads.  To make this process simpler, we provide the
   // "strong_roots_parity()" method.  Collectors that start parallel tasks
-  // whose threads invoke "process_strong_roots" must 
+  // whose threads invoke "process_strong_roots" must
   // call "change_strong_roots_parity" in sequential code starting such a
   // task.  (This also means that a parallel thread may only call
   // process_strong_roots once.)
-  // 
+  //
   // For calls to process_strong_roots by sequential code, the parity is
   // updated automatically.
-  // 
+  //
   // The idea is that objects representing fine-grained tasks, such as
-  // threads, will contain a "parity" field.  A task will is claimed in the 
+  // threads, will contain a "parity" field.  A task will is claimed in the
   // current "process_strong_roots" call only if its parity field is the
   // same as the "strong_roots_parity"; task claiming is accomplished by
   // updating the parity field to the strong_roots_parity with a CAS.
-  // 
+  //
   // If the client meats this spec, then strong_roots_parity() will have
   // the following properties:
   //   a) to return a different value than was returned before the last
@@ -199,16 +199,16 @@ public:
   // "SO_Strings" applies the closure to all entries in StringTable;
   // "SO_CodeCache" applies the closure to all elements of the CodeCache.
   void process_strong_roots(bool collecting_perm_gen,
-			    ScanningOption so,
-			    OopClosure* roots,
-			    OopsInGenClosure* perm_blk);
+                            ScanningOption so,
+                            OopClosure* roots,
+                            OopsInGenClosure* perm_blk);
 
   // Apply "blk" to all the weak roots of the system.  These include
   // JNI weak roots, the code cache, system dictionary, symbol table,
   // string table.
   void process_weak_roots(OopClosure* root_closure,
-			  OopClosure* non_root_closure);
-			  
+                          OopClosure* non_root_closure);
+
 
   // Like CollectedHeap::collect, but assume that the caller holds the Heap_lock.
   virtual void collect_locked(GCCause::Cause cause) = 0;
@@ -217,13 +217,12 @@ public:
   // "SharedHeap" can use in the implementation of its virtual
   // functions.
 
-protected:
+public:
 
   // Do anything common to GC's.
   virtual void gc_prologue(bool full) = 0;
   virtual void gc_epilogue(bool full) = 0;
 
-public:
   //
   // New methods from CollectedHeap
   //
@@ -245,7 +244,7 @@ public:
 
   // Different from is_in_permanent in that is_in_permanent
   // only checks if p is in the reserved area of the heap
-  // and this checks to see if it in the commited area. 
+  // and this checks to see if it in the commited area.
   // This is typically used by things like the forte stackwalker
   // during verification of suspicious frame values.
   bool is_permanent(const void *p) const {
@@ -269,9 +268,8 @@ public:
   }
 
   // Some utilities.
-  void print_size_transition(size_t bytes_before,
-			     size_t bytes_after,
-			     size_t capacity);
+  void print_size_transition(outputStream* out,
+                             size_t bytes_before,
+                             size_t bytes_after,
+                             size_t capacity);
 };
-
-

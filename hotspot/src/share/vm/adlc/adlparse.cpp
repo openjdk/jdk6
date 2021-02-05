@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)adlparse.cpp	1.205 07/05/05 17:05:00 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // ADLPARSE.CPP - Architecture Description Language Parser
@@ -32,11 +29,10 @@
 //----------------------------ADLParser----------------------------------------
 // Create a new ADL parser
 ADLParser::ADLParser(FileBuff& buffer, ArchDesc& archDesc)
-  : _buf(buffer), _AD(archDesc), 
+  : _buf(buffer), _AD(archDesc),
     _globalNames(archDesc.globalNames()) {
   _AD._syntax_errs = _AD._semantic_errs = 0; // No errors so far this file
   _AD._warnings    = 0;                      // No warnings either
-  _linenum         = 0;                      // Will increment to first line
   _curline         = _ptr = NULL;            // No pointers into buffer yet
 
   _preproc_depth = 0;
@@ -79,7 +75,7 @@ ADLParser::~ADLParser() {
   }
   if (!_AD._quiet_mode)
     fprintf(stderr,"-----------------------------------------------------------------------------\n");
-  _AD._TotalLines += _linenum-1;     // -1 for overshoot in "nextline" routine
+  _AD._TotalLines += linenum()-1;     // -1 for overshoot in "nextline" routine
 
   // Write out information we have stored
   // // UNIXism == fsync(stderr);
@@ -87,20 +83,20 @@ ADLParser::~ADLParser() {
 
 //------------------------------parse------------------------------------------
 // Each top-level keyword should appear as the first non-whitespace on a line.
-// 
+//
 void ADLParser::parse() {
   char *ident;
 
   // Iterate over the lines in the file buffer parsing Level 1 objects
   for( next_line(); _curline != NULL; next_line()) {
     _ptr = _curline;             // Reset ptr to start of new line
-    skipws();                    // Skip any leading whitespace 
+    skipws();                    // Skip any leading whitespace
     ident = get_ident();         // Get first token
     if (ident == NULL) {         // Empty line
       continue;                  // Get the next line
     }
     if (!strcmp(ident, "instruct"))        instr_parse();
-    else if (!strcmp(ident, "operand"))    oper_parse();	
+    else if (!strcmp(ident, "operand"))    oper_parse();
     else if (!strcmp(ident, "opclass"))    opclass_parse();
     else if (!strcmp(ident, "ins_attrib")) ins_attr_parse();
     else if (!strcmp(ident, "op_attrib"))  op_attr_parse();
@@ -112,6 +108,7 @@ void ADLParser::parse() {
     else if (!strcmp(ident, "pipeline"))   pipe_parse();
     else if (!strcmp(ident, "definitions")) definitions_parse();
     else if (!strcmp(ident, "peephole"))   peep_parse();
+    else if (!strcmp(ident, "#line"))      preproc_line();
     else if (!strcmp(ident, "#define"))    preproc_define();
     else if (!strcmp(ident, "#undef"))     preproc_undef();
     else {
@@ -151,7 +148,7 @@ void ADLParser::instr_parse(void) {
   if( (ident = get_unique_ident(_globalNames,"instruction")) == NULL )
     return;
   instr = new InstructForm(ident); // Create new instruction form
-  instr->_linenum = _linenum;
+  instr->_linenum = linenum();
   _globalNames.Insert(ident, instr); // Add name to the name table
   // Debugging Stuff
   if (_AD._adl_debug > 1)
@@ -166,8 +163,8 @@ void ADLParser::instr_parse(void) {
   else get_oplist(instr->_parameters, instr->_localNames);
   skipws();                        // Skip leading whitespace
   // Check for block delimiter
-  if ( (_curchar != '%') 
-       || ( next_char(),  (_curchar != '{')) ) { 
+  if ( (_curchar != '%')
+       || ( next_char(),  (_curchar != '{')) ) {
     parse_err(SYNERR, "missing '%{' in instruction definition\n");
     return;
   }
@@ -202,7 +199,7 @@ void ADLParser::instr_parse(void) {
         // Add the new match rule to the list
         rule->_next = match_parse(instr->_localNames);
         if (rule->_next) {
-          rule = rule->_next; 
+          rule = rule->_next;
           if( instr->is_ideal_control() ) {
             parse_err(SYNERR, "unique match rule expected for %s\n", rule->_name);
             return;
@@ -261,11 +258,11 @@ void ADLParser::instr_parse(void) {
   adjust_set_rule(instr);
   if (_AD._pipeline ) {
     if( instr->expands() ) {
-      if( instr->_ins_pipe ) 
-	parse_err(WARN, "ins_pipe and expand rule both specified for instruction \"%s\"; ins_pipe will be unused\n", instr->_ident); 
+      if( instr->_ins_pipe )
+        parse_err(WARN, "ins_pipe and expand rule both specified for instruction \"%s\"; ins_pipe will be unused\n", instr->_ident);
     } else {
-      if( !instr->_ins_pipe ) 
-	parse_err(WARN, "No ins_pipe specified for instruction \"%s\"\n", instr->_ident); 
+      if( !instr->_ins_pipe )
+        parse_err(WARN, "No ins_pipe specified for instruction \"%s\"\n", instr->_ident);
     }
   }
   // Add instruction to tail of instruction list
@@ -293,7 +290,7 @@ void ADLParser::instr_parse(void) {
 }
 
 //------------------------------matchrule_clone_and_swap-----------------------
-// Check for commutative operations with subtree operands, 
+// Check for commutative operations with subtree operands,
 // create clones and swap operands.
 void ADLParser::matchrule_clone_and_swap(MatchRule* rule, const char* instr_ident, int& match_rules_cnt) {
   // Check for commutative operations with tree operands.
@@ -302,7 +299,7 @@ void ADLParser::matchrule_clone_and_swap(MatchRule* rule, const char* instr_iden
   if (count > 0) {
     // Clone match rule and swap commutative operation's operands.
     rule->swap_commutative_op(instr_ident, count, match_rules_cnt);
-  } 
+  }
 }
 
 //------------------------------adjust_set_rule--------------------------------
@@ -327,7 +324,7 @@ void ADLParser::adjust_set_rule(InstructForm *instr) {
       // Can not have additional base operands in right side of match!
       if ( ! right->base_operand( position, _globalNames, result2, name2, optype2) ) {
         assert( instr->_predicate == NULL, "ADLC does not support instruction chain rules with predicates");
-        // Chain from input  _ideal_operand_type_, 
+        // Chain from input  _ideal_operand_type_,
         // Needed for shared roots of match-trees
         ChainList *lst = (ChainList *)_AD._chainRules[optype];
         if (lst == NULL) {
@@ -339,7 +336,7 @@ void ADLParser::adjust_set_rule(InstructForm *instr) {
           if (cost == NULL) {
             cost = ((AttributeForm*)_globalNames[AttributeForm::_ins_cost])->_attrdef;
           }
-          // The ADLC does not support chaining from the ideal operand type 
+          // The ADLC does not support chaining from the ideal operand type
           // of a predicated user-defined operand
           if( frm->is_operand() == NULL || frm->is_operand()->_predicate == NULL ) {
             lst->insert(instr->_matrule->_lChild->_opType,cost,instr->_ident);
@@ -357,7 +354,7 @@ void ADLParser::adjust_set_rule(InstructForm *instr) {
             cost = ((AttributeForm*)_globalNames[AttributeForm::_ins_cost])->_attrdef;
           }
           // It is safe to chain from the top-level user-defined operand even
-          // if it has a predicate, since the predicate is checked before 
+          // if it has a predicate, since the predicate is checked before
           // the user-defined type is available.
           lst->insert(instr->_matrule->_lChild->_opType,cost,instr->_ident);
         }
@@ -407,7 +404,7 @@ void ADLParser::oper_parse(void) {
   if( (ident = get_unique_ident(_globalNames,"operand")) == NULL )
     return;
   oper = new OperandForm(ident);        // Create new operand form
-  oper->_linenum = _linenum;
+  oper->_linenum = linenum();
   _globalNames.Insert(ident, oper); // Add name to the name table
 
   // Debugging Stuff
@@ -459,7 +456,7 @@ void ADLParser::oper_parse(void) {
     }
     else if (!strcmp(ident, "opcode"))    {
       parse_err(SYNERR, "Operands do not specify an opcode\n");
-    }	
+    }
     else if (!strcmp(ident, "effect"))    {
       parse_err(SYNERR, "Operands do not specify an effect\n");
     }
@@ -613,9 +610,9 @@ void ADLParser::op_attr_parse(void) {
     return;
   }
   next_char();                    // Advance past the ';'
-  
+
   // Construct the attribute, record global name, and store in ArchDesc
-  attrib = new AttributeForm(ident, OP_ATTR, aexpr); 
+  attrib = new AttributeForm(ident, OP_ATTR, aexpr);
   _globalNames.Insert(ident, attrib);
   _AD.addForm(attrib);
 }
@@ -645,10 +642,10 @@ void ADLParser::definitions_parse(void) {
 }
 
 //------------------------------int_def_parse----------------------------------
-// Parse Example: 
+// Parse Example:
 // int_def    MEMORY_REF_COST      (         200,  DEFAULT_COST * 2);
 // <keyword>  <name>               ( <int_value>,   <description>  );
-// 
+//
 void ADLParser::int_def_parse(void) {
   char *name        = NULL;         // Name of definition
   char *value       = NULL;         // its value,
@@ -709,10 +706,10 @@ void ADLParser::int_def_parse(void) {
 
   // Debug Stuff
   if (_AD._adl_debug > 1) {
-    fprintf(stderr,"int_def: %s ( %s, %s )\n", name, 
+    fprintf(stderr,"int_def: %s ( %s, %s )\n", name,
             (value), (description ? description : ""));
   }
-  
+
   // Record new definition.
   Expr *expr     = new Expr(name, description, int_value, int_value);
   const Expr *old_expr = _AD.globalDefs().define(name, expr);
@@ -777,7 +774,7 @@ void ADLParser::reg_parse(void) {
 
   // Create the RegisterForm for the architecture description.
   RegisterForm *regBlock = new RegisterForm();    // Build new Source object
-  regBlock->_linenum = _linenum;
+  regBlock->_linenum = linenum();
   _AD.addForm(regBlock);
 
   skipws();                       // Skip leading whitespace
@@ -790,9 +787,11 @@ void ADLParser::reg_parse(void) {
         parse_err(SYNERR, "missing identifier inside register block.\n");
         return;
       }
-      if (strcmp(token,"reg_def")==0)     { reg_def_parse(); }
-      if (strcmp(token,"reg_class")==0)   { reg_class_parse(); }
-      if (strcmp(token,"alloc_class")==0) { alloc_class_parse(); }
+      if (strcmp(token,"reg_def")==0)          { reg_def_parse(); }
+      else if (strcmp(token,"reg_class")==0)   { reg_class_parse(); }
+      else if (strcmp(token,"alloc_class")==0) { alloc_class_parse(); }
+      else if (strcmp(token,"#define")==0)     { preproc_define(); }
+      else { parse_err(SYNERR, "bad token %s inside register block.\n", token); break; }
       skipws();
     }
   }
@@ -800,7 +799,7 @@ void ADLParser::reg_parse(void) {
     parse_err(SYNERR, "Missing %c{ ... %c} block after register keyword.\n",'%','%');
     return;
   }
-  
+
   // Add reg_class spill_regs
   regBlock->addSpillRegClass();
 }
@@ -850,7 +849,7 @@ void ADLParser::enc_class_parse(void) {
   }
 
   EncClass  *encoding = _AD._encode->add_EncClass(ec_name);
-  encoding->_linenum = _linenum;
+  encoding->_linenum = linenum();
 
   skipws();                      // Skip leading whitespace
   // Check for optional parameter list
@@ -862,7 +861,7 @@ void ADLParser::enc_class_parse(void) {
       next_char();               // skip open paren & comma characters
       skipws();
       if (_curchar == ')') break;
-      
+
       // Get parameter type
       pType = get_ident();
       if (pType == NULL) {
@@ -907,18 +906,14 @@ void ADLParser::enc_class_parse_block(EncClass* encoding, char* ec_name) {
   skipws_no_preproc();              // Skip leading whitespace
   // Prepend location descriptor, for debugging; cf. ADLParser::find_cpp_block
   if (_AD._adlocation_debug) {
-    const char* file     = _AD._ADL_file._name;
-    int         line     = _linenum;
-    char*       location = (char *)malloc(strlen(file) + 100);
-    sprintf(location, "#line %d \"%s\"\n", line, file);
-    encoding->add_code(location);
+    encoding->add_code(get_line_string());
   }
-      
+
   // Collect the parts of the encode description
   // (1) strings that are passed through to output
   // (2) replacement/substitution variable, preceeded by a '$'
   while ( (_curchar != '%') && (*(_ptr+1) != '}') ) {
-      
+
     // (1)
     // Check if there is a string to pass through to output
     char *start = _ptr;       // Record start of the next string
@@ -936,9 +931,9 @@ void ADLParser::enc_class_parse_block(EncClass* encoding, char* ec_name) {
       *_ptr  = '\0';          // Terminate the string
       encoding->add_code(start);
     }
-        
+
     // (2)
-    // If we are at a replacement variable, 
+    // If we are at a replacement variable,
     // copy it and record in EncClass
     if ( _curchar == '$' ) {
       // Found replacement Variable
@@ -951,6 +946,10 @@ void ADLParser::enc_class_parse_block(EncClass* encoding, char* ec_name) {
   next_char();                      // Skip '}'
 
   skipws();
+
+  if (_AD._adlocation_debug) {
+    encoding->add_code(end_line_marker());
+  }
 
   // Debug Stuff
   if (_AD._adl_debug > 1) fprintf(stderr,"EncodingClass Form: %s\n", ec_name);
@@ -975,7 +974,7 @@ void ADLParser::frame_parse(void) {
             parse_err(SYNERR, "missing identifier inside frame block.\n");
             return;
       }
-      if (strcmp(token,"stack_direction")==0) { 
+      if (strcmp(token,"stack_direction")==0) {
         stack_dir_parse(frame);
       }
       if (strcmp(token,"sync_stack_slots")==0) {
@@ -1350,8 +1349,8 @@ void ADLParser::pipe_parse(void) {
 
   skipws();                       // Skip leading whitespace
   // Check for block delimiter
-  if ( (_curchar != '%') 
-       || ( next_char(),  (_curchar != '{')) ) { 
+  if ( (_curchar != '%')
+       || ( next_char(),  (_curchar != '{')) ) {
     parse_err(SYNERR, "missing '%{' in pipeline definition\n");
     return;
   }
@@ -1367,8 +1366,8 @@ void ADLParser::pipe_parse(void) {
     else if (!strcmp(ident, "pipe_class")) pipe_class_parse(*pipeline);
     else if (!strcmp(ident, "define")) {
       skipws();
-      if ( (_curchar != '%') 
-           || ( next_char(),  (_curchar != '{')) ) { 
+      if ( (_curchar != '%')
+           || ( next_char(),  (_curchar != '{')) ) {
         parse_err(SYNERR, "expected '%{'\n");
         return;
       }
@@ -1396,11 +1395,11 @@ void ADLParser::pipe_parse(void) {
         parse_err(SYNERR, "expected `;`, found '%c'\n", _curchar);
         break;
       }
-      next_char();		// Skip over semi-colon
+      next_char();              // Skip over semi-colon
 
       skipws();
-      if ( (_curchar != '%') 
-           || ( next_char(),  (_curchar != '}')) ) { 
+      if ( (_curchar != '%')
+           || ( next_char(),  (_curchar != '}')) ) {
         parse_err(SYNERR, "expected '%%}', found \"%c\"\n", _curchar);
       }
       next_char();
@@ -1423,8 +1422,8 @@ void ADLParser::pipe_parse(void) {
       bool vsi_seen = false, bhds_seen = false;
 
       skipws();
-      if ( (_curchar != '%') 
-           || ( next_char(),  (_curchar != '{')) ) { 
+      if ( (_curchar != '%')
+           || ( next_char(),  (_curchar != '{')) ) {
         parse_err(SYNERR, "expected '%{'\n");
         return;
       }
@@ -1613,8 +1612,8 @@ void ADLParser::pipe_parse(void) {
         parse_err(SYNERR, "unknown specifier \"%s\"\n", ident);
       }
 
-      if ( (_curchar != '%') 
-           || ( next_char(),  (_curchar != '}')) ) { 
+      if ( (_curchar != '%')
+           || ( next_char(),  (_curchar != '}')) ) {
         parse_err(SYNERR, "expected '%}', found \"%c\"\n", _curchar);
       }
       next_char(); skipws();
@@ -1645,7 +1644,7 @@ void ADLParser::pipe_parse(void) {
     return;
   }
 
-  next_char(); 
+  next_char();
 }
 
 //------------------------------resource_parse----------------------------
@@ -1694,19 +1693,19 @@ void ADLParser::resource_parse(PipelineForm &pipeline) {
       while (_curchar == '|') {
         next_char(); skipws();
 
-	expr = get_ident();          // Grab next identifier
-	if (expr == NULL) {
-	  parse_err(SYNERR, "keyword identifier expected at \"%c\"\n", _curchar);
-	  return;
-	}
+        expr = get_ident();          // Grab next identifier
+        if (expr == NULL) {
+          parse_err(SYNERR, "keyword identifier expected at \"%c\"\n", _curchar);
+          return;
+        }
 
-	resource = (ResourceForm *) pipeline._resdict[expr];   // Look up the value
-	if (resource == NULL) {
-	  parse_err(SYNERR, "resource \"%s\" is not defined\n", expr);
-	  return;
-	}
+        resource = (ResourceForm *) pipeline._resdict[expr];   // Look up the value
+        if (resource == NULL) {
+          parse_err(SYNERR, "resource \"%s\" is not defined\n", expr);
+          return;
+        }
 
-	mask |= resource->mask();
+        mask |= resource->mask();
         skipws();
       }
     }
@@ -1732,7 +1731,7 @@ void ADLParser::pipe_desc_parse(PipelineForm &pipeline) {
   char * ident;
 
   skipws();                       // Skip leading whitespace
-  
+
   if (_curchar != '(') {
     parse_err(SYNERR, "missing \"(\" in pipe_desc definition\n");
     return;
@@ -1774,7 +1773,7 @@ void ADLParser::pipe_class_parse(PipelineForm &pipeline) {
   OperandForm  *oper;
 
   skipws();                       // Skip leading whitespace
-  
+
   ident = get_ident();            // Grab next identifier
 
   if (ident == NULL) {
@@ -2313,13 +2312,13 @@ void ADLParser::reg_def_parse(void) {
     return;
   }
   next_char();                   // move past ';'
-  
+
   // Debug Stuff
   if (_AD._adl_debug > 1) {
-    fprintf(stderr,"Register Definition: %s ( %s, %s %s )\n", rname, 
+    fprintf(stderr,"Register Definition: %s ( %s, %s %s )\n", rname,
             (callconv ? callconv : ""), (c_conv ? c_conv : ""), concrete);
   }
-  
+
   // Record new register definition.
   _AD._register->addRegDef(rname, callconv, c_conv, idealtype, encoding, concrete);
   return;
@@ -2353,7 +2352,11 @@ void ADLParser::reg_class_parse(void) {
         return;
       }
       RegDef *regDef = _AD._register->getRegDef(rname);
-      reg_class->addReg(regDef);     // add regDef to regClass
+      if (!regDef) {
+        parse_err(SEMERR, "unknown identifier %s inside reg_class list.\n", rname);
+      } else {
+        reg_class->addReg(regDef); // add regDef to regClass
+      }
 
       // Check for ',' and position to next token.
       skipws();
@@ -2374,7 +2377,7 @@ void ADLParser::reg_class_parse(void) {
   next_char();                    // Skip trailing ';'
 
   // Check RegClass size, must be <= 32 registers in class.
-  
+
   return;
 }
 
@@ -2433,7 +2436,7 @@ void ADLParser::alloc_class_parse(void) {
     return;
   }
   next_char();                    // Skip trailing ';'
-  
+
   return;
 }
 
@@ -2442,10 +2445,10 @@ InstructForm *ADLParser::peep_match_child_parse(PeepMatch &match, int parent, in
   char      *token  = NULL;
   int        lparen = 0;          // keep track of parenthesis nesting depth
   int        rparen = 0;          // position of instruction at this depth
-  InstructForm *inst_seen  = NULL;  
+  InstructForm *inst_seen  = NULL;
   InstructForm *child_seen = NULL;
 
-  // Walk the match tree, 
+  // Walk the match tree,
   // Record <parent, position, instruction name, input position>
   while ( lparen >= rparen ) {
     skipws();
@@ -2478,7 +2481,7 @@ InstructForm *ADLParser::peep_match_child_parse(PeepMatch &match, int parent, in
       if (form) {
         InstructForm *inst = form->is_instruction();
         // Record the first instruction at this level
-        if( inst_seen == NULL ) { 
+        if( inst_seen == NULL ) {
           inst_seen = inst;
         }
         if (inst) {
@@ -2500,7 +2503,7 @@ InstructForm *ADLParser::peep_match_child_parse(PeepMatch &match, int parent, in
       parse_err(SYNERR, "missing identifier in peepmatch rule.\n");
       return NULL;
     }
-      
+
   } // end while
 
   assert( false, "ShouldNotReachHere();");
@@ -2508,7 +2511,7 @@ InstructForm *ADLParser::peep_match_child_parse(PeepMatch &match, int parent, in
 }
 
 //------------------------------peep_match_parse-------------------------------
-// Syntax for a peepmatch rule 
+// Syntax for a peepmatch rule
 //
 // peepmatch ( root_instr_name [(instruction subtree)] [,(instruction subtree)]* );
 //
@@ -2533,7 +2536,7 @@ void ADLParser::peep_match_parse(Peephole &peep) {
     parse_err(SYNERR, "missing instruction-name at start of peepmatch.\n");
     return;
   }
-  
+
   if( _curchar != ')' ) {
     parse_err(SYNERR, "missing ')' at end of peepmatch.\n");
     return;
@@ -2558,13 +2561,13 @@ void ADLParser::peep_match_parse(Peephole &peep) {
 // A parenthesized list of relations between operands in peepmatch subtree
 //
 // peepconstraint %{
-// (instruction_number.operand_name 
-//     relational_op 
+// (instruction_number.operand_name
+//     relational_op
 //  instruction_number.operand_name OR register_name
 //  [, ...] );
-// 
+//
 // // instruction numbers are zero-based using topological order in peepmatch
-// 
+//
 void ADLParser::peep_constraint_parse(Peephole &peep) {
 
   skipws();
@@ -2616,12 +2619,12 @@ void ADLParser::peep_constraint_parse(Peephole &peep) {
     char *right_op = get_ident_dup();
 
     // Construct the next PeepConstraint
-    PeepConstraint *constraint = new PeepConstraint( left_inst, left_op, 
-                                                     relation, 
+    PeepConstraint *constraint = new PeepConstraint( left_inst, left_op,
+                                                     relation,
                                                      right_inst, right_op );
     // And append it to the list for this peephole rule
     peep.append_constraint( constraint );
-    
+
     // Check for another constraint, or end of rule
     skipws();
     if( _curchar == ',' ) {
@@ -2647,12 +2650,12 @@ void ADLParser::peep_constraint_parse(Peephole &peep) {
 
 //------------------------------peep_replace_parse-----------------------------
 // Syntax for a peepreplace rule
-// root instruction name followed by a 
+// root instruction name followed by a
 // parenthesized list of whitespace separated instruction.operand specifiers
 //
 // peepreplace ( instr_name  ( [instruction_number.operand_name]* ) );
-// 
-// 
+//
+//
 void ADLParser::peep_replace_parse(Peephole &peep) {
   int          lparen = 0;        // keep track of parenthesis nesting depth
   int          rparen = 0;        // keep track of parenthesis nesting depth
@@ -2750,7 +2753,8 @@ Predicate *ADLParser::pred_parse(void) {
   char      *rule = NULL;         // String representation of predicate
 
   skipws();                       // Skip leading whitespace
-  if ( (rule = get_paren_expr("pred expression")) == NULL ) {
+  int line = linenum();
+  if ( (rule = get_paren_expr("pred expression", true)) == NULL ) {
     parse_err(SYNERR, "incorrect or missing expression for 'predicate'\n");
     return NULL;
   }
@@ -2779,7 +2783,7 @@ InsEncode *ADLParser::ins_encode_parse_block(InstructForm &inst) {
 
   assert(_AD._encode->encClass(ec_name) == NULL, "shouldn't already exist");
   EncClass  *encoding = _AD._encode->add_EncClass(ec_name);
-  encoding->_linenum = _linenum;
+  encoding->_linenum = linenum();
 
   // synthesize the arguments list for the enc_class from the
   // arguments to the instruct definition.
@@ -2815,7 +2819,7 @@ InsEncode *ADLParser::ins_encode_parse_block(InstructForm &inst) {
 
 
 //------------------------------ins_encode_parse-------------------------------
-// Encode rules have the form 
+// Encode rules have the form
 //   ins_encode( encode_class_name(parameter_list), ... );
 //
 // The "encode_class_name" must be defined in the encode section
@@ -2826,12 +2830,12 @@ InsEncode *ADLParser::ins_encode_parse_block(InstructForm &inst) {
 //   ins_encode %{
 //      ... // body
 //   %}
-// 
+//
 // which synthesizes a new encoding class taking the same arguments as
 // the InstructForm, and automatically prefixes the definition with:
-// 
+//
 //    MacroAssembler masm(&cbuf);\n");
-// 
+//
 //  making it more compact to take advantage of the MacroAssembler and
 //  placing the assembly closer to it's use by instructions.
 InsEncode *ADLParser::ins_encode_parse(InstructForm &inst) {
@@ -2855,7 +2859,7 @@ InsEncode *ADLParser::ins_encode_parse(InstructForm &inst) {
   skipws();
 
   InsEncode *encrule  = new InsEncode(); // Encode class for instruction
-  encrule->_linenum = _linenum;
+  encrule->_linenum = linenum();
   char      *ec_name  = NULL;      // String representation of encode rule
   // identifier is optional.
   while (_curchar != ')') {
@@ -2878,7 +2882,7 @@ InsEncode *ADLParser::ins_encode_parse(InstructForm &inst) {
     skipws();
     if ( _curchar == '(' ) {
       next_char();                 // move past '(' for parameters
-      
+
       // Parse the encode method's parameters
       while (_curchar != ')') {
         char *param = get_ident_or_literal_constant("encoding operand");
@@ -2889,8 +2893,8 @@ InsEncode *ADLParser::ins_encode_parse(InstructForm &inst) {
           // New: allow parenthesized expressions as parameters.
           // New: allow "primary", "secondary", "tertiary" as parameters.
           // New: allow user-defined register name as parameter
-          if ( (inst._localNames[param] == NULL) && 
-               !ADLParser::is_literal_constant(param) && 
+          if ( (inst._localNames[param] == NULL) &&
+               !ADLParser::is_literal_constant(param) &&
                (Opcode::as_opcode_type(param) == Opcode::NOT_AN_OPCODE) &&
                ((_AD._register == NULL ) || (_AD._register->getRegDef(param) == NULL)) ) {
             parse_err(SYNERR, "Using non-locally defined parameter %s for encoding %s.\n", param, ec_name);
@@ -2924,7 +2928,7 @@ InsEncode *ADLParser::ins_encode_parse(InstructForm &inst) {
           if (_curchar != ')') {
             parse_err(SYNERR, "Expected ')' after encode parameters.\n");
             return NULL;
-          }            
+          }
         }
       } // WHILE loop collecting parameters
       next_char();                   // move past ')' at end of parameters
@@ -2963,7 +2967,7 @@ InsEncode *ADLParser::ins_encode_parse(InstructForm &inst) {
   }
   next_char();                     // move past ';'
   skipws();                        // be friendly to oper_parse()
-  
+
   // Debug Stuff
   if (_AD._adl_debug > 1) fprintf(stderr,"Instruction Encode: %s\n", ec_name);
 
@@ -2977,7 +2981,7 @@ char* ADLParser::size_parse(InstructForm *instr) {
 
   // Get value of the instruction's size
   skipws();
-  
+
   // Parse size
   sizeOfInstr = get_paren_expr("size expression");
   if (sizeOfInstr == NULL) {
@@ -2998,10 +3002,10 @@ char* ADLParser::size_parse(InstructForm *instr) {
   // Debug Stuff
   if (_AD._adl_debug > 1) {
     if (sizeOfInstr != NULL) {
-      fprintf(stderr,"size of opcode: %s\n", sizeOfInstr);    
+      fprintf(stderr,"size of opcode: %s\n", sizeOfInstr);
     }
   }
-  
+
   return sizeOfInstr;
 }
 
@@ -3021,7 +3025,7 @@ Opcode * ADLParser::opcode_parse(InstructForm *instr) {
     parse_err(SYNERR, "missing '(' in expand instruction declaration\n");
     return NULL;
   }
-  next_char();                   // skip open paren 
+  next_char();                   // skip open paren
   skipws();
   if (_curchar != ')') {
     // Parse primary, secondary, and tertiary opcodes, if provided.
@@ -3104,7 +3108,7 @@ Interface *ADLParser::interface_parse(void) {
   }
   next_char();                    // move past ')'
 
-  // Get details of the interface, 
+  // Get details of the interface,
   // for the type of interface indicated by iface_name.
   Interface *inter = NULL;
   skipws();
@@ -3116,7 +3120,7 @@ Interface *ADLParser::interface_parse(void) {
       inter = cond_interface_parse();
     }
     // The parse routines consume the "%}"
-      
+
     // Check for probable extra ';' after defining block.
     if ( _curchar == ';' ) {
       parse_err(SYNERR, "Extra ';' after defining interface block.\n");
@@ -3206,7 +3210,13 @@ Interface *ADLParser::cond_interface_parse(void) {
   char *greater_equal;
   char *less_equal;
   char *greater;
-  
+  const char *equal_format = "eq";
+  const char *not_equal_format = "ne";
+  const char *less_format = "lt";
+  const char *greater_equal_format = "ge";
+  const char *less_equal_format = "le";
+  const char *greater_format = "gt";
+
   if (_curchar != '%') {
     parse_err(SYNERR, "Missing '%{' for 'cond_interface' block.\n");
     return NULL;
@@ -3225,22 +3235,22 @@ Interface *ADLParser::cond_interface_parse(void) {
       return NULL;
     }
     if ( strcmp(field,"equal") == 0 ) {
-      equal  = interface_field_parse();
+      equal  = interface_field_parse(&equal_format);
     }
     else if ( strcmp(field,"not_equal") == 0 ) {
-      not_equal = interface_field_parse();
+      not_equal = interface_field_parse(&not_equal_format);
     }
     else if ( strcmp(field,"less") == 0 ) {
-      less = interface_field_parse();
+      less = interface_field_parse(&less_format);
     }
     else if ( strcmp(field,"greater_equal") == 0 ) {
-      greater_equal  = interface_field_parse();
+      greater_equal  = interface_field_parse(&greater_equal_format);
     }
     else if ( strcmp(field,"less_equal") == 0 ) {
-      less_equal = interface_field_parse();
+      less_equal = interface_field_parse(&less_equal_format);
     }
     else if ( strcmp(field,"greater") == 0 ) {
-      greater = interface_field_parse();
+      greater = interface_field_parse(&greater_format);
     }
     else {
       parse_err(SYNERR, "Expected keyword, base|index|scale|disp,  or '%}' ending interface.\n");
@@ -3255,14 +3265,18 @@ Interface *ADLParser::cond_interface_parse(void) {
   next_char();                  // Skip '}'
 
   // Construct desired object and return
-  Interface *inter = new CondInterface(equal, not_equal, less, greater_equal,
-                                       less_equal, greater);
+  Interface *inter = new CondInterface(equal,         equal_format,
+                                       not_equal,     not_equal_format,
+                                       less,          less_format,
+                                       greater_equal, greater_equal_format,
+                                       less_equal,    less_equal_format,
+                                       greater,       greater_format);
   return inter;
 }
 
 
 //------------------------------interface_field_parse--------------------------
-char *ADLParser::interface_field_parse(void) {
+char *ADLParser::interface_field_parse(const char ** format) {
   char *iface_field = NULL;
 
   // Get interface field
@@ -3283,6 +3297,32 @@ char *ADLParser::interface_field_parse(void) {
     return NULL;
   }
   skipws();
+  if (format != NULL && _curchar == ',') {
+    next_char();
+    skipws();
+    if (_curchar != '"') {
+      parse_err(SYNERR, "Missing '\"' in field format .\n");
+      return NULL;
+    }
+    next_char();
+    char *start = _ptr;       // Record start of the next string
+    while ((_curchar != '"') && (_curchar != '%') && (_curchar != '\n')) {
+      if (_curchar == '\\')  next_char();  // superquote
+      if (_curchar == '\n')  parse_err(SYNERR, "newline in string");  // unimplemented!
+      next_char();
+    }
+    if (_curchar != '"') {
+      parse_err(SYNERR, "Missing '\"' at end of field format .\n");
+      return NULL;
+    }
+    // If a string was found, terminate it and record in FormatRule
+    if ( start != _ptr ) {
+      *_ptr  = '\0';          // Terminate the string
+      *format = start;
+    }
+    next_char();
+    skipws();
+  }
   if (_curchar != ')') {
     parse_err(SYNERR, "Missing ')' after interface field.\n");
     return NULL;
@@ -3321,17 +3361,17 @@ MatchRule *ADLParser::match_parse(FormDict &operands) {
               "Missing ';' or invalid '%{' and '%}' constructor\n");
     return NULL;                  // No MatchRule to return
   }
-  if (_AD._adl_debug > 1) 
+  if (_AD._adl_debug > 1)
     if (cnstr) fprintf(stderr,"Match Constructor: %s\n", cnstr);
   // Build new MatchRule object
-  match = new MatchRule(_AD, mnode, depth, cnstr, numleaves); 
+  match = new MatchRule(_AD, mnode, depth, cnstr, numleaves);
   skipws();                       // Skip any trailing whitespace
   return match;                   // Return MatchRule object
 }
 
 //------------------------------format_parse-----------------------------------
 FormatRule* ADLParser::format_parse(void) {
-  char       *desc   = NULL;    
+  char       *desc   = NULL;
   FormatRule *format = (new FormatRule(desc));
 
   // Without expression form, MUST have a code block;
@@ -3345,6 +3385,12 @@ FormatRule* ADLParser::format_parse(void) {
     next_char();                  // Move past the '{'
 
     skipws();
+    if (_curchar == '$') {
+      char* ident = get_rep_var_ident();
+      if (strcmp(ident, "$$template") == 0) return template_parse();
+      parse_err(SYNERR, "Unknown \"%s\" directive in format", ident);
+      return NULL;
+    }
     // Check for the opening '"' inside the format description
     if ( _curchar == '"' ) {
       next_char();              // Move past the initial '"'
@@ -3358,19 +3404,24 @@ FormatRule* ADLParser::format_parse(void) {
       // (2) replacement/substitution variable, preceeded by a '$'
       // (3) multi-token ANSIY C style strings
       while ( true ) {
-	if ( _curchar == '%' || _curchar == '\n' ) {
-	  if ( _curchar != '"' ) {
-	    parse_err(SYNERR, "missing '\"' at end of format block");
-	    return NULL;
-	  }
-	}
+        if ( _curchar == '%' || _curchar == '\n' ) {
+          if ( _curchar != '"' ) {
+            parse_err(SYNERR, "missing '\"' at end of format block");
+            return NULL;
+          }
+        }
 
         // (1)
         // Check if there is a string to pass through to output
         char *start = _ptr;       // Record start of the next string
         while ((_curchar != '$') && (_curchar != '"') && (_curchar != '%') && (_curchar != '\n')) {
-	  if (_curchar == '\\')  next_char();  // superquote
-	  if (_curchar == '\n')  parse_err(SYNERR, "newline in string");  // unimplemented!
+          if (_curchar == '\\') {
+            next_char();  // superquote
+            if ((_curchar == '$') || (_curchar == '%'))
+              // hack to avoid % escapes and warnings about undefined \ escapes
+              *(_ptr-1) = _curchar;
+          }
+          if (_curchar == '\n')  parse_err(SYNERR, "newline in string");  // unimplemented!
           next_char();
         }
         // If a string was found, terminate it and record in FormatRule
@@ -3378,12 +3429,12 @@ FormatRule* ADLParser::format_parse(void) {
           *_ptr  = '\0';          // Terminate the string
           format->_strings.addName(start);
         }
-        
+
         // (2)
-        // If we are at a replacement variable, 
+        // If we are at a replacement variable,
         // copy it and record in FormatRule
         if ( _curchar == '$' ) {
-          next_char();		// Move past the '$'
+          next_char();          // Move past the '$'
           char* rep_var = get_ident(); // Nil terminate the variable name
           rep_var = strdup(rep_var);// Copy the string
           *_ptr   = _curchar;     // and replace Nil with original character
@@ -3392,19 +3443,19 @@ FormatRule* ADLParser::format_parse(void) {
           format->_strings.addName(NameList::_signal);
         }
 
-	// (3)
-	// Allow very long strings to be broken up,
-	// using the ANSI C syntax "foo\n" <newline> "bar"
-	if ( _curchar == '"') {
-	  next_char();           // Move past the '"'
-	  skipws();              // Skip white space before next string token
-	  if ( _curchar != '"') {
-	    break;
-	  } else {
-	    // Found one.  Skip both " and the whitespace in between.
-	    next_char();
-	  }
-	}
+        // (3)
+        // Allow very long strings to be broken up,
+        // using the ANSI C syntax "foo\n" <newline> "bar"
+        if ( _curchar == '"') {
+          next_char();           // Move past the '"'
+          skipws();              // Skip white space before next string token
+          if ( _curchar != '"') {
+            break;
+          } else {
+            // Found one.  Skip both " and the whitespace in between.
+            next_char();
+          }
+        }
       } // end while part of format description
 
       // Check for closing '"' and '%}' in format description
@@ -3413,7 +3464,7 @@ FormatRule* ADLParser::format_parse(void) {
         parse_err(SYNERR, "non-blank characters between closing '\"' and '%' in format");
         return NULL;
       }
-    } // Done with format description inside 
+    } // Done with format description inside
 
     skipws();
     // Past format description, at '%'
@@ -3430,7 +3481,132 @@ FormatRule* ADLParser::format_parse(void) {
   }
   // Debug Stuff
   if (_AD._adl_debug > 1) fprintf(stderr,"Format Rule: %s\n", desc);
-  
+
+  skipws();
+  return format;
+}
+
+
+//------------------------------template_parse-----------------------------------
+FormatRule* ADLParser::template_parse(void) {
+  char       *desc   = NULL;
+  FormatRule *format = (new FormatRule(desc));
+
+  skipws();
+  while ( (_curchar != '%') && (*(_ptr+1) != '}') ) {
+
+    // (1)
+    // Check if there is a string to pass through to output
+    char *start = _ptr;       // Record start of the next string
+    while ((_curchar != '$') && ((_curchar != '%') || (*(_ptr+1) != '}')) ) {
+      // If at the start of a comment, skip past it
+      if( (_curchar == '/') && ((*(_ptr+1) == '/') || (*(_ptr+1) == '*')) ) {
+        skipws_no_preproc();
+      } else {
+        // ELSE advance to the next character, or start of the next line
+        next_char_or_line();
+      }
+    }
+    // If a string was found, terminate it and record in EncClass
+    if ( start != _ptr ) {
+      *_ptr  = '\0';          // Terminate the string
+      // Add flag to _strings list indicating we should check _rep_vars
+      format->_strings.addName(NameList::_signal2);
+      format->_strings.addName(start);
+    }
+
+    // (2)
+    // If we are at a replacement variable,
+    // copy it and record in EncClass
+    if ( _curchar == '$' ) {
+      // Found replacement Variable
+      char *rep_var = get_rep_var_ident_dup();
+      if (strcmp(rep_var, "$emit") == 0) {
+        // switch to normal format parsing
+        next_char();
+        next_char();
+        skipws();
+        // Check for the opening '"' inside the format description
+        if ( _curchar == '"' ) {
+          next_char();              // Move past the initial '"'
+          if( _curchar == '"' ) {   // Handle empty format string case
+            *_ptr = '\0';           // Terminate empty string
+            format->_strings.addName(_ptr);
+          }
+
+          // Collect the parts of the format description
+          // (1) strings that are passed through to tty->print
+          // (2) replacement/substitution variable, preceeded by a '$'
+          // (3) multi-token ANSIY C style strings
+          while ( true ) {
+            if ( _curchar == '%' || _curchar == '\n' ) {
+              parse_err(SYNERR, "missing '\"' at end of format block");
+              return NULL;
+            }
+
+            // (1)
+            // Check if there is a string to pass through to output
+            char *start = _ptr;       // Record start of the next string
+            while ((_curchar != '$') && (_curchar != '"') && (_curchar != '%') && (_curchar != '\n')) {
+              if (_curchar == '\\')  next_char();  // superquote
+              if (_curchar == '\n')  parse_err(SYNERR, "newline in string");  // unimplemented!
+              next_char();
+            }
+            // If a string was found, terminate it and record in FormatRule
+            if ( start != _ptr ) {
+              *_ptr  = '\0';          // Terminate the string
+              format->_strings.addName(start);
+            }
+
+            // (2)
+            // If we are at a replacement variable,
+            // copy it and record in FormatRule
+            if ( _curchar == '$' ) {
+              next_char();          // Move past the '$'
+              char* rep_var = get_ident(); // Nil terminate the variable name
+              rep_var = strdup(rep_var);// Copy the string
+              *_ptr   = _curchar;     // and replace Nil with original character
+              format->_rep_vars.addName(rep_var);
+              // Add flag to _strings list indicating we should check _rep_vars
+              format->_strings.addName(NameList::_signal);
+            }
+
+            // (3)
+            // Allow very long strings to be broken up,
+            // using the ANSI C syntax "foo\n" <newline> "bar"
+            if ( _curchar == '"') {
+              next_char();           // Move past the '"'
+              skipws();              // Skip white space before next string token
+              if ( _curchar != '"') {
+                break;
+              } else {
+                // Found one.  Skip both " and the whitespace in between.
+                next_char();
+              }
+            }
+          } // end while part of format description
+        }
+      } else {
+        // Add flag to _strings list indicating we should check _rep_vars
+        format->_rep_vars.addName(rep_var);
+        // Add flag to _strings list indicating we should check _rep_vars
+        format->_strings.addName(NameList::_signal3);
+      }
+    } // end while part of format description
+  }
+
+  skipws();
+  // Past format description, at '%'
+  if ( _curchar != '%' || *(_ptr+1) != '}' ) {
+    parse_err(SYNERR, "missing '%}' at end of format block");
+    return NULL;
+  }
+  next_char();                  // Move past the '%'
+  next_char();                  // Move past the '}'
+
+  // Debug Stuff
+  if (_AD._adl_debug > 1) fprintf(stderr,"Format Rule: %s\n", desc);
+
   skipws();
   return format;
 }
@@ -3438,7 +3614,7 @@ FormatRule* ADLParser::format_parse(void) {
 
 //------------------------------effect_parse-----------------------------------
 void ADLParser::effect_parse(InstructForm *instr) {
-  char* desc   = NULL;    
+  char* desc   = NULL;
 
   skipws();                      // Skip whitespace
   if (_curchar != '(') {
@@ -3454,7 +3630,7 @@ void ADLParser::effect_parse(InstructForm *instr) {
     parse_err(SYNERR, "missing ';' in Effect definition\n");
   }
   next_char();                  // Skip ';'
-  
+
 }
 
 //------------------------------expand_parse-----------------------------------
@@ -3469,7 +3645,7 @@ ExpandRule* ADLParser::expand_parse(InstructForm *instr) {
   // which has an ordered list of operands.
   // Check for block delimiter
   skipws();                        // Skip leading whitespace
-  if ((_curchar != '%') 
+  if ((_curchar != '%')
       || (next_char(), (_curchar != '{')) ) { // If not open block
     parse_err(SYNERR, "missing '%{' in expand definition\n");
     return(NULL);
@@ -3561,7 +3737,7 @@ ExpandRule* ADLParser::expand_parse(InstructForm *instr) {
       }
       next_char();
 
-      // Record both instruction name and its operand list 
+      // Record both instruction name and its operand list
       exp->add_instruction(instr_and_operands);
 
       skipws();
@@ -3585,7 +3761,7 @@ ExpandRule* ADLParser::expand_parse(InstructForm *instr) {
 //------------------------------rewrite_parse----------------------------------
 RewriteRule* ADLParser::rewrite_parse(void) {
   char* params = NULL;
-  char* desc   = NULL;    
+  char* desc   = NULL;
 
 
   // This feature targeted for second generation description language.
@@ -3598,7 +3774,7 @@ RewriteRule* ADLParser::rewrite_parse(void) {
   }
   // Debug Stuff
   if (_AD._adl_debug > 1) fprintf(stderr,"Rewrite parameters: %s\n", params);
-  
+
   // For now, grab entire block;
   skipws();
   if ( (desc = find_cpp_block("rewrite block")) == NULL ) {
@@ -3607,7 +3783,7 @@ RewriteRule* ADLParser::rewrite_parse(void) {
   }
   // Debug Stuff
   if (_AD._adl_debug > 1) fprintf(stderr,"Rewrite Rule: %s\n", desc);
-  
+
   skipws();
   return (new RewriteRule(params,desc));
 }
@@ -3654,7 +3830,7 @@ MatchNode *ADLParser::matchNode_parse(FormDict &operands, int &depth, int &numle
   next_char();                    // advance past '('
 
   // Parse the opcode
-  token = get_ident();            // Get identifier, opcode 
+  token = get_ident();            // Get identifier, opcode
   if (token == NULL) {
     parse_err(SYNERR, "missing opcode in match expression\n");
     return NULL;
@@ -3690,7 +3866,7 @@ MatchNode *ADLParser::matchNode_parse(FormDict &operands, int &depth, int &numle
   // Parse the operands
   skipws();
   if (cur_char() != ')') {
-    
+
     // Parse the left child
     if (strcmp(operation,"Set"))
       lChild = matchChild_parse(operands, lParens, numleaves, false);
@@ -3725,7 +3901,7 @@ MatchNode *ADLParser::matchNode_parse(FormDict &operands, int &depth, int &numle
 
   return mroot;
 }
-  
+
 
 //------------------------------matchChild_parse-------------------------------
 MatchNode *ADLParser::matchChild_parse(FormDict &operands, int &parens, int &numleaves, bool atroot) {
@@ -3779,8 +3955,7 @@ char* ADLParser::find_cpp_block(const char* description) {
     next_char();                  // Skip block delimiter
     skipws_no_preproc();          // Skip leading whitespace
     cppBlock = _ptr;              // Point to start of expression
-    const char* file = _AD._ADL_file._name;
-    int         line = _linenum;
+    int line = linenum();
     next = _ptr + 1;
     while(((_curchar != '%') || (*next != '}')) && (_curchar != '\0')) {
       next_char_or_line();
@@ -3795,15 +3970,16 @@ char* ADLParser::find_cpp_block(const char* description) {
     _curchar = *_ptr;             // Maintain invariant
 
     // Prepend location descriptor, for debugging.
-    char* location = (char *)malloc(strlen(file) + 100);
-    *location = '\0';
-    if (_AD._adlocation_debug)
-      sprintf(location, "#line %d \"%s\"\n", line, file);
-    char* result = (char *)malloc(strlen(location) + strlen(cppBlock) + 1);
-    strcpy(result, location);
-    strcat(result, cppBlock);
-    cppBlock = result;
-    free(location);
+    if (_AD._adlocation_debug) {
+      char* location = get_line_string(line);
+      char* end_loc  = end_line_marker();
+      char* result = (char *)malloc(strlen(location) + strlen(cppBlock) + strlen(end_loc) + 1);
+      strcpy(result, location);
+      strcat(result, cppBlock);
+      strcat(result, end_loc);
+      cppBlock = result;
+      free(location);
+    }
   }
 
   return cppBlock;
@@ -3823,10 +3999,10 @@ char* ADLParser::get_expr(const char *desc, const char *stop_chars) {
     }
     else if (_curchar == ')') {   // Up one level of nesting
       if (paren == 0) {
-	// Paren underflow:  We didn't encounter the required stop-char.
-	parse_err(SYNERR, "too many )'s, did not find %s after %s\n",
-		  stop_chars, desc);
-	return NULL;
+        // Paren underflow:  We didn't encounter the required stop-char.
+        parse_err(SYNERR, "too many )'s, did not find %s after %s\n",
+                  stop_chars, desc);
+        return NULL;
       }
       paren--;                    // Drop the parenthesis counter
       next_char();                // Maintain the invariant
@@ -3834,13 +4010,13 @@ char* ADLParser::get_expr(const char *desc, const char *stop_chars) {
     else if (_curchar == '"' || _curchar == '\'') {
       int qchar = _curchar;
       while (true) {
-	next_char();
-	if (_curchar == qchar) { next_char(); break; }
-	if (_curchar == '\\')  next_char();  // superquote
-	if (_curchar == '\n' || _curchar == '\0') {
-	  parse_err(SYNERR, "newline in string in %s\n", desc);
-	  return NULL;
-	}
+        next_char();
+        if (_curchar == qchar) { next_char(); break; }
+        if (_curchar == '\\')  next_char();  // superquote
+        if (_curchar == '\n' || _curchar == '\0') {
+          parse_err(SYNERR, "newline in string in %s\n", desc);
+          return NULL;
+        }
       }
     }
     else if (_curchar == '%' && (_ptr[1] == '{' || _ptr[1] == '}')) {
@@ -3859,9 +4035,9 @@ char* ADLParser::get_expr(const char *desc, const char *stop_chars) {
       // If the parser declined to make progress on whitespace,
       // skip the next character, which is therefore NOT whitespace.
       if (pre_skip_ptr == _ptr) {
-	next_char();
+        next_char();
       } else if (pre_skip_ptr+strlen(pre_skip_ptr) != _ptr+strlen(_ptr)) {
-	parse_err(SYNERR, "unimplemented: preprocessor must not elide subexpression in %s", desc);
+        parse_err(SYNERR, "unimplemented: preprocessor must not elide subexpression in %s", desc);
       }
     }
   }
@@ -3873,13 +4049,26 @@ char* ADLParser::get_expr(const char *desc, const char *stop_chars) {
 
 // Helper function around get_expr
 // Sets _curchar to '(' so that get_paren_expr will search for a matching ')'
-char *ADLParser::get_paren_expr(const char *description) {
+char *ADLParser::get_paren_expr(const char *description, bool include_location) {
+  int line = linenum();
   if (_curchar != '(')            // Escape if not valid starting position
     return NULL;
-  next_char();			  // Skip the required initial paren.
+  next_char();                    // Skip the required initial paren.
   char *token2 = get_expr(description, ")");
   if (_curchar == ')')
-    next_char();		  // Skip required final paren.
+    next_char();                  // Skip required final paren.
+  int junk = 0;
+  if (include_location && _AD._adlocation_debug && !is_int_token(token2, junk)) {
+    // Prepend location descriptor, for debugging.
+    char* location = get_line_string(line);
+    char* end_loc  = end_line_marker();
+    char* result = (char *)malloc(strlen(location) + strlen(token2) + strlen(end_loc) + 1);
+    strcpy(result, location);
+    strcat(result, token2);
+    strcat(result, end_loc);
+    token2 = result;
+    free(location);
+  }
   return token2;
 }
 
@@ -3903,7 +4092,7 @@ char *ADLParser::get_ident_common(bool do_preproc) {
     c = *end;                     // Grab character to test
   } while ( ((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z'))
             || ((c >= '0') && (c <= '9'))
-	    || ((c == '_')) || ((c == ':')) || ((c == '#')) );
+            || ((c == '_')) || ((c == ':')) || ((c == '#')) );
   if (start == end) {             // We popped out on the first try
     parse_err(SYNERR, "identifier expected at %c\n", c);
     start = NULL;
@@ -3919,10 +4108,16 @@ char *ADLParser::get_ident_common(bool do_preproc) {
   if (do_preproc && start != NULL) {
     const char* def = _AD.get_preproc_def(start);
     if (def != NULL && strcmp(def, start)) {
-      const char* def2 = _AD.get_preproc_def(def);
-      if (def2 != NULL && strcmp(def2, def)) {
-        parse_err(SYNERR, "unimplemented: using %s defined as %s => %s",
-                  start, def, def2);
+      const char* def1 = def;
+      const char* def2 = _AD.get_preproc_def(def1);
+      // implement up to 2 levels of #define
+      if (def2 != NULL && strcmp(def2, def1)) {
+        def = def2;
+        const char* def3 = _AD.get_preproc_def(def2);
+        if (def3 != NULL && strcmp(def3, def2) && strcmp(def3, def1)) {
+          parse_err(SYNERR, "unimplemented: using %s defined as %s => %s => %s",
+                    start, def1, def2, def3);
+        }
       }
       start = strdup(def);
     }
@@ -3932,14 +4127,14 @@ char *ADLParser::get_ident_common(bool do_preproc) {
 }
 
 //------------------------------get_ident_dup----------------------------------
-// Looks for an identifier in the buffer, and returns a duplicate 
+// Looks for an identifier in the buffer, and returns a duplicate
 // or NULL if some other token is found instead.
 char *ADLParser::get_ident_dup(void) {
   char *ident = get_ident();
 
   // Duplicate an identifier before returning and restore string.
   if( ident != NULL ) {
-    ident = strdup(ident);  // Copy the string 
+    ident = strdup(ident);  // Copy the string
     *_ptr   = _curchar;         // and replace Nil with original character
   }
 
@@ -3960,7 +4155,7 @@ char *ADLParser::get_ident_or_literal_constant(const char* description) {
       param = buf;
     }
     assert(is_literal_constant(param),
-	   "expr must be recognizable as a constant");
+           "expr must be recognizable as a constant");
   } else {
     param = get_ident();
   }
@@ -3968,7 +4163,7 @@ char *ADLParser::get_ident_or_literal_constant(const char* description) {
 }
 
 //------------------------------get_rep_var_ident-----------------------------
-// Do NOT duplicate, 
+// Do NOT duplicate,
 // Leave nil terminator in buffer
 // Preserve initial '$'(s) in string
 char *ADLParser::get_rep_var_ident(void) {
@@ -3998,9 +4193,9 @@ char *ADLParser::get_rep_var_ident(void) {
 
   // Nil terminate the variable name following the '$'
   char *rep_var_name = get_ident();
-  assert( rep_var_name != NULL, 
+  assert( rep_var_name != NULL,
           "Missing identifier after replacement variable indicator '$'");
-  
+
   return rep_var;
 }
 
@@ -4009,7 +4204,7 @@ char *ADLParser::get_rep_var_ident(void) {
 //------------------------------get_rep_var_ident_dup-------------------------
 // Return the next replacement variable identifier, skipping first '$'
 // given a pointer into a line of the buffer.
-// Null terminates string, still inside the file buffer, 
+// Null terminates string, still inside the file buffer,
 // Returns a pointer to a copy of the string, or NULL on failure
 char *ADLParser::get_rep_var_ident_dup(void) {
   if( _curchar != '$' ) return NULL;
@@ -4036,17 +4231,17 @@ char *ADLParser::get_rep_var_ident_dup(void) {
 
   // Nil terminate the variable name following the '$'
   char *rep_var_name = get_ident();
-  assert( rep_var_name != NULL, 
+  assert( rep_var_name != NULL,
           "Missing identifier after replacement variable indicator '$'");
-  rep_var = strdup(rep_var);  // Copy the string 
+  rep_var = strdup(rep_var);  // Copy the string
   *_ptr   = _curchar;         // and replace Nil with original character
-  
+
   return rep_var;
 }
 
 
 //------------------------------get_unique_ident------------------------------
-// Looks for an identifier in the buffer, terminates it with a NULL, 
+// Looks for an identifier in the buffer, terminates it with a NULL,
 // and checks that it is unique
 char *ADLParser::get_unique_ident(FormDict& dict, const char* nameDescription){
   char* ident = get_ident();
@@ -4082,7 +4277,7 @@ int ADLParser::get_int(void) {
   start = end = _ptr;             // Start points at first character
   c = *end;                       // Grab character to test
   while ((c >= '0') && (c <= '9')
-	 || ((c == '-') && (end == start))) {
+         || ((c == '-') && (end == start))) {
     end++;                        // Increment end pointer
     c = *end;                     // Grab character to test
   }
@@ -4100,7 +4295,7 @@ int ADLParser::get_int(void) {
   // Reset _ptr to next char after token
   _ptr = end;
 
-  return result;                   // integer 
+  return result;                   // integer
 }
 
 
@@ -4163,7 +4358,7 @@ void ADLParser::get_oplist(NameList &parameters, FormDict &operands) {
         parse_err(SYNERR, "undefined operand type %s\n", ident);
         return;
       }
-      
+
       // Check for valid operand type
       OpClassForm *opc  = form->is_opclass();
       OperandForm *oper = form->is_operand();
@@ -4247,10 +4442,10 @@ void ADLParser::get_effectlist(FormDict &effects, FormDict &operands) {
     opForm = form ? form->is_operand() : NULL;
     if( opForm == NULL ) {
       if( form && form->is_opclass() ) {
-	const char* cname = form->is_opclass()->_ident;
-	parse_err(SYNERR, "operand classes are illegal in effect lists (found %s %s)\n", cname, ident);
+        const char* cname = form->is_opclass()->_ident;
+        parse_err(SYNERR, "operand classes are illegal in effect lists (found %s %s)\n", cname, ident);
       } else {
-	parse_err(SYNERR, "undefined operand %s in effect list\n", ident);
+        parse_err(SYNERR, "undefined operand %s in effect list\n", ident);
       }
       return;
     }
@@ -4267,6 +4462,35 @@ void ADLParser::get_effectlist(FormDict &effects, FormDict &operands) {
   }
 }
 
+
+//-------------------------------preproc_line----------------------------------
+// A "#line" keyword has been seen, so parse the rest of the line.
+void ADLParser::preproc_line(void) {
+  int line = get_int();
+  skipws_no_preproc();
+  const char* file = NULL;
+  if (_curchar == '"') {
+    next_char();              // Move past the initial '"'
+    file = _ptr;
+    while (true) {
+      if (_curchar == '\n') {
+        parse_err(SYNERR, "missing '\"' at end of #line directive");
+        return;
+      }
+      if (_curchar == '"') {
+        *_ptr  = '\0';          // Terminate the string
+        next_char();
+        skipws_no_preproc();
+        break;
+      }
+      next_char();
+    }
+  }
+  ensure_end_of_line();
+  if (file != NULL)
+    _AD._ADL_file._name = file;
+  _buf.set_linenum(line);
+}
 
 //------------------------------preproc_define---------------------------------
 // A "#define" keyword has been seen, so parse the rest of the line.
@@ -4300,11 +4524,11 @@ void ADLParser::parse_err(int flag, const char *fmt, ...) {
 
   va_start(args, fmt);
   if (flag == 1)
-    _AD._syntax_errs += _AD.emit_msg(0, flag, _linenum, fmt, args);
+    _AD._syntax_errs += _AD.emit_msg(0, flag, linenum(), fmt, args);
   else if (flag == 2)
-    _AD._semantic_errs += _AD.emit_msg(0, flag, _linenum, fmt, args);
+    _AD._semantic_errs += _AD.emit_msg(0, flag, linenum(), fmt, args);
   else
-    _AD._warnings += _AD.emit_msg(0, flag, _linenum, fmt, args);
+    _AD._warnings += _AD.emit_msg(0, flag, linenum(), fmt, args);
 
   int error_char = _curchar;
   char* error_ptr = _ptr+1;
@@ -4321,7 +4545,7 @@ void ADLParser::parse_err(int flag, const char *fmt, ...) {
     while (error_head > _curline && *error_head)  --error_head;
     if (error_tail)  *error_tail = '\0';
     fprintf(stderr, "Error Context:  %s>>>%c<<<%s\n",
-	    error_head, error_char, error_ptr);
+            error_head, error_char, error_ptr);
     if (error_tail)  *error_tail = '\n';
     error_ptr[-1] = tem;
   }
@@ -4331,9 +4555,10 @@ void ADLParser::parse_err(int flag, const char *fmt, ...) {
 // A preprocessor directive has been encountered.  Be sure it has fallen at
 // the begining of a line, or else report an error.
 void ADLParser::ensure_start_of_line(void) {
+  if (_curchar == '\n') { next_line(); return; }
   assert( _ptr >= _curline && _ptr < _curline+strlen(_curline),
-	  "Must be able to find which line we are in" );
-  
+          "Must be able to find which line we are in" );
+
   for (char *s = _curline; s < _ptr; s++) {
     if (*s > ' ') {
       parse_err(SYNERR, "'%c' must be at beginning of line\n", _curchar);
@@ -4382,7 +4607,7 @@ bool ADLParser::handle_preproc_token() {
   if (ident == NULL) {
     parse_err(SYNERR, "expected preprocessor command, got end of line\n");
   } else if (!strcmp(ident, "ifdef") ||
-	     !strcmp(ident, "ifndef")) {
+             !strcmp(ident, "ifndef")) {
     char* flag = get_ident_no_preproc();
     ensure_end_of_line();
     // Test the identifier only if we are already in taken code:
@@ -4431,21 +4656,21 @@ void ADLParser::skipws_common(bool do_preproc) {
       _ptr = _curline; next = _ptr + 1;
     }
     else if (_curchar == '#' ||
-	(_curchar == '/' && (*next == '/' || *next == '*'))) {
+        (_curchar == '/' && (*next == '/' || *next == '*'))) {
       parse_err(SYNERR, "unimplemented: comment token in a funny place");
     }
   }
   while(_curline != NULL) {                // Check for end of file
     if (*_ptr == '\n') {                   // keep proper track of new lines
       if (!do_preproc)  break;             // let caller handle the newline
-      next_line(); 
+      next_line();
       _ptr = _curline; next = _ptr + 1;
     }
     else if ((*_ptr == '/') && (*next == '/'))      // C++ comment
       do { _ptr++; next++; } while(*_ptr != '\n');  // So go to end of line
     else if ((*_ptr == '/') && (*next == '*')) {    // C comment
       _ptr++; next++;
-      do { 
+      do {
         _ptr++; next++;
         if (*_ptr == '\n') {               // keep proper track of new lines
           next_line();                     // skip newlines within comments
@@ -4460,12 +4685,12 @@ void ADLParser::skipws_common(bool do_preproc) {
     }
     else if (do_preproc && *_ptr == '#') {
       // Note that this calls skipws_common(false) recursively!
-      bool preproc_handled = handle_preproc_token(); 
+      bool preproc_handled = handle_preproc_token();
       if (!preproc_handled) {
-	if (preproc_taken()) {
-	  return;  // short circuit
-	}
-	++_ptr;    // skip the preprocessor character
+        if (preproc_taken()) {
+          return;  // short circuit
+        }
+        ++_ptr;    // skip the preprocessor character
       }
       next = _ptr+1;
     } else if(*_ptr > ' ' && !(do_preproc && !preproc_taken())) {
@@ -4476,13 +4701,13 @@ void ADLParser::skipws_common(bool do_preproc) {
       // skip untaken quoted string
       int qchar = *_ptr;
       while (true) {
-	++_ptr;
-	if (*_ptr == qchar) { ++_ptr; break; }
-	if (*_ptr == '\\')  ++_ptr;
-	if (*_ptr == '\n' || *_ptr == '\0') {
-	  parse_err(SYNERR, "newline in string");
-	  break;
-	}
+        ++_ptr;
+        if (*_ptr == qchar) { ++_ptr; break; }
+        if (*_ptr == '\\')  ++_ptr;
+        if (*_ptr == '\n' || *_ptr == '\0') {
+          parse_err(SYNERR, "newline in string");
+          break;
+        }
       }
       next = _ptr + 1;
     }
@@ -4499,11 +4724,12 @@ char ADLParser::cur_char() {
 
 //---------------------------next_char-----------------------------------------
 void ADLParser::next_char() {
+  if (_curchar == '\n')  parse_err(WARN, "must call next_line!");
   _curchar = *++_ptr;
   // if ( _curchar == '\n' ) {
   //   next_line();
   // }
-} 
+}
 
 //---------------------------next_char_or_line---------------------------------
 void ADLParser::next_char_or_line() {
@@ -4514,11 +4740,23 @@ void ADLParser::next_char_or_line() {
     _ptr = _curline;
     _curchar = *_ptr;  // maintain invariant
   }
-} 
+}
 
 //---------------------------next_line-----------------------------------------
 void ADLParser::next_line() {
-  _curline = _buf.get_line(); _linenum++; 
+  _curline = _buf.get_line();
+  _curchar = ' ';
+}
+
+//------------------------get_line_string--------------------------------------
+// Prepended location descriptor, for debugging.
+// Must return a malloced string (that can be freed if desired).
+char* ADLParser::get_line_string(int linenum) {
+  const char* file = _AD._ADL_file._name;
+  int         line = linenum ? linenum : this->linenum();
+  char* location = (char *)malloc(strlen(file) + 100);
+  sprintf(location, "\n#line %d \"%s\"\n", line, file);
+  return location;
 }
 
 //-------------------------is_literal_constant---------------------------------
@@ -4540,7 +4778,7 @@ bool ADLParser::is_literal_constant(const char *param) {
 //---------------------------is_hex_digit--------------------------------------
 bool ADLParser::is_hex_digit(char digit) {
   return ((digit >= '0') && (digit <= '9'))
-       ||((digit >= 'a') && (digit <= 'f')) 
+       ||((digit >= 'a') && (digit <= 'f'))
        ||((digit >= 'A') && (digit <= 'F'));
 }
 
@@ -4558,6 +4796,66 @@ bool ADLParser::is_int_token(const char* token, int& intval) {
   intval = atoi(token);
   return true;
 }
+
+static const char* skip_expr_ws(const char* str) {
+  const char * cp = str;
+  while (cp[0]) {
+    if (cp[0] <= ' ') {
+      ++cp;
+    } else if (cp[0] == '#') {
+      ++cp;
+      while (cp[0] == ' ')  ++cp;
+      assert(0 == strncmp(cp, "line", 4), "must be a #line directive");
+      const char* eol = strchr(cp, '\n');
+      assert(eol != NULL, "must find end of line");
+      if (eol == NULL)  eol = cp + strlen(cp);
+      cp = eol;
+    } else {
+      break;
+    }
+  }
+  return cp;
+}
+
+//-----------------------equivalent_expressions--------------------------------
+bool ADLParser::equivalent_expressions(const char* str1, const char* str2) {
+  if (str1 == str2)
+    return true;
+  else if (str1 == NULL || str2 == NULL)
+    return false;
+  const char* cp1 = str1;
+  const char* cp2 = str2;
+  char in_quote = '\0';
+  while (cp1[0] && cp2[0]) {
+    if (!in_quote) {
+      // skip spaces and/or cpp directives
+      const char* cp1a = skip_expr_ws(cp1);
+      const char* cp2a = skip_expr_ws(cp2);
+      if (cp1a > cp1 && cp2a > cp2) {
+        cp1 = cp1a; cp2 = cp2a;
+        continue;
+      }
+      if (cp1a > cp1 || cp2a > cp2)  break; // fail
+    }
+    // match one non-space char
+    if (cp1[0] != cp2[0])  break; // fail
+    char ch = cp1[0];
+    cp1++; cp2++;
+    // watch for quotes
+    if (in_quote && ch == '\\') {
+      if (cp1[0] != cp2[0])  break; // fail
+      if (!cp1[0])  break;
+      cp1++; cp2++;
+    }
+    if (in_quote && ch == in_quote) {
+      in_quote = '\0';
+    } else if (!in_quote && (ch == '"' || ch == '\'')) {
+      in_quote = ch;
+    }
+  }
+  return (!cp1[0] && !cp2[0]);
+}
+
 
 //-------------------------------trim------------------------------------------
 void ADLParser::trim(char* &token) {

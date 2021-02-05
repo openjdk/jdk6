@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)phase.hpp	1.53 07/05/17 16:00:29 JVM"
-#endif
 /*
- * Copyright 1997-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class Compile;
@@ -30,7 +27,7 @@ class Compile;
 //------------------------------Phase------------------------------------------
 // Most optimizations are done in Phases.  Creating a phase does any long
 // running analysis required, and caches the analysis in internal data
-// structures.  Later the analysis is queried using transform() calls to 
+// structures.  Later the analysis is queried using transform() calls to
 // guide transforming the program.  When the Phase is deleted, so is any
 // cached analysis info.  This basic Phase class mostly contains timing and
 // memory management code.
@@ -43,16 +40,12 @@ public:
     Optimistic,                 // Optimistic analysis phase
     GVN,                        // Pessimistic global value numbering phase
     Ins_Select,                 // Instruction selection phase
-    Copy_Elimination,           // Copy Elimination
-    Dead_Code_Elimination,      // DCE and compress Nodes
-    Conditional_Constant,       // Conditional Constant Propagation
     CFG,                        // Build a CFG
-    DefUse,                     // Build Def->Use chains
+    BlockLayout,                // Linear ordering of blocks
     Register_Allocation,        // Register allocation, duh
     LIVE,                       // Dragon-book LIVE range problem
     Interference_Graph,         // Building the IFG
     Coalesce,                   // Coalescing copies
-    Conditional_CProp,          // Conditional Constant Propagation
     Ideal_Loop,                 // Find idealized trip-counted loops
     Macro_Expand,               // Expand macro nodes
     Peephole,                   // Apply peephole optimizations
@@ -83,7 +76,7 @@ protected:
 #ifndef PRODUCT
   static elapsedTimer _t_graphReshaping;
   static elapsedTimer _t_scheduler;
-  static elapsedTimer _t_removeEmptyBlocks;
+  static elapsedTimer _t_blockOrdering;
   static elapsedTimer _t_macroExpand;
   static elapsedTimer _t_peephole;
   static elapsedTimer _t_codeGeneration;
@@ -91,11 +84,11 @@ protected:
   static elapsedTimer _t_temporaryTimer1;
   static elapsedTimer _t_temporaryTimer2;
 
-// Subtimers for _t_optimizer 
+// Subtimers for _t_optimizer
   static elapsedTimer   _t_iterGVN;
   static elapsedTimer   _t_iterGVN2;
 
-// Subtimers for _t_registerAllocation 
+// Subtimers for _t_registerAllocation
   static elapsedTimer   _t_ctorChaitin;
   static elapsedTimer   _t_buildIFGphysical;
   static elapsedTimer   _t_computeLive;
@@ -103,7 +96,7 @@ protected:
   static elapsedTimer   _t_postAllocCopyRemoval;
   static elapsedTimer   _t_fixupSpills;
 
-// Subtimers for _t_output 
+// Subtimers for _t_output
   static elapsedTimer   _t_instrSched;
   static elapsedTimer   _t_buildOopMaps;
 #endif
@@ -114,4 +107,3 @@ public:
   static void print_timers();
 #endif
 };
-

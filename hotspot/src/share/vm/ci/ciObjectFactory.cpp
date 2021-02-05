@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)ciObjectFactory.cpp	1.39 07/05/17 15:50:05 JVM"
-#endif
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -99,7 +96,7 @@ void ciObjectFactory::initialize() {
 void ciObjectFactory::init_shared_objects() {
 
   _next_ident = 1;  // start numbering CI objects at 1
-  
+
   {
     // Create the shared symbols, but not in _shared_ci_objects.
     int i;
@@ -124,7 +121,7 @@ void ciObjectFactory::init_shared_objects() {
 
   for (int i = T_BOOLEAN; i <= T_CONFLICT; i++) {
     BasicType t = (BasicType)i;
-    if (type2name(t) != NULL && t != T_OBJECT && t != T_ARRAY) {
+    if (type2name(t) != NULL && t != T_OBJECT && t != T_ARRAY && t != T_NARROWOOP) {
       ciType::_basic_types[t] = new (_arena) ciType(t);
       init_ident_of(ciType::_basic_types[t]);
     }
@@ -170,7 +167,7 @@ void ciObjectFactory::init_shared_objects() {
       ->as_instance_klass();
   ciEnv::_String =
     get(SystemDictionary::string_klass())
-      ->as_instance_klass(); 
+      ->as_instance_klass();
 
   for (int len = -1; len != _ci_objects->length(); ) {
     len = _ci_objects->length();
@@ -250,7 +247,7 @@ ciObject* ciObjectFactory::get(oop key) {
     if (key->is_symbol()) {
       vmSymbols::SID sid = vmSymbols::find_sid((symbolOop)key);
       if (sid != vmSymbols::NO_SID) {
-	// do not pollute the main cache with it
+        // do not pollute the main cache with it
         return vm_symbol_at(sid);
       }
     }
@@ -455,7 +452,7 @@ ciKlass* ciObjectFactory::get_unloaded_klass(ciKlass* accessing_klass,
 //------------------------------------------------------------------
 // ciObjectFactory::get_empty_methodData
 //
-// Get the ciMethodData representing the methodData for a method with 
+// Get the ciMethodData representing the methodData for a method with
 // none.
 ciMethodData* ciObjectFactory::get_empty_methodData() {
   ciMethodData* new_methodData = new (arena()) ciMethodData();
@@ -475,7 +472,7 @@ ciReturnAddress* ciObjectFactory::get_return_address(int bci) {
       return entry;
     }
   }
-  
+
   ciReturnAddress* new_ret_addr = new (arena()) ciReturnAddress(bci);
   init_ident_of(new_ret_addr);
   _return_addresses->append(new_ret_addr);
@@ -521,7 +518,7 @@ int ciObjectFactory::find(oop key, GrowableArray<ciObject*>* objects) {
 // Verify that the binary seach found the given key.
 bool ciObjectFactory::is_found_at(int index, oop key, GrowableArray<ciObject*>* objects) {
   return (index < objects->length() &&
-	  objects->at(index)->get_oop() == key);
+          objects->at(index)->get_oop() == key);
 }
 
 
@@ -648,4 +645,3 @@ void ciObjectFactory::print() {
              _ci_objects->length(), _unloaded_methods->length(),
              _unloaded_klasses->length());
 }
-

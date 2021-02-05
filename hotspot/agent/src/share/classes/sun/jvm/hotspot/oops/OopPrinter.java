@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.oops;
@@ -57,9 +57,16 @@ public class OopPrinter implements OopVisitor {
     Oop.printOopValueOn(field.getValue(getObj()), tty);
     tty.println();
   }
+
+  public void doOop(NarrowOopField field, boolean isVMField) {
+    printField(field);
+    Oop.printOopValueOn(field.getValue(getObj()), tty);
+    tty.println();
+  }
+
   public void doChar(CharField field, boolean isVMField) {
     printField(field);
-    char c = field.getValue(getObj()); 
+    char c = field.getValue(getObj());
     // Fix me: not yet complete
     if (Character.isLetterOrDigit(c)) tty.println(c);
     else tty.println((int)c);

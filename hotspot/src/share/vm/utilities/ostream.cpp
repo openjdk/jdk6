@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)ostream.cpp	1.80 07/09/28 10:22:57 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -55,8 +52,9 @@ void outputStream::update_position(const char* s, size_t len) {
       _precount += _position + 1;
       _position = 0;
     } else if (ch == '\t') {
-      _position += 8;
-      _precount -= 7;  // invariant:  _precount + _position == total count
+      int tw = 8 - (_position & 7);
+      _position += tw;
+      _precount -= tw-1;  // invariant:  _precount + _position == total count
     } else {
       _position += 1;
     }
@@ -111,7 +109,7 @@ void outputStream::print(const char* format, ...) {
   va_end(ap);
 }
 
-void outputStream::print_cr(const char* format, ...) { 
+void outputStream::print_cr(const char* format, ...) {
   char buffer[O_BUFLEN];
   va_list ap;
   va_start(ap, format);
@@ -121,7 +119,7 @@ void outputStream::print_cr(const char* format, ...) {
   va_end(ap);
 }
 
-void outputStream::vprint(const char *format, va_list argptr) { 
+void outputStream::vprint(const char *format, va_list argptr) {
   char buffer[O_BUFLEN];
   size_t len;
   const char* str = do_vsnprintf(buffer, O_BUFLEN, format, argptr, false, len);
@@ -136,7 +134,17 @@ void outputStream::vprint_cr(const char* format, va_list argptr) {
 }
 
 void outputStream::fill_to(int col) {
-  while (position() < col) sp();
+  int need_fill = col - position();
+  sp(need_fill);
+}
+
+void outputStream::move_to(int col, int slop, int min_space) {
+  if (position() >= col + slop)
+    cr();
+  int need_fill = col - position();
+  if (need_fill < min_space)
+    need_fill = min_space;
+  sp(need_fill);
 }
 
 void outputStream::put(char ch) {
@@ -145,8 +153,23 @@ void outputStream::put(char ch) {
   write(buf, 1);
 }
 
-void outputStream::sp() {
-  this->write(" ", 1);
+#define SP_USE_TABS false
+
+void outputStream::sp(int count) {
+  if (count < 0)  return;
+  if (SP_USE_TABS && count >= 8) {
+    int target = position() + count;
+    while (count >= 8) {
+      this->write("\t", 1);
+      count -= 8;
+    }
+    count = target - position();
+  }
+  while (count > 0) {
+    int nw = (count > 8) ? 8 : count;
+    this->write("        ", nw);
+    count -= nw;
+  }
 }
 
 void outputStream::cr() {
@@ -163,6 +186,17 @@ void outputStream::stamp() {
   char buf[40];
   jio_snprintf(buf, sizeof(buf), "%.3f", _stamp.seconds());
   print_raw(buf);
+}
+
+void outputStream::stamp(bool guard,
+                         const char* prefix,
+                         const char* suffix) {
+  if (!guard) {
+    return;
+  }
+  print_raw(prefix);
+  stamp();
+  print_raw(suffix);
 }
 
 void outputStream::date_stamp(bool guard,
@@ -202,7 +236,7 @@ void outputStream::print_julong(julong value) {
 stringStream::stringStream(size_t initial_size) : outputStream() {
   buffer_length = initial_size;
   buffer        = NEW_RESOURCE_ARRAY(char, buffer_length);
-  buffer_pos    = 0;  
+  buffer_pos    = 0;
   buffer_fixed  = false;
 }
 
@@ -210,7 +244,7 @@ stringStream::stringStream(size_t initial_size) : outputStream() {
 stringStream::stringStream(char* fixed_buffer, size_t fixed_buffer_size) : outputStream() {
   buffer_length = fixed_buffer_size;
   buffer        = fixed_buffer;
-  buffer_pos    = 0;  
+  buffer_pos    = 0;
   buffer_fixed  = true;
 }
 
@@ -223,7 +257,7 @@ void stringStream::write(const char* s, size_t len) {
       end = buffer_length;
       write_len = end - buffer_pos - 1; // leave room for the final '\0'
     } else {
-      // For small overruns, double the buffer.  For larger ones, 
+      // For small overruns, double the buffer.  For larger ones,
       // increase to the requested size.
       if (end < buffer_length * 2) {
         end = buffer_length * 2;
@@ -266,7 +300,10 @@ fileStream::fileStream(const char* file_name) {
 }
 
 void fileStream::write(const char* s, size_t len) {
-  if (_file != NULL)  fwrite(s, 1, len, _file);
+  if (_file != NULL)  {
+    // Make an unused local variable to avoid warning from gcc 4.x compiler.
+    size_t count = fwrite(s, 1, len, _file);
+  }
   update_position(s, len);
 }
 
@@ -294,7 +331,10 @@ fdStream::~fdStream() {
 }
 
 void fdStream::write(const char* s, size_t len) {
-  if (_fd != -1) ::write(_fd, s, (int)len);
+  if (_fd != -1) {
+    // Make an unused local variable to avoid warning from gcc 4.x compiler.
+    size_t count = ::write(_fd, s, (int)len);
+  }
   update_position(s, len);
 }
 
@@ -314,13 +354,13 @@ void defaultStream::init() {
   }
 }
 
-bool defaultStream::has_log_file() { 
+bool defaultStream::has_log_file() {
   // lazily create log file (at startup, LogVMOutput is false even
   // if +LogVMOutput is used, because the flags haven't been parsed yet)
   // For safer printing during fatal error handling, do not init logfile
   // if a VM error has been reported.
   if (!_inited && !is_error_reported())  init();
-  return _log_file != NULL; 
+  return _log_file != NULL;
 }
 
 static const char* make_log_name(const char* log_name, const char* force_directory, char* buf) {
@@ -459,7 +499,7 @@ void defaultStream::finish_log() {
 
   delete _outer_xmlStream;
   _outer_xmlStream = NULL;
-  
+
   file->flush();
   delete file;
 }
@@ -480,11 +520,11 @@ void defaultStream::finish_log_on_error(char *buf, int buflen) {
     fileStream* file = _log_file;
     _log_file = NULL;
     _outer_xmlStream = NULL;
-  
+
     if (file) {
       file->flush();
 
-      // Can't delete or close the file because delete and fclose aren't 
+      // Can't delete or close the file because delete and fclose aren't
       // async-safe. We are about to die, so leave it to the kernel.
       // delete file;
     }
@@ -494,23 +534,23 @@ void defaultStream::finish_log_on_error(char *buf, int buflen) {
 intx defaultStream::hold(intx writer_id) {
   bool has_log = has_log_file();  // check before locking
   if (// impossible, but who knows?
-      writer_id == NO_WRITER || 
+      writer_id == NO_WRITER ||
 
       // bootstrap problem
       tty_lock == NULL ||
 
       // can't grab a lock or call Thread::current() if TLS isn't initialized
-      ThreadLocalStorage::thread() == NULL || 
+      ThreadLocalStorage::thread() == NULL ||
 
       // developer hook
-      !SerializeVMOutput || 
+      !SerializeVMOutput ||
 
       // VM already unhealthy
-      is_error_reported() || 
-      
+      is_error_reported() ||
+
       // safepoint == global lock (for VM only)
-      (SafepointSynchronize::is_synchronizing() && 
-       Thread::current()->is_VM_thread()) 
+      (SafepointSynchronize::is_synchronizing() &&
+       Thread::current()->is_VM_thread())
       ) {
     // do not attempt to lock unless we know the thread and the VM is healthy
     return NO_WRITER;
@@ -645,7 +685,7 @@ void ostream_init_log() {
   defaultStream::instance->has_log_file();
 }
 
-// ostream_exit() is called during normal VM exit to finish log files, flush 
+// ostream_exit() is called during normal VM exit to finish log files, flush
 // output and free resource.
 void ostream_exit() {
   static bool ostream_exit_called = false;
@@ -657,14 +697,14 @@ void ostream_exit() {
   {
       // we temporaly disable PrintMallocFree here
       // as otherwise it'll lead to using of almost deleted
-      // tty or defaultStream::instance in logging facility 
+      // tty or defaultStream::instance in logging facility
       // of HeapFree(), see 6391258
       DEBUG_ONLY(FlagSetting fs(PrintMallocFree, false);)
       if (tty != defaultStream::instance) {
-	  delete tty;
+          delete tty;
       }
       if (defaultStream::instance != NULL) {
-	  delete defaultStream::instance;
+          delete defaultStream::instance;
       }
   }
   tty = NULL;
@@ -686,7 +726,7 @@ void ostream_abort() {
 }
 
 staticBufferStream::staticBufferStream(char* buffer, size_t buflen,
-				       outputStream *outer_stream) {
+                                       outputStream *outer_stream) {
   _buffer = buffer;
   _buflen = buflen;
   _outer_stream = outer_stream;
@@ -730,28 +770,35 @@ void staticBufferStream::vprint_cr(const char* format, va_list argptr) {
   write(str, len);
 }
 
-bufferedStream::bufferedStream(size_t initial_size) : outputStream() {
+bufferedStream::bufferedStream(size_t initial_size, size_t bufmax) : outputStream() {
   buffer_length = initial_size;
   buffer        = NEW_C_HEAP_ARRAY(char, buffer_length);
   buffer_pos    = 0;
   buffer_fixed  = false;
+  buffer_max    = bufmax;
 }
-                                                                                                
-bufferedStream::bufferedStream(char* fixed_buffer, size_t fixed_buffer_size) : outputStream() {
+
+bufferedStream::bufferedStream(char* fixed_buffer, size_t fixed_buffer_size, size_t bufmax) : outputStream() {
   buffer_length = fixed_buffer_size;
   buffer        = fixed_buffer;
   buffer_pos    = 0;
   buffer_fixed  = true;
+  buffer_max    = bufmax;
 }
 
 void bufferedStream::write(const char* s, size_t len) {
+
+  if(buffer_pos + len > buffer_max) {
+    flush();
+  }
+
   size_t end = buffer_pos + len;
   if (end >= buffer_length) {
     if (buffer_fixed) {
       // if buffer cannot resize, silently truncate
       len = buffer_length - buffer_pos - 1;
     } else {
-      // For small overruns, double the buffer.  For larger ones, 
+      // For small overruns, double the buffer.  For larger ones,
       // increase to the requested size.
       if (end < buffer_length * 2) {
         end = buffer_length * 2;
@@ -764,14 +811,14 @@ void bufferedStream::write(const char* s, size_t len) {
   buffer_pos += len;
   update_position(s, len);
 }
-                                                                                                
+
 char* bufferedStream::as_string() {
   char* copy = NEW_RESOURCE_ARRAY(char, buffer_pos+1);
   strncpy(copy, buffer, buffer_pos);
   copy[buffer_pos] = 0;  // terminating null
   return copy;
 }
-                                                                                                
+
 bufferedStream::~bufferedStream() {
   if (!buffer_fixed) {
     FREE_C_HEAP_ARRAY(char, buffer);
@@ -788,12 +835,12 @@ bufferedStream::~bufferedStream() {
 #endif
 
 // Network access
-networkStream::networkStream() {
+networkStream::networkStream() : bufferedStream(1024*10, 1024*10) {
 
   _socket = -1;
 
   hpi::initialize_socket_library();
-  
+
   int result = hpi::socket(AF_INET, SOCK_STREAM, 0);
   if (result <= 0) {
     assert(false, "Socket could not be created!");
@@ -808,7 +855,9 @@ int networkStream::read(char *buf, size_t len) {
 
 void networkStream::flush() {
   if (size() != 0) {
-    hpi::send(_socket, (char *)base(), (int)size(), 0);
+    int result = hpi::raw_send(_socket, (char *)base(), (int)size(), 0);
+    assert(result != -1, "connection error");
+    assert(result == (int)size(), "didn't send enough data");
   }
   reset();
 }
@@ -826,13 +875,13 @@ void networkStream::close() {
 }
 
 bool networkStream::connect(const char *ip, short port) {
-  
+
   struct sockaddr_in server;
   server.sin_family = AF_INET;
   server.sin_port = htons(port);
 
   server.sin_addr.s_addr = inet_addr(ip);
-  if (server.sin_addr.s_addr == (unsigned long)-1) {
+  if (server.sin_addr.s_addr == (uint32_t)-1) {
 #ifdef _WINDOWS
     struct hostent* host = hpi::get_host_by_name((char*)ip);
 #else

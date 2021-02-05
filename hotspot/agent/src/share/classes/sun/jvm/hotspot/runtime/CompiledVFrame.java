@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.runtime;
@@ -94,7 +94,7 @@ public class CompiledVFrame extends JavaVFrame {
 
   public StackValueCollection getLocals() {
     List scvList = getScope().getLocals();
-    if (scvList == null) 
+    if (scvList == null)
       return new StackValueCollection();
 
     // scvList is the list of ScopeValues describing the JVM stack state.
@@ -109,7 +109,7 @@ public class CompiledVFrame extends JavaVFrame {
 
   public StackValueCollection getExpressions() {
     List scvList = getScope().getExpressions();
-    if (scvList == null) 
+    if (scvList == null)
       return new StackValueCollection();
 
     // scvList is the list of ScopeValues describing the JVM stack state.
@@ -149,7 +149,7 @@ public class CompiledVFrame extends JavaVFrame {
     }
     return getScope().getBCI();
   }
-	
+
   /** Returns the sender vframe */
   public VFrame sender() {
     if (Assert.ASSERTS_ENABLED) {
@@ -157,7 +157,7 @@ public class CompiledVFrame extends JavaVFrame {
     }
     return sender(false);
   }
-	
+
   public VFrame sender(boolean mayBeImprecise) {
     if (!VM.getVM().isDebugging()) {
       if (Assert.ASSERTS_ENABLED) {
@@ -206,6 +206,16 @@ public class CompiledVFrame extends JavaVFrame {
           Assert.that( loc.isRegister(), "ints always saved to stack in 1 word" );
         }
         return new StackValue(valueAddr.getJLongAt(0) & 0xFFFFFFFF);
+      } else if (loc.holdsNarrowOop()) {  // Holds an narrow oop?
+        if (loc.isRegister() && VM.getVM().isBigEndian()) {
+          // The callee has no clue whether the register holds an narrow oop,
+          // long or is unused.  He always saves a long.  Here we know
+          // a long was saved, but we only want an narrow oop back.  Narrow the
+          // saved long to the narrow oop that the JVM wants.
+          return new StackValue(valueAddr.getCompOopHandleAt(VM.getVM().getIntSize()));
+        } else {
+          return new StackValue(valueAddr.getCompOopHandleAt(0));
+        }
       } else if( loc.holdsOop() ) {  // Holds an oop?
         return new StackValue(valueAddr.getOopHandleAt(0));
       } else if( loc.holdsDouble() ) {
@@ -233,9 +243,9 @@ public class CompiledVFrame extends JavaVFrame {
         //      assert (SafepointSynchronize::is_at_safepoint(), "must be at safepoint, otherwise lock method()");
         //      // make sure bci points to jsr
         //      Bytecode* bytecode = Bytecode_at(method()->bcp_from(bci));
-        //      Bytecodes::Code bc = bytecode->code();     
+        //      Bytecodes::Code bc = bytecode->code();
         //      assert (bc == Bytecodes::_jsr || bc == Bytecodes::_jsr_w, "must be jsr");
-        //      
+        //
         //      // the real returnAddress is the bytecode following the jsr
         //      return new StackValue((intptr_t)(bci + Bytecodes::length_for(bc)));
       } else if (VM.getVM().isLP64() && loc.holdsLong()) {
@@ -266,7 +276,7 @@ public class CompiledVFrame extends JavaVFrame {
       // Constant int: treat same as register int.
       return new StackValue(((ConstantIntValue) sv).getValue() & 0xFFFFFFFF);
     } else if (sv.isConstantOop()) {
-      // constant oop        
+      // constant oop
       return new StackValue(((ConstantOopReadValue) sv).getValue());
     } else if (sv.isConstantDouble()) {
       // Constant double in a single stack slot
@@ -279,7 +289,7 @@ public class CompiledVFrame extends JavaVFrame {
 
     // Unknown ScopeValue type
     Assert.that(false, "Should not reach here");
-    return new StackValue(0);   // dummy  
+    return new StackValue(0);   // dummy
   }
 
   private BasicLock resolveMonitorLock(Location location) {
@@ -290,7 +300,7 @@ public class CompiledVFrame extends JavaVFrame {
     // (stack picture)
     // high: [     ]  byte_offset + wordSize
     // low   [     ]  byte_offset
-    //       
+    //
     // sp->  [     ]  0
     // the byte_offset is the distance from the stack pointer to the lowest address
     // The frame's original stack pointer, before any extension by its callee

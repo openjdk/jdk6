@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)constantPoolKlass.hpp	1.51 07/05/29 09:44:18 JVM"
-#endif
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +19,13 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // A constantPoolKlass is the klass of a constantPoolOop
 
-class constantPoolKlass : public arrayKlass {
+class constantPoolKlass : public Klass {
+  juint    _alloc_size;        // allocation profiling support
  public:
   // Dispatched klass operations
   bool oop_is_constantPool() const  { return true; }
@@ -36,18 +34,18 @@ class constantPoolKlass : public arrayKlass {
 
   // Allocation
   DEFINE_ALLOCATE_PERMANENT(constantPoolKlass);
-  constantPoolOop allocate(int length, TRAPS); 
+  constantPoolOop allocate(int length, TRAPS);
   static klassOop create_klass(TRAPS);
 
   // Casting from klassOop
   static constantPoolKlass* cast(klassOop k) {
     assert(k->klass_part()->oop_is_constantPool(), "cast to constantPoolKlass");
-    return (constantPoolKlass*) k->klass_part(); 
+    return (constantPoolKlass*) k->klass_part();
   }
 
   // Sizing
   static int header_size()        { return oopDesc::header_size() + sizeof(constantPoolKlass)/HeapWordSize; }
-  int object_size() const         { return arrayKlass::object_size(header_size()); }
+  int object_size() const        { return align_object_size(header_size()); }
 
   // Garbage collection
   void oop_follow_contents(oop obj);
@@ -59,6 +57,11 @@ class constantPoolKlass : public arrayKlass {
   // Iterators
   int oop_oop_iterate(oop obj, OopClosure* blk);
   int oop_oop_iterate_m(oop obj, OopClosure* blk, MemRegion mr);
+
+  // Allocation profiling support
+  // no idea why this is pure virtual and not in Klass ???
+  juint alloc_size() const              { return _alloc_size; }
+  void set_alloc_size(juint n)          { _alloc_size = n; }
 
 #ifndef PRODUCT
  public:
@@ -78,4 +81,3 @@ class constantPoolKlass : public arrayKlass {
   static void preload_and_initialize_all_classes(oop constant_pool, TRAPS);
 #endif
 };
-

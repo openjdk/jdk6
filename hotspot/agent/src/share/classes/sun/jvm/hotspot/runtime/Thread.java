@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.runtime;
@@ -38,7 +38,6 @@ public class Thread extends VMObject {
   private static int HAS_ASYNC_EXCEPTION;
 
   private static AddressField activeHandlesField;
-  private static AddressField highestLockField;
   private static AddressField currentPendingMonitorField;
   private static AddressField currentWaitingMonitorField;
 
@@ -60,7 +59,6 @@ public class Thread extends VMObject {
 
     tlabFieldOffset    = type.getField("_tlab").getOffset();
     activeHandlesField = type.getAddressField("_active_handles");
-    highestLockField   = type.getAddressField("_highest_lock");
     currentPendingMonitorField = type.getAddressField("_current_pending_monitor");
     currentWaitingMonitorField = type.getAddressField("_current_waiting_monitor");
   }
@@ -93,7 +91,7 @@ public class Thread extends VMObject {
   public boolean hasAsyncException() {
     return (suspendFlags() & HAS_ASYNC_EXCEPTION) != 0;
   }
-  
+
   public ThreadLocalAllocBuffer tlab() {
     return new ThreadLocalAllocBuffer(addr.addOffsetTo(tlabFieldOffset));
   }
@@ -109,7 +107,7 @@ public class Thread extends VMObject {
   public boolean   isVMThread()                { return false; }
   public boolean   isJavaThread()              { return false; }
   public boolean   isCompilerThread()          { return false; }
-  public boolean   isHiddenFromExternalView()  { return false; } 
+  public boolean   isHiddenFromExternalView()  { return false; }
   public boolean   isJvmtiAgentThread()        { return false; }
   public boolean   isWatcherThread()           { return false; }
   public boolean   isConcurrentMarkSweepThread() { return false; }
@@ -119,10 +117,6 @@ public class Thread extends VMObject {
   public void oopsDo(AddressVisitor oopVisitor) {
     // FIXME: Empty for now; will later traverse JNI handles and
     // pending exception
-  }
-
-  public Address highestLock() {
-    return highestLockField.getValue(addr);
   }
 
   public ObjectMonitor getCurrentPendingMonitor() {

@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)ciObjectFactory.hpp	1.20 07/05/17 15:50:07 JVM"
-#endif
 /*
  * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // ciObjectFactory
@@ -102,7 +99,7 @@ public:
                               bool create_if_not_found);
 
 
-  // Get the ciMethodData representing the methodData for a method 
+  // Get the ciMethodData representing the methodData for a method
   // with none.
   ciMethodData* get_empty_methodData();
 
@@ -111,5 +108,3 @@ public:
   void print_contents();
   void print();
 };
-
-

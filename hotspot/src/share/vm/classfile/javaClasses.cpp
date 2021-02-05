@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)javaClasses.cpp	1.250 08/01/17 09:41:13 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +19,35 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
 # include "incls/_javaClasses.cpp.incl"
 
-// Helpful macro for computing field offsets at run time rather than hardcoding them
-#define COMPUTE_OFFSET(klass_name_as_C_str, dest_offset, klass_oop, name_symbol, signature_symbol) \
-{                                                                                                  \
-  fieldDescriptor fd;                                                                              \
-  instanceKlass* ik = instanceKlass::cast(klass_oop);                                              \
-  if (!ik->find_local_field(name_symbol, signature_symbol, &fd)) {                                 \
-    fatal("Invalid layout of " klass_name_as_C_str);                                               \
-  }                                                                                                \
-  dest_offset = fd.offset();                                                                       \
+// Helpful routine for computing field offsets at run time rather than hardcoding them
+static void
+compute_offset(int &dest_offset,
+               klassOop klass_oop, symbolOop name_symbol, symbolOop signature_symbol) {
+  fieldDescriptor fd;
+  instanceKlass* ik = instanceKlass::cast(klass_oop);
+  if (!ik->find_local_field(name_symbol, signature_symbol, &fd)) {
+    ResourceMark rm;
+    tty->print_cr("Invalid layout of %s at %s", ik->external_name(), name_symbol->as_C_string());
+    fatal("Invalid layout of preloaded class");
+  }
+  dest_offset = fd.offset();
 }
 
 // Same as above but for "optional" offsets that might not be present in certain JDK versions
-#define COMPUTE_OPTIONAL_OFFSET(klass_name_as_C_str, dest_offset, klass_oop, name_symbol, signature_symbol) \
-{                                                                                                  \
-  fieldDescriptor fd;                                                                              \
-  instanceKlass* ik = instanceKlass::cast(klass_oop);                                              \
-  if (ik->find_local_field(name_symbol, signature_symbol, &fd)) {                                  \
-    dest_offset = fd.offset();                                                                     \
-  }                                                                                                \
+static void
+compute_optional_offset(int& dest_offset,
+                        klassOop klass_oop, symbolOop name_symbol, symbolOop signature_symbol) {
+  fieldDescriptor fd;
+  instanceKlass* ik = instanceKlass::cast(klass_oop);
+  if (ik->find_local_field(name_symbol, signature_symbol, &fd)) {
+    dest_offset = fd.offset();
+  }
 }
 
 Handle java_lang_String::basic_create(int length, bool tenured, TRAPS) {
@@ -146,7 +147,7 @@ Handle java_lang_String::create_from_platform_dependent_str(const char* str, TRA
   jstring js = NULL;
   { JavaThread* thread = (JavaThread*)THREAD;
     assert(thread->is_Java_thread(), "must be java thread");
-    HandleMark hm(thread);    
+    HandleMark hm(thread);
     ThreadToNativeFromVM ttn(thread);
     js = (_to_java_string_fn)(thread->jni_environment(), str);
   }
@@ -174,7 +175,7 @@ char* java_lang_String::as_platform_dependent_str(Handle java_string, TRAPS) {
     JNIEnv *env = thread->jni_environment();
     jstring js = (jstring) JNIHandles::make_local(env, java_string());
     bool is_copy;
-    HandleMark hm(thread);    
+    HandleMark hm(thread);
     ThreadToNativeFromVM ttn(thread);
     native_platform_string = (_to_platform_string_fn)(env, js, &is_copy);
     assert(is_copy == JNI_TRUE, "is_copy value changed");
@@ -217,7 +218,7 @@ Handle java_lang_String::char_converter(Handle java_string, jchar from_char, jch
       c = to_char;
     }
     to_buffer->char_at_put(index, c);
-  }  
+  }
   return string;
 }
 
@@ -247,9 +248,9 @@ symbolHandle java_lang_String::as_symbol(Handle java_string, TRAPS) {
     char* chars = NEW_RESOURCE_ARRAY(char, utf8_length + 1);
     UNICODE::convert_to_utf8(value->char_at_addr(offset), length, chars);
     // Allocate the symbol
-    result = oopFactory::new_symbol_handle(chars, utf8_length, CHECK_(symbolHandle()));  
+    result = oopFactory::new_symbol_handle(chars, utf8_length, CHECK_(symbolHandle()));
   } else {
-    result = oopFactory::new_symbol_handle("", 0, CHECK_(symbolHandle()));  
+    result = oopFactory::new_symbol_handle("", 0, CHECK_(symbolHandle()));
   }
   return result;
 }
@@ -304,7 +305,7 @@ void java_lang_String::print(Handle java_string, outputStream* st) {
   int          offset = java_lang_String::offset(obj);
   int          length = java_lang_String::length(obj);
 
-  int end = MIN2(length, 100); 
+  int end = MIN2(length, 100);
   if (value == NULL) {
     // This can happen if, e.g., printing a String
     // object before its initializer has been called
@@ -411,7 +412,7 @@ void java_lang_Class::set_resolved_constructor(oop java_class, methodOop constru
 
 
 bool java_lang_Class::is_primitive(oop java_class) {
-  klassOop k = klassOop(java_class->obj_field(klass_offset)); 
+  klassOop k = klassOop(java_class->obj_field(klass_offset));
   return k == NULL;
 }
 
@@ -447,8 +448,8 @@ void java_lang_Class::compute_offsets() {
 
   klassOop k = SystemDictionary::class_klass();
   // The classRedefinedCount field is only present starting in 1.5,
-  // so don't go fatal. 
-  COMPUTE_OPTIONAL_OFFSET("java.lang.Class", classRedefinedCount_offset,
+  // so don't go fatal.
+  compute_optional_offset(classRedefinedCount_offset,
     k, vmSymbols::classRedefinedCount_name(), vmSymbols::int_signature());
 }
 
@@ -477,8 +478,8 @@ void java_lang_Class::set_classRedefinedCount(oop the_class_mirror, int value) {
 
 // Note: JDK1.1 and before had a privateInfo_offset field which was used for the
 //       platform thread structure, and a eetop offset which was used for thread
-//       local storage (and unused by the HotSpot VM). In JDK1.2 the two structures 
-//       merged, so in the HotSpot VM we just use the eetop field for the thread 
+//       local storage (and unused by the HotSpot VM). In JDK1.2 the two structures
+//       merged, so in the HotSpot VM we just use the eetop field for the thread
 //       instead of the privateInfo_offset.
 //
 // Note: The stackSize field is only present starting in 1.4.
@@ -495,49 +496,45 @@ int java_lang_Thread::_stackSize_offset = 0;
 int java_lang_Thread::_tid_offset = 0;
 int java_lang_Thread::_thread_status_offset = 0;
 int java_lang_Thread::_park_blocker_offset = 0;
-int java_lang_Thread::_park_event_offset = 0 ; 
+int java_lang_Thread::_park_event_offset = 0 ;
 
 
 void java_lang_Thread::compute_offsets() {
   assert(_group_offset == 0, "offsets should be initialized only once");
 
   klassOop k = SystemDictionary::thread_klass();
-  COMPUTE_OFFSET("java.lang.Thread", _name_offset,      k, vmSymbols::name_name(),      vmSymbols::char_array_signature());
-  COMPUTE_OFFSET("java.lang.Thread", _group_offset,     k, vmSymbols::group_name(),     vmSymbols::threadgroup_signature());
-  COMPUTE_OFFSET("java.lang.Thread", _contextClassLoader_offset, k, vmSymbols::contextClassLoader_name(), vmSymbols::classloader_signature());
-  COMPUTE_OFFSET("java.lang.Thread", _inheritedAccessControlContext_offset, k, vmSymbols::inheritedAccessControlContext_name(), vmSymbols::accesscontrolcontext_signature());
-  COMPUTE_OFFSET("java.lang.Thread", _priority_offset,  k, vmSymbols::priority_name(),  vmSymbols::int_signature());
-  COMPUTE_OFFSET("java.lang.Thread", _daemon_offset,    k, vmSymbols::daemon_name(),    vmSymbols::bool_signature());
-  COMPUTE_OFFSET("java.lang.Thread", _eetop_offset,     k, vmSymbols::eetop_name(),     vmSymbols::long_signature());
-  COMPUTE_OFFSET("java.lang.Thread", _stillborn_offset, k, vmSymbols::stillborn_name(), vmSymbols::bool_signature());
-  // The stackSize field is only present starting in 1.4, so don't go fatal. 
-  COMPUTE_OPTIONAL_OFFSET("java.lang.Thread", _stackSize_offset, k, vmSymbols::stackSize_name(), vmSymbols::long_signature());
-  // The tid and thread_status fields are only present starting in 1.5, so don't go fatal. 
-  COMPUTE_OPTIONAL_OFFSET("java.lang.Thread", _tid_offset, k, vmSymbols::thread_id_name(), vmSymbols::long_signature());
-  COMPUTE_OPTIONAL_OFFSET("java.lang.Thread", _thread_status_offset, k, vmSymbols::thread_status_name(), vmSymbols::int_signature());
-  // The parkBlocker field is only present starting in 1.6, so don't go fatal. 
-  COMPUTE_OPTIONAL_OFFSET("java.lang.Thread", _park_blocker_offset, k, vmSymbols::park_blocker_name(), vmSymbols::object_signature());
-  COMPUTE_OPTIONAL_OFFSET("java.lang.Thread", _park_event_offset, k, vmSymbols::park_event_name(),
+  compute_offset(_name_offset,      k, vmSymbols::name_name(),      vmSymbols::char_array_signature());
+  compute_offset(_group_offset,     k, vmSymbols::group_name(),     vmSymbols::threadgroup_signature());
+  compute_offset(_contextClassLoader_offset, k, vmSymbols::contextClassLoader_name(), vmSymbols::classloader_signature());
+  compute_offset(_inheritedAccessControlContext_offset, k, vmSymbols::inheritedAccessControlContext_name(), vmSymbols::accesscontrolcontext_signature());
+  compute_offset(_priority_offset,  k, vmSymbols::priority_name(),  vmSymbols::int_signature());
+  compute_offset(_daemon_offset,    k, vmSymbols::daemon_name(),    vmSymbols::bool_signature());
+  compute_offset(_eetop_offset,     k, vmSymbols::eetop_name(),     vmSymbols::long_signature());
+  compute_offset(_stillborn_offset, k, vmSymbols::stillborn_name(), vmSymbols::bool_signature());
+  // The stackSize field is only present starting in 1.4, so don't go fatal.
+  compute_optional_offset(_stackSize_offset, k, vmSymbols::stackSize_name(), vmSymbols::long_signature());
+  // The tid and thread_status fields are only present starting in 1.5, so don't go fatal.
+  compute_optional_offset(_tid_offset, k, vmSymbols::thread_id_name(), vmSymbols::long_signature());
+  compute_optional_offset(_thread_status_offset, k, vmSymbols::thread_status_name(), vmSymbols::int_signature());
+  // The parkBlocker field is only present starting in 1.6, so don't go fatal.
+  compute_optional_offset(_park_blocker_offset, k, vmSymbols::park_blocker_name(), vmSymbols::object_signature());
+  compute_optional_offset(_park_event_offset, k, vmSymbols::park_event_name(),
  vmSymbols::long_signature());
 }
 
 
 JavaThread* java_lang_Thread::thread(oop java_thread) {
-  return (JavaThread*) java_thread->obj_field(_eetop_offset);
+  return (JavaThread*)java_thread->address_field(_eetop_offset);
 }
 
 
 void java_lang_Thread::set_thread(oop java_thread, JavaThread* thread) {
-  // We are storing a JavaThread* (malloc'ed data) into a long field in the thread 
-  // object. The store has to be 64-bit wide so we use a pointer store, but we 
-  // cannot call oopDesc::obj_field_put since it includes a write barrier!
-  oop* addr = java_thread->obj_field_addr(_eetop_offset);
-  *addr = (oop) thread;
+  java_thread->address_field_put(_eetop_offset, (address)thread);
 }
 
 
 typeArrayOop java_lang_Thread::name(oop java_thread) {
-  oop name = java_thread->obj_field(_name_offset);  
+  oop name = java_thread->obj_field(_name_offset);
   assert(name == NULL || (name->is_typeArray() && typeArrayKlass::cast(name->klass())->element_type() == T_CHAR), "just checking");
   return typeArrayOop(name);
 }
@@ -636,7 +633,7 @@ java_lang_Thread::ThreadStatus java_lang_Thread::get_thread_status(oop java_thre
     if (thr == NULL) {
       // the thread hasn't run yet or is in the process of exiting
       return NEW;
-    } 
+    }
     return (java_lang_Thread::ThreadStatus)JVMTI_THREAD_STATE_ALIVE;
   }
 }
@@ -652,8 +649,8 @@ jlong java_lang_Thread::thread_id(oop java_thread) {
 }
 
 oop java_lang_Thread::park_blocker(oop java_thread) {
-  assert(JDK_Version::supports_thread_park_blocker() && _park_blocker_offset != 0, 
-         "Must support parkBlocker field");
+  assert(JDK_Version::current().supports_thread_park_blocker() &&
+         _park_blocker_offset != 0, "Must support parkBlocker field");
 
   if (_park_blocker_offset > 0) {
     return java_thread->obj_field(_park_blocker_offset);
@@ -668,7 +665,7 @@ jlong java_lang_Thread::park_event(oop java_thread) {
   }
   return 0;
 }
- 
+
 bool java_lang_Thread::set_park_event(oop java_thread, jlong ptr) {
   if (_park_event_offset > 0) {
     java_thread->long_field_put(_park_event_offset, ptr);
@@ -766,16 +763,16 @@ void java_lang_ThreadGroup::compute_offsets() {
 
   klassOop k = SystemDictionary::threadGroup_klass();
 
-  COMPUTE_OFFSET("java.lang.ThreadGroup", _parent_offset,      k, vmSymbols::parent_name(),      vmSymbols::threadgroup_signature());
-  COMPUTE_OFFSET("java.lang.ThreadGroup", _name_offset,        k, vmSymbols::name_name(),        vmSymbols::string_signature());
-  COMPUTE_OFFSET("java.lang.ThreadGroup", _threads_offset,     k, vmSymbols::threads_name(),     vmSymbols::thread_array_signature());
-  COMPUTE_OFFSET("java.lang.ThreadGroup", _groups_offset,      k, vmSymbols::groups_name(),      vmSymbols::threadgroup_array_signature());
-  COMPUTE_OFFSET("java.lang.ThreadGroup", _maxPriority_offset, k, vmSymbols::maxPriority_name(), vmSymbols::int_signature());
-  COMPUTE_OFFSET("java.lang.ThreadGroup", _destroyed_offset,   k, vmSymbols::destroyed_name(),   vmSymbols::bool_signature());
-  COMPUTE_OFFSET("java.lang.ThreadGroup", _daemon_offset,      k, vmSymbols::daemon_name(),      vmSymbols::bool_signature());
-  COMPUTE_OFFSET("java.lang.ThreadGroup", _vmAllowSuspension_offset, k, vmSymbols::vmAllowSuspension_name(), vmSymbols::bool_signature());
-  COMPUTE_OFFSET("java.lang.ThreadGroup", _nthreads_offset,    k, vmSymbols::nthreads_name(),    vmSymbols::int_signature());
-  COMPUTE_OFFSET("java.lang.ThreadGroup", _ngroups_offset,     k, vmSymbols::ngroups_name(),     vmSymbols::int_signature());
+  compute_offset(_parent_offset,      k, vmSymbols::parent_name(),      vmSymbols::threadgroup_signature());
+  compute_offset(_name_offset,        k, vmSymbols::name_name(),        vmSymbols::string_signature());
+  compute_offset(_threads_offset,     k, vmSymbols::threads_name(),     vmSymbols::thread_array_signature());
+  compute_offset(_groups_offset,      k, vmSymbols::groups_name(),      vmSymbols::threadgroup_array_signature());
+  compute_offset(_maxPriority_offset, k, vmSymbols::maxPriority_name(), vmSymbols::int_signature());
+  compute_offset(_destroyed_offset,   k, vmSymbols::destroyed_name(),   vmSymbols::bool_signature());
+  compute_offset(_daemon_offset,      k, vmSymbols::daemon_name(),      vmSymbols::bool_signature());
+  compute_offset(_vmAllowSuspension_offset, k, vmSymbols::vmAllowSuspension_name(), vmSymbols::bool_signature());
+  compute_offset(_nthreads_offset,    k, vmSymbols::nthreads_name(),    vmSymbols::int_signature());
+  compute_offset(_ngroups_offset,     k, vmSymbols::ngroups_name(),     vmSymbols::int_signature());
 }
 
 oop java_lang_Throwable::backtrace(oop throwable) {
@@ -833,7 +830,7 @@ void java_lang_Throwable::print(Handle throwable, outputStream* st) {
 }
 
 // Print stack trace element to resource allocated buffer
-char* java_lang_Throwable::print_stack_element_to_buffer(methodOop method, int bci) { 
+char* java_lang_Throwable::print_stack_element_to_buffer(methodOop method, int bci) {
   // Get strings and string lengths
   instanceKlass* klass = instanceKlass::cast(method->method_holder());
   const char* klass_name  = klass->external_name();
@@ -855,21 +852,21 @@ char* java_lang_Throwable::print_stack_element_to_buffer(methodOop method, int b
   sprintf(buf, "\tat %s.%s", klass_name, method_name);
   if (method->is_native()) {
     strcat(buf, "(Native Method)");
-  } else {    
+  } else {
     int line_number = method->line_number_from_bci(bci);
     if (source_file_name != NULL && (line_number != -1)) {
       // Sourcename and linenumber
       sprintf(buf + (int)strlen(buf), "(%s:%d)", source_file_name, line_number);
     } else if (source_file_name != NULL) {
       // Just sourcename
-      sprintf(buf + (int)strlen(buf), "(%s)", source_file_name);      
+      sprintf(buf + (int)strlen(buf), "(%s)", source_file_name);
     } else {
       // Neither soucename and linenumber
       sprintf(buf + (int)strlen(buf), "(Unknown Source)");
     }
     nmethod* nm = method->code();
     if (WizardMode && nm != NULL) {
-      sprintf(buf + (int)strlen(buf), "(nmethod %#x)", nm);
+      sprintf(buf + (int)strlen(buf), "(nmethod " PTR_FORMAT ")", (intptr_t)nm);
     }
   }
 
@@ -877,13 +874,13 @@ char* java_lang_Throwable::print_stack_element_to_buffer(methodOop method, int b
 }
 
 
-void java_lang_Throwable::print_stack_element(Handle stream, methodOop method, int bci) {  
+void java_lang_Throwable::print_stack_element(Handle stream, methodOop method, int bci) {
   ResourceMark rm;
   char* buf = print_stack_element_to_buffer(method, bci);
   print_to_stream(stream, buf);
 }
 
-void java_lang_Throwable::print_stack_element(outputStream *st, methodOop method, int bci) {  
+void java_lang_Throwable::print_stack_element(outputStream *st, methodOop method, int bci) {
   ResourceMark rm;
   char* buf = print_stack_element_to_buffer(method, bci);
   st->print_cr("%s", buf);
@@ -897,12 +894,12 @@ void java_lang_Throwable::print_to_stream(Handle stream, const char* str) {
     JavaValue result(T_VOID);
     Handle arg (THREAD, oopFactory::new_charArray(str, THREAD));
     if (!HAS_PENDING_EXCEPTION) {
-      JavaCalls::call_virtual(&result, 
-                              stream, 
+      JavaCalls::call_virtual(&result,
+                              stream,
                               KlassHandle(THREAD, stream->klass()),
-                              vmSymbolHandles::println_name(), 
-                              vmSymbolHandles::char_array_void_signature(), 
-                              arg, 
+                              vmSymbolHandles::println_name(),
+                              vmSymbolHandles::char_array_void_signature(),
+                              arg,
                               THREAD);
     }
     // Ignore any exceptions. we are in the middle of exception handling. Same as classic VM.
@@ -927,11 +924,11 @@ void java_lang_Throwable::print_stack_trace(oop throwable, outputStream* st) {
       st->print_cr(no_stack_trace_message());
       return;
     }
-  
+
     while (result.not_null()) {
       objArrayHandle methods (THREAD,
                               objArrayOop(result->obj_at(trace_methods_offset)));
-      typeArrayHandle bcis (THREAD, 
+      typeArrayHandle bcis (THREAD,
                             typeArrayOop(result->obj_at(trace_bcis_offset)));
 
       if (methods.is_null() || bcis.is_null()) {
@@ -966,7 +963,7 @@ void java_lang_Throwable::print_stack_trace(oop throwable, outputStream* st) {
         h_throwable = Handle(THREAD, (oop) result.get_jobject());
         if (h_throwable.not_null()) {
           st->print("Caused by: ");
-          print(h_throwable, st); 
+          print(h_throwable, st);
           st->cr();
         }
       }
@@ -984,11 +981,11 @@ void java_lang_Throwable::print_stack_trace(oop throwable, oop print_stream) {
     print_to_stream(stream, no_stack_trace_message());
     return;
   }
-  
+
   while (result.not_null()) {
     objArrayHandle methods (thread,
                             objArrayOop(result->obj_at(trace_methods_offset)));
-    typeArrayHandle bcis (thread, 
+    typeArrayHandle bcis (thread,
                           typeArrayOop(result->obj_at(trace_bcis_offset)));
 
     if (methods.is_null() || bcis.is_null()) {
@@ -1018,7 +1015,6 @@ class BacktraceBuilder: public StackObj {
   typeArrayOop    _bcis;
   int             _index;
   bool            _dirty;
-  bool            _done;
   No_Safepoint_Verifier _nsv;
 
  public:
@@ -1032,20 +1028,18 @@ class BacktraceBuilder: public StackObj {
   };
 
   // constructor for new backtrace
-  BacktraceBuilder(TRAPS): _methods(NULL), _bcis(NULL), _head(NULL) {
+  BacktraceBuilder(TRAPS): _methods(NULL), _bcis(NULL), _head(NULL), _dirty(false) {
     expand(CHECK);
     _backtrace = _head;
     _index = 0;
-    _dirty = false;
-    _done = false;
   }
 
   void flush() {
     if (_dirty && _methods != NULL) {
       BarrierSet* bs = Universe::heap()->barrier_set();
       assert(bs->has_write_ref_array_opt(), "Barrier set must have ref array opt");
-      bs->write_ref_array(MemRegion((HeapWord*)_methods->obj_at_addr(0),
-                                    _methods->length() * HeapWordsPerOop));
+      bs->write_ref_array(MemRegion((HeapWord*)_methods->base(),
+                                    _methods->array_size()));
       _dirty = false;
     }
   }
@@ -1089,8 +1083,9 @@ class BacktraceBuilder: public StackObj {
       method = mhandle();
     }
 
-    // _methods->obj_at_put(_index, method);
-    *_methods->obj_at_addr(_index) = method;
+     _methods->obj_at_put(_index, method);
+    // bad for UseCompressedOops
+    // *_methods->obj_at_addr(_index) = method;
     _bcis->ushort_at_put(_index, bci);
     _index++;
     _dirty = true;
@@ -1125,13 +1120,13 @@ void java_lang_Throwable::fill_in_stack_trace(Handle throwable, TRAPS) {
   JavaThread* thread = (JavaThread*)THREAD;
   BacktraceBuilder bt(CHECK);
 
-  // Instead of using vframe directly, this version of fill_in_stack_trace 
-  // basically handles everything by hand. This significantly improved the 
-  // speed of this method call up to 28.5% on Solaris sparc. 27.1% on Windows.  
+  // Instead of using vframe directly, this version of fill_in_stack_trace
+  // basically handles everything by hand. This significantly improved the
+  // speed of this method call up to 28.5% on Solaris sparc. 27.1% on Windows.
   // See bug 6333838 for  more details.
   // The "ASSERT" here is to verify this method generates the exactly same stack
   // trace as utilizing vframe.
-#ifdef ASSERT 
+#ifdef ASSERT
   vframeStream st(thread);
   methodHandle st_method(THREAD, st.method());
 #endif
@@ -1141,11 +1136,11 @@ void java_lang_Throwable::fill_in_stack_trace(Handle throwable, TRAPS) {
   nmethod* nm = NULL;
   bool skip_fillInStackTrace_check = false;
   bool skip_throwableInit_check = false;
- 
+
   for (frame fr = thread->last_frame(); max_depth != total_count;) {
     methodOop method = NULL;
     int bci = 0;
-    
+
     // Compiled java method case.
     if (decode_offset != 0) {
       DebugInfoReadStream stream(nm, decode_offset);
@@ -1153,7 +1148,7 @@ void java_lang_Throwable::fill_in_stack_trace(Handle throwable, TRAPS) {
       method = (methodOop)nm->oop_at(stream.read_int());
       bci = stream.read_bci();
     } else {
-      if (fr.is_first_frame()) break;      
+      if (fr.is_first_frame()) break;
       address pc = fr.pc();
       if (fr.is_interpreted_frame()) {
         intptr_t bcx = fr.interpreter_frame_bcx();
@@ -1175,12 +1170,12 @@ void java_lang_Throwable::fill_in_stack_trace(Handle throwable, TRAPS) {
         } else {
           PcDesc* pd = nm->pc_desc_at(pc);
           decode_offset = pd->scope_decode_offset();
-          // if decode_offset is not equal to 0, it will execute the 
+          // if decode_offset is not equal to 0, it will execute the
           // "compiled java method case" at the beginning of the loop.
           continue;
         }
       }
-    }  
+    }
 #ifdef ASSERT
   assert(st_method() == method && st.bci() == bci,
          "Wrong stack trace");
@@ -1203,7 +1198,7 @@ void java_lang_Throwable::fill_in_stack_trace(Handle throwable, TRAPS) {
     // that belongs to a superclass of the exception  we are going to skipping
     // them in stack trace. This is simlar to classic VM.
     if (!skip_throwableInit_check) {
-      if (method->name() == vmSymbols::object_initializer_name() &&  
+      if (method->name() == vmSymbols::object_initializer_name() &&
           throwable->is_a(method->method_holder())) {
         continue;
       } else {
@@ -1224,24 +1219,24 @@ void java_lang_Throwable::fill_in_stack_trace(Handle throwable) {
   if (!StackTraceInThrowable) {
     return;
   }
- 
+
   // Disable stack traces for some preallocated out of memory errors
   if (!Universe::should_fill_in_stack_trace(throwable)) {
     return;
   }
- 
+
   PRESERVE_EXCEPTION_MARK;
- 
+
   JavaThread* thread = JavaThread::active();
   fill_in_stack_trace(throwable, thread);
   // ignore exceptions thrown during stack trace filling
-  CLEAR_PENDING_EXCEPTION;  
+  CLEAR_PENDING_EXCEPTION;
 }
 
 void java_lang_Throwable::allocate_backtrace(Handle throwable, TRAPS) {
   // Allocate stack trace - backtrace is created but not filled in
 
-  // No-op if stack trace is disabled 
+  // No-op if stack trace is disabled
   if (!StackTraceInThrowable) return;
 
   objArrayOop h_oop = oopFactory::new_objectArray(trace_size, CHECK);
@@ -1250,7 +1245,7 @@ void java_lang_Throwable::allocate_backtrace(Handle throwable, TRAPS) {
   objArrayHandle methods (THREAD, m_oop);
   typeArrayOop b = oopFactory::new_shortArray(trace_chunk_size, CHECK);
   typeArrayHandle bcis(THREAD, b);
-  
+
   // backtrace has space for one chunk (next is NULL)
   backtrace->obj_at_put(trace_methods_offset, methods());
   backtrace->obj_at_put(trace_bcis_offset, bcis());
@@ -1272,7 +1267,7 @@ void java_lang_Throwable::fill_in_stack_trace_of_preallocated_backtrace(Handle t
   oop m = objArrayOop(backtrace)->obj_at(trace_methods_offset);
   objArrayOop methods = objArrayOop(m);
   assert(methods != NULL && methods->length() > 0, "method array not preallocated");
-  
+
   oop b = objArrayOop(backtrace)->obj_at(trace_bcis_offset);
   typeArrayOop bcis = typeArrayOop(b);
   assert(bcis != NULL, "bci array not preallocated");
@@ -1281,16 +1276,16 @@ void java_lang_Throwable::fill_in_stack_trace_of_preallocated_backtrace(Handle t
 
   JavaThread* thread = JavaThread::current();
   ResourceMark rm(thread);
-  vframeStream st(thread); 
+  vframeStream st(thread);
 
-  // Unlike fill_in_stack_trace we do not skip fillInStackTrace or throwable init 
-  // methods as preallocated errors aren't created by "java" code. 
+  // Unlike fill_in_stack_trace we do not skip fillInStackTrace or throwable init
+  // methods as preallocated errors aren't created by "java" code.
 
   // fill in as much stack trace as possible
   int max_chunks = MIN2(methods->length(), (int)MaxJavaStackTraceDepth);
   int chunk_count = 0;
 
-  for (;!st.at_end(); st.next()) {    
+  for (;!st.at_end(); st.next()) {
     // add element
     bcis->ushort_at_put(chunk_count, st.bci());
     methods->obj_at_put(chunk_count, st.method());
@@ -1344,7 +1339,7 @@ oop java_lang_Throwable::get_stack_trace_element(oop throwable, int index, TRAPS
   int chunk_index = index % trace_chunk_size;
   while (chunk != NULL && skip_chunks > 0) {
     chunk = objArrayOop(chunk->obj_at(trace_next_offset));
-	skip_chunks--;
+        skip_chunks--;
   }
   if (chunk == NULL) {
     THROW_(vmSymbols::java_lang_IndexOutOfBoundsException(), NULL);
@@ -1370,6 +1365,7 @@ oop java_lang_StackTraceElement::create(methodHandle method, int bci, TRAPS) {
 
   // Allocate java.lang.StackTraceElement instance
   klassOop k = SystemDictionary::stackTraceElement_klass();
+  assert(k != NULL, "must be loaded in 1.4+");
   instanceKlassHandle ik (THREAD, k);
   if (ik->should_be_initialized()) {
     ik->initialize(CHECK_0);
@@ -1391,7 +1387,7 @@ oop java_lang_StackTraceElement::create(methodHandle method, int bci, TRAPS) {
   // File in source line number
   int line_number;
   if (method->is_native()) {
-    // Negative value different from -1 below, enabling Java code in 
+    // Negative value different from -1 below, enabling Java code in
     // class java.lang.StackTraceElement to distinguish "native" from
     // "no LineNumberTable".
     line_number = -2;
@@ -1407,7 +1403,7 @@ oop java_lang_StackTraceElement::create(methodHandle method, int bci, TRAPS) {
 
 void java_lang_reflect_AccessibleObject::compute_offsets() {
   klassOop k = SystemDictionary::reflect_accessible_object_klass();
-  COMPUTE_OFFSET("java.lang.reflect.AccessibleObject", override_offset, k, vmSymbols::override_name(), vmSymbols::bool_signature());
+  compute_offset(override_offset, k, vmSymbols::override_name(), vmSymbols::bool_signature());
 }
 
 jboolean java_lang_reflect_AccessibleObject::override(oop reflect) {
@@ -1422,30 +1418,30 @@ void java_lang_reflect_AccessibleObject::set_override(oop reflect, jboolean valu
 
 void java_lang_reflect_Method::compute_offsets() {
   klassOop k = SystemDictionary::reflect_method_klass();
-  COMPUTE_OFFSET("java.lang.reflect.Method", clazz_offset,          k, vmSymbols::clazz_name(),          vmSymbols::class_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Method", name_offset,           k, vmSymbols::name_name(),           vmSymbols::string_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Method", returnType_offset,     k, vmSymbols::returnType_name(),     vmSymbols::class_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Method", parameterTypes_offset, k, vmSymbols::parameterTypes_name(), vmSymbols::class_array_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Method", exceptionTypes_offset, k, vmSymbols::exceptionTypes_name(), vmSymbols::class_array_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Method", slot_offset,           k, vmSymbols::slot_name(),           vmSymbols::int_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Method", modifiers_offset,      k, vmSymbols::modifiers_name(),      vmSymbols::int_signature());
+  compute_offset(clazz_offset,          k, vmSymbols::clazz_name(),          vmSymbols::class_signature());
+  compute_offset(name_offset,           k, vmSymbols::name_name(),           vmSymbols::string_signature());
+  compute_offset(returnType_offset,     k, vmSymbols::returnType_name(),     vmSymbols::class_signature());
+  compute_offset(parameterTypes_offset, k, vmSymbols::parameterTypes_name(), vmSymbols::class_array_signature());
+  compute_offset(exceptionTypes_offset, k, vmSymbols::exceptionTypes_name(), vmSymbols::class_array_signature());
+  compute_offset(slot_offset,           k, vmSymbols::slot_name(),           vmSymbols::int_signature());
+  compute_offset(modifiers_offset,      k, vmSymbols::modifiers_name(),      vmSymbols::int_signature());
   // The generic signature and annotations fields are only present in 1.5
   signature_offset = -1;
   annotations_offset = -1;
   parameter_annotations_offset = -1;
   annotation_default_offset = -1;
-  COMPUTE_OPTIONAL_OFFSET("java.lang.reflect.Method", signature_offset,             k, vmSymbols::signature_name(),             vmSymbols::string_signature());
-  COMPUTE_OPTIONAL_OFFSET("java.lang.reflect.Method", annotations_offset,           k, vmSymbols::annotations_name(),           vmSymbols::byte_array_signature());
-  COMPUTE_OPTIONAL_OFFSET("java.lang.reflect.Method", parameter_annotations_offset, k, vmSymbols::parameter_annotations_name(), vmSymbols::byte_array_signature());
-  COMPUTE_OPTIONAL_OFFSET("java.lang.reflect.Method", annotation_default_offset,    k, vmSymbols::annotation_default_name(),    vmSymbols::byte_array_signature());
+  compute_optional_offset(signature_offset,             k, vmSymbols::signature_name(),             vmSymbols::string_signature());
+  compute_optional_offset(annotations_offset,           k, vmSymbols::annotations_name(),           vmSymbols::byte_array_signature());
+  compute_optional_offset(parameter_annotations_offset, k, vmSymbols::parameter_annotations_name(), vmSymbols::byte_array_signature());
+  compute_optional_offset(annotation_default_offset,    k, vmSymbols::annotation_default_name(),    vmSymbols::byte_array_signature());
 }
 
-Handle java_lang_reflect_Method::create(TRAPS) {  
+Handle java_lang_reflect_Method::create(TRAPS) {
   assert(Universe::is_fully_initialized(), "Need to find another solution to the reflection problem");
   klassOop klass = SystemDictionary::reflect_method_klass();
   // This class is eagerly initialized during VM initialization, since we keep a refence
   // to one of the methods
-  assert(instanceKlass::cast(klass)->is_initialized(), "must be initialized");  
+  assert(instanceKlass::cast(klass)->is_initialized(), "must be initialized");
   return instanceKlass::cast(klass)->allocate_instance_handle(CHECK_NH);
 }
 
@@ -1585,18 +1581,18 @@ void java_lang_reflect_Method::set_annotation_default(oop method, oop value) {
 
 void java_lang_reflect_Constructor::compute_offsets() {
   klassOop k = SystemDictionary::reflect_constructor_klass();
-  COMPUTE_OFFSET("java.lang.reflect.Constructor", clazz_offset,          k, vmSymbols::clazz_name(),          vmSymbols::class_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Constructor", parameterTypes_offset, k, vmSymbols::parameterTypes_name(), vmSymbols::class_array_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Constructor", exceptionTypes_offset, k, vmSymbols::exceptionTypes_name(), vmSymbols::class_array_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Constructor", slot_offset,           k, vmSymbols::slot_name(),           vmSymbols::int_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Constructor", modifiers_offset,      k, vmSymbols::modifiers_name(),      vmSymbols::int_signature());
+  compute_offset(clazz_offset,          k, vmSymbols::clazz_name(),          vmSymbols::class_signature());
+  compute_offset(parameterTypes_offset, k, vmSymbols::parameterTypes_name(), vmSymbols::class_array_signature());
+  compute_offset(exceptionTypes_offset, k, vmSymbols::exceptionTypes_name(), vmSymbols::class_array_signature());
+  compute_offset(slot_offset,           k, vmSymbols::slot_name(),           vmSymbols::int_signature());
+  compute_offset(modifiers_offset,      k, vmSymbols::modifiers_name(),      vmSymbols::int_signature());
   // The generic signature and annotations fields are only present in 1.5
   signature_offset = -1;
   annotations_offset = -1;
   parameter_annotations_offset = -1;
-  COMPUTE_OPTIONAL_OFFSET("java.lang.reflect.Constructor", signature_offset,             k, vmSymbols::signature_name(),             vmSymbols::string_signature());
-  COMPUTE_OPTIONAL_OFFSET("java.lang.reflect.Constructor", annotations_offset,           k, vmSymbols::annotations_name(),           vmSymbols::byte_array_signature());
-  COMPUTE_OPTIONAL_OFFSET("java.lang.reflect.Constructor", parameter_annotations_offset, k, vmSymbols::parameter_annotations_name(), vmSymbols::byte_array_signature());
+  compute_optional_offset(signature_offset,             k, vmSymbols::signature_name(),             vmSymbols::string_signature());
+  compute_optional_offset(annotations_offset,           k, vmSymbols::annotations_name(),           vmSymbols::byte_array_signature());
+  compute_optional_offset(parameter_annotations_offset, k, vmSymbols::parameter_annotations_name(), vmSymbols::byte_array_signature());
 }
 
 Handle java_lang_reflect_Constructor::create(TRAPS) {
@@ -1709,19 +1705,19 @@ void java_lang_reflect_Constructor::set_parameter_annotations(oop method, oop va
 
 void java_lang_reflect_Field::compute_offsets() {
   klassOop k = SystemDictionary::reflect_field_klass();
-  COMPUTE_OFFSET("java.lang.reflect.Field", clazz_offset,     k, vmSymbols::clazz_name(),     vmSymbols::class_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Field", name_offset,      k, vmSymbols::name_name(),      vmSymbols::string_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Field", type_offset,      k, vmSymbols::type_name(),      vmSymbols::class_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Field", slot_offset,      k, vmSymbols::slot_name(),      vmSymbols::int_signature());
-  COMPUTE_OFFSET("java.lang.reflect.Field", modifiers_offset, k, vmSymbols::modifiers_name(), vmSymbols::int_signature());
+  compute_offset(clazz_offset,     k, vmSymbols::clazz_name(),     vmSymbols::class_signature());
+  compute_offset(name_offset,      k, vmSymbols::name_name(),      vmSymbols::string_signature());
+  compute_offset(type_offset,      k, vmSymbols::type_name(),      vmSymbols::class_signature());
+  compute_offset(slot_offset,      k, vmSymbols::slot_name(),      vmSymbols::int_signature());
+  compute_offset(modifiers_offset, k, vmSymbols::modifiers_name(), vmSymbols::int_signature());
   // The generic signature and annotations fields are only present in 1.5
   signature_offset = -1;
   annotations_offset = -1;
-  COMPUTE_OPTIONAL_OFFSET("java.lang.reflect.Field", signature_offset, k, vmSymbols::signature_name(), vmSymbols::string_signature());
-  COMPUTE_OPTIONAL_OFFSET("java.lang.reflect.Field", annotations_offset,  k, vmSymbols::annotations_name(),  vmSymbols::byte_array_signature());
+  compute_optional_offset(signature_offset, k, vmSymbols::signature_name(), vmSymbols::string_signature());
+  compute_optional_offset(annotations_offset,  k, vmSymbols::annotations_name(),  vmSymbols::byte_array_signature());
 }
 
-Handle java_lang_reflect_Field::create(TRAPS) {  
+Handle java_lang_reflect_Field::create(TRAPS) {
   assert(Universe::is_fully_initialized(), "Need to find another solution to the reflection problem");
   symbolHandle name = vmSymbolHandles::java_lang_reflect_Field();
   klassOop k = SystemDictionary::resolve_or_fail(name, true, CHECK_NH);
@@ -1818,12 +1814,12 @@ void sun_reflect_ConstantPool::compute_offsets() {
   klassOop k = SystemDictionary::reflect_constant_pool_klass();
   // This null test can be removed post beta
   if (k != NULL) {
-    COMPUTE_OFFSET("sun.reflect.ConstantPool", _cp_oop_offset, k, vmSymbols::constantPoolOop_name(), vmSymbols::object_signature());
+    compute_offset(_cp_oop_offset, k, vmSymbols::constantPoolOop_name(), vmSymbols::object_signature());
   }
 }
 
 
-Handle sun_reflect_ConstantPool::create(TRAPS) {  
+Handle sun_reflect_ConstantPool::create(TRAPS) {
   assert(Universe::is_fully_initialized(), "Need to find another solution to the reflection problem");
   klassOop k = SystemDictionary::reflect_constant_pool_klass();
   instanceKlassHandle klass (THREAD, k);
@@ -1848,52 +1844,47 @@ void sun_reflect_UnsafeStaticFieldAccessorImpl::compute_offsets() {
   klassOop k = SystemDictionary::reflect_unsafe_static_field_accessor_impl_klass();
   // This null test can be removed post beta
   if (k != NULL) {
-    COMPUTE_OFFSET("sun.reflect.UnsafeStaticFieldAccessorImpl", _base_offset, k,
+    compute_offset(_base_offset, k,
                    vmSymbols::base_name(), vmSymbols::object_signature());
   }
 }
 
-oop java_lang_boxing_object::initialize_and_allocate(klassOop k, TRAPS) {
- instanceKlassHandle h (THREAD, k);
- if (!h->is_initialized()) h->initialize(CHECK_0);
- return h->allocate_instance(THREAD);
+oop java_lang_boxing_object::initialize_and_allocate(BasicType type, TRAPS) {
+  klassOop k = SystemDictionary::box_klass(type);
+  if (k == NULL)  return NULL;
+  instanceKlassHandle h (THREAD, k);
+  if (!h->is_initialized())  h->initialize(CHECK_0);
+  return h->allocate_instance(THREAD);
 }
 
 
 oop java_lang_boxing_object::create(BasicType type, jvalue* value, TRAPS) {
-  oop box;
+  oop box = initialize_and_allocate(type, CHECK_0);
+  if (box == NULL)  return NULL;
   switch (type) {
     case T_BOOLEAN:
-      box = initialize_and_allocate(SystemDictionary::boolean_klass(), CHECK_0);
       box->bool_field_put(value_offset, value->z);
       break;
     case T_CHAR:
-      box = initialize_and_allocate(SystemDictionary::char_klass(), CHECK_0);
       box->char_field_put(value_offset, value->c);
       break;
     case T_FLOAT:
-      box = initialize_and_allocate(SystemDictionary::float_klass(), CHECK_0);
       box->float_field_put(value_offset, value->f);
       break;
     case T_DOUBLE:
-      box = initialize_and_allocate(SystemDictionary::double_klass(), CHECK_0);
-      box->double_field_put(value_offset, value->d);
+      box->double_field_put(long_value_offset, value->d);
       break;
     case T_BYTE:
-      box = initialize_and_allocate(SystemDictionary::byte_klass(), CHECK_0);
       box->byte_field_put(value_offset, value->b);
       break;
     case T_SHORT:
-      box = initialize_and_allocate(SystemDictionary::short_klass(), CHECK_0);
       box->short_field_put(value_offset, value->s);
       break;
     case T_INT:
-      box = initialize_and_allocate(SystemDictionary::int_klass(), CHECK_0);
       box->int_field_put(value_offset, value->i);
       break;
     case T_LONG:
-      box = initialize_and_allocate(SystemDictionary::long_klass(), CHECK_0);
-      box->long_field_put(value_offset, value->j);
+      box->long_field_put(long_value_offset, value->j);
       break;
     default:
       return NULL;
@@ -1902,116 +1893,108 @@ oop java_lang_boxing_object::create(BasicType type, jvalue* value, TRAPS) {
 }
 
 
+BasicType java_lang_boxing_object::basic_type(oop box) {
+  if (box == NULL)  return T_ILLEGAL;
+  BasicType type = SystemDictionary::box_klass_type(box->klass());
+  if (type == T_OBJECT)         // 'unknown' value returned by SD::bkt
+    return T_ILLEGAL;
+  return type;
+}
+
+
 BasicType java_lang_boxing_object::get_value(oop box, jvalue* value) {
-  klassOop k = box->klass();
-  if (k == SystemDictionary::boolean_klass()) {
+  BasicType type = SystemDictionary::box_klass_type(box->klass());
+  switch (type) {
+  case T_BOOLEAN:
     value->z = box->bool_field(value_offset);
-    return T_BOOLEAN;
-  }
-  if (k == SystemDictionary::char_klass()) {
+    break;
+  case T_CHAR:
     value->c = box->char_field(value_offset);
-    return T_CHAR;
-  }
-  if (k == SystemDictionary::float_klass()) {
+    break;
+  case T_FLOAT:
     value->f = box->float_field(value_offset);
-    return T_FLOAT;
-  }
-  if (k == SystemDictionary::double_klass()) {
-    value->d = box->double_field(value_offset);
-    return T_DOUBLE;
-  }
-  if (k == SystemDictionary::byte_klass()) {
+    break;
+  case T_DOUBLE:
+    value->d = box->double_field(long_value_offset);
+    break;
+  case T_BYTE:
     value->b = box->byte_field(value_offset);
-    return T_BYTE;
-  }
-  if (k == SystemDictionary::short_klass()) {
+    break;
+  case T_SHORT:
     value->s = box->short_field(value_offset);
-    return T_SHORT;
-  }
-  if (k == SystemDictionary::int_klass()) {
+    break;
+  case T_INT:
     value->i = box->int_field(value_offset);
-    return T_INT;
-  }
-  if (k == SystemDictionary::long_klass()) {
-    value->j = box->long_field(value_offset);
-    return T_LONG;
-  }
-  return T_ILLEGAL;
+    break;
+  case T_LONG:
+    value->j = box->long_field(long_value_offset);
+    break;
+  default:
+    return T_ILLEGAL;
+  } // end switch
+  return type;
 }
 
 
 BasicType java_lang_boxing_object::set_value(oop box, jvalue* value) {
-  klassOop k = box->klass();
-  if (k == SystemDictionary::boolean_klass()) {
+  BasicType type = SystemDictionary::box_klass_type(box->klass());
+  switch (type) {
+  case T_BOOLEAN:
     box->bool_field_put(value_offset, value->z);
-    return T_BOOLEAN;
-  }
-  if (k == SystemDictionary::char_klass()) {
+    break;
+  case T_CHAR:
     box->char_field_put(value_offset, value->c);
-    return T_CHAR;
-  }
-  if (k == SystemDictionary::float_klass()) {
+    break;
+  case T_FLOAT:
     box->float_field_put(value_offset, value->f);
-    return T_FLOAT;
-  }
-  if (k == SystemDictionary::double_klass()) {
-    box->double_field_put(value_offset, value->d);
-    return T_DOUBLE;
-  }
-  if (k == SystemDictionary::byte_klass()) {
+    break;
+  case T_DOUBLE:
+    box->double_field_put(long_value_offset, value->d);
+    break;
+  case T_BYTE:
     box->byte_field_put(value_offset, value->b);
-    return T_BYTE;
-  }
-  if (k == SystemDictionary::short_klass()) {
+    break;
+  case T_SHORT:
     box->short_field_put(value_offset, value->s);
-    return T_SHORT;
-  }
-  if (k == SystemDictionary::int_klass()) {
+    break;
+  case T_INT:
     box->int_field_put(value_offset, value->i);
-    return T_INT;
-  }
-  if (k == SystemDictionary::long_klass()) {
-    box->long_field_put(value_offset, value->j);
-    return T_LONG;
-  }
-  return T_ILLEGAL;
+    break;
+  case T_LONG:
+    box->long_field_put(long_value_offset, value->j);
+    break;
+  default:
+    return T_ILLEGAL;
+  } // end switch
+  return type;
 }
 
 
 // Support for java_lang_ref_Reference
-
-void java_lang_ref_Reference::set_referent(oop ref, oop value) {
-  ref->obj_field_put(referent_offset, value);
-}
-
-oop* java_lang_ref_Reference::referent_addr(oop ref) {
-  return ref->obj_field_addr(referent_offset);
-}
-
-void java_lang_ref_Reference::set_next(oop ref, oop value) {
-  ref->obj_field_put(next_offset, value);
-}
-
-oop* java_lang_ref_Reference::next_addr(oop ref) {
-  return ref->obj_field_addr(next_offset);
-}
-
-void java_lang_ref_Reference::set_discovered(oop ref, oop value) {
-  ref->obj_field_put(discovered_offset, value);
-}
-
-oop* java_lang_ref_Reference::discovered_addr(oop ref) {
-  return ref->obj_field_addr(discovered_offset);
-}
-
-oop* java_lang_ref_Reference::pending_list_lock_addr() {
+oop java_lang_ref_Reference::pending_list_lock() {
   instanceKlass* ik = instanceKlass::cast(SystemDictionary::reference_klass());
-  return (oop*)(((char *)ik->start_of_static_fields()) + static_lock_offset);
+  char *addr = (((char *)ik->start_of_static_fields()) + static_lock_offset);
+  if (UseCompressedOops) {
+    return oopDesc::load_decode_heap_oop((narrowOop *)addr);
+  } else {
+    return oopDesc::load_decode_heap_oop((oop*)addr);
+  }
 }
 
-oop* java_lang_ref_Reference::pending_list_addr() {
+HeapWord *java_lang_ref_Reference::pending_list_addr() {
   instanceKlass* ik = instanceKlass::cast(SystemDictionary::reference_klass());
-  return (oop *)(((char *)ik->start_of_static_fields()) + static_pending_offset);
+  char *addr = (((char *)ik->start_of_static_fields()) + static_pending_offset);
+  // XXX This might not be HeapWord aligned, almost rather be char *.
+  return (HeapWord*)addr;
+}
+
+oop java_lang_ref_Reference::pending_list() {
+  char *addr = (char *)pending_list_addr();
+  if (UseCompressedOops) {
+    return oopDesc::load_decode_heap_oop((narrowOop *)addr);
+  } else {
+    return oopDesc::load_decode_heap_oop((oop*)addr);
+  }
 }
 
 
@@ -2065,7 +2048,7 @@ void java_security_AccessControlContext::compute_offsets() {
 }
 
 
-oop java_security_AccessControlContext::create(objArrayHandle context, bool isPrivileged, Handle privileged_context, TRAPS) {  
+oop java_security_AccessControlContext::create(objArrayHandle context, bool isPrivileged, Handle privileged_context, TRAPS) {
   assert(_isPrivileged_offset != 0, "offsets should have been initialized");
   // Ensure klass is initialized
   instanceKlass::cast(SystemDictionary::AccessControlContext_klass())->initialize(CHECK_0);
@@ -2180,6 +2163,7 @@ int java_lang_reflect_Field::modifiers_offset;
 int java_lang_reflect_Field::signature_offset;
 int java_lang_reflect_Field::annotations_offset;
 int java_lang_boxing_object::value_offset;
+int java_lang_boxing_object::long_value_offset;
 int java_lang_ref_Reference::referent_offset;
 int java_lang_ref_Reference::queue_offset;
 int java_lang_ref_Reference::next_offset;
@@ -2227,8 +2211,8 @@ void java_lang_StackTraceElement::set_methodName(oop element, oop value) {
 void java_lang_StackTraceElement::set_lineNumber(oop element, int value) {
   element->int_field_put(lineNumber_offset, value);
 }
-  
-  
+
+
 // Support for java Assertions - java_lang_AssertionStatusDirectives.
 
 void java_lang_AssertionStatusDirectives::set_classes(oop o, oop val) {
@@ -2260,7 +2244,8 @@ int java_nio_Buffer::limit_offset() {
 
 void java_nio_Buffer::compute_offsets() {
   klassOop k = SystemDictionary::java_nio_Buffer_klass();
-  COMPUTE_OFFSET("java.nio.Buffer", _limit_offset, k, vmSymbols::limit_name(), vmSymbols::int_signature());
+  assert(k != NULL, "must be loaded in 1.4+");
+  compute_offset(_limit_offset, k, vmSymbols::limit_name(), vmSymbols::int_signature());
 }
 
 // Support for intrinsification of sun.misc.AtomicLongCSImpl.attemptUpdate
@@ -2274,7 +2259,7 @@ void sun_misc_AtomicLongCSImpl::compute_offsets() {
   klassOop k = SystemDictionary::sun_misc_AtomicLongCSImpl_klass();
   // If this class is not present, its value field offset won't be referenced.
   if (k != NULL) {
-    COMPUTE_OFFSET("sun.misc.AtomicLongCSImpl", _value_offset, k, vmSymbols::value_name(), vmSymbols::long_signature());
+    compute_offset(_value_offset, k, vmSymbols::value_name(), vmSymbols::long_signature());
   }
 }
 
@@ -2284,7 +2269,7 @@ void java_util_concurrent_locks_AbstractOwnableSynchronizer::initialize(TRAPS) {
   assert(JDK_Version::is_gte_jdk16x_version(), "Must be JDK 1.6 or later");
   SystemDictionary::load_abstract_ownable_synchronizer_klass(CHECK);
   klassOop k = SystemDictionary::abstract_ownable_synchronizer_klass();
-  COMPUTE_OFFSET("java.util.concurrent.locks.AbstractOwnableSynchronizer", _owner_offset, k, 
+  compute_offset(_owner_offset, k,
                  vmSymbols::exclusive_owner_thread_name(), vmSymbols::thread_signature());
 }
 
@@ -2297,8 +2282,8 @@ oop java_util_concurrent_locks_AbstractOwnableSynchronizer::get_owner_threadObj(
 // Invoked before SystemDictionary::initialize, so pre-loaded classes
 // are not available to determine the offset_of_static_fields.
 void JavaClasses::compute_hard_coded_offsets() {
-  const int x = wordSize;  			
-  const int header = instanceOopDesc::header_size_in_bytes();
+  const int x = heapOopSize;
+  const int header = instanceOopDesc::base_offset_in_bytes();
 
   // Do the String Class
   java_lang_String::value_offset  = java_lang_String::hc_value_offset  * x + header;
@@ -2321,7 +2306,8 @@ void JavaClasses::compute_hard_coded_offsets() {
   java_lang_Throwable::stackTrace_offset = java_lang_Throwable::hc_stackTrace_offset * x + header;
 
   // java_lang_boxing_object
-  java_lang_boxing_object::value_offset = java_lang_boxing_object::hc_value_offset * x + header;
+  java_lang_boxing_object::value_offset = java_lang_boxing_object::hc_value_offset + header;
+  java_lang_boxing_object::long_value_offset = align_size_up((java_lang_boxing_object::hc_value_offset + header), BytesPerLong);
 
   // java_lang_ref_Reference:
   java_lang_ref_Reference::referent_offset = java_lang_ref_Reference::hc_referent_offset * x + header;
@@ -2335,7 +2321,7 @@ void JavaClasses::compute_hard_coded_offsets() {
   java_lang_ref_Reference::number_of_fake_oop_fields = 1;
 
   // java_lang_ref_SoftReference Class
-  java_lang_ref_SoftReference::timestamp_offset = java_lang_ref_SoftReference::hc_timestamp_offset * x + header;
+  java_lang_ref_SoftReference::timestamp_offset = align_size_up((java_lang_ref_SoftReference::hc_timestamp_offset * x + header), BytesPerLong);
   // Don't multiply static fields because they are always in wordSize units
   java_lang_ref_SoftReference::static_clock_offset = java_lang_ref_SoftReference::hc_static_clock_offset * x;
 
@@ -2359,7 +2345,7 @@ void JavaClasses::compute_hard_coded_offsets() {
   java_lang_AssertionStatusDirectives::deflt_offset = java_lang_AssertionStatusDirectives::hc_deflt_offset * x + header;
 
 }
-  
+
 
 // Compute non-hard-coded field offsets of all the classes in this file
 void JavaClasses::compute_offsets() {
@@ -2389,7 +2375,7 @@ void JavaClasses::compute_offsets() {
 
 #ifndef PRODUCT
 
-// These functions exist to assert the validity of hard-coded field offsets to guard 
+// These functions exist to assert the validity of hard-coded field offsets to guard
 // against changes in the class files
 
 bool JavaClasses::check_offset(const char *klass_name, int hardcoded_offset, const char *field_name, const char* field_sig) {
@@ -2412,7 +2398,7 @@ bool JavaClasses::check_offset(const char *klass_name, int hardcoded_offset, con
   if (fd.offset() == hardcoded_offset ) {
     return true;
   } else {
-    tty->print_cr("Offset of nonstatic field %s.%s is hardcoded as %d but should really be %d.", 
+    tty->print_cr("Offset of nonstatic field %s.%s is hardcoded as %d but should really be %d.",
                   klass_name, field_name, hardcoded_offset, fd.offset());
     return false;
   }
@@ -2444,6 +2430,36 @@ bool JavaClasses::check_static_offset(const char *klass_name, int hardcoded_offs
 }
 
 
+bool JavaClasses::check_constant(const char *klass_name, int hardcoded_constant, const char *field_name, const char* field_sig) {
+  EXCEPTION_MARK;
+  fieldDescriptor fd;
+  symbolHandle klass_sym = oopFactory::new_symbol_handle(klass_name, CATCH);
+  klassOop k = SystemDictionary::resolve_or_fail(klass_sym, true, CATCH);
+  instanceKlassHandle h_klass (THREAD, k);
+  symbolHandle f_name = oopFactory::new_symbol_handle(field_name, CATCH);
+  symbolHandle f_sig  = oopFactory::new_symbol_handle(field_sig, CATCH);
+  if (!h_klass->find_local_field(f_name(), f_sig(), &fd)) {
+    tty->print_cr("Static field %s.%s not found", klass_name, field_name);
+    return false;
+  }
+  if (!fd.is_static() || !fd.has_initial_value()) {
+    tty->print_cr("Static field %s.%s appears to be non-constant", klass_name, field_name);
+    return false;
+  }
+  if (!fd.initial_value_tag().is_int()) {
+    tty->print_cr("Static field %s.%s is not an int", klass_name, field_name);
+    return false;
+  }
+  jint field_value = fd.int_initial_value();
+  if (field_value == hardcoded_constant) {
+    return true;
+  } else {
+    tty->print_cr("Constant value of static field %s.%s is hardcoded as %d but should really be %d.", klass_name, field_name, hardcoded_constant, field_value);
+    return false;
+  }
+}
+
+
 // Check the hard-coded field offsets of all the classes in this file
 
 void JavaClasses::check_offsets() {
@@ -2452,8 +2468,14 @@ void JavaClasses::check_offsets() {
 #define CHECK_OFFSET(klass_name, cpp_klass_name, field_name, field_sig) \
   valid &= check_offset(klass_name, cpp_klass_name :: field_name ## _offset, #field_name, field_sig)
 
+#define CHECK_LONG_OFFSET(klass_name, cpp_klass_name, field_name, field_sig) \
+  valid &= check_offset(klass_name, cpp_klass_name :: long_ ## field_name ## _offset, #field_name, field_sig)
+
 #define CHECK_STATIC_OFFSET(klass_name, cpp_klass_name, field_name, field_sig) \
   valid &= check_static_offset(klass_name, cpp_klass_name :: static_ ## field_name ## _offset, #field_name, field_sig)
+
+#define CHECK_CONSTANT(klass_name, cpp_klass_name, field_name, field_sig) \
+  valid &= check_constant(klass_name, cpp_klass_name :: field_name, #field_name, field_sig)
 
   // java.lang.String
 
@@ -2461,7 +2483,7 @@ void JavaClasses::check_offsets() {
   CHECK_OFFSET("java/lang/String", java_lang_String, offset, "I");
   CHECK_OFFSET("java/lang/String", java_lang_String, count, "I");
   CHECK_OFFSET("java/lang/String", java_lang_String, hash, "I");
-  
+
   // java.lang.Class
 
   // Fake fields
@@ -2475,17 +2497,17 @@ void JavaClasses::check_offsets() {
   CHECK_OFFSET("java/lang/Throwable", java_lang_Throwable, detailMessage, "Ljava/lang/String;");
   CHECK_OFFSET("java/lang/Throwable", java_lang_Throwable, cause, "Ljava/lang/Throwable;");
   CHECK_OFFSET("java/lang/Throwable", java_lang_Throwable, stackTrace, "[Ljava/lang/StackTraceElement;");
-  
+
   // Boxed primitive objects (java_lang_boxing_object)
 
   CHECK_OFFSET("java/lang/Boolean",   java_lang_boxing_object, value, "Z");
   CHECK_OFFSET("java/lang/Character", java_lang_boxing_object, value, "C");
   CHECK_OFFSET("java/lang/Float",     java_lang_boxing_object, value, "F");
-  CHECK_OFFSET("java/lang/Double",    java_lang_boxing_object, value, "D");
+  CHECK_LONG_OFFSET("java/lang/Double", java_lang_boxing_object, value, "D");
   CHECK_OFFSET("java/lang/Byte",      java_lang_boxing_object, value, "B");
   CHECK_OFFSET("java/lang/Short",     java_lang_boxing_object, value, "S");
   CHECK_OFFSET("java/lang/Integer",   java_lang_boxing_object, value, "I");
-  CHECK_OFFSET("java/lang/Long",      java_lang_boxing_object, value, "J");
+  CHECK_LONG_OFFSET("java/lang/Long", java_lang_boxing_object, value, "J");
 
   // java.lang.ClassLoader
 
@@ -2520,7 +2542,7 @@ void JavaClasses::check_offsets() {
   CHECK_STATIC_OFFSET("java/lang/ref/SoftReference", java_lang_ref_SoftReference, clock, "J");
 
   // java.lang.AssertionStatusDirectives
-  // 
+  //
   // The CheckAssertionStatusDirectives boolean can be removed from here and
   // globals.hpp after the AssertionStatusDirectives class has been integrated
   // into merlin "for some time."  Without it, the vm will fail with early

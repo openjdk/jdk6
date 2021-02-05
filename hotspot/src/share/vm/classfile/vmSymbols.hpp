@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)vmSymbols.hpp	1.166 07/11/01 16:55:02 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +19,10 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
-// The classes vmSymbols and vmSymbolHandles are a name spaces for fast lookup of 
+// The classes vmSymbols and vmSymbolHandles are a name spaces for fast lookup of
 // symbols commonly used in the VM. The first class return a symbolOop, while the
 // second class returns a SymbolHandle. The underlying data structure is shared
 // between the two classes.
@@ -52,6 +49,7 @@
   template(java_lang_Object,                          "java/lang/Object")                         \
   template(java_lang_Class,                           "java/lang/Class")                          \
   template(java_lang_String,                          "java/lang/String")                         \
+  template(java_lang_StringValue,                     "java/lang/StringValue")                    \
   template(java_lang_Thread,                          "java/lang/Thread")                         \
   template(java_lang_ThreadGroup,                     "java/lang/ThreadGroup")                    \
   template(java_lang_Cloneable,                       "java/lang/Cloneable")                      \
@@ -286,6 +284,7 @@
   template(cache_field_name,                          "cache")                                    \
   template(value_name,                                "value")                                    \
   template(frontCacheEnabled_name,                    "frontCacheEnabled")                        \
+  template(stringCacheEnabled_name,                   "stringCacheEnabled")                       \
                                                                                                   \
   /* non-intrinsic name/signature pairs: */                                                       \
   template(register_method_name,                      "register")                                 \
@@ -421,8 +420,8 @@
   template(serializeAgentPropertiesToByteArray_name,   "serializeAgentPropertiesToByteArray")                     \
   template(classRedefinedCount_name,                   "classRedefinedCount")                                     \
   /*end*/
- 
-                
+
+
 
 // Here are all the intrinsics known to the runtime and the CI.
 // Each intrinsic consists of a public enum name (like _hashCode),
@@ -567,6 +566,10 @@
    do_name(     copyOfRange_name,                                "copyOfRange")                                         \
    do_signature(copyOfRange_signature,        "([Ljava/lang/Object;IILjava/lang/Class;)[Ljava/lang/Object;")            \
                                                                                                                         \
+  do_intrinsic(_equalsC,                  java_util_Arrays,       equals_name,    equalsC_signature,             F_S)   \
+   do_name(     equals_name,                                     "equals")                                              \
+   do_signature(equalsC_signature,                               "([C[C)Z")                                             \
+                                                                                                                        \
   do_intrinsic(_invoke,                   java_lang_reflect_Method, invoke_name, object_array_object_object_signature, F_R) \
   /*   (symbols invoke_name and invoke_signature defined above) */                                                      \
                                                                                                                         \
@@ -586,6 +589,8 @@
   do_intrinsic(_attemptUpdate,            sun_misc_AtomicLongCSImpl, attemptUpdate_name, attemptUpdate_signature, F_R)  \
    do_name(     attemptUpdate_name,                                 "attemptUpdate")                                    \
    do_signature(attemptUpdate_signature,                            "(JJ)Z")                                            \
+                                                                                                                        \
+  do_intrinsic(_fillInStackTrace,         java_lang_Throwable, fillInStackTrace_name, void_throwable_signature,  F_RNY) \
                                                                                                                         \
   /* support for sun.misc.Unsafe */                                                                                     \
   do_class(sun_misc_Unsafe,               "sun/misc/Unsafe")                                                            \
@@ -874,7 +879,8 @@ class vmIntrinsics: AllStatic {
     F_R,                        // !static        !synchronized (R="regular")
     F_S,                        //  static        !synchronized
     F_RN,                       // !static native !synchronized
-    F_SN                        //  static native !synchronized
+    F_SN,                       //  static native !synchronized
+    F_RNY                       // !static native  synchronized
   };
 
 public:

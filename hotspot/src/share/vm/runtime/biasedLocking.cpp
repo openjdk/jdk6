@@ -1,9 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)biasedLocking.cpp	1.15 07/05/23 10:53:58 JVM"
-#endif
-
 /*
- * Copyright 2005-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -40,9 +36,14 @@ static void enable_biased_locking(klassOop k) {
 }
 
 class VM_EnableBiasedLocking: public VM_Operation {
+ private:
+  bool _is_cheap_allocated;
  public:
-  VM_EnableBiasedLocking() {}
-  VMOp_Type type() const   { return VMOp_EnableBiasedLocking; }
+  VM_EnableBiasedLocking(bool is_cheap_allocated) { _is_cheap_allocated = is_cheap_allocated; }
+  VMOp_Type type() const          { return VMOp_EnableBiasedLocking; }
+  Mode evaluation_mode() const    { return _is_cheap_allocated ? _async_safepoint : _safepoint; }
+  bool is_cheap_allocated() const { return _is_cheap_allocated; }
+
   void doit() {
     // Iterate the system dictionary enabling biased locking for all
     // currently loaded classes
@@ -65,8 +66,10 @@ class EnableBiasedLockingTask : public PeriodicTask {
   EnableBiasedLockingTask(size_t interval_time) : PeriodicTask(interval_time) {}
 
   virtual void task() {
-    VM_EnableBiasedLocking op;
-    VMThread::execute(&op);
+    // Use async VM operation to avoid blocking the Watcher thread.
+    // VM Thread will free C heap storage.
+    VM_EnableBiasedLocking *op = new VM_EnableBiasedLocking(true);
+    VMThread::execute(op);
 
     // Reclaim our storage and disenroll ourself
     delete this;
@@ -87,7 +90,7 @@ void BiasedLocking::init() {
       EnableBiasedLockingTask* task = new EnableBiasedLockingTask(BiasedLockingStartupDelay);
       task->enroll();
     } else {
-      VM_EnableBiasedLocking op;
+      VM_EnableBiasedLocking op(false);
       VMThread::execute(&op);
     }
   }
@@ -292,7 +295,7 @@ static HeuristicsResult update_heuristics(oop o, bool allow_rebias) {
   if (revocation_count <= BiasedLockingBulkRevokeThreshold) {
     revocation_count = k->atomic_incr_biased_lock_revocation_count();
   }
-    
+
   if (revocation_count == BiasedLockingBulkRevokeThreshold) {
     return HR_BULK_REVOKE;
   }
@@ -447,7 +450,7 @@ public:
     , _status_code(BiasedLocking::NOT_BIASED) {}
 
   virtual VMOp_Type type() const { return VMOp_RevokeBias; }
-  
+
   virtual bool doit_prologue() {
     // Verify that there is actual work to do since the callers just
     // give us locked object(s). If we don't find any biased objects
@@ -503,7 +506,7 @@ public:
     , _bulk_rebias(bulk_rebias)
     , _attempt_rebias_of_object(attempt_rebias_of_object) {}
 
-  virtual VMOp_Type type() const { return VMOp_BulkRevokeBias; }  
+  virtual VMOp_Type type() const { return VMOp_BulkRevokeBias; }
   virtual bool doit_prologue()   { return true; }
 
   virtual void doit() {
@@ -573,19 +576,25 @@ BiasedLocking::Condition BiasedLocking::revoke_and_rebias(Handle obj, bool attem
         }
       }
     }
-  }    
+  }
 
   HeuristicsResult heuristics = update_heuristics(obj(), attempt_rebias);
   if (heuristics == HR_NOT_BIASED) {
     return NOT_BIASED;
   } else if (heuristics == HR_SINGLE_REVOKE) {
-    if (mark->biased_locker() == THREAD) {
+    Klass *k = Klass::cast(obj->klass());
+    markOop prototype_header = k->prototype_header();
+    if (mark->biased_locker() == THREAD &&
+        prototype_header->bias_epoch() == mark->bias_epoch()) {
       // A thread is trying to revoke the bias of an object biased
       // toward it, again likely due to an identity hash code
       // computation. We can again avoid a safepoint in this case
       // since we are only going to walk our own stack. There are no
       // races with revocations occurring in other threads because we
       // reach no safepoints in the revocation path.
+      // Also check the epoch because even if threads match, another thread
+      // can come in with a CAS to steal the bias of an object that has a
+      // stale epoch.
       ResourceMark rm;
       if (TraceBiasedLocking) {
         tty->print_cr("Revoking bias by walking my own stack:");
