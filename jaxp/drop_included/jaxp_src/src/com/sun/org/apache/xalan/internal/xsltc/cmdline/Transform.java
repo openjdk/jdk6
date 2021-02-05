@@ -115,8 +115,7 @@ final public class Transform {
 
             // Set the DOM's DOM builder as the XMLReader's SAX2 content handler
             XSLTCDTMManager dtmManager =
-                (XSLTCDTMManager)XSLTCDTMManager.getDTMManagerClass()
-                                                .newInstance();
+                XSLTCDTMManager.createNewDTMManagerInstance();
 
             DTMWSFilter wsfilter;
             if (translet != null && translet instanceof StripFilter) {

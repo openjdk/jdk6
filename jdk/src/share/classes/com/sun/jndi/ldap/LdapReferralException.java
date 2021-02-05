@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -117,7 +117,8 @@ final public class LdapReferralException extends
 
         // If following referral, request controls are passed to referral ctx
         this.reqCtls =
-            (handleReferrals == LdapClient.LDAP_REF_FOLLOW ? reqCtls : null);
+            (handleReferrals == LdapClient.LDAP_REF_FOLLOW ||
+                    handleReferrals == LdapClient.LDAP_REF_FOLLOW_SCHEME ? reqCtls : null);
     }
 
     /**
@@ -217,13 +218,15 @@ final public class LdapReferralException extends
             System.out.println("LdapReferralException.setReferralInfo");
 
         this.referrals = referrals;
-        if (referrals != null) {
-            referralCount = referrals.size();
-        }
+        referralCount = (referrals == null) ? 0 : referrals.size();
 
         if (debug) {
-            for (int i = 0; i < referralCount; i++) {
-                System.out.println("  [" + i + "] " + referrals.elementAt(i));
+            if (referrals != null) {
+                for (int i = 0; i < referralCount; i++) {
+                    System.out.println("  [" + i + "] " + referrals.elementAt(i));
+                }
+            } else {
+                System.out.println("setReferralInfo : referrals == null");
             }
         }
     }
