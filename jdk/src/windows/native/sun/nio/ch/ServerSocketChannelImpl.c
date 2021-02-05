@@ -23,6 +23,12 @@
  * questions.
  */
 
+/*
+ * This file has been modified by Azul Systems, Inc. in 2014. These
+ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+ * available on the same license terms set forth above. 
+ */
+
 #include <windows.h>
 #include <winsock2.h>
 #include <ctype.h>
@@ -48,8 +54,6 @@ static jclass isa_class;        /* java.net.InetSocketAddress */
 static jmethodID isa_ctorID;    /* InetSocketAddress(InetAddress, int) */
 static jclass ia_class;         /* java.net.InetAddress */
 static jmethodID ia_ctorID;     /* InetAddress() */
-static jfieldID ia_addrID;      /* java.net.InetAddress.address */
-static jfieldID ia_famID;       /* java.net.InetAddress.family */
 
 
 /**************************************************************
@@ -70,8 +74,6 @@ Java_sun_nio_ch_ServerSocketChannelImpl_initIDs(JNIEnv *env, jclass cls)
     cls = (*env)->FindClass(env, "java/net/Inet4Address");
     ia_class = (*env)->NewGlobalRef(env, cls);
     ia_ctorID = (*env)->GetMethodID(env, cls, "<init>","()V");
-    ia_addrID = (*env)->GetFieldID(env, cls, "address", "I");
-    ia_famID = (*env)->GetFieldID(env, cls, "family", "I");
 }
 
 JNIEXPORT void JNICALL
@@ -109,8 +111,8 @@ Java_sun_nio_ch_ServerSocketChannelImpl_accept0(JNIEnv *env, jobject this,
     (*env)->SetIntField(env, newfdo, fd_fdID, newfd);
 
     ia = (*env)->NewObject(env, ia_class, ia_ctorID);
-    (*env)->SetIntField(env, ia, ia_addrID, ntohl(sa.sin_addr.s_addr));
-    (*env)->SetIntField(env, ia, ia_famID, sa.sin_family);
+    setInetAddress_addr(env, ia, ntohl(sa.sin_addr.s_addr));
+    setInetAddress_family(env, ia, sa.sin_family);
 
     isa = (*env)->NewObject(env, isa_class, isa_ctorID, ia,
                             ntohs(sa.sin_port));

@@ -23,6 +23,12 @@
  * questions.
  */
 
+/*
+ * This file has been modified by Azul Systems, Inc. in 2014. These
+ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+ * available on the same license terms set forth above. 
+ */
+
 package sun.java2d.d3d;
 
 import java.awt.Color;
@@ -39,6 +45,7 @@ import java.util.HashMap;
 
 import sun.awt.Win32GraphicsConfig;
 import sun.awt.windows.WComponentPeer;
+import sun.awt.SunToolkit;
 import sun.java2d.InvalidPipeException;
 import sun.java2d.ScreenUpdateManager;
 import sun.java2d.SunGraphics2D;

@@ -23,6 +23,12 @@
  * questions.
  */
 
+/*
+ * This file has been modified by Azul Systems, Inc. in 2014. These
+ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+ * available on the same license terms set forth above. 
+ */
+
 #include <signal.h>
 #include <windowsx.h>
 #include <process.h>
@@ -1328,8 +1334,6 @@ BOOL AwtToolkit::PreProcessMsg(MSG& msg)
         return TRUE;
 
     if ((msg.message >= WM_MOUSEFIRST && msg.message <= WM_AWT_MOUSELAST) ||
-        (IS_WIN95 && !IS_WIN98 &&
-                                msg.message == AwtComponent::Wheel95GetMsg()) ||
         (msg.message >= WM_NCMOUSEMOVE && msg.message <= WM_NCMBUTTONDBLCLK)) {
         if (PreProcessMouseMsg(p, msg)) {
             return TRUE;
@@ -1356,9 +1360,7 @@ BOOL AwtToolkit::PreProcessMouseMsg(AwtComponent* p, MSG& msg)
         return FALSE;
     }
 
-    if (msg.message >= WM_MOUSEFIRST && msg.message <= WM_AWT_MOUSELAST ||
-        (IS_WIN95 && !IS_WIN98 && msg.message == AwtComponent::Wheel95GetMsg()))
-    {
+    if (msg.message >= WM_MOUSEFIRST && msg.message <= WM_AWT_MOUSELAST) {
         mouseWParam = msg.wParam;
         mouseLParam = msg.lParam;
     } else {
@@ -1447,21 +1449,6 @@ BOOL AwtToolkit::PreProcessMouseMsg(AwtComponent* p, MSG& msg)
         mouseWheelComp != NULL) { //i.e. mouse is over client area for this
                                   //window
         msg.hwnd = hWndForWheel;
-    }
-    else if (IS_WIN95 && !IS_WIN98 &&
-             msg.message == AwtComponent::Wheel95GetMsg() &&
-             mouseWheelComp != NULL) {
-
-        // On Win95, mouse wheels are _always_ delivered to the top level
-        // Frame.  Default behavior only takes place if the message's hwnd
-        // remains that of the Frame.  We only want to change the hwnd if
-        // we're changing it to a Component that DOESN'T handle the
-        // mousewheel natively.
-
-        if (!mouseWheelComp->InheritsNativeMouseWheelBehavior()) {
-            DTRACE_PRINTLN("AwtT::PPMM: changing hwnd on 95");
-            msg.hwnd = hWndForWheel;
-        }
     }
 
     /*
@@ -1700,13 +1687,13 @@ BOOL AwtToolkit::GetScreenInsets(int screenNum, RECT * rect)
     }
     /* if additional display */
     else {
-        MONITORINFO *miInfo;
+        MONITOR_INFO *miInfo;
         miInfo = AwtWin32GraphicsDevice::GetMonitorInfo(screenNum);
         if (miInfo) {
-            rect->top = miInfo->rcWork.top    - miInfo->rcMonitor.top;
-            rect->left = miInfo->rcWork.left   - miInfo->rcMonitor.left;
-            rect->bottom = miInfo->rcMonitor.bottom - miInfo->rcWork.bottom;
-            rect->right = miInfo->rcMonitor.right - miInfo->rcWork.right;
+            rect->top = miInfo->rWork.top    - miInfo->rMonitor.top;
+            rect->left = miInfo->rWork.left   - miInfo->rMonitor.left;
+            rect->bottom = miInfo->rMonitor.bottom - miInfo->rWork.bottom;
+            rect->right = miInfo->rMonitor.right - miInfo->rWork.right;
             return TRUE;
         }
     }

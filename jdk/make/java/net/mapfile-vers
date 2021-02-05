@@ -23,6 +23,12 @@
 # questions.
 #
 
+#
+# This file has been modified by Azul Systems, Inc. in 2014. These
+# modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+# available on the same license terms set forth above. 
+#
+
 # Define public interface.
 
 SUNWprivate_1.1 {
@@ -101,7 +107,10 @@ SUNWprivate_1.1 {
 		NET_MapSocketOption;
 		NET_Wait;
                 ipv6_available;
-
+		setInetAddress_addr;
+		setInetAddress_family;
+		getInetAddress_addr;
+		getInetAddress_family;
 	local:
 		*;
 };
