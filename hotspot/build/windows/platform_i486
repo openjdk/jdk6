@@ -1,0 +1,12 @@
+// Platform file for win32 NT platform $Revision: 1.2 $
+
+os_family = win32
+
+arch = i486
+
+os_arch = win32_i486
+
+compiler = visCPP
+
+gnu_dis_arch = i386
+

@@ -1,0 +1,106 @@
+# %W% %E%
+# Generated exception classes for java.nio.channels
+
+SCCS_ID='%I%'
+SCCS_DATE='%E%'
+SINCE=1.4
+PACKAGE=java.nio.channels
+
+
+SUPER=java.io.IOException
+
+gen ClosedChannelException "
+ * Checked exception thrown when an attempt is made to invoke or complete an
+ * I/O operation upon channel that is closed, or at least closed to that
+ * operation.  That this exception is thrown does not necessarily imply that
+ * the channel is completely closed.  A socket channel whose write half has
+ * been shut down, for example, may still be open for reading."
+
+gen FileLockInterruptionException "
+ * Checked exception received by a thread when another thread interrupts it
+ * while it is waiting to acquire a file lock.  Before this exception is thrown
+ * the interrupt status of the previously-blocked thread will have been set."
+
+
+SUPER=ClosedChannelException
+
+gen AsynchronousCloseException "
+ * Checked exception received by a thread when another thread closes the
+ * channel or the part of the channel upon which it is blocked in an I/O
+ * operation."
+
+
+SUPER=AsynchronousCloseException
+
+gen ClosedByInterruptException "
+ * Checked exception received by a thread when another thread interrupts it
+ * while it is blocked in an I/O operation upon a channel.  Before this
+ * exception is thrown the channel will have been closed and the interrupt
+ * status of the previously-blocked thread will have been set."
+
+
+SUPER=IllegalArgumentException
+
+gen IllegalSelectorException "
+ * Unchecked exception thrown when an attempt is made to register a channel
+ * with a selector that was not created by the provider that created the
+ * channel."
+
+gen UnresolvedAddressException "
+ * Unchecked exception thrown when an attempt is made to invoke a network
+ * operation upon an unresolved socket address."
+
+gen UnsupportedAddressTypeException "
+ * Unchecked exception thrown when an attempt is made to bind or connect
+ * to a socket address of a type that is not supported."
+
+
+SUPER=IllegalStateException
+
+gen AlreadyConnectedException "
+ * Unchecked exception thrown when an attempt is made to connect a {@link
+ * SocketChannel} that is already connected."
+
+gen ConnectionPendingException "
+ * Unchecked exception thrown when an attempt is made to connect a {@link
+ * SocketChannel} for which a non-blocking connection operation is already in
+ * progress."
+
+gen ClosedSelectorException "
+ * Unchecked exception thrown when an attempt is made to invoke an I/O
+ * operation upon a closed selector."
+
+gen CancelledKeyException "
+ * Unchecked exception thrown when an attempt is made to use
+ * a selection key that is no longer valid."
+
+gen IllegalBlockingModeException "
+ * Unchecked exception thrown when a blocking-mode-specific operation
+ * is invoked upon a channel in the incorrect blocking mode."
+
+gen NoConnectionPendingException "
+ * Unchecked exception thrown when the {@link SocketChannel#finishConnect
+ * finishConnect} method of a {@link SocketChannel} is invoked without first
+ * successfully invoking its {@link SocketChannel#connect connect} method."
+
+gen NonReadableChannelException "
+ * Unchecked exception thrown when an attempt is made to read
+ * from a channel that was not originally opened for reading."
+
+gen NonWritableChannelException "
+ * Unchecked exception thrown when an attempt is made to write
+ * to a channel that was not originally opened for writing."
+
+gen NotYetBoundException "
+ * Unchecked exception thrown when an attempt is made to invoke an I/O
+ * operation upon a server socket channel that is not yet bound."
+
+gen NotYetConnectedException "
+ * Unchecked exception thrown when an attempt is made to invoke an I/O
+ * operation upon a socket channel that is not yet connected."
+
+gen OverlappingFileLockException "
+ * Unchecked exception thrown when an attempt is made to acquire a lock on a
+ * region of a file that overlaps a region already locked by the same Java
+ * virtual machine, or when another thread is already waiting to lock an
+ * overlapping region of the same file."
