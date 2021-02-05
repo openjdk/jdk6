@@ -40,14 +40,26 @@
 #include "LEGlyphStorage.h"
 #include "LESwaps.h"
 
-le_int32 GlyphSubstitutionTableHeader::process(LEGlyphStorage &glyphStorage,
-    le_bool rightToLeft, LETag scriptTag, LETag languageTag,
-    const GlyphDefinitionTableHeader *glyphDefinitionTableHeader,
-    const LEGlyphFilter *filter, const FeatureMap *featureMap,
-    le_int32 featureMapCount, le_bool featureOrder) const
-{
-    GlyphSubstitutionLookupProcessor processor(this, scriptTag, languageTag, filter, featureMap,
-        featureMapCount, featureOrder);
+U_NAMESPACE_BEGIN
 
-    return processor.process(glyphStorage, NULL, rightToLeft, glyphDefinitionTableHeader, NULL);
+le_int32 GlyphSubstitutionTableHeader::process(const LEReferenceTo<GlyphSubstitutionTableHeader> &base,
+                                               LEGlyphStorage &glyphStorage,
+                                               le_bool rightToLeft,
+                                               LETag scriptTag,
+                                               LETag languageTag,
+                                               const LEReferenceTo<GlyphDefinitionTableHeader> &glyphDefinitionTableHeader,
+                                               const LEGlyphFilter *filter,
+                                               const FeatureMap *featureMap,
+                                               le_int32 featureMapCount,
+                                               le_bool featureOrder,
+                                               LEErrorCode &success) const
+{
+    if (LE_FAILURE(success)) {
+        return 0;
+    }
+
+    GlyphSubstitutionLookupProcessor processor(base, scriptTag, languageTag, filter, featureMap, featureMapCount, featureOrder, success);
+    return processor.process(glyphStorage, NULL, rightToLeft, glyphDefinitionTableHeader, NULL, success);
 }
+
+U_NAMESPACE_END

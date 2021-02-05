@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,6 +33,8 @@ package com.sun.corba.se.impl.corba;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.List ;
 import java.util.ArrayList ;
 
@@ -504,7 +506,12 @@ public class AnyImpl extends Any
     public org.omg.CORBA.portable.OutputStream create_output_stream()
     {
         //debug.log ("create_output_stream");
-        return new AnyOutputStream(orb);
+        final ORB finalorb = this.orb;
+        return AccessController.doPrivileged(new PrivilegedAction<AnyOutputStream>() {
+            public AnyOutputStream run() {
+                return new AnyOutputStream(finalorb);
+            }
+        });
     }
 
     /**
@@ -1218,7 +1225,7 @@ public class AnyImpl extends Any
         // See bug 4391648 for more info about the tcORB in this
         // case.
         RepositoryIdStrings repStrs
-            = RepositoryIdFactory.getRepIdStringsFactory(tcORB);
+            = RepositoryIdFactory.getRepIdStringsFactory();
 
 
         // Assertion: c instanceof Serializable?
@@ -1251,7 +1258,7 @@ public class AnyImpl extends Any
         // Anything else
         // We know that this is a TypeCodeImpl since it is our ORB
         classTC = (TypeCodeImpl)ValueUtility.createTypeCodeForClass(
-            tcORB, c, ORBUtility.createValueHandler(tcORB));
+            tcORB, c, ORBUtility.createValueHandler());
         // Intruct classTC to store its buffer
         classTC.setCaching(true);
         // Update the cache

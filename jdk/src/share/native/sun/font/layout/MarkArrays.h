@@ -32,9 +32,16 @@
 #ifndef __MARKARRAYS_H
 #define __MARKARRAYS_H
 
+/**
+ * \file
+ * \internal
+ */
+
 #include "LETypes.h"
 #include "LEFontInstance.h"
 #include "OpenTypeTables.h"
+
+U_NAMESPACE_BEGIN
 
 struct MarkRecord
 {
@@ -50,5 +57,9 @@ struct MarkArray
     le_int32 getMarkClass(LEGlyphID glyphID, le_int32 coverageIndex, const LEFontInstance *fontInstance,
         LEPoint &anchor) const;
 };
+LE_VAR_ARRAY(MarkArray, markRecordArray)
 
+U_NAMESPACE_END
 #endif
+
+

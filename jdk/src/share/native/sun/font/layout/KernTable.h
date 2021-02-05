@@ -25,7 +25,8 @@
 
 /*
  *
- * (C) Copyright IBM Corp. 2004-2005 - All Rights Reserved
+ *
+ * (C) Copyright IBM Corp. 2004-2013 - All Rights Reserved
  *
  */
 
@@ -37,9 +38,13 @@
 #endif
 
 #include "LETypes.h"
+#include "LETableReference.h"
+//#include "LEFontInstance.h"
+//#include "LEGlyphStorage.h"
 
 #include <stdio.h>
 
+U_NAMESPACE_BEGIN
 struct PairInfo;
 class  LEFontInstance;
 class  LEGlyphStorage;
@@ -52,19 +57,22 @@ class U_LAYOUT_API KernTable
  private:
   le_uint16 coverage;
   le_uint16 nPairs;
-  const PairInfo* pairs;
-  const LEFontInstance* font;
+  LEReferenceToArrayOf<PairInfo> pairs;
+  PairInfo  *pairsSwapped;
+  const LETableReference &fTable;
   le_uint16 searchRange;
   le_uint16 entrySelector;
   le_uint16 rangeShift;
 
  public:
-  KernTable(const LEFontInstance* font, const void* tableData);
+  KernTable(const LETableReference &table, LEErrorCode &success);
 
   /*
    * Process the glyph positions.
    */
-  void process(LEGlyphStorage& storage);
+  void process(LEGlyphStorage& storage, LEErrorCode &success);
 };
+
+U_NAMESPACE_END
 
 #endif

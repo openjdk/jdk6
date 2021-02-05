@@ -23,11 +23,11 @@
  *
  */
 
+
 /*
- *
  * HanLayoutEngine.h: OpenType processing for Han fonts.
  *
- * (C) Copyright IBM Corp. 1998-2005 - All Rights Reserved.
+ * (C) Copyright IBM Corp. 1998-2008 - All Rights Reserved.
  */
 
 #ifndef __HANLAYOUTENGINE_H
@@ -39,6 +39,8 @@
 #include "OpenTypeLayoutEngine.h"
 
 #include "GlyphSubstitutionTables.h"
+
+U_NAMESPACE_BEGIN
 
 class LEGlyphStorage;
 
@@ -62,6 +64,7 @@ public:
      * @param scriptCode - the script
      * @param langaugeCode - the language
      * @param gsubTable - the GSUB table
+     * @param success - set to an error code if the operation fails
      *
      * @see LayoutEngine::layoutEngineFactory
      * @see OpenTypeLayoutEngine
@@ -69,9 +72,8 @@ public:
      *
      * @internal
      */
-    HanOpenTypeLayoutEngine(const LEFontInstance *fontInstance, le_int32 scriptCode,
-        le_int32 languageCode,
-        le_int32 typoFlags, const GlyphSubstitutionTableHeader *gsubTable);
+    HanOpenTypeLayoutEngine(const LEFontInstance *fontInstance, le_int32 scriptCode, le_int32 languageCode,
+                            le_int32 typoFlags, const LEReferenceTo<GlyphSubstitutionTableHeader> &gsubTablem, LEErrorCode &success);
 
 
     /**
@@ -80,6 +82,20 @@ public:
      * @internal
      */
     virtual ~HanOpenTypeLayoutEngine();
+
+    /**
+     * ICU "poor man's RTTI", returns a UClassID for the actual class.
+     *
+     * @stable ICU 2.8
+     */
+    virtual UClassID getDynamicClassID() const;
+
+    /**
+     * ICU "poor man's RTTI", returns a UClassID for this class.
+     *
+     * @stable ICU 2.8
+     */
+    static UClassID getStaticClassID();
 
 protected:
 
@@ -92,10 +108,8 @@ protected:
      * @param offset - the index of the first character to process
      * @param count - the number of characters to process
      * @param max - the number of characters in the input context
-     * @param rightToLeft - <code>TRUE</code> if the characters are in a
-     *    right to left directional run
-     * @param glyphStorage - the object holding the glyph storage. The char
-     *    index and auxillary data arrays will be set.
+     * @param rightToLeft - <code>TRUE</code> if the characters are in a right to left directional run
+     * @param glyphStorage - the object holding the glyph storage. The char index and auxillary data arrays will be set.
      *
      * Output parameters:
      * @param outChars - the output character arrayt
@@ -107,9 +121,10 @@ protected:
      *
      * @internal
      */
-    virtual le_int32 characterProcessing(const LEUnicode chars[], le_int32 offset,
-        le_int32 count, le_int32 max, le_bool rightToLeft,
-        LEUnicode *&outChars, LEGlyphStorage &glyphStorage, LEErrorCode &success);
+    virtual le_int32 characterProcessing(const LEUnicode chars[], le_int32 offset, le_int32 count, le_int32 max, le_bool rightToLeft,
+            LEUnicode *&outChars, LEGlyphStorage &glyphStorage, LEErrorCode &success);
+
 };
 
+U_NAMESPACE_END
 #endif

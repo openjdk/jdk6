@@ -25,6 +25,7 @@
 
 /*
  *
+ *
  * (C) Copyright IBM Corp. 1998-2003 - All Rights Reserved
  *
  */
@@ -32,22 +33,25 @@
 #include "LETypes.h"
 #include "OpenTypeUtilities.h"
 #include "OpenTypeTables.h"
-#include "Features.h"
+#include "ICUFeatures.h"
 #include "LESwaps.h"
 
-const FeatureTable *FeatureListTable::getFeatureTable(le_uint16 featureIndex, LETag *featureTag) const
+U_NAMESPACE_BEGIN
+
+LEReferenceTo<FeatureTable> FeatureListTable::getFeatureTable(const LETableReference &base, le_uint16 featureIndex, LETag *featureTag, LEErrorCode &success) const
 {
-    if (featureIndex >= SWAPW(featureCount)) {
-        return 0;
-    }
+  if (featureIndex >= SWAPW(featureCount) || LE_FAILURE(success)) {
+    return LEReferenceTo<FeatureTable>();
+  }
 
     Offset featureTableOffset = featureRecordArray[featureIndex].featureTableOffset;
 
     *featureTag = SWAPT(featureRecordArray[featureIndex].featureTag);
 
-    return (const FeatureTable *) ((char *) this + SWAPW(featureTableOffset));
+    return LEReferenceTo<FeatureTable>(base, success, SWAPW(featureTableOffset));
 }
 
+#if 0
 /*
  * Note: according to the OpenType Spec. v 1.4, the entries in the Feature
  * List Table are sorted alphabetically by feature tag; however, there seem
@@ -79,3 +83,6 @@ const FeatureTable *FeatureListTable::getFeatureTable(LETag featureTag) const
     return 0;
 #endif
 }
+#endif
+
+U_NAMESPACE_END

@@ -25,7 +25,8 @@
 
 /*
  *
- * (C) Copyright IBM Corp. 1998-2003 - All Rights Reserved
+ *
+ * (C) Copyright IBM Corp. 1998-2006 - All Rights Reserved
  *
  */
 
@@ -37,10 +38,12 @@
 #include "GlyphIterator.h"
 #include "LESwaps.h"
 
-le_uint32 LigatureSubstitutionSubtable::process(GlyphIterator *glyphIterator, const LEGlyphFilter *filter) const
+U_NAMESPACE_BEGIN
+
+le_uint32 LigatureSubstitutionSubtable::process(const LETableReference &base, GlyphIterator *glyphIterator, LEErrorCode &success, const LEGlyphFilter *filter) const
 {
     LEGlyphID glyph = glyphIterator->getCurrGlyphID();
-    le_int32 coverageIndex = getGlyphCoverage(glyph);
+    le_int32 coverageIndex = getGlyphCoverage(base, glyph, success);
 
     if (coverageIndex >= 0) {
         Offset ligSetTableOffset = SWAPW(ligSetTableOffsetArray[coverageIndex]);
@@ -55,10 +58,6 @@ le_uint32 LigatureSubstitutionSubtable::process(GlyphIterator *glyphIterator, co
             TTGlyphID ligGlyph = SWAPW(ligTable->ligGlyph);
             le_uint16 comp;
 
-            if (filter != NULL && ! filter->accept(LE_SET_GLYPH(glyph, ligGlyph))) {
-                continue;
-            }
-
             for (comp = 0; comp < compCount; comp += 1) {
                 if (! glyphIterator->next()) {
                     break;
@@ -69,7 +68,7 @@ le_uint32 LigatureSubstitutionSubtable::process(GlyphIterator *glyphIterator, co
                 }
             }
 
-            if (comp == compCount) {
+            if (comp == compCount && (filter == NULL || filter->accept(LE_SET_GLYPH(glyph, ligGlyph)))) {
                 GlyphIterator tempIterator(*glyphIterator);
                 TTGlyphID deletedGlyph = tempIterator.ignoresMarks()? 0xFFFE : 0xFFFF;
 
@@ -92,3 +91,5 @@ le_uint32 LigatureSubstitutionSubtable::process(GlyphIterator *glyphIterator, co
 
     return 0;
 }
+
+U_NAMESPACE_END

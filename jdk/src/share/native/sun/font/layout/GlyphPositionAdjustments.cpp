@@ -34,6 +34,8 @@
 #include "LEGlyphStorage.h"
 #include "LEFontInstance.h"
 
+U_NAMESPACE_BEGIN
+
 #define CHECK_ALLOCATE_ARRAY(array, type, size) \
     if (array == NULL) { \
         array = (type *) new type[size]; \
@@ -67,6 +69,20 @@ const LEPoint *GlyphPositionAdjustments::getExitPoint(le_int32 index, LEPoint &e
     }
 
     return fEntryExitPoints[index].getExitPoint(exitPoint);
+}
+
+void GlyphPositionAdjustments::clearEntryPoint(le_int32 index)
+{
+    CHECK_ALLOCATE_ARRAY(fEntryExitPoints, EntryExitPoint, fGlyphCount);
+
+    fEntryExitPoints[index].clearEntryPoint();
+}
+
+void GlyphPositionAdjustments::clearExitPoint(le_int32 index)
+{
+    CHECK_ALLOCATE_ARRAY(fEntryExitPoints, EntryExitPoint, fGlyphCount);
+
+    fEntryExitPoints[index].clearExitPoint();
 }
 
 void GlyphPositionAdjustments::setEntryPoint(le_int32 index, LEPoint &newEntryPoint, le_bool baselineIsLogicalEnd)
@@ -150,7 +166,12 @@ void GlyphPositionAdjustments::applyCursiveAdjustments(LEGlyphStorage &glyphStor
                 lastExitGlyphID = glyphID;
             } else {
                 if (baselineIsLogicalEnd(i) && firstExitPoint >= 0 && lastExitPoint >= 0) {
-                    le_int32 limit = lastExitPoint + dir;
+                    le_int32 limit = lastExitPoint /*+ dir*/;
+                    LEPoint dummyAnchor;
+
+                    if (getEntryPoint(i, dummyAnchor) != NULL) {
+                        limit += dir;
+                    }
 
                     for (le_int32 j = firstExitPoint; j != limit; j += dir) {
                         if (isCursiveGlyph(j)) {
@@ -185,3 +206,5 @@ LEPoint *GlyphPositionAdjustments::EntryExitPoint::getExitPoint(LEPoint &exitPoi
 
     return NULL;
 }
+
+U_NAMESPACE_END

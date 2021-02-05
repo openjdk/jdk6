@@ -24,7 +24,6 @@
  */
 
 /*
- *
  * (C) Copyright IBM Corp. 1998-2005 - All Rights Reserved
  *
  */
@@ -40,18 +39,25 @@
 #include "LEGlyphStorage.h"
 #include "GlyphPositionAdjustments.h"
 
-void GlyphPositioningTableHeader::process(LEGlyphStorage &glyphStorage,
-    GlyphPositionAdjustments *glyphPositionAdjustments, le_bool rightToLeft,
-    LETag scriptTag, LETag languageTag,
-    const GlyphDefinitionTableHeader *glyphDefinitionTableHeader,
-    const LEFontInstance *fontInstance,
-    const FeatureMap *featureMap, le_int32 featureMapCount, le_bool featureOrder) const
-{
-    GlyphPositioningLookupProcessor processor(this, scriptTag, languageTag, featureMap,
-        featureMapCount, featureOrder);
+U_NAMESPACE_BEGIN
 
-    processor.process(glyphStorage, glyphPositionAdjustments, rightToLeft,
-                      glyphDefinitionTableHeader, fontInstance);
+void GlyphPositioningTableHeader::process(const LEReferenceTo<GlyphPositioningTableHeader> &base, LEGlyphStorage &glyphStorage, GlyphPositionAdjustments *glyphPositionAdjustments, le_bool rightToLeft,
+                                          LETag scriptTag, LETag languageTag,
+                                          const LEReferenceTo<GlyphDefinitionTableHeader> &glyphDefinitionTableHeader, LEErrorCode &success,
+                                          const LEFontInstance *fontInstance, const FeatureMap *featureMap, le_int32 featureMapCount, le_bool featureOrder) const
+{
+    if (LE_FAILURE(success)) {
+        return;
+    }
+
+    GlyphPositioningLookupProcessor processor(base, scriptTag, languageTag, featureMap, featureMapCount, featureOrder, success);
+    if (LE_FAILURE(success)) {
+        return;
+    }
+
+    processor.process(glyphStorage, glyphPositionAdjustments, rightToLeft, glyphDefinitionTableHeader, fontInstance, success);
 
     glyphPositionAdjustments->applyCursiveAdjustments(glyphStorage, rightToLeft, fontInstance);
 }
+
+U_NAMESPACE_END

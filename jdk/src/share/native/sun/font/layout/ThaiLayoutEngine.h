@@ -26,7 +26,7 @@
 
 /*
  *
- * (C) Copyright IBM Corp. 1998-2005 - All Rights Reserved
+ * (C) Copyright IBM Corp. 1998-2010 - All Rights Reserved
  *
  */
 
@@ -38,6 +38,8 @@
 #include "LayoutEngine.h"
 
 #include "ThaiShaping.h"
+
+U_NAMESPACE_BEGIN
 
 class LEGlyphStorage;
 
@@ -60,14 +62,14 @@ public:
      * @param fontInstance - the font
      * @param scriptCode - the script
      * @param languageCode - the language
+     * @param success - set to an error code if the operation fails
      *
      * @see LEFontInstance
      * @see ScriptAndLanguageTags.h for script and language codes
      *
      * @internal
      */
-    ThaiLayoutEngine(const LEFontInstance *fontInstance, le_int32 scriptCode,
-        le_int32 languageCode, le_int32 typoFlags);
+    ThaiLayoutEngine(const LEFontInstance *fontInstance, le_int32 scriptCode, le_int32 languageCode, le_int32 typoFlags, LEErrorCode &success);
 
     /**
      * The destructor, virtual for correct polymorphic invocation.
@@ -75,6 +77,20 @@ public:
      * @internal
      */
     virtual ~ThaiLayoutEngine();
+
+    /**
+     * ICU "poor man's RTTI", returns a UClassID for the actual class.
+     *
+     * @stable ICU 2.8
+     */
+    virtual UClassID getDynamicClassID() const;
+
+    /**
+     * ICU "poor man's RTTI", returns a UClassID for this class.
+     *
+     * @stable ICU 2.8
+     */
+    static UClassID getStaticClassID();
 
 protected:
     /**
@@ -109,10 +125,8 @@ protected:
      * @param offset - the index of the first character to process
      * @param count - the number of characters to process
      * @param max - the number of characters in the input context
-     * @param rightToLeft - <code>TRUE</code> if the text is in a
-     *    right to left directional run
-     * @param glyphStorage - the glyph storage object. The glyph and
-     *    char index arrays will be set.
+     * @param rightToLeft - <code>TRUE</code> if the text is in a right to left directional run
+     * @param glyphStorage - the glyph storage object. The glyph and char index arrays will be set.
      *
      * Output parameters:
      * @param success - set to an error code if the operation fails
@@ -123,10 +137,33 @@ protected:
      *
      * @internal
      */
-    virtual le_int32 computeGlyphs(const LEUnicode chars[], le_int32 offset,
-        le_int32 count, le_int32 max, le_bool rightToLeft,
+    virtual le_int32 computeGlyphs(const LEUnicode chars[], le_int32 offset, le_int32 count, le_int32 max, le_bool rightToLeft,
         LEGlyphStorage &glyphStorage, LEErrorCode &success);
+
+    /**
+     * This method does positioning adjustments like accent positioning and
+     * kerning. The default implementation does nothing. Subclasses needing
+     * position adjustments must override this method.
+     *
+     * Note that this method has both characters and glyphs as input so that
+     * it can use the character codes to determine glyph types if that information
+     * isn't directly available. (e.g. Some Arabic OpenType fonts don't have a GDEF
+     * table)
+     *
+     * @param chars - the input character context
+     * @param offset - the offset of the first character to process
+     * @param count - the number of characters to process
+     * @param reverse - <code>TRUE</code> if the glyphs in the glyph array have been reordered
+     * @param glyphStorage - the object which holds the per-glyph storage. The glyph positions will be
+     *                       adjusted as needed.
+     * @param success - output parameter set to an error code if the operation fails
+     *
+     * @internal
+     */
+    virtual void adjustGlyphPositions(const LEUnicode chars[], le_int32 offset, le_int32 count, le_bool reverse, LEGlyphStorage &glyphStorage, LEErrorCode &success);
 
 };
 
+U_NAMESPACE_END
 #endif
+

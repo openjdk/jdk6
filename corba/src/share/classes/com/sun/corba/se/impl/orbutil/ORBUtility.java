@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -90,6 +90,8 @@ import com.sun.corba.se.impl.logging.ORBUtilSystemException ;
 import com.sun.corba.se.impl.logging.OMGSystemException ;
 import com.sun.corba.se.impl.ior.iiop.JavaSerializationComponent;
 
+import sun.corba.SharedSecrets;
+
 /**
  *  Handy class full of static functions that don't belong in util.Utility for pure ORB reasons.
  */
@@ -160,42 +162,10 @@ public final class ORBUtility {
     }
 
     /**
-     * Creates the correct ValueHandler for the given ORB,
-     * querying ORBVersion information.  If the ORB or
-     * ORBVersion is null, gets the ValueHandler from
-     * Util.createValueHandler.
+     * Return default ValueHandler
      */
-    public static ValueHandler createValueHandler(ORB orb) {
-
-        if (orb == null)
-            return Util.createValueHandler();
-
-        ORBVersion version = orb.getORBVersion();
-
-        if (version == null)
-            return Util.createValueHandler();
-
-        if (version.equals(ORBVersionFactory.getOLD()))
-            return new ValueHandlerImpl_1_3();
-        if (version.equals(ORBVersionFactory.getNEW()))
-            return new ValueHandlerImpl_1_3_1();
-
+    public static ValueHandler createValueHandler() {
         return Util.createValueHandler();
-    }
-
-    /**
-     * Returns true if the given ORB could accurately be determined to be a
-     * Kestrel or earlier ORB.  Note: If passed the ORBSingleton, this will return
-     * false.
-     */
-    public static boolean isLegacyORB(ORB orb)
-    {
-        try {
-            ORBVersion currentORB = orb.getORBVersion();
-            return currentORB.equals( ORBVersionFactory.getOLD() ) ;
-        } catch (SecurityException se) {
-            return false;
-        }
     }
 
     /**
@@ -294,8 +264,8 @@ public final class ORBUtility {
     {
         try {
             String name = classNameOf(strm.read_string());
-            SystemException ex
-                = (SystemException)ORBClassLoader.loadClass(name).newInstance();
+            SystemException ex = (SystemException)SharedSecrets.
+                getJavaCorbaAccess().loadClass(name).newInstance();
             ex.minor = strm.read_long();
             ex.completed = CompletionStatus.from_int(strm.read_long());
             return ex;
