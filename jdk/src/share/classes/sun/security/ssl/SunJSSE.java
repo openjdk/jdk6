@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,7 +38,7 @@ import java.security.*;
  *
  * SunJSSE now supports an experimental FIPS compliant mode when used with an
  * appropriate FIPS certified crypto provider. In FIPS mode, we:
- *  . allow only TLS 1.0
+ *  . allow only TLS 1.0 or later
  *  . allow only FIPS approved ciphersuites
  *  . perform all crypto in the FIPS crypto provider
  *
@@ -201,18 +201,19 @@ public abstract class SunJSSE extends java.security.Provider {
         put("Alg.Alias.TrustManagerFactory.SunPKIX", "PKIX");
         put("Alg.Alias.TrustManagerFactory.X509", "PKIX");
         put("Alg.Alias.TrustManagerFactory.X.509", "PKIX");
-        if (isfips == false) {
-            put("SSLContext.SSL",
-                "sun.security.ssl.SSLContextImpl");
-            put("SSLContext.SSLv3",
-                "sun.security.ssl.SSLContextImpl");
-        }
-        put("SSLContext.TLS",
-            "sun.security.ssl.SSLContextImpl");
+
         put("SSLContext.TLSv1",
-            "sun.security.ssl.SSLContextImpl");
+            "sun.security.ssl.SSLContextImpl$TLS10Context");
+        put("Alg.Alias.SSLContext.TLS", "TLSv1");
+        if (isfips == false) {
+            put("Alg.Alias.SSLContext.SSL", "TLSv1");
+            put("Alg.Alias.SSLContext.SSLv3", "TLSv1");
+        }
+
+        put("SSLContext.TLSv1.1",
+            "sun.security.ssl.SSLContextImpl$TLS11Context");
         put("SSLContext.Default",
-            "sun.security.ssl.DefaultSSLContextImpl");
+            "sun.security.ssl.SSLContextImpl$DefaultSSLContext");
 
         /*
          * KeyStore

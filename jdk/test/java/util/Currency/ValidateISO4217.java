@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,7 @@
  */
 /*
  * @test
- * @bug 4819436 4942982 5104960 6544471
+ * @bug 4819436 4942982 5104960 6544471 6627549 7066203 7195759
  * @summary Validate ISO 4217 data for Currency class.
  */
 
@@ -86,11 +86,13 @@ public class ValidateISO4217 {
         {"JE", "GBP", "826", "2"},      // Jersey
         {"GG", "GBP", "826", "2"},      // Guernsey
         {"IM", "GBP", "826", "2"},      // Isle of Man
+        {"BL", "EUR", "978", "2"},      // Saint Barthelemy
+        {"MF", "EUR", "978", "2"},      // Saint Martin
     };
 
     /* Codes that are obsolete, do not have related country */
     static final String otherCodes =
-        "ADP-AFA-ATS-AYM-BEF-BGL-BOV-BYB-CLF-DEM-ESP-FIM-FRF-GRD-GWP-IEP-ITL-LUF-MGF-MXV-NLG-PTE-RUR-SDD-SIT-SRG-TPE-TRL-VEF-USN-USS-XAG-XAU-XBA-XBB-XBC-XBD-XDR-XFO-XFU-XPD-XPT-XTS-XXX-YUM-ZWN";
+        "ADP-AFA-ATS-AYM-AZM-BEF-BGL-BOV-BYB-CLF-CUC-CYP-DEM-EEK-ESP-FIM-FRF-GHC-GRD-GWP-IEP-ITL-LUF-MGF-MTL-MXV-MZM-NLG-PTE-ROL-RUR-SDD-SIT-SKK-SRG-TMM-TPE-TRL-VEF-USN-USS-VEB-XAG-XAU-XBA-XBB-XBC-XBD-XDR-XFO-XFU-XPD-XPT-XSU-XTS-XUA-XXX-YUM-ZMK-ZWD-ZWN-ZWR";
 
     static boolean err = false;
 
