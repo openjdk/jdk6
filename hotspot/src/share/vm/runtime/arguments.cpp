@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -948,6 +948,7 @@ static void no_shared_spaces() {
   }
 }
 
+#ifndef KERNEL
 // If the user has chosen ParallelGCThreads > 0, we set UseParNewGC
 // if it's not explictly set or unset. If the user has chosen
 // UseParNewGC and not explicitly set ParallelGCThreads we
@@ -971,7 +972,6 @@ void Arguments::set_parnew_gc_flags() {
       FLAG_SET_DEFAULT(ParallelGCThreads, 0);
     }
   }
-
   if (UseParNewGC) {
     // CDS doesn't work with ParNew yet
     no_shared_spaces();
@@ -1178,8 +1178,7 @@ void Arguments::set_cms_and_parnew_gc_flags() {
       // the value (either from the command line or ergonomics) of
       // OldPLABSize.  Following OldPLABSize is an ergonomics decision.
       FLAG_SET_ERGO(uintx, CMSParPromoteBlocksToClaim, OldPLABSize);
-    }
-    else {
+    } else {
       // OldPLABSize and CMSParPromoteBlocksToClaim are both set.
       // CMSParPromoteBlocksToClaim is a collector-specific flag, so
       // we'll let it to take precedence.
@@ -1189,7 +1188,28 @@ void Arguments::set_cms_and_parnew_gc_flags() {
                   " CMSParPromoteBlocksToClaim will take precedence.\n");
     }
   }
+  if (!FLAG_IS_DEFAULT(ResizeOldPLAB) && !ResizeOldPLAB) {
+    // OldPLAB sizing manually turned off: Use a larger default setting,
+    // unless it was manually specified. This is because a too-low value
+    // will slow down scavenges.
+    if (FLAG_IS_DEFAULT(CMSParPromoteBlocksToClaim)) {
+      FLAG_SET_ERGO(uintx, CMSParPromoteBlocksToClaim, 50); // default value before 6631166
+    }
+  }
+  // Overwrite OldPLABSize which is the variable we will internally use everywhere.
+  FLAG_SET_ERGO(uintx, OldPLABSize, CMSParPromoteBlocksToClaim);
+  // If either of the static initialization defaults have changed, note this
+  // modification.
+  if (!FLAG_IS_DEFAULT(CMSParPromoteBlocksToClaim) || !FLAG_IS_DEFAULT(OldPLABWeight)) {
+    CFLS_LAB::modify_initialization(OldPLABSize, OldPLABWeight);
+  }
+  if (PrintGCDetails && Verbose) {
+    tty->print_cr("MarkStackSize: %uk  MarkStackSizeMax: %uk",
+      MarkStackSize / K, MarkStackSizeMax / K);
+    tty->print_cr("ConcGCThreads: %u", ConcGCThreads);
+  }
 }
+#endif // KERNEL
 
 inline uintx max_heap_for_compressed_oops() {
   LP64_ONLY(return oopDesc::OopEncodingHeapMax - MaxPermSize - os::vm_page_size());
@@ -1241,11 +1261,12 @@ void Arguments::set_ergonomics_flags() {
   // Check that UseCompressedOops can be set with the max heap size allocated
   // by ergonomics.
   if (MaxHeapSize <= max_heap_for_compressed_oops()) {
-    if (FLAG_IS_DEFAULT(UseCompressedOops)) {
-      // Turn off until bug is fixed.
-      // the following line to return it to default status.
+#ifndef COMPILER1
+    if (FLAG_IS_DEFAULT(UseCompressedOops) && !UseG1GC) {
+      // Disable Compressed Oops by default. Uncomment next line to enable it.
       // FLAG_SET_ERGO(bool, UseCompressedOops, true);
     }
+#endif
 #ifdef _WIN64
     if (UseLargePages && UseCompressedOops) {
       // Cannot allocate guard pages for implicit checks in indexed addressing
@@ -1323,6 +1344,27 @@ void Arguments::set_g1_gc_flags() {
   // Set the maximum pause time goal to be a reasonable default.
   if (FLAG_IS_DEFAULT(MaxGCPauseMillis)) {
     FLAG_SET_DEFAULT(MaxGCPauseMillis, 200);
+  }
+
+  if (FLAG_IS_DEFAULT(MarkStackSize)) {
+    // Size as a multiple of TaskQueueSuper::N which is larger
+    // for 64-bit.
+    FLAG_SET_DEFAULT(MarkStackSize, 128 * TaskQueueSuper::total_size());
+  }
+  if (PrintGCDetails && Verbose) {
+    tty->print_cr("MarkStackSize: %uk  MarkStackSizeMax: %uk",
+      MarkStackSize / K, MarkStackSizeMax / K);
+    tty->print_cr("ConcGCThreads: %u", ConcGCThreads);
+  }
+
+  if (FLAG_IS_DEFAULT(GCTimeRatio) || GCTimeRatio == 0) {
+    // In G1, we want the default GC overhead goal to be higher than
+    // say in PS. So we set it here to 10%. Otherwise the heap might
+    // be expanded more aggressively than we would like it to. In
+    // fact, even 10% seems to not be high enough in some cases
+    // (especially small GC stress tests that the main thing they do
+    // is allocation). We might consider increase it further.
+    FLAG_SET_DEFAULT(GCTimeRatio, 9);
   }
 }
 
@@ -1432,11 +1474,17 @@ void Arguments::set_aggressive_opts_flags() {
     sprintf(buffer, "java.lang.Integer.IntegerCache.high=" INTX_FORMAT, AutoBoxCacheMax);
     add_property(buffer);
   }
-  if (AggressiveOpts && FLAG_IS_DEFAULT(DoEscapeAnalysis)) {
-    FLAG_SET_DEFAULT(DoEscapeAnalysis, true);
-  }
-  if (AggressiveOpts && FLAG_IS_DEFAULT(BiasedLockingStartupDelay)) {
-    FLAG_SET_DEFAULT(BiasedLockingStartupDelay, 500);
+  if (AggressiveOpts) {
+    // Switch on optimizations with AggressiveOpts.
+    if (FLAG_IS_DEFAULT(DoEscapeAnalysis)) {
+      FLAG_SET_DEFAULT(DoEscapeAnalysis, true);
+    }
+    if (FLAG_IS_DEFAULT(UseLoopPredicate)) {
+      FLAG_SET_DEFAULT(UseLoopPredicate, true);
+    }
+    if (FLAG_IS_DEFAULT(BiasedLockingStartupDelay)) {
+      FLAG_SET_DEFAULT(BiasedLockingStartupDelay, 500);
+    }
   }
 #endif
 
@@ -1472,6 +1520,20 @@ bool Arguments::created_by_java_launcher() {
 //===========================================================================================================
 // Parsing of main arguments
 
+bool Arguments::verify_interval(uintx val, uintx min,
+                                uintx max, const char* name) {
+  // Returns true iff value is in the inclusive interval [min..max]
+  // false, otherwise.
+  if (val >= min && val <= max) {
+    return true;
+  }
+  jio_fprintf(defaultStream::error_stream(),
+              "%s of " UINTX_FORMAT " is invalid; must be between " UINTX_FORMAT
+              " and " UINTX_FORMAT "\n",
+              name, val, min, max);
+  return false;
+}
+
 bool Arguments::verify_percentage(uintx value, const char* name) {
   if (value <= 100) {
     return true;
@@ -1486,6 +1548,7 @@ static void force_serial_gc() {
   FLAG_SET_DEFAULT(UseSerialGC, true);
   FLAG_SET_DEFAULT(UseParNewGC, false);
   FLAG_SET_DEFAULT(UseConcMarkSweepGC, false);
+  FLAG_SET_DEFAULT(CMSIncrementalMode, false);  // special CMS suboption
   FLAG_SET_DEFAULT(UseParallelGC, false);
   FLAG_SET_DEFAULT(UseParallelOldGC, false);
   FLAG_SET_DEFAULT(UseG1GC, false);
@@ -1493,7 +1556,7 @@ static void force_serial_gc() {
 
 static bool verify_serial_gc_flags() {
   return (UseSerialGC &&
-        !(UseParNewGC || UseConcMarkSweepGC || UseG1GC ||
+        !(UseParNewGC || (UseConcMarkSweepGC || CMSIncrementalMode) || UseG1GC ||
           UseParallelGC || UseParallelOldGC));
 }
 
@@ -1608,7 +1671,7 @@ bool Arguments::check_vm_args_consistency() {
   status = status && verify_percentage(GCHeapFreeLimit, "GCHeapFreeLimit");
 
   // Check user specified sharing option conflict with Parallel GC
-  bool cannot_share = (UseConcMarkSweepGC || UseG1GC || UseParNewGC ||
+  bool cannot_share = ((UseConcMarkSweepGC || CMSIncrementalMode) || UseG1GC || UseParNewGC ||
                        UseParallelGC || UseParallelOldGC ||
                        SOLARIS_ONLY(UseISM) NOT_SOLARIS(UseLargePages));
 
@@ -1616,9 +1679,17 @@ bool Arguments::check_vm_args_consistency() {
     // Either force sharing on by forcing the other options off, or
     // force sharing off.
     if (DumpSharedSpaces || ForceSharedSpaces) {
+      jio_fprintf(defaultStream::error_stream(),
+                  "Reverting to Serial GC because of %s\n",
+                  ForceSharedSpaces ? " -Xshare:on" : "-Xshare:dump");
       force_serial_gc();
       FLAG_SET_DEFAULT(SOLARIS_ONLY(UseISM) NOT_SOLARIS(UseLargePages), false);
     } else {
+      if (UseSharedSpaces && Verbose) {
+        jio_fprintf(defaultStream::error_stream(),
+                    "Turning off use of shared archive because of "
+                    "choice of garbage collector or large pages\n");
+      }
       no_shared_spaces();
     }
   }
@@ -1699,6 +1770,21 @@ bool Arguments::check_vm_args_consistency() {
     status = false;
   }
 
+  if (UseG1GC) {
+    status = status && verify_percentage(InitiatingHeapOccupancyPercent,
+                                         "InitiatingHeapOccupancyPercent");
+  }
+
+  status = status && verify_interval(RefDiscoveryPolicy,
+                                     ReferenceProcessor::DiscoveryPolicyMin,
+                                     ReferenceProcessor::DiscoveryPolicyMax,
+                                     "RefDiscoveryPolicy");
+
+  // Limit the lower bound of this flag to 1 as it is used in a division
+  // expression.
+  status = status && verify_interval(TLABWasteTargetPercent,
+                                     1, 100, "TLABWasteTargetPercent");
+
   return status;
 }
 
@@ -1740,6 +1826,29 @@ static bool match_option(const JavaVMOption* option, const char** names, const c
   for (/* empty */; *names != NULL; ++names) {
     if (match_option(option, *names, tail)) {
       if (**tail == '\0' || tail_allowed && **tail == ':') {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool Arguments::parse_uintx(const char* value,
+                            uintx* uintx_arg,
+                            uintx min_size) {
+
+  // Check the sign first since atomull() parses only unsigned values.
+  bool value_is_positive = !(*value == '-');
+
+  if (value_is_positive) {
+    julong n;
+    bool good_return = atomull(value, &n);
+    if (good_return) {
+      bool above_minimum = n >= min_size;
+      bool value_is_too_large = n > max_uintx;
+
+      if (above_minimum && !value_is_too_large) {
+        *uintx_arg = n;
         return true;
       }
     }
@@ -1842,7 +1951,6 @@ jint Arguments::parse_each_vm_init_arg(const JavaVMInitArgs* args,
         FLAG_SET_CMDLINE(bool, TraceClassUnloading, true);
       } else if (!strcmp(tail, ":gc")) {
         FLAG_SET_CMDLINE(bool, PrintGC, true);
-        FLAG_SET_CMDLINE(bool, TraceClassUnloading, true);
       } else if (!strcmp(tail, ":jni")) {
         FLAG_SET_CMDLINE(bool, PrintJNIResolving, true);
       }
@@ -2362,22 +2470,25 @@ SOLARIS_ONLY(
                   "ExtendedDTraceProbes flag is only applicable on Solaris\n");
       return JNI_EINVAL;
 #endif // ndef SOLARIS
-    } else
 #ifdef ASSERT
-    if (match_option(option, "-XX:+FullGCALot", &tail)) {
+    } else if (match_option(option, "-XX:+FullGCALot", &tail)) {
       FLAG_SET_CMDLINE(bool, FullGCALot, true);
       // disable scavenge before parallel mark-compact
       FLAG_SET_CMDLINE(bool, ScavengeBeforeFullGC, false);
-    } else
 #endif
-    if (match_option(option, "-XX:ParCMSPromoteBlocksToClaim=", &tail)) {
+    } else if (match_option(option, "-XX:CMSParPromoteBlocksToClaim=", &tail)) {
       julong cms_blocks_to_claim = (julong)atol(tail);
       FLAG_SET_CMDLINE(uintx, CMSParPromoteBlocksToClaim, cms_blocks_to_claim);
       jio_fprintf(defaultStream::error_stream(),
-        "Please use -XX:CMSParPromoteBlocksToClaim in place of "
+        "Please use -XX:OldPLABSize in place of "
+        "-XX:CMSParPromoteBlocksToClaim in the future\n");
+    } else if (match_option(option, "-XX:ParCMSPromoteBlocksToClaim=", &tail)) {
+      julong cms_blocks_to_claim = (julong)atol(tail);
+      FLAG_SET_CMDLINE(uintx, CMSParPromoteBlocksToClaim, cms_blocks_to_claim);
+      jio_fprintf(defaultStream::error_stream(),
+        "Please use -XX:OldPLABSize in place of "
         "-XX:ParCMSPromoteBlocksToClaim in the future\n");
-    } else
-    if (match_option(option, "-XX:ParallelGCOldGenAllocBufferSize=", &tail)) {
+    } else if (match_option(option, "-XX:ParallelGCOldGenAllocBufferSize=", &tail)) {
       julong old_plab_size = 0;
       ArgsRange errcode = parse_memory_size(tail, &old_plab_size, 1);
       if (errcode != arg_in_range) {
@@ -2390,8 +2501,7 @@ SOLARIS_ONLY(
       jio_fprintf(defaultStream::error_stream(),
                   "Please use -XX:OldPLABSize in place of "
                   "-XX:ParallelGCOldGenAllocBufferSize in the future\n");
-    } else
-    if (match_option(option, "-XX:ParallelGCToSpaceAllocBufferSize=", &tail)) {
+    } else if (match_option(option, "-XX:ParallelGCToSpaceAllocBufferSize=", &tail)) {
       julong young_plab_size = 0;
       ArgsRange errcode = parse_memory_size(tail, &young_plab_size, 1);
       if (errcode != arg_in_range) {
@@ -2404,8 +2514,38 @@ SOLARIS_ONLY(
       jio_fprintf(defaultStream::error_stream(),
                   "Please use -XX:YoungPLABSize in place of "
                   "-XX:ParallelGCToSpaceAllocBufferSize in the future\n");
-    } else
-    if (match_option(option, "-XX:", &tail)) { // -XX:xxxx
+    } else if (match_option(option, "-XX:CMSMarkStackSize=", &tail) ||
+               match_option(option, "-XX:G1MarkStackSize=", &tail)) {
+      julong stack_size = 0;
+      ArgsRange errcode = parse_memory_size(tail, &stack_size, 1);
+      if (errcode != arg_in_range) {
+        jio_fprintf(defaultStream::error_stream(),
+                    "Invalid mark stack size: %s\n", option->optionString);
+        describe_range_error(errcode);
+        return JNI_EINVAL;
+      }
+      FLAG_SET_CMDLINE(uintx, MarkStackSize, stack_size);
+    } else if (match_option(option, "-XX:CMSMarkStackSizeMax=", &tail)) {
+      julong max_stack_size = 0;
+      ArgsRange errcode = parse_memory_size(tail, &max_stack_size, 1);
+      if (errcode != arg_in_range) {
+        jio_fprintf(defaultStream::error_stream(),
+                    "Invalid maximum mark stack size: %s\n",
+                    option->optionString);
+        describe_range_error(errcode);
+        return JNI_EINVAL;
+      }
+      FLAG_SET_CMDLINE(uintx, MarkStackSizeMax, max_stack_size);
+    } else if (match_option(option, "-XX:ParallelMarkingThreads=", &tail) ||
+               match_option(option, "-XX:ParallelCMSThreads=", &tail)) {
+      uintx conc_threads = 0;
+      if (!parse_uintx(tail, &conc_threads, 1)) {
+        jio_fprintf(defaultStream::error_stream(),
+                    "Invalid concurrent threads: %s\n", option->optionString);
+        return JNI_EINVAL;
+      }
+      FLAG_SET_CMDLINE(uintx, ConcGCThreads, conc_threads);
+    } else if (match_option(option, "-XX:", &tail)) { // -XX:xxxx
       // Skip -XX:Flags= since that case has already been handled
       if (strncmp(tail, "Flags=", strlen("Flags=")) != 0) {
         if (!process_argument(tail, args->ignoreUnrecognized, origin)) {
@@ -2475,6 +2615,9 @@ jint Arguments::finalize_vm_init_args(SysClassPath* scp_p, bool scp_assembly_req
     SOLARIS_ONLY(FLAG_SET_DEFAULT(UseMPSS, false));
     SOLARIS_ONLY(FLAG_SET_DEFAULT(UseISM, false));
   }
+
+  // Tiered compilation is undefined with C1.
+  TieredCompilation = false;
 
 #else
   if (!FLAG_IS_DEFAULT(OptoLoopAlignment) && FLAG_IS_DEFAULT(MaxLoopPad)) {
@@ -2679,24 +2822,40 @@ jint Arguments::parse(const JavaVMInitArgs* args) {
 
   if (EnableInvokeDynamic && !EnableMethodHandles) {
     if (!FLAG_IS_DEFAULT(EnableMethodHandles)) {
-      warning("forcing EnableMethodHandles true to allow EnableInvokeDynamic");
+      warning("forcing EnableMethodHandles true because EnableInvokeDynamic is true");
     }
     EnableMethodHandles = true;
   }
   if (EnableMethodHandles && !AnonymousClasses) {
     if (!FLAG_IS_DEFAULT(AnonymousClasses)) {
-      warning("forcing AnonymousClasses true to enable EnableMethodHandles");
+      warning("forcing AnonymousClasses true because EnableMethodHandles is true");
     }
     AnonymousClasses = true;
   }
+  if ((EnableMethodHandles || AnonymousClasses) && ScavengeRootsInCode == 0) {
+    if (!FLAG_IS_DEFAULT(ScavengeRootsInCode)) {
+      warning("forcing ScavengeRootsInCode non-zero because EnableMethodHandles or AnonymousClasses is true");
+    }
+    ScavengeRootsInCode = 1;
+  }
+#ifdef COMPILER2
+  if (EnableInvokeDynamic && DoEscapeAnalysis) {
+    // TODO: We need to find rules for invokedynamic and EA.  For now,
+    // simply disable EA by default.
+    if (FLAG_IS_DEFAULT(DoEscapeAnalysis)) {
+      DoEscapeAnalysis = false;
+    }
+  }
+#endif
 
   if (PrintGCDetails) {
     // Turn on -verbose:gc options as well
     PrintGC = true;
-    if (FLAG_IS_DEFAULT(TraceClassUnloading)) {
-      TraceClassUnloading = true;
-    }
   }
+
+#if defined(_LP64) && defined(COMPILER1)
+  UseCompressedOops = false;
+#endif
 
 #ifdef SERIALGC
   force_serial_gc();
@@ -2708,11 +2867,21 @@ jint Arguments::parse(const JavaVMInitArgs* args) {
   // Set flags based on ergonomics.
   set_ergonomics_flags();
 
+#ifdef _LP64
+  // XXX JSR 292 currently does not support compressed oops.
+  if (EnableMethodHandles && UseCompressedOops) {
+    if (FLAG_IS_DEFAULT(UseCompressedOops) || FLAG_IS_ERGO(UseCompressedOops)) {
+      UseCompressedOops = false;
+    }
+  }
+#endif // _LP64
+
   // Check the GC selections again.
   if (!check_gc_consistency()) {
     return JNI_EINVAL;
   }
 
+#ifndef KERNEL
   if (UseConcMarkSweepGC) {
     // Set flags for CMS and ParNew.  Check UseConcMarkSweep first
     // to ensure that when both UseConcMarkSweepGC and UseParNewGC
@@ -2730,6 +2899,7 @@ jint Arguments::parse(const JavaVMInitArgs* args) {
       set_g1_gc_flags();
     }
   }
+#endif // KERNEL
 
 #ifdef SERIALGC
   assert(verify_serial_gc_flags(), "SerialGC unset");
@@ -2757,11 +2927,19 @@ jint Arguments::parse(const JavaVMInitArgs* args) {
   if (!UseBiasedLocking || EmitSync != 0) {
     UseOptoBiasInlining = false;
   }
-  if (DoEscapeAnalysis) {
-    if (FLAG_IS_CMDLINE(DoEscapeAnalysis)) {
-      warning("Escape Analysis is disabled in this release.");
+#endif
+
+  if (PrintAssembly && FLAG_IS_DEFAULT(DebugNonSafepoints)) {
+    warning("PrintAssembly is enabled; turning on DebugNonSafepoints to gain additional output");
+    DebugNonSafepoints = true;
+  }
+
+#ifndef PRODUCT
+  if (CompileTheWorld) {
+    // Force NmethodSweeper to sweep whole CodeCache each time.
+    if (FLAG_IS_DEFAULT(NmethodSweepFraction)) {
+      NmethodSweepFraction = 1;
     }
-    FLAG_SET_DEFAULT(DoEscapeAnalysis, false);
   }
 #endif
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -337,12 +337,12 @@ class instanceKlass: public Klass {
   static bool is_same_class_package(oop class_loader1, symbolOop class_name1, oop class_loader2, symbolOop class_name2);
 
   // find an enclosing class (defined where original code was, in jvm.cpp!)
-  klassOop compute_enclosing_class(symbolOop& simple_name_result, TRAPS) {
+  klassOop compute_enclosing_class(bool* inner_is_member, TRAPS) {
     instanceKlassHandle self(THREAD, this->as_klassOop());
-    return compute_enclosing_class_impl(self, simple_name_result, THREAD);
+    return compute_enclosing_class_impl(self, inner_is_member, THREAD);
   }
   static klassOop compute_enclosing_class_impl(instanceKlassHandle self,
-                                               symbolOop& simple_name_result, TRAPS);
+                                               bool* inner_is_member, TRAPS);
 
   // tell if two classes have the same enclosing class (at package level)
   bool is_same_package_member(klassOop class2, TRAPS) {
@@ -465,6 +465,10 @@ class instanceKlass: public Klass {
   // RedefineClasses() support for previous versions:
   void add_previous_version(instanceKlassHandle ikh, BitMap *emcp_methods,
          int emcp_method_count);
+  // If the _previous_versions array is non-NULL, then this klass
+  // has been redefined at least once even if we aren't currently
+  // tracking a previous version.
+  bool has_been_redefined() const { return _previous_versions != NULL; }
   bool has_previous_version() const;
   void init_previous_versions() {
     _previous_versions = NULL;
@@ -506,9 +510,14 @@ class instanceKlass: public Klass {
   void set_bootstrap_method(oop mh)                   { oop_store(&_bootstrap_method, mh); }
 
   // jmethodID support
-  static jmethodID get_jmethod_id(instanceKlassHandle ik_h, size_t idnum,
-                                  jmethodID new_id, jmethodID* new_jmeths);
-  static jmethodID jmethod_id_for_impl(instanceKlassHandle ik_h, methodHandle method_h);
+  static jmethodID get_jmethod_id(instanceKlassHandle ik_h,
+                     methodHandle method_h);
+  static jmethodID get_jmethod_id_fetch_or_update(instanceKlassHandle ik_h,
+                     size_t idnum, jmethodID new_id, jmethodID* new_jmeths,
+                     jmethodID* to_dealloc_id_p,
+                     jmethodID** to_dealloc_jmeths_p);
+  static void get_jmethod_id_length_value(jmethodID* cache, size_t idnum,
+                size_t *length_p, jmethodID* id_p);
   jmethodID jmethod_id_or_null(methodOop method);
 
   // cached itable index support
@@ -713,7 +722,7 @@ class instanceKlass: public Klass {
 #endif // SERIALGC
 
   // Naming
-  char* signature_name() const;
+  const char* signature_name() const;
 
   // Iterators
   int oop_oop_iterate(oop obj, OopClosure* blk) {
@@ -754,6 +763,11 @@ private:
   void set_init_thread(Thread *thread)  { _init_thread = thread; }
 
   u2 idnum_allocated_count() const      { return _idnum_allocated_count; }
+  // The RedefineClasses() API can cause new method idnums to be needed
+  // which will cause the caches to grow. Safety requires different
+  // cache management logic if the caches can grow instead of just
+  // going from NULL to non-NULL.
+  bool idnum_can_increment() const      { return has_been_redefined(); }
   jmethodID* methods_jmethod_ids_acquire() const
          { return (jmethodID*)OrderAccess::load_ptr_acquire(&_methods_jmethod_ids); }
   void release_set_methods_jmethod_ids(jmethodID* jmeths)
@@ -825,17 +839,16 @@ public:
   // JVMTI support
   jint jvmti_class_status() const;
 
-#ifndef PRODUCT
  public:
   // Printing
-  void oop_print_on      (oop obj, outputStream* st);
   void oop_print_value_on(oop obj, outputStream* st);
+#ifndef PRODUCT
+  void oop_print_on      (oop obj, outputStream* st);
 
   void print_dependent_nmethods(bool verbose = false);
   bool is_dependent_nmethod(nmethod* nm);
 #endif
 
- public:
   // Verification
   const char* internal_name() const;
   void oop_verify_on(oop obj, outputStream* st);
