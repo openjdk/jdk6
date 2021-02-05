@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007, 2008, 2009, 2010, 2011 Red Hat, Inc.
+ * Copyright (c) 2003, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright 2007, 2008, 2009, 2010, 2011, 2012 Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -78,6 +78,30 @@ int CppInterpreter::normal_entry(methodOop method, intptr_t UNUSED, TRAPS) {
   // No deoptimized frames on the stack
   return 0;
 }
+
+intptr_t narrow(BasicType type, intptr_t result) {
+  // mask integer result to narrower return type.
+  switch (type) {
+    case T_BOOLEAN:
+      return result&1;
+    case T_BYTE:
+      return (intptr_t)(jbyte)result;
+    case T_CHAR:
+      return (intptr_t)(uintptr_t)(jchar)result;
+    case T_SHORT:
+      return (intptr_t)(jshort)result;
+    case T_OBJECT:  // nothing to do fall through
+    case T_ARRAY:
+    case T_LONG:
+    case T_INT:
+    case T_FLOAT:
+    case T_DOUBLE:
+    case T_VOID:
+      return result;
+    default  : ShouldNotReachHere();
+  }
+}
+
 
 void CppInterpreter::main_loop(int recurse, TRAPS) {
   JavaThread *thread = (JavaThread *) THREAD;
@@ -211,8 +235,21 @@ void CppInterpreter::main_loop(int recurse, TRAPS) {
   stack->set_sp(stack->sp() + method->max_locals());
 
   // Push our result
-  for (int i = 0; i < result_slots; i++)
-    stack->push(result[-i]);
+  for (int i = 0; i < result_slots; i++) {
+    // Adjust result to smaller
+    union {
+      intptr_t res;
+      jint res_jint;
+    };
+    res = result[-i];
+    if (result_slots == 1) {
+      BasicType t = result_type_of(method);
+      if (is_subword_type(t)) {
+        res_jint = (jint)narrow(t, res_jint);
+      }
+    }
+    stack->push(res);
+  }
 }
 
 int CppInterpreter::native_entry(methodOop method, intptr_t UNUSED, TRAPS) {
@@ -539,6 +576,7 @@ int CppInterpreter::accessor_entry(methodOop method, intptr_t UNUSED, TRAPS) {
       break;
 
     case btos:
+    case ztos:
       SET_LOCALS_INT(object->byte_field_acquire(entry->f2()), 0);
       break;
 
@@ -577,6 +615,7 @@ int CppInterpreter::accessor_entry(methodOop method, intptr_t UNUSED, TRAPS) {
       break;
 
     case btos:
+    case ztos:
       SET_LOCALS_INT(object->byte_field(entry->f2()), 0);
       break;
 
@@ -811,11 +850,10 @@ void CppInterpreter::process_method_handle(oop method_handle, TRAPS) {
   case MethodHandles::_bound_int_mh:
   case MethodHandles::_bound_long_mh:
     {
-      BasicType arg_type  = T_ILLEGAL;
-      int       arg_mask  = -1;
-      int       arg_slots = -1;
-      MethodHandles::get_ek_bound_mh_info(
-        entry_kind, arg_type, arg_mask, arg_slots);
+      BasicType arg_type = MethodHandles::ek_bound_mh_arg_type(entry_kind);
+      int arg_mask = 0;
+      int arg_slots = type2size[arg_type];;
+
       int arg_slot =
         java_lang_invoke_BoundMethodHandle::vmargslot(method_handle);
 
@@ -961,10 +999,10 @@ void CppInterpreter::process_method_handle(oop method_handle, TRAPS) {
         java_lang_invoke_AdapterMethodHandle::conversion(method_handle);
       int arg2 = MethodHandles::adapter_conversion_vminfo(conv);
 
-      int swap_bytes = 0, rotate = 0;
-      MethodHandles::get_ek_adapter_opt_swap_rot_info(
-        entry_kind, swap_bytes, rotate);
-      int swap_slots = swap_bytes >> LogBytesPerWord;
+      int swap_slots = MethodHandles::ek_adapter_opt_swap_slots(entry_kind);
+      int rotate = MethodHandles::ek_adapter_opt_swap_mode(entry_kind);
+      int swap_bytes = swap_slots * Interpreter::stackElementSize;
+      swap_slots = swap_bytes >> LogBytesPerWord;
 
       intptr_t tmp;
       switch (rotate) {
@@ -1288,22 +1326,10 @@ int AbstractInterpreter::BasicType_as_index(BasicType type) {
 }
 
 BasicType CppInterpreter::result_type_of(methodOop method) {
-  BasicType t;
-  switch (method->result_index()) {
-    case 0 : t = T_BOOLEAN; break;
-    case 1 : t = T_CHAR;    break;
-    case 2 : t = T_BYTE;    break;
-    case 3 : t = T_SHORT;   break;
-    case 4 : t = T_INT;     break;
-    case 5 : t = T_LONG;    break;
-    case 6 : t = T_VOID;    break;
-    case 7 : t = T_FLOAT;   break;
-    case 8 : t = T_DOUBLE;  break;
-    case 9 : t = T_OBJECT;  break;
-    default: ShouldNotReachHere();
-  }
-  assert(AbstractInterpreter::BasicType_as_index(t) == method->result_index(),
-         "out of step with AbstractInterpreter::BasicType_as_index");
+  // Get method->_constMethod->_result_type
+  u1 *p = ((unsigned char *)method->constMethod()
+           + in_bytes(constMethodOopDesc::result_type_offset()));
+  BasicType t = (BasicType)*p;
   return t;
 }
 
