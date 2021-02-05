@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,22 +23,13 @@
  * questions.
  */
 
-package sun.beans.editors;
+package sun.misc;
 
-/**
- * Abstract Property editor for a java builtin number types.
- *
- */
+import java.io.File;
+import java.io.IOException;
 
-import java.beans.*;
-
-abstract public class NumberEditor extends PropertyEditorSupport {
-
-    public String getJavaInitializationString() {
-        Object value = getValue();
-        return (value != null)
-                ? value.toString()
-                : "null";
-    }
-
+public interface JavaIOFileAccess {
+    public File createTempFile(String prefix, String suffix, File directory)
+        throws IOException;
 }
+
