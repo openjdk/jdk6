@@ -32,7 +32,7 @@
  * @build TestImpl
  * @build TestImpl_Stub
  * @build BlockAcceptTest
- * @run main/othervm/policy=security.policy/timeout=60 BlockAcceptTest
+ * @run main/othervm/policy=security.policy/timeout=60 -Dsun.rmi.server.disableIncomingHttp=false BlockAcceptTest
  */
 
 /* This test attempts to stymie the RMI accept loop.  The accept loop in

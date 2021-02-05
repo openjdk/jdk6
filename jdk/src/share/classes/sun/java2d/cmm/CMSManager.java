@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -97,53 +97,53 @@ public class CMSManager {
             cName = tcmm.getClass().getName();
         }
 
-        public long loadProfile(byte[] data) {
+        public Profile loadProfile(byte[] data) {
             System.err.print(cName + ".loadProfile");
-            long profileID = tcmm.loadProfile(data);
-            System.err.println("(ID=" + profileID + ")");
-            return profileID;
+            Profile p = tcmm.loadProfile(data);
+            System.err.printf("(ID=%s)\n", p.toString());
+            return p;
         }
 
-        public void freeProfile(long profileID) {
-            System.err.println(cName + ".freeProfile(ID=" + profileID + ")");
-            tcmm.freeProfile(profileID);
+        public void freeProfile(Profile p) {
+            System.err.printf(cName + ".freeProfile(ID=%s)\n", p.toString());
+            tcmm.freeProfile(p);
         }
 
-        public int getProfileSize(long profileID) {
-            System.err.print(cName + ".getProfileSize(ID=" + profileID + ")");
-            int size = tcmm.getProfileSize(profileID);
+        public int getProfileSize(Profile p) {
+            System.err.print(cName + ".getProfileSize(ID=" + p + ")");
+            int size = tcmm.getProfileSize(p);
             System.err.println("=" + size);
             return size;
         }
 
-        public void getProfileData(long profileID, byte[] data) {
-            System.err.print(cName + ".getProfileData(ID=" + profileID + ") ");
+        public void getProfileData(Profile p, byte[] data) {
+            System.err.print(cName + ".getProfileData(ID=" + p + ") ");
             System.err.println("requested " + data.length + " byte(s)");
-            tcmm.getProfileData(profileID, data);
+            tcmm.getProfileData(p, data);
         }
 
-        public int getTagSize(long profileID, int tagSignature) {
-            System.err.print(cName + ".getTagSize(ID=" + profileID +
-                               ", TagSig=" + tagSignature + ")");
-            int size = tcmm.getTagSize(profileID, tagSignature);
+        public int getTagSize(Profile p, int tagSignature) {
+            System.err.printf(cName + ".getTagSize(ID=%x, TagSig=%s)",
+                              p, signatureToString(tagSignature));
+            int size = tcmm.getTagSize(p, tagSignature);
             System.err.println("=" + size);
             return size;
         }
 
-        public void getTagData(long profileID, int tagSignature,
+        public void getTagData(Profile p, int tagSignature,
                                byte[] data) {
-            System.err.print(cName + ".getTagData(ID=" + profileID +
-                             ", TagSig=" + tagSignature + ")");
+            System.err.printf(cName + ".getTagData(ID=%x, TagSig=%s)",
+                              p, signatureToString(tagSignature));
             System.err.println(" requested " + data.length + " byte(s)");
-            tcmm.getTagData(profileID, tagSignature, data);
+            tcmm.getTagData(p, tagSignature, data);
         }
 
-        public void setTagData(long profileID, int tagSignature,
+        public void setTagData(Profile p, int tagSignature,
                                byte[] data) {
-            System.err.print(cName + ".setTagData(ID=" + profileID +
+            System.err.print(cName + ".setTagData(ID=" + p +
                              ", TagSig=" + tagSignature + ")");
             System.err.println(" sending " + data.length + " byte(s)");
-            tcmm.setTagData(profileID, tagSignature, data);
+            tcmm.setTagData(p, tagSignature, data);
         }
 
         /* methods for creating ColorTransforms */
@@ -157,6 +157,14 @@ public class CMSManager {
         public ColorTransform createTransform(ColorTransform[] transforms) {
             System.err.println(cName + ".createTransform(ColorTransform[])");
             return tcmm.createTransform(transforms);
+        }
+
+        private static String signatureToString(int sig) {
+            return String.format("%c%c%c%c",
+                                 (char)(0xff & (sig >> 24)),
+                                 (char)(0xff & (sig >> 16)),
+                                 (char)(0xff & (sig >>  8)),
+                                 (char)(0xff & (sig      )));
         }
     }
 }

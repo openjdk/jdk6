@@ -62,10 +62,11 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 
-%% This notice is provided with respect to littlecms, which may be included with this software:  
+%% This notice is provided with respect to Little CMS 2.9, which is
+included with OpenJDK 6:
 
 Little cms
-Copyright (C) 1998-2004 Marti Maria
+Copyright (C) 1998-2017 Marti Maria
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
