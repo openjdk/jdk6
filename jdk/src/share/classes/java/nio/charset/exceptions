@@ -1,0 +1,27 @@
+# %W% %E%
+# Generated exception classes for java.nio.charset
+
+SCCS_ID='%I%'
+SCCS_DATE='%E%'
+SINCE=1.4
+PACKAGE=java.nio.charset
+
+
+SUPER=java.io.IOException
+
+gen CharacterCodingException "
+ * Checked exception thrown when a character encoding
+ * or decoding error occurs."
+
+
+SUPER=IllegalArgumentException
+
+gen IllegalCharsetNameException "
+ * Unchecked exception thrown when a string that is not a
+ * <a href="Charset.html#names">legal charset name</a> is used as such." \
+ String charsetName CharsetName "illegal charset name"
+
+gen UnsupportedCharsetException "
+ * Unchecked exception thrown when no support is available
+ * for a requested charset." \
+ String charsetName CharsetName "name of the unsupported charset"

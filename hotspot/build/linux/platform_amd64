@@ -1,0 +1,13 @@
+os_family = linux
+
+arch = amd64
+
+os_arch = linux_amd64
+
+lib_arch = amd64
+
+compiler = gcc
+
+gnu_dis_arch = amd64
+
+sysdefs = -DLINUX -D_GNU_SOURCE -DAMD64
