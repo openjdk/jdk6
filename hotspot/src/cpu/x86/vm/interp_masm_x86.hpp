@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,14 +19,31 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
+ *
  */
 
-/*
- *
- *
- * Used by unresolvedExceptions.sh
- */
+#ifndef CPU_X86_VM_INTERP_MASM_X86_HPP
+#define CPU_X86_VM_INTERP_MASM_X86_HPP
 
-public class SomeException extends RuntimeException {
+#include "assembler_x86.inline.hpp"
+#include "interpreter/invocationCounter.hpp"
 
-}
+// This file specializes the assember with interpreter-specific macros
+
+
+class InterpreterMacroAssembler: public MacroAssembler {
+
+#ifdef TARGET_ARCH_MODEL_x86_32
+# include "interp_masm_x86_32.hpp"
+#endif
+#ifdef TARGET_ARCH_MODEL_x86_64
+# include "interp_masm_x86_64.hpp"
+#endif
+
+ public:
+  // narrow int return value
+  void narrow(Register result);
+
+};
+
+#endif // CPU_X86_VM_INTERP_MASM_X86_HPP
