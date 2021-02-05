@@ -39,6 +39,7 @@ static BOOL reportEvents = FALSE;
  */
 
 jfieldID AwtObject::pDataID;
+jfieldID AwtObject::destroyedID;
 jfieldID AwtObject::targetID;
 jclass AwtObject::wObjectPeerClass;
 jmethodID AwtObject::getPeerForTargetMID;
@@ -223,6 +224,7 @@ Java_sun_awt_windows_WObjectPeer_initIDs(JNIEnv *env, jclass cls) {
 
     AwtObject::wObjectPeerClass = (jclass)env->NewGlobalRef(cls);
     AwtObject::pDataID = env->GetFieldID(cls, "pData", "J");
+    AwtObject::destroyedID = env->GetFieldID(cls, "destroyed", "Z");
     AwtObject::targetID = env->GetFieldID(cls, "target",
                                               "Ljava/lang/Object;");
 
@@ -233,6 +235,7 @@ Java_sun_awt_windows_WObjectPeer_initIDs(JNIEnv *env, jclass cls) {
     AwtObject::createErrorID = env->GetFieldID(cls, "createError", "Ljava/lang/Error;");
 
     DASSERT(AwtObject::pDataID != NULL);
+    DASSERT(AwtObject::destroyedID != NULL);
     DASSERT(AwtObject::targetID != NULL);
     DASSERT(AwtObject::getPeerForTargetMID != NULL);
     DASSERT(AwtObject::createErrorID != NULL);

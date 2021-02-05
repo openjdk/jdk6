@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1639,6 +1639,22 @@ void os::win32::print_windows_version(outputStream* st) {
             st->print(" Windows 8");
         } else {
             st->print(" Windows Server 2012");
+        }
+        if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64)
+            st->print(" , 64 bit");
+      } else if (os_vers == 6003) {
+        if (osvi.wProductType == VER_NT_WORKSTATION) {
+            st->print(" Windows 8.1");
+        } else {
+            st->print(" Windows Server 2012 R2");
+        }
+        if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64)
+            st->print(" , 64 bit");
+      } else if (os_vers == 10000) {
+        if (osvi.wProductType == VER_NT_WORKSTATION) {
+            st->print(" Windows 10");
+        } else {
+            st->print(" Windows Server 2016");
         }
         if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64)
             st->print(" , 64 bit");
