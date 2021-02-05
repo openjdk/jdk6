@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -402,12 +402,7 @@ inline void vframeStreamCommon::fill_from_compiled_frame(int decode_offset) {
   DebugInfoReadStream buffer(nm(), decode_offset);
   _sender_decode_offset = buffer.read_int();
   _method               = methodOop(buffer.read_oop());
-  // Deoptimization needs reexecute bit to determine whether to reexecute the bytecode
-  // only at the time when it "unpack_frames", and the reexecute bit info could always
-  // be obtained from the scopeDesc in the compiledVFrame. As a result, we don't keep
-  // the reexecute bit here.
-  bool dummy_reexecute;
-  _bci                  = buffer.read_bci_and_reexecute(dummy_reexecute);
+  _bci                  = buffer.read_bci();
 
   assert(_method->is_method(), "checking type of decoded method");
 }

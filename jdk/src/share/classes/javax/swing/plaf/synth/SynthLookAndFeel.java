@@ -1,12 +1,12 @@
 /*
- * Copyright 2002-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2002, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,11 +18,13 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package javax.swing.plaf.synth;
+
+import com.sun.java.swing.plaf.nimbus.NimbusLookAndFeel;
 
 import java.awt.*;
 import java.beans.*;
@@ -233,6 +235,17 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
      * <code>shouldUpdateStyleOnAncestorChanged</code> as necessary.
      */
     static boolean shouldUpdateStyle(PropertyChangeEvent event) {
+        // Note: The following Nimbus-specific call should be refactored
+        // to be in the Nimbus LAF. Due to constraints in an update release,
+        // we couldn't actually provide the public API necessary to allow
+        // NimbusLookAndFeel (a subclass of SynthLookAndFeel) to provide its
+        // own rules for shouldUpdateStyle.
+        LookAndFeel laf = UIManager.getLookAndFeel();
+        if (laf instanceof NimbusLookAndFeel &&
+            ((NimbusLookAndFeel) laf).shouldUpdateStyleOnEvent(event)) {
+            return true;
+        }
+
         String eName = event.getPropertyName();
         if ("name" == eName) {
             // Always update on a name change
@@ -245,30 +258,9 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
         else if ("ancestor" == eName && event.getNewValue() != null) {
             // Only update on an ancestor change when getting a valid
             // parent and the LookAndFeel wants this.
-            LookAndFeel laf = UIManager.getLookAndFeel();
             return (laf instanceof SynthLookAndFeel &&
                     ((SynthLookAndFeel)laf).
                      shouldUpdateStyleOnAncestorChanged());
-        }
-        // Note: The following two nimbus based overrides should be refactored
-        // to be in the Nimbus LAF. Due to constraints in an update release,
-        // we couldn't actually provide the public API necessary to allow
-        // NimbusLookAndFeel (a subclass of SynthLookAndFeel) to provide its
-        // own rules for shouldUpdateStyle.
-        else if ("Nimbus.Overrides" == eName) {
-            // Always update when the Nimbus.Overrides client property has
-            // been changed
-            return true;
-        }
-        else if ("Nimbus.Overrides.InheritDefaults" == eName) {
-            // Always update when the Nimbus.Overrides.InheritDefaults
-            // client property has changed
-            return true;
-        }
-        else if ("JComponent.sizeVariant" == eName) {
-            // Always update when the JComponent.sizeVariant
-            // client property has changed
-            return true;
         }
         return false;
     }
@@ -686,6 +678,14 @@ public class SynthLookAndFeel extends BasicLookAndFeel {
                   new Dimension(10, 10));
         table.put("ColorChooser.swatchesDefaultRecentColor", Color.RED);
         table.put("ColorChooser.swatchesSwatchSize", new Dimension(10, 10));
+
+        // These need to be defined for ImageView.
+        table.put("html.pendingImage", SwingUtilities2.makeIcon(getClass(),
+                                BasicLookAndFeel.class,
+                                "icons/image-delayed.png"));
+        table.put("html.missingImage", SwingUtilities2.makeIcon(getClass(),
+                                BasicLookAndFeel.class,
+                                "icons/image-failed.png"));
 
         // These are needed for PopupMenu.
         table.put("PopupMenu.selectedWindowInputMapBindings", new Object[] {

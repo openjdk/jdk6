@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -212,6 +212,51 @@ char* VMError::error_string(char* buf, int buflen) {
   return buf;
 }
 
+void VMError::print_stack_trace(outputStream* st, JavaThread* jt,
+                                char* buf, int buflen, bool verbose) {
+#ifdef ZERO
+  if (jt->zero_stack()->sp() && jt->top_zero_frame()) {
+    // StackFrameStream uses the frame anchor, which may not have
+    // been set up.  This can be done at any time in Zero, however,
+    // so if it hasn't been set up then we just set it up now and
+    // clear it again when we're done.
+    bool has_last_Java_frame = jt->has_last_Java_frame();
+    if (!has_last_Java_frame)
+      jt->set_last_Java_frame();
+    st->print("Java frames:");
+
+    // If the top frame is a Shark frame and the frame anchor isn't
+    // set up then it's possible that the information in the frame
+    // is garbage: it could be from a previous decache, or it could
+    // simply have never been written.  So we print a warning...
+    StackFrameStream sfs(jt);
+    if (!has_last_Java_frame && !sfs.is_done()) {
+      if (sfs.current()->zeroframe()->is_shark_frame()) {
+        st->print(" (TOP FRAME MAY BE JUNK)");
+      }
+    }
+    st->cr();
+
+    // Print the frames
+    for(int i = 0; !sfs.is_done(); sfs.next(), i++) {
+      sfs.current()->zero_print_on_error(i, st, buf, buflen);
+      st->cr();
+    }
+
+    // Reset the frame anchor if necessary
+    if (!has_last_Java_frame)
+      jt->reset_last_Java_frame();
+  }
+#else
+  if (jt->has_last_Java_frame()) {
+    st->print_cr("Java frames: (J=compiled Java code, j=interpreted, Vv=VM code)");
+    for(StackFrameStream sfs(jt); !sfs.is_done(); sfs.next()) {
+      sfs.current()->print_on_error(st, buf, buflen, verbose);
+      st->cr();
+    }
+  }
+#endif // ZERO
+}
 
 // This is the main function to report a fatal error. Only one thread can
 // call this function, so we don't need to worry about MT-safety. But it's
@@ -457,49 +502,18 @@ void VMError::report(outputStream* st) {
   STEP(130, "(printing Java stack)" )
 
      if (_verbose && _thread && _thread->is_Java_thread()) {
-       JavaThread* jt = (JavaThread*)_thread;
-#ifdef ZERO
-       if (jt->zero_stack()->sp() && jt->top_zero_frame()) {
-         // StackFrameStream uses the frame anchor, which may not have
-         // been set up.  This can be done at any time in Zero, however,
-         // so if it hasn't been set up then we just set it up now and
-         // clear it again when we're done.
-         bool has_last_Java_frame = jt->has_last_Java_frame();
-         if (!has_last_Java_frame)
-           jt->set_last_Java_frame();
-         st->print("Java frames:");
+       print_stack_trace(st, (JavaThread*)_thread, buf, sizeof(buf));
+     }
 
-         // If the top frame is a Shark frame and the frame anchor isn't
-         // set up then it's possible that the information in the frame
-         // is garbage: it could be from a previous decache, or it could
-         // simply have never been written.  So we print a warning...
-         StackFrameStream sfs(jt);
-         if (!has_last_Java_frame && !sfs.is_done()) {
-           if (sfs.current()->zeroframe()->is_shark_frame()) {
-             st->print(" (TOP FRAME MAY BE JUNK)");
-           }
-         }
-         st->cr();
+  STEP(135, "(printing target Java thread stack)" )
 
-         // Print the frames
-         for(int i = 0; !sfs.is_done(); sfs.next(), i++) {
-           sfs.current()->zero_print_on_error(i, st, buf, sizeof(buf));
-           st->cr();
-         }
-
-         // Reset the frame anchor if necessary
-         if (!has_last_Java_frame)
-           jt->reset_last_Java_frame();
+     // printing Java thread stack trace if it is involved in GC crash
+     if (_verbose && (_thread->is_Named_thread())) {
+       JavaThread*  jt = ((NamedThread *)_thread)->processed_thread();
+       if (jt != NULL) {
+         st->print_cr("JavaThread " PTR_FORMAT " (nid = " UINTX_FORMAT ") was being processed", jt, jt->osthread()->thread_id());
+         print_stack_trace(st, jt, buf, sizeof(buf), true);
        }
-#else
-       if (jt->has_last_Java_frame()) {
-         st->print_cr("Java frames: (J=compiled Java code, j=interpreted, Vv=VM code)");
-         for(StackFrameStream sfs(jt); !sfs.is_done(); sfs.next()) {
-           sfs.current()->print_on_error(st, buf, sizeof(buf));
-           st->cr();
-         }
-       }
-#endif // ZERO
      }
 
   STEP(140, "(printing VM operation)" )
