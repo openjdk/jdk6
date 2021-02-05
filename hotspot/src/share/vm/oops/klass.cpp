@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,6 +34,19 @@
 #include "oops/oop.inline.hpp"
 #include "oops/oop.inline2.hpp"
 #include "runtime/atomic.hpp"
+
+bool Klass::is_cloneable() const {
+  return _access_flags.is_cloneable() ||
+         is_subtype_of(SystemDictionary::Cloneable_klass());
+}
+
+void Klass::set_is_cloneable() {
+  if (oop_is_instance() && instanceKlass::cast(this->as_klassOop())->reference_type() != REF_NONE) {
+    // Reference cloning should not be intrinsified and always happen in JVM_Clone.
+  } else {
+    _access_flags.set_is_cloneable();
+  }
+}
 
 void Klass::set_name(Symbol* n) {
   _name = n;
