@@ -40,6 +40,8 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.beans.PropertyChangeSupport;
 import java.beans.PropertyChangeListener;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -127,6 +129,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author  Fred Ecks
  */
 public final class AppContext {
+    private static final Logger log = Logger.getLogger("sun.awt.AppContext");
 
     /* Since the contents of an AppContext are unique to each Java
      * session, this class should never be serialized. */
@@ -419,7 +422,13 @@ public final class AppContext {
             public void run() {
                 Window[] windowsToDispose = Window.getOwnerlessWindows();
                 for (Window w : windowsToDispose) {
-                    w.dispose();
+                    try {
+                        w.dispose();
+                    } catch (Throwable t) {
+                        if (log.isLoggable(Level.FINER)) {
+                            log.log(Level.FINER, "exception occured while disposing app context", t);
+                        }
+                    }
                 }
                 AccessController.doPrivileged(new PrivilegedAction() {
                         public Object run() {

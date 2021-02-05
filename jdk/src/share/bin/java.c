@@ -231,6 +231,7 @@ main(int argc, char ** argv)
           printf("\targv[%d] = '%s'\n",i,argv[i]);
         }
       }
+      AddOption("-Dsun.java.launcher.diag=true", NULL);
     }
 
 
@@ -447,7 +448,6 @@ JavaMain(void * _args)
         if (showVersion) {
             fprintf(stderr, "\n");
         }
-        AddOption("-Dsun.java.launcher.diag=true", NULL);
     }
 
     if (showSettings != NULL) {

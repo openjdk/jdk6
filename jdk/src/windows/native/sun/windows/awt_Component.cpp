@@ -4022,6 +4022,10 @@ void AwtComponent::OpenCandidateWindow(int x, int y)
     RECT rc;
     GetWindowRect(GetHWnd(), &rc);
 
+    if (!m_bitsCandType) {
+        SetCandidateWindow(m_bitsCandType, x-rc.left, y-rc.top);
+        return;
+    }
     for (int iCandType=0; iCandType<32; iCandType++, bits<<=1) {
         if ( m_bitsCandType & bits )
             SetCandidateWindow(iCandType, x-rc.left, y-rc.top);
@@ -4036,7 +4040,7 @@ void AwtComponent::SetCandidateWindow(int iCandType, int x, int y)
     HIMC hIMC = ImmGetContext();
     CANDIDATEFORM cf;
     cf.dwIndex = iCandType;
-    cf.dwStyle = CFS_CANDIDATEPOS;
+    cf.dwStyle = CFS_POINT;
     cf.ptCurrentPos.x = x;
     cf.ptCurrentPos.y = y;
 
@@ -4064,9 +4068,15 @@ MsgRouting AwtComponent::WmImeSetContext(BOOL fSet, LPARAM *lplParam)
 
 MsgRouting AwtComponent::WmImeNotify(WPARAM subMsg, LPARAM bitsCandType)
 {
-    if (!m_useNativeCompWindow && subMsg == IMN_OPENCANDIDATE) {
-        m_bitsCandType = bitsCandType;
-        InquireCandidatePosition();
+    if (!m_useNativeCompWindow) {
+        if (subMsg == IMN_OPENCANDIDATE) {
+            m_bitsCandType = subMsg;
+            InquireCandidatePosition();
+        } else if (subMsg == IMN_OPENSTATUSWINDOW ||
+                   subMsg == WM_IME_STARTCOMPOSITION) {
+            m_bitsCandType = 0;
+            InquireCandidatePosition();
+        }
         return mrConsume;
     }
     return mrDoDefault;
@@ -4325,7 +4335,7 @@ void AwtComponent::CallProxyDefWindowProc(UINT message, WPARAM wParam,
     if (mr != mrConsume)  {
         HWND proxy = GetProxyFocusOwner();
         if (proxy != NULL) {
-            retVal = ComCtl32Util::GetInstance().DefWindowProc(NULL, proxy, message, wParam, lParam);
+            retVal = ::DefWindowProc(proxy, message, wParam, lParam);
             mr = mrConsume;
         }
     }
@@ -4404,7 +4414,7 @@ MsgRouting AwtComponent::WmDrawItem(UINT ctrlId, DRAWITEMSTRUCT &drawInfo)
     JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
 
     if (drawInfo.CtlType == ODT_MENU) {
-        if (drawInfo.itemData != 0) {
+        if (IsMenu((HMENU)drawInfo.hwndItem) && drawInfo.itemData != 0) {
             AwtMenu* menu = (AwtMenu*)(drawInfo.itemData);
             menu->DrawItem(drawInfo);
         }
@@ -5552,6 +5562,7 @@ void AwtComponent::UnlinkObjects()
     if (m_peerObject) {
         env->SetLongField(m_peerObject, AwtComponent::hwndID, 0);
         JNI_SET_PDATA(m_peerObject, static_cast<PDATA>(NULL));
+        JNI_SET_DESTROYED(m_peerObject);
         env->DeleteGlobalRef(m_peerObject);
         m_peerObject = NULL;
     }

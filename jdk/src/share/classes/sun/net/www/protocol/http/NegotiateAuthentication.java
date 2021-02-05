@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2009, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,6 +39,7 @@ import java.lang.reflect.InvocationTargetException;
 import sun.net.www.http.HttpCapture;
 import static sun.net.www.protocol.http.AuthScheme.NEGOTIATE;
 import static sun.net.www.protocol.http.AuthScheme.KERBEROS;
+import sun.security.action.GetPropertyAction;
 
 /**
  * NegotiateAuthentication:
@@ -56,10 +57,18 @@ class NegotiateAuthentication extends AuthenticationInfo {
     // These maps are used to manage the GSS availability for diffrent
     // hosts. The key for both maps is the host name.
     // <code>supported</code> is set when isSupported is checked,
+
     // if it's true, a cached Negotiator is put into <code>cache</code>.
     // the cache can be used only once, so after the first use, it's cleaned.
     static HashMap <String, Boolean> supported = null;
-    static HashMap <String, Negotiator> cache = null;
+    static ThreadLocal <HashMap <String, Negotiator>> cache = null;
+    /* Whether cache is enabled for Negotiate/Kerberos */
+    private static final boolean cacheSPNEGO;
+    static {
+        String spnegoCacheProp = java.security.AccessController.doPrivileged(
+            new sun.security.action.GetPropertyAction("jdk.spnego.cache", "true"));
+        cacheSPNEGO = Boolean.parseBoolean(spnegoCacheProp);
+    }
 
     // The HTTP Negotiate Helper
     private Negotiator negotiator = null;
@@ -96,8 +105,7 @@ class NegotiateAuthentication extends AuthenticationInfo {
      */
     synchronized public static boolean isSupported(HttpCallerInfo hci) {
         if (supported == null) {
-            supported = new HashMap <String, Boolean>();
-            cache = new HashMap <String, Negotiator>();
+            supported = new HashMap<String, Boolean>();
         }
         String hostname = hci.host;
         hostname = hostname.toLowerCase();
@@ -110,7 +118,15 @@ class NegotiateAuthentication extends AuthenticationInfo {
             supported.put(hostname, true);
             // the only place cache.put is called. here we can make sure
             // the object is valid and the oneToken inside is not null
-            cache.put(hostname, neg);
+            if (cache == null) {
+                cache = new ThreadLocal<HashMap<String, Negotiator>>() {
+                    @Override
+                    protected HashMap<String, Negotiator> initialValue() {
+                        return new HashMap<String, Negotiator>();
+                    }
+                };
+            }
+            cache.get().put(hostname, neg);
             return true;
         } catch(Exception e) {
             supported.put(hostname, false);
@@ -127,6 +143,16 @@ class NegotiateAuthentication extends AuthenticationInfo {
         } else {
             return "Proxy-Authorization";
         }
+    }
+
+    private static synchronized HashMap<String, Negotiator> getCache() {
+        if (cache == null) return null;
+        return cache.get();
+    }
+
+    @Override
+    protected boolean useAuthCache() {
+        return super.useAuthCache() && cacheSPNEGO;
     }
 
     /**
@@ -183,12 +209,11 @@ class NegotiateAuthentication extends AuthenticationInfo {
      */
     private byte[] firstToken() throws IOException {
         negotiator = null;
-        if (cache != null) {
-            synchronized(cache) {
-                negotiator = cache.get(getHost());
-                if (negotiator != null) {
-                    cache.remove(getHost()); // so that it is only used once
-                }
+        HashMap <String, Negotiator> cachedMap = getCache();
+        if (cachedMap != null) {
+            negotiator = cachedMap.get(getHost());
+            if (negotiator != null) {
+                cachedMap.remove(getHost()); // so that it is only used once
             }
         }
         if (negotiator == null) {

@@ -201,7 +201,8 @@ INSTALL_DOT_LIB = true
 #
 ifeq ($(PLATFORM),windows)
 OTHER_LDLIBS += $(JVMLIB) -libpath:$(OBJDIR)/../../../fdlibm/$(OBJDIRNAME) fdlibm.lib \
-		       -libpath:$(OBJDIR)/../../../verify/$(OBJDIRNAME) verify.lib
+		       -libpath:$(OBJDIR)/../../../verify/$(OBJDIRNAME) verify.lib \
+	               version.lib
 else
 OTHER_LDLIBS += $(JVMLIB) -lverify $(LIBSOCKET) -lnsl -ldl \
 		-L$(OBJDIR)/../../../fdlibm/$(OBJDIRNAME) -lfdlibm.$(ARCH)
