@@ -32,10 +32,17 @@
 #ifndef __VALUERECORDS_H
 #define __VALUERECORDS_H
 
+/**
+ * \file
+ * \internal
+ */
+
 #include "LETypes.h"
 #include "LEFontInstance.h"
 #include "OpenTypeTables.h"
 #include "GlyphIterator.h"
+
+U_NAMESPACE_BEGIN
 
 typedef le_uint16 ValueFormat;
 typedef le_int16 ValueRecordField;
@@ -57,6 +64,7 @@ private:
     static le_int16    getFieldCount(ValueFormat valueFormat);
     static le_int16    getFieldIndex(ValueFormat valueFormat, ValueRecordField field);
 };
+LE_VAR_ARRAY(ValueRecord, values)
 
 enum ValueRecordFields
 {
@@ -84,5 +92,7 @@ enum ValueFormatBits
     vfbAnyDevice    = vfbXPlaDevice + vfbYPlaDevice + vfbXAdvDevice + vfbYAdvDevice
 };
 
-
+U_NAMESPACE_END
 #endif
+
+

@@ -78,8 +78,8 @@ class SocketChannelImpl
     private int state = ST_UNINITIALIZED;
 
     // Binding
-    private SocketAddress localAddress = null;
-    private SocketAddress remoteAddress = null;
+    private InetSocketAddress localAddress;
+    private InetSocketAddress remoteAddress;
 
     // Input/Output open
     private boolean isInputOpen = true;
@@ -423,6 +423,11 @@ class SocketChannelImpl
                             {
                                 Net.setIntOption(fd, opt, arg);
                             }
+                            boolean getIsBoundCondition()
+                            {
+                                // always return true
+                                return true;
+                            }
                         };
                 options = new SocketOptsImpl.IP.TCP(d);
             }
@@ -438,7 +443,7 @@ class SocketChannelImpl
         }
     }
 
-    public SocketAddress localAddress() {
+    public InetSocketAddress localAddress() {
         synchronized (stateLock) {
             if (state == ST_CONNECTED &&
                 (localAddress == null ||
@@ -447,7 +452,7 @@ class SocketChannelImpl
                     // Socket was bound with an "anyLocalAddress"
                     localAddress = Net.localAddress(fd);
             }
-            return localAddress;
+            return  Net.getRevealedLocalAddress(localAddress);
         }
     }
 
@@ -825,6 +830,7 @@ class SocketChannelImpl
         return fdVal;
     }
 
+    @Override
     public String toString() {
         StringBuffer sb = new StringBuffer();
         sb.append(this.getClass().getSuperclass().getName());
@@ -848,9 +854,10 @@ class SocketChannelImpl
                         sb.append(" oshut");
                     break;
                 }
-                if (localAddress() != null) {
+                InetSocketAddress addr = localAddress();
+                if (addr != null) {
                     sb.append(" local=");
-                    sb.append(localAddress().toString());
+                    sb.append(Net.getRevealedLocalAddressAsString(addr));
                 }
                 if (remoteAddress() != null) {
                     sb.append(" remote=");

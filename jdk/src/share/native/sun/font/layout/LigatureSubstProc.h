@@ -32,11 +32,18 @@
 #ifndef __LIGATURESUBSTITUTIONPROCESSOR_H
 #define __LIGATURESUBSTITUTIONPROCESSOR_H
 
+/**
+ * \file
+ * \internal
+ */
+
 #include "LETypes.h"
 #include "MorphTables.h"
 #include "SubtableProcessor.h"
 #include "StateTableProcessor.h"
 #include "LigatureSubstitution.h"
+
+U_NAMESPACE_BEGIN
 
 class LEGlyphStorage;
 
@@ -51,8 +58,22 @@ public:
 
     virtual void endStateTable();
 
-    LigatureSubstitutionProcessor(const MorphSubtableHeader *morphSubtableHeader);
+    LigatureSubstitutionProcessor(const LEReferenceTo<MorphSubtableHeader> &morphSubtableHeader, LEErrorCode &success);
     virtual ~LigatureSubstitutionProcessor();
+
+    /**
+     * ICU "poor man's RTTI", returns a UClassID for the actual class.
+     *
+     * @stable ICU 2.8
+     */
+    virtual UClassID getDynamicClassID() const;
+
+    /**
+     * ICU "poor man's RTTI", returns a UClassID for this class.
+     *
+     * @stable ICU 2.8
+     */
+    static UClassID getStaticClassID();
 
 private:
     LigatureSubstitutionProcessor();
@@ -62,12 +83,14 @@ protected:
     ByteOffset componentTableOffset;
     ByteOffset ligatureTableOffset;
 
-    const LigatureSubstitutionStateEntry *entryTable;
+    LEReferenceToArrayOf<LigatureSubstitutionStateEntry> entryTable;
 
     le_int32 componentStack[nComponents];
     le_int16 m;
 
-    const LigatureSubstitutionHeader *ligatureSubstitutionHeader;
+    LEReferenceTo<LigatureSubstitutionHeader> ligatureSubstitutionHeader;
+
 };
 
+U_NAMESPACE_END
 #endif

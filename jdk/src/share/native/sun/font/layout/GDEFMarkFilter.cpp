@@ -34,9 +34,14 @@
 #include "GDEFMarkFilter.h"
 #include "GlyphDefinitionTables.h"
 
-GDEFMarkFilter::GDEFMarkFilter(const GlyphDefinitionTableHeader *gdefTable)
+U_NAMESPACE_BEGIN
+
+GDEFMarkFilter::GDEFMarkFilter(const LEReferenceTo<GlyphDefinitionTableHeader> &gdefTable, LEErrorCode &success)
+  : classDefTable(gdefTable->getGlyphClassDefinitionTable(gdefTable, success))
 {
-    classDefTable = gdefTable->getGlyphClassDefinitionTable();
+  if(!classDefTable.isValid()) {
+    success = LE_INTERNAL_ERROR;
+  }
 }
 
 GDEFMarkFilter::~GDEFMarkFilter()
@@ -50,3 +55,5 @@ le_bool GDEFMarkFilter::accept(LEGlyphID glyph) const
 
     return glyphClass == gcdMarkGlyph;
 }
+
+U_NAMESPACE_END

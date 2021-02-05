@@ -25,23 +25,33 @@
 
 /*
  *
- * (C) Copyright IBM Corp. 1998-2005 - All Rights Reserved
+ * (C) Copyright IBM Corp. 1998-2010 - All Rights Reserved
  *
  */
 
 #ifndef __OPENTYPETABLES_H
 #define __OPENTYPETABLES_H
 
+/**
+ * \file
+ * \internal
+ */
+
 #include "LETypes.h"
+#include "LETableReference.h"
+
+U_NAMESPACE_BEGIN
 
 #define ANY_NUMBER 1
 
 typedef le_uint16 Offset;
 typedef le_uint8  ATag[4];
 typedef le_uint32 fixed32;
+
+#define LE_GLYPH_GROUP_MASK 0x00000001UL
 typedef le_uint32 FeatureMask;
 
-#define SWAPT(atag) ((LETag) ((atag[0] << 24) + (atag[1] << 16) + (atag[2] << 8) + atag[3]))
+#define SWAPT(atag) ((LETag) (((atag[0]) << 24) + ((atag[1]) << 16) + ((atag[2]) << 8) + (atag[3])))
 
 struct TagAndOffsetRecord
 {
@@ -62,4 +72,5 @@ struct FeatureMap
     FeatureMask mask;
 };
 
+U_NAMESPACE_END
 #endif

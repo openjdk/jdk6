@@ -24,9 +24,8 @@
  */
 
 /*
- *
  **********************************************************************
- *   Copyright (C) 1998-2005, International Business Machines
+ *   Copyright (C) 1998-2009, International Business Machines
  *   Corporation and others.  All Rights Reserved.
  **********************************************************************
  */
@@ -34,6 +33,15 @@
 #include "LETypes.h"
 #include "LEInsertionList.h"
 #include "LEGlyphStorage.h"
+
+U_NAMESPACE_BEGIN
+
+UOBJECT_DEFINE_RTTI_IMPLEMENTATION(LEGlyphStorage)
+
+LEInsertionCallback::~LEInsertionCallback()
+{
+        // nothing to do...
+}
 
 LEGlyphStorage::LEGlyphStorage()
     : fGlyphCount(0), fGlyphs(NULL), fCharIndices(NULL), fPositions(NULL),
@@ -126,13 +134,28 @@ void LEGlyphStorage::allocateGlyphArray(le_int32 initialGlyphCount, le_bool righ
     if (fInsertionList == NULL) {
         // FIXME: check this for failure?
         fInsertionList = new LEInsertionList(rightToLeft);
+        if (fInsertionList == NULL) {
+            LE_DELETE_ARRAY(fCharIndices);
+            fCharIndices = NULL;
+
+            LE_DELETE_ARRAY(fGlyphs);
+            fGlyphs = NULL;
+
+            success = LE_MEMORY_ALLOCATION_ERROR;
+            return;
     }
+}
 }
 
 // FIXME: do we want to initialize the positions to [0, 0]?
 le_int32 LEGlyphStorage::allocatePositions(LEErrorCode &success)
 {
     if (LE_FAILURE(success)) {
+        return -1;
+    }
+
+    if (fPositions != NULL) {
+        success = LE_INTERNAL_ERROR;
         return -1;
     }
 
@@ -150,6 +173,11 @@ le_int32 LEGlyphStorage::allocatePositions(LEErrorCode &success)
 le_int32 LEGlyphStorage::allocateAuxData(LEErrorCode &success)
 {
     if (LE_FAILURE(success)) {
+        return -1;
+    }
+
+    if (fAuxData != NULL) {
+        success = LE_INTERNAL_ERROR;
         return -1;
     }
 
@@ -507,30 +535,87 @@ void LEGlyphStorage::adoptGlyphCount(le_int32 newGlyphCount)
     fGlyphCount = newGlyphCount;
 }
 
-// FIXME: add error checking?
+// Move a glyph to a different position in the LEGlyphStorage ( used for Indic v2 processing )
+
+void LEGlyphStorage::moveGlyph(le_int32 fromPosition, le_int32 toPosition, le_uint32 marker )
+{
+
+    LEErrorCode success = LE_NO_ERROR;
+
+    LEGlyphID holdGlyph = getGlyphID(fromPosition,success);
+    le_int32 holdCharIndex = getCharIndex(fromPosition,success);
+    le_uint32 holdAuxData = getAuxData(fromPosition,success);
+
+    if ( fromPosition < toPosition ) {
+        for ( le_int32 i = fromPosition ; i < toPosition ; i++ ) {
+            setGlyphID(i,getGlyphID(i+1,success),success);
+            setCharIndex(i,getCharIndex(i+1,success),success);
+            setAuxData(i,getAuxData(i+1,success),success);
+        }
+    } else {
+        for ( le_int32 i = toPosition ; i > fromPosition ; i-- ) {
+            setGlyphID(i,getGlyphID(i-1,success),success);
+            setCharIndex(i,getCharIndex(i-1,success),success);
+            setAuxData(i,getAuxData(i-1,success),success);
+
+        }
+    }
+
+    setGlyphID(toPosition,holdGlyph,success);
+    setCharIndex(toPosition,holdCharIndex,success);
+    setAuxData(toPosition,holdAuxData | marker,success);
+
+}
+
+// Glue code for existing stable API
 LEGlyphID *LEGlyphStorage::insertGlyphs(le_int32  atIndex, le_int32 insertCount)
 {
-    return fInsertionList->insert(atIndex, insertCount);
+    LEErrorCode ignored = LE_NO_LAYOUT_ERROR;
+    return insertGlyphs(atIndex, insertCount, ignored);
+}
+
+// FIXME: add error checking?
+LEGlyphID *LEGlyphStorage::insertGlyphs(le_int32  atIndex, le_int32 insertCount, LEErrorCode& success)
+{
+    return fInsertionList->insert(atIndex, insertCount, success);
 }
 
 le_int32 LEGlyphStorage::applyInsertions()
 {
     le_int32 growAmount = fInsertionList->getGrowAmount();
 
-    if (growAmount == 0) {
+    if (growAmount <= 0) {
         return fGlyphCount;
     }
 
     le_int32 newGlyphCount = fGlyphCount + growAmount;
 
-    fGlyphs      = (LEGlyphID *) LE_GROW_ARRAY(fGlyphs,      newGlyphCount);
-    fCharIndices = (le_int32 *)  LE_GROW_ARRAY(fCharIndices, newGlyphCount);
+    LEGlyphID *newGlyphs = (LEGlyphID *) LE_GROW_ARRAY(fGlyphs, newGlyphCount);
+    if (newGlyphs == NULL) {
+        // Could not grow the glyph array
+        return fGlyphCount;
+    }
+    fGlyphs = newGlyphs;
+
+    le_int32 *newCharIndices = (le_int32 *) LE_GROW_ARRAY(fCharIndices, newGlyphCount);
+    if (newCharIndices == NULL) {
+        // Could not grow the glyph array
+        return fGlyphCount;
+    }
+    fCharIndices = newCharIndices;
 
     if (fAuxData != NULL) {
-        fAuxData = (le_uint32 *) LE_GROW_ARRAY(fAuxData,     newGlyphCount);
+        le_uint32 *newAuxData = (le_uint32 *) LE_GROW_ARRAY(fAuxData, newGlyphCount);
+        if (newAuxData == NULL) {
+            // could not grow the aux data array
+            return fGlyphCount;
+    }
+        fAuxData = (le_uint32 *)newAuxData;
     }
 
-    fSrcIndex  = fGlyphCount - 1;
+    if (fGlyphCount > 0) {
+       fSrcIndex  = fGlyphCount - 1;
+    }
     fDestIndex = newGlyphCount - 1;
 
 #if 0
@@ -570,6 +655,10 @@ le_bool LEGlyphStorage::applyInsertion(le_int32 atPosition, le_int32 count, LEGl
     }
 #endif
 
+    if (atPosition < 0 || fSrcIndex < 0 || fDestIndex < 0) {
+        return FALSE;
+    }
+
     if (fAuxData != NULL) {
         le_int32 src = fSrcIndex, dest = fDestIndex;
 
@@ -582,7 +671,7 @@ le_bool LEGlyphStorage::applyInsertion(le_int32 atPosition, le_int32 count, LEGl
         }
     }
 
-    while (fSrcIndex > atPosition) {
+    while (fSrcIndex > atPosition && fSrcIndex >= 0 && fDestIndex >= 0) {
         fGlyphs[fDestIndex]      = fGlyphs[fSrcIndex];
         fCharIndices[fDestIndex] = fCharIndices[fSrcIndex];
 
@@ -590,7 +679,7 @@ le_bool LEGlyphStorage::applyInsertion(le_int32 atPosition, le_int32 count, LEGl
         fSrcIndex  -= 1;
     }
 
-    for (le_int32 i = count - 1; i >= 0; i -= 1) {
+    for (le_int32 i = count - 1; i >= 0 && fDestIndex >= 0; i -= 1) {
         fGlyphs[fDestIndex]      = newGlyphs[i];
         fCharIndices[fDestIndex] = fCharIndices[atPosition];
 
@@ -599,7 +688,10 @@ le_bool LEGlyphStorage::applyInsertion(le_int32 atPosition, le_int32 count, LEGl
 
     // the source glyph we're pointing at
     // just got replaced by the insertion
-    fSrcIndex -= 1;
+        fSrcIndex -= 1;
 
     return FALSE;
 }
+
+U_NAMESPACE_END
+

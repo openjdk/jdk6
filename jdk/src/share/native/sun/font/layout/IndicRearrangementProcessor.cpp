@@ -39,11 +39,18 @@
 #include "LEGlyphStorage.h"
 #include "LESwaps.h"
 
-IndicRearrangementProcessor::IndicRearrangementProcessor(const MorphSubtableHeader *morphSubtableHeader)
-  : StateTableProcessor(morphSubtableHeader)
+U_NAMESPACE_BEGIN
+
+UOBJECT_DEFINE_RTTI_IMPLEMENTATION(IndicRearrangementProcessor)
+
+  IndicRearrangementProcessor::IndicRearrangementProcessor(const LEReferenceTo<MorphSubtableHeader> &morphSubtableHeader, LEErrorCode &success)
+  : StateTableProcessor(morphSubtableHeader, success),
+  indicRearrangementSubtableHeader(morphSubtableHeader, success),
+  entryTable(stateTableHeader, success, (const IndicRearrangementStateEntry*)(&stateTableHeader->stHeader),
+             entryTableOffset, LE_UNBOUNDED_ARRAY),
+  int16Table(stateTableHeader, success, (const le_int16*)entryTable.getAlias(), 0, LE_UNBOUNDED_ARRAY)
+
 {
-    indicRearrangementSubtableHeader = (const IndicRearrangementSubtableHeader *) morphSubtableHeader;
-    entryTable = (const IndicRearrangementStateEntry *) ((char *) &stateTableHeader->stHeader + entryTableOffset);
 }
 
 IndicRearrangementProcessor::~IndicRearrangementProcessor()
@@ -56,10 +63,10 @@ void IndicRearrangementProcessor::beginStateTable()
     lastGlyph = 0;
 }
 
-ByteOffset IndicRearrangementProcessor::processStateEntry(LEGlyphStorage &glyphStorage,
-    le_int32 &currGlyph, EntryTableIndex index)
+ByteOffset IndicRearrangementProcessor::processStateEntry(LEGlyphStorage &glyphStorage, le_int32 &currGlyph, EntryTableIndex index)
 {
-    const IndicRearrangementStateEntry *entry = &entryTable[index];
+  LEErrorCode success = LE_NO_ERROR; // todo- make a param?
+  const IndicRearrangementStateEntry *entry = entryTable.getAlias(index,success);
     ByteOffset newState = SWAPW(entry->newStateOffset);
     IndicRearrangementFlags flags = (IndicRearrangementFlags) SWAPW(entry->flags);
 
@@ -416,3 +423,5 @@ void IndicRearrangementProcessor::doRearrangementAction(LEGlyphStorage &glyphSto
         break;
     }
 }
+
+U_NAMESPACE_END

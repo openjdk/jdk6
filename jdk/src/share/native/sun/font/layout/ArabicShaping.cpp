@@ -35,6 +35,8 @@
 #include "LEGlyphStorage.h"
 #include "ClassDefinitionTables.h"
 
+U_NAMESPACE_BEGIN
+
 // This table maps Unicode joining types to
 // ShapeTypes.
 const ArabicShaping::ShapeType ArabicShaping::shapeTypes[] =
@@ -56,14 +58,16 @@ const ArabicShaping::ShapeType ArabicShaping::shapeTypes[] =
 */
 ArabicShaping::ShapeType ArabicShaping::getShapeType(LEUnicode c)
 {
-    const ClassDefinitionTable *joiningTypes = (const ClassDefinitionTable *) ArabicShaping::shapingTypeTable;
-    le_int32 joiningType = joiningTypes->getGlyphClass(c);
+  LEErrorCode success = LE_NO_ERROR;
+  const LEReferenceTo<ClassDefinitionTable> joiningTypes((const ClassDefinitionTable *) ArabicShaping::shapingTypeTable,
+                                                         ArabicShaping::shapingTypeTableLen);
+  le_int32 joiningType = joiningTypes->getGlyphClass(joiningTypes, c, success);
 
-    if (joiningType >= 0 && joiningType < ArabicShaping::JT_COUNT) {
-        return ArabicShaping::shapeTypes[joiningType];
-    }
+  if (joiningType >= 0 && joiningType < ArabicShaping::JT_COUNT && LE_SUCCESS(success)) {
+    return ArabicShaping::shapeTypes[joiningType];
+  }
 
-    return ArabicShaping::ST_NOSHAPE_NONE;
+  return ArabicShaping::ST_NOSHAPE_NONE;
 }
 
 #define isolFeatureTag LE_ISOL_FEATURE_TAG
@@ -102,9 +106,8 @@ ArabicShaping::ShapeType ArabicShaping::getShapeType(LEUnicode c)
 #define markFeatureMask 0x00040000UL
 #define mkmkFeatureMask 0x00020000UL
 
-#define ISOL_FEATURES (isolFeatureMask | ligaFeatureMask | msetFeatureMask | \
-    markFeatureMask | ccmpFeatureMask | rligFeatureMask | caltFeatureMask | \
-    dligFeatureMask | cswhFeatureMask | cursFeatureMask | kernFeatureMask | mkmkFeatureMask)
+#define NO_FEATURES   0
+#define ISOL_FEATURES (isolFeatureMask | ligaFeatureMask | msetFeatureMask | markFeatureMask | ccmpFeatureMask | rligFeatureMask | caltFeatureMask | dligFeatureMask | cswhFeatureMask | cursFeatureMask | kernFeatureMask | mkmkFeatureMask)
 
 #define SHAPE_MASK 0xF0000000UL
 
@@ -198,7 +201,11 @@ void ArabicShaping::shape(const LEUnicode *chars, le_int32 offset, le_int32 char
         LEUnicode c = chars[in];
         ShapeType t = getShapeType(c);
 
+        if (t == ST_NOSHAPE_NONE) {
+            glyphStorage.setAuxData(out, NO_FEATURES, success);
+        } else {
         glyphStorage.setAuxData(out, ISOL_FEATURES, success);
+        }
 
         if ((t & MASK_TRANSPARENT) != 0) {
             continue;
@@ -226,3 +233,5 @@ void ArabicShaping::shape(const LEUnicode *chars, le_int32 offset, le_int32 char
         adjustTags(erout, 2, glyphStorage);
     }
 }
+
+U_NAMESPACE_END

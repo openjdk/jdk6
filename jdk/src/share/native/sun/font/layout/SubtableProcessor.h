@@ -32,19 +32,25 @@
 #ifndef __SUBTABLEPROCESSOR_H
 #define __SUBTABLEPROCESSOR_H
 
+/**
+ * \file
+ * \internal
+ */
+
 #include "LETypes.h"
 #include "MorphTables.h"
 
+U_NAMESPACE_BEGIN
+
 class LEGlyphStorage;
 
-class SubtableProcessor
-{
+class SubtableProcessor : public UMemory {
 public:
-    virtual void process(LEGlyphStorage &glyphStorage) = 0;
+    virtual void process(LEGlyphStorage &glyphStorage, LEErrorCode &success) = 0;
     virtual ~SubtableProcessor();
 
 protected:
-    SubtableProcessor(const MorphSubtableHeader *morphSubtableHeader);
+    SubtableProcessor(const LEReferenceTo<MorphSubtableHeader> &morphSubtableHeader, LEErrorCode &success);
 
     SubtableProcessor();
 
@@ -52,7 +58,7 @@ protected:
     SubtableCoverage coverage;
     FeatureFlags subtableFeatures;
 
-    const MorphSubtableHeader *subtableHeader;
+    const LEReferenceTo<MorphSubtableHeader> subtableHeader;
 
 private:
 
@@ -60,4 +66,6 @@ private:
     SubtableProcessor &operator=(const SubtableProcessor &other); // forbid copying of this class
 };
 
+U_NAMESPACE_END
 #endif
+

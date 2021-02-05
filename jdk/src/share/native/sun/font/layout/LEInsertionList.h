@@ -24,9 +24,8 @@
  */
 
 /*
- *
  **********************************************************************
- *   Copyright (C) 1998-2004, International Business Machines
+ *   Copyright (C) 1998-2008, International Business Machines
  *   Corporation and others.  All Rights Reserved.
  **********************************************************************
  */
@@ -36,6 +35,8 @@
 
 #include "LETypes.h"
 
+U_NAMESPACE_BEGIN
+
 struct InsertionRecord;
 
 /**
@@ -44,7 +45,7 @@ struct InsertionRecord;
  *
  * @internal
  */
-class LEInsertionCallback
+class U_LAYOUT_API LEInsertionCallback
 {
 public:
     /**
@@ -61,6 +62,11 @@ public:
      * @internal
      */
     virtual le_bool applyInsertion(le_int32 atPosition, le_int32 count, LEGlyphID newGlyphs[]) = 0;
+
+    /**
+     * The destructor
+     */
+     virtual ~LEInsertionCallback();
 };
 
 /**
@@ -78,7 +84,7 @@ public:
  *
  * @internal
  */
-class LEInsertionList
+class LEInsertionList : public UObject
 {
 public:
     /**
@@ -102,13 +108,14 @@ public:
      * @param position the glyph at this position in the array will be
      *                 replaced by the new glyphs.
      * @param count the number of new glyphs
+     * @param success set to an error code if the auxillary data cannot be retrieved.
      *
      * @return the address of an array in which to store the new glyphs. This will
      *         <em>not</em> be in the glyph array.
      *
      * @internal
      */
-    LEGlyphID *insert(le_int32 position, le_int32 count);
+    LEGlyphID *insert(le_int32 position, le_int32 count, LEErrorCode &success);
 
     /**
      * Return the number of new glyphs that have been inserted.
@@ -139,6 +146,20 @@ public:
      * @internal
      */
     void reset();
+
+    /**
+     * ICU "poor man's RTTI", returns a UClassID for the actual class.
+     *
+     * @stable ICU 2.8
+     */
+    virtual UClassID getDynamicClassID() const;
+
+    /**
+     * ICU "poor man's RTTI", returns a UClassID for this class.
+     *
+     * @stable ICU 2.8
+     */
+    static UClassID getStaticClassID();
 
 private:
 
@@ -174,4 +195,6 @@ private:
     le_bool  append;
 };
 
+U_NAMESPACE_END
 #endif
+

@@ -23,6 +23,7 @@
  *
  */
 
+
 /*
  *
  * (C) Copyright IBM Corp. 1998-2005 - All Rights Reserved
@@ -36,10 +37,14 @@
 
 #include "MorphTables.h"
 
-GXLayoutEngine::GXLayoutEngine(const LEFontInstance *fontInstance, le_int32 scriptCode,
-    le_int32 languageCode, const MorphTableHeader *morphTable)
-    : LayoutEngine(fontInstance, scriptCode, languageCode, 0), fMorphTable(morphTable)
+U_NAMESPACE_BEGIN
+
+UOBJECT_DEFINE_RTTI_IMPLEMENTATION(GXLayoutEngine)
+
+  GXLayoutEngine::GXLayoutEngine(const LEFontInstance *fontInstance, le_int32 scriptCode, le_int32 languageCode, const LEReferenceTo<MorphTableHeader> &morphTable, LEErrorCode &success)
+    : LayoutEngine(fontInstance, scriptCode, languageCode, 0, success), fMorphTable(morphTable)
 {
+  fMorphTable.orphan();
     // nothing else to do?
 }
 
@@ -49,9 +54,7 @@ GXLayoutEngine::~GXLayoutEngine()
 }
 
 // apply 'mort' table
-le_int32 GXLayoutEngine::computeGlyphs(const LEUnicode chars[], le_int32 offset,
-    le_int32 count, le_int32 max, le_bool rightToLeft, LEGlyphStorage &glyphStorage,
-    LEErrorCode &success)
+le_int32 GXLayoutEngine::computeGlyphs(const LEUnicode chars[], le_int32 offset, le_int32 count, le_int32 max, le_bool rightToLeft, LEGlyphStorage &glyphStorage, LEErrorCode &success)
 {
     if (LE_FAILURE(success)) {
         return 0;
@@ -68,15 +71,14 @@ le_int32 GXLayoutEngine::computeGlyphs(const LEUnicode chars[], le_int32 offset,
         return 0;
     }
 
-    fMorphTable->process(glyphStorage);
+    fMorphTable->process(fMorphTable, glyphStorage, success);
 
     return count;
 }
 
 // apply positional tables
-void GXLayoutEngine::adjustGlyphPositions(const LEUnicode chars[],
-    le_int32 offset, le_int32 count, le_bool /*reverse*/,
-    LEGlyphStorage &/*glyphStorage*/, LEErrorCode &success)
+void GXLayoutEngine::adjustGlyphPositions(const LEUnicode chars[], le_int32 offset, le_int32 count, le_bool /*reverse*/,
+                                          LEGlyphStorage &/*glyphStorage*/, LEErrorCode &success)
 {
     if (LE_FAILURE(success)) {
         return;
@@ -89,3 +91,5 @@ void GXLayoutEngine::adjustGlyphPositions(const LEUnicode chars[],
 
     // FIXME: no positional processing yet...
 }
+
+U_NAMESPACE_END
