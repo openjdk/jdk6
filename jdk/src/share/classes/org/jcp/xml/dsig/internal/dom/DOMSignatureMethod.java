@@ -41,6 +41,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
 import org.jcp.xml.dsig.internal.SignerOutputStream;
+import sun.security.util.KeyUtil;
 
 /**
  * DOM-based abstract implementation of SignatureMethod.
@@ -220,6 +221,7 @@ public abstract class DOMSignatureMethod extends DOMStructure
         if (!(key instanceof PublicKey)) {
             throw new InvalidKeyException("key must be PublicKey");
         }
+        checkKeySize(context, key);
         if (signature == null) {
             try {
                 Provider p = (Provider) context.getProperty
@@ -250,6 +252,37 @@ public abstract class DOMSignatureMethod extends DOMStructure
     }
 
     /**
+     * If secure validation mode is enabled, checks that the key size is
+     * restricted.
+     *
+     * @param context the context
+     * @param key the key to check
+     * @throws XMLSignatureException if the key size is restricted
+     */
+    private static void checkKeySize(XMLCryptoContext context, Key key)
+        throws XMLSignatureException {
+        if (Utils.secureValidation(context)) {
+            int size = KeyUtil.getKeySize(key);
+            if (size == -1) {
+                // key size cannot be determined, so we cannot check against
+                // restrictions. Note that a DSA key w/o params will be
+                // rejected later if the certificate chain is validated.
+                if (log.isLoggable(java.util.logging.Level.FINE)) {
+                    log.log(java.util.logging.Level.FINE, "Size for " +
+                         key.getAlgorithm() + " key cannot be determined");
+                }
+                return;
+            }
+            if (Policy.restrictKey(key.getAlgorithm(), size)) {
+                throw new XMLSignatureException(key.getAlgorithm() +
+                    " keys less than " +
+                    Policy.minKeySize(key.getAlgorithm()) + " bits are" +
+                    " forbidden when secure validation is enabled");
+            }
+        }
+    }
+
+    /**
      * Signs the bytes with the specified key, using the underlying
      * signature or MAC algorithm.
      *
@@ -272,6 +305,7 @@ public abstract class DOMSignatureMethod extends DOMStructure
         if (!(key instanceof PrivateKey)) {
             throw new InvalidKeyException("key must be PrivateKey");
         }
+        checkKeySize(context, key);
         if (signature == null) {
             try {
                 Provider p = (Provider) context.getProperty

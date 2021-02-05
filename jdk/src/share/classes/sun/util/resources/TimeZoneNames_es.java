@@ -139,6 +139,8 @@ public final class TimeZoneNames_es extends TimeZoneNamesBundle {
                                            "Hora de verano de Lord Howe", "LHDT"};
         String MHT[] = new String[] {"Hora de las Islas Marshall", "MHT",
                                      "Hora de verano de las Islas Marshall", "MHST"};
+	String MMT[] = new String[] {"Hora de Myanmar", "MMT",
+                                     "Hora de verano de Myanmar", "MMST"};
         String MSK[] = new String[] {"Hora est\u00e1ndar de Mosc\u00fa", "MSK",
                                      "Hora de verano de Mosc\u00fa", "MSD"};
         String MST[] = new String[] {"Hora est\u00e1ndar de las Rocosas", "MST",
@@ -566,8 +568,7 @@ public final class TimeZoneNames_es extends TimeZoneNamesBundle {
             {"Asia/Qatar", ARAST},
             {"Asia/Qyzylorda", new String[] {"Hora de Qyzylorda", "QYZT",
                                              "Hora de verano de Qyzylorda", "QYZST"}},
-            {"Asia/Rangoon", new String[] {"Hora de Myanmar", "MMT",
-                                           "Hora de verano de Myanmar", "MMST"}},
+            {"Asia/Rangoon", MMT},
             {"Asia/Riyadh", ARAST},
             {"Asia/Saigon", ICT},
             {"Asia/Sakhalin", new String[] {"Hora de Sajalin", "SAKT",
@@ -594,6 +595,7 @@ public final class TimeZoneNames_es extends TimeZoneNamesBundle {
             {"Asia/Vientiane", ICT},
             {"Asia/Vladivostok", VLAT},
             {"Asia/Yakutsk", YAKT},
+            {"Asia/Yangon", MMT},
             {"Asia/Yekaterinburg", new String[] {"Hora de Ekaterinburgo", "YEKT",
                                                  "Hora de verano de Ekaterinburgo", "YEKST"}},
             {"Asia/Yerevan", ARMT},

@@ -37,6 +37,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 
 import org.omg.CosNaming.*;
 import org.omg.CosNaming.NamingContextPackage.*;
@@ -82,6 +84,22 @@ public class CNCtx implements javax.naming.Context {
 
     private static final String FED_PROP = "com.sun.jndi.cosnaming.federation";
     boolean federation = false;
+
+    /**
+     * Determines whether classes may be loaded from an arbitrary URL code base.
+     */
+    public static final boolean trustURLCodebase;
+    static {
+        // System property to control whether classes may be loaded from an
+        // arbitrary URL code base
+        String trust = AccessController.doPrivileged(new PrivilegedAction<String>() {
+		public String run() {
+		    return System.getProperty("com.sun.jndi.cosnaming.object.trustURLCodebase", "false");
+		}
+	    });
+
+        trustURLCodebase = "true".equalsIgnoreCase(trust);
+    }
 
     // Reference counter for tracking _orb references
     OrbReuseTracker orbTracker = null;
@@ -536,12 +554,16 @@ public class CNCtx implements javax.naming.Context {
             if (name.size() == 0 )
                 return this; // %%% should clone() so that env can be changed
             NameComponent[] path = CNNameParser.nameToCosName(name);
+            java.lang.Object answer = null;
 
             try {
-                java.lang.Object answer = callResolve(path);
-
+                answer = callResolve(path);
                 try {
-                    return NamingManager.getObjectInstance(answer, name, this, _env);
+                    // Check whether object factory codebase is trusted
+                    if (CorbaUtils.isObjectFactoryTrusted(answer)) {
+                        answer = NamingManager.getObjectInstance(
+                            answer, name, this, _env);
+                    }
                 } catch (NamingException e) {
                     throw e;
                 } catch (Exception e) {
@@ -554,6 +576,7 @@ public class CNCtx implements javax.naming.Context {
                 javax.naming.Context cctx = getContinuationContext(cpe);
                 return cctx.lookup(cpe.getRemainingName());
             }
+            return answer;
     }
 
     /**
