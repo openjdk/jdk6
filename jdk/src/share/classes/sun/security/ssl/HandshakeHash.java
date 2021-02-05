@@ -46,7 +46,29 @@ final class HandshakeHash {
      * a hash for the certificate verify message is required.
      */
     HandshakeHash(boolean needCertificateVerify) {
-        int n = needCertificateVerify ? 3 : 2;
+        // We may rework the code later, but for now we use hard-coded number
+        // of clones if the underlying MessageDigests are not cloneable.
+        //
+        // The number used here is based on the current handshake protocols and
+        // implementation.  It may be changed if the handshake processe gets
+        // changed in the future, for example adding a new extension that
+        // requires handshake hash.  Please be careful about the number of
+        // clones if additional handshak hash is required in the future.
+        //
+        // For the current implementation, the handshake hash is required for
+        // the following items:
+        //     . CertificateVerify handshake message (optional)
+        //     . client Finished handshake message
+        //     . server Finished Handshake message
+        //     . the extended Master Secret extension [RFC 7627]
+        //
+        // Note that a late call to server setNeedClientAuth dose not update
+        // the number of clones.  We may address the issue later.
+        //
+        // Note for safe, we allocate one more clone for the current
+        // implementation.  We may consider it more carefully in the future
+        // for the exactly number or rework the code in a different way.
+        int n = needCertificateVerify ? 5 : 4;
         try {
             md5 = CloneableDigest.getDigest("MD5", n);
             sha = CloneableDigest.getDigest("SHA", n);

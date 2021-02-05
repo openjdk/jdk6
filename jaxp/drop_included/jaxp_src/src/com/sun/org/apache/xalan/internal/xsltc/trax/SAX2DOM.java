@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 2001-2004 The Apache Software Foundation.
@@ -32,12 +31,12 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import com.sun.org.apache.xalan.internal.xsltc.runtime.Constants;
+import jdk.xml.internal.JdkXmlUtils;
 
 import org.w3c.dom.Comment;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
-import org.w3c.dom.Text;
 import org.w3c.dom.ProcessingInstruction;
 import org.xml.sax.Attributes;
 import org.xml.sax.ContentHandler;
@@ -69,27 +68,16 @@ public class SAX2DOM implements ContentHandler, LexicalHandler, Constants {
      * synchronization because the Javadoc is not explicit about 
      * thread safety.
      */
-    static final DocumentBuilderFactory _factory =
-            DocumentBuilderFactory.newInstance();
-    static final DocumentBuilder _internalBuilder;
-    static {
-        DocumentBuilder tmpBuilder = null;
-        try {
-            if (_factory instanceof com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl) {
-                tmpBuilder = _factory.newDocumentBuilder();
-            }
-        } catch(Exception e) {
-            // It's OK. Will create DocumentBuilder every time
-        }
-        _internalBuilder = tmpBuilder;
-    }
-    
-    public SAX2DOM() throws ParserConfigurationException {
-        _document = createDocument();
+    static DocumentBuilderFactory _factory;
+    static boolean _internal;
+
+    public SAX2DOM(boolean overrideDefaultParser) throws ParserConfigurationException {
+        _document = createDocument(overrideDefaultParser);
 	_root = _document;
     }
 
-    public SAX2DOM(Node root, Node nextSibling) throws ParserConfigurationException {
+    public SAX2DOM(Node root, Node nextSibling, boolean overrideDefaultParser)
+            throws ParserConfigurationException {
 	_root = root;
 	if (root instanceof Document) {
 	  _document = (Document)root;
@@ -98,15 +86,15 @@ public class SAX2DOM implements ContentHandler, LexicalHandler, Constants {
 	  _document = root.getOwnerDocument();
 	}
 	else {
-          _document = createDocument();
-	  _root = _document;
+        _document = createDocument(overrideDefaultParser);
+        _root = _document;
 	}
 	
 	_nextSibling = nextSibling;
     }
-    
-    public SAX2DOM(Node root) throws ParserConfigurationException {
-        this(root, null);
+
+    public SAX2DOM(Node root, boolean overrideDefaultParser) throws ParserConfigurationException {
+        this(root, null, overrideDefaultParser);
     }
 
     public Node getDOM() {
@@ -318,11 +306,19 @@ public class SAX2DOM implements ContentHandler, LexicalHandler, Constants {
     public void startDTD(String name, String publicId, String systemId)
         throws SAXException {}
     
-    private static Document createDocument() throws ParserConfigurationException {
+    private static Document createDocument(boolean overrideDefaultParser)
+            throws ParserConfigurationException {
+        if (_factory == null) {
+            _factory = JdkXmlUtils.getDOMFactory(overrideDefaultParser);
+            _internal = true;
+            if (!(_factory instanceof com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl)) {
+                _internal = false;
+            }
+        }
         Document doc;
-        if (_internalBuilder != null) {
+        if (_internal) {
             //default implementation is thread safe
-            doc = _internalBuilder.newDocument();
+            doc = _factory.newDocumentBuilder().newDocument();
         } else {
             synchronized(SAX2DOM.class) {
                 doc = _factory.newDocumentBuilder().newDocument();

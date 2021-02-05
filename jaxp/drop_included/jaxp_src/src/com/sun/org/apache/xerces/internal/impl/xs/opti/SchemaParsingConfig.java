@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 2001-2004 The Apache Software Foundation.
@@ -48,6 +47,7 @@ import com.sun.org.apache.xerces.internal.xni.parser.XMLDTDScanner;
 import com.sun.org.apache.xerces.internal.xni.parser.XMLDocumentScanner;
 import com.sun.org.apache.xerces.internal.xni.parser.XMLInputSource;
 import com.sun.org.apache.xerces.internal.xni.parser.XMLPullParserConfiguration;
+import jdk.xml.internal.JdkXmlUtils;
 
 /**
  * @xerces.internal
@@ -299,7 +299,8 @@ public class SchemaParsingConfig extends BasicParserConfiguration
             PARSER_SETTINGS, WARN_ON_DUPLICATE_ATTDEF,   WARN_ON_UNDECLARED_ELEMDEF,
             ALLOW_JAVA_ENCODINGS,       CONTINUE_AFTER_FATAL_ERROR,
             LOAD_EXTERNAL_DTD,          NOTIFY_BUILTIN_REFS,
-            NOTIFY_CHAR_REFS, GENERATE_SYNTHETIC_ANNOTATIONS
+            NOTIFY_CHAR_REFS, GENERATE_SYNTHETIC_ANNOTATIONS,
+            JdkXmlUtils.OVERRIDE_PARSER
         };
         addRecognizedFeatures(recognizedFeatures);
         fFeatures.put(PARSER_SETTINGS, Boolean.TRUE);
@@ -313,6 +314,7 @@ public class SchemaParsingConfig extends BasicParserConfiguration
         fFeatures.put(NOTIFY_BUILTIN_REFS, Boolean.FALSE);
         fFeatures.put(NOTIFY_CHAR_REFS, Boolean.FALSE);
         fFeatures.put(GENERATE_SYNTHETIC_ANNOTATIONS, Boolean.FALSE);
+        fFeatures.put(JdkXmlUtils.OVERRIDE_PARSER, JdkXmlUtils.OVERRIDE_PARSER_DEFAULT);
 
         // add default recognized properties
         final String[] recognizedProperties = {

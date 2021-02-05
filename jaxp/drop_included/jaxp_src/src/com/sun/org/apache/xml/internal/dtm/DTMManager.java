@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -50,6 +50,8 @@ public abstract class DTMManager
    *  %TBD% Make this set by the caller.
    */
   protected XMLStringFactory m_xsf = null;
+
+  private boolean _overrideDefaultParser;
 
   /**
    * Default constructor is protected on purpose.
@@ -290,6 +292,20 @@ public abstract class DTMManager
    */
   public void setSource_location(boolean sourceLocation){
     m_source_location = sourceLocation;
+  }
+
+  /**
+   * Return the state of the services mechanism feature.
+   */
+  public boolean overrideDefaultParser() {
+      return _overrideDefaultParser;
+  }
+
+  /**
+   * Set the state of the services mechanism feature.
+   */
+  public void setOverrideDefaultParser(boolean flag) {
+      _overrideDefaultParser = flag;
   }
 
 

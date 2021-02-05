@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 1999-2004 The Apache Software Foundation.
@@ -50,6 +49,7 @@ import javax.xml.transform.ErrorListener;
 import javax.xml.transform.SourceLocator;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.URIResolver;
+import jdk.xml.internal.JdkXmlUtils;
 import org.xml.sax.XMLReader;
 
 /**
@@ -91,6 +91,8 @@ public class XPathContext extends DTMManager // implements ExpressionContext
    * state of the secure processing feature.
    */
   private boolean m_isSecureProcessing = false;
+
+  private boolean m_overrideDefaultParser;
 
   /**
    * Though XPathContext context extends
@@ -308,6 +310,7 @@ public class XPathContext extends DTMManager // implements ExpressionContext
     m_currentNodes.push(DTM.NULL);
     m_currentExpressionNodes.push(DTM.NULL);
     m_saxLocations.push(null);
+    m_overrideDefaultParser = false;
   }
 
   /**
@@ -326,6 +329,7 @@ public class XPathContext extends DTMManager // implements ExpressionContext
     m_currentNodes.push(DTM.NULL);
     m_currentExpressionNodes.push(DTM.NULL);
     m_saxLocations.push(null);
+    m_overrideDefaultParser = false;
   }
 
   /**
@@ -1068,6 +1072,21 @@ public class XPathContext extends DTMManager // implements ExpressionContext
     {
       return XPathContext.this.getErrorListener();
     }
+
+
+      /**
+       * Return the state of the services mechanism feature.
+       */
+      public boolean overrideDefaultParser() {
+          return m_overrideDefaultParser;
+      }
+
+      /**
+       * Set the state of the services mechanism feature.
+       */
+      public void setOverrideDefaultParser(boolean flag) {
+          m_overrideDefaultParser = flag;
+      }
 
     /**
      * Get the value of a node as a number.

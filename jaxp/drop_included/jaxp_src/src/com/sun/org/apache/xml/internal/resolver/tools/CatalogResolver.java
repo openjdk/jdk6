@@ -1,4 +1,7 @@
 /*
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ */
+/*
  * reserved comment block
  * DO NOT REMOVE OR ALTER!
  */
@@ -43,6 +46,7 @@ import javax.xml.parsers.SAXParserFactory;
 import com.sun.org.apache.xml.internal.resolver.Catalog;
 import com.sun.org.apache.xml.internal.resolver.CatalogManager;
 import com.sun.org.apache.xml.internal.resolver.helpers.FileURL;
+import jdk.xml.internal.JdkXmlUtils;
 
 /**
  * A SAX EntityResolver/JAXP URIResolver that uses catalogs.
@@ -302,10 +306,9 @@ public class CatalogResolver implements EntityResolver, URIResolver {
   private void setEntityResolver(SAXSource source) throws TransformerException {
     XMLReader reader = source.getXMLReader();
     if (reader == null) {
-      SAXParserFactory spFactory = SAXParserFactory.newInstance();
-      spFactory.setNamespaceAware(true);
+      SAXParserFactory spf = JdkXmlUtils.getSAXFactory(catalogManager.overrideDefaultParser());
       try {
-        reader = spFactory.newSAXParser().getXMLReader();
+        reader = spf.newSAXParser().getXMLReader();
       }
       catch (ParserConfigurationException ex) {
         throw new TransformerException(ex);

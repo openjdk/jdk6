@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 1999-2004 The Apache Software Foundation.
@@ -22,13 +21,11 @@
 
 package com.sun.org.apache.xpath.internal.jaxp;
 
-import javax.xml.transform.TransformerException;
 import javax.xml.xpath.XPathFunctionResolver;
 import javax.xml.xpath.XPathFunction;
 import javax.xml.xpath.XPathFunctionException;
 
 import com.sun.org.apache.xpath.internal.ExtensionsProvider;
-import com.sun.org.apache.xpath.internal.XPathContext;
 import com.sun.org.apache.xpath.internal.objects.XObject;
 import com.sun.org.apache.xpath.internal.objects.XNodeSet;
 import com.sun.org.apache.xpath.internal.res.XPATHErrorResources;
@@ -38,6 +35,7 @@ import com.sun.org.apache.xpath.internal.functions.FuncExtFunction;
 import java.util.Vector;
 import java.util.ArrayList;
 import javax.xml.namespace.QName;
+import jdk.xml.internal.JdkXmlFeatures;
 
 /**
  *
@@ -54,9 +52,12 @@ public class JAXPExtensionsProvider implements ExtensionsProvider {
     }
 
     public JAXPExtensionsProvider(XPathFunctionResolver resolver,
-        boolean featureSecureProcessing ) {
+        boolean featureSecureProcessing, JdkXmlFeatures featureManager ) {
         this.resolver = resolver;
-        this.extensionInvocationDisabled = featureSecureProcessing;
+        if (featureSecureProcessing &&
+                !featureManager.getFeature(JdkXmlFeatures.XmlFeature.ENABLE_EXTENSION_FUNCTION)) {
+            this.extensionInvocationDisabled = true;
+        }
     }
 
     /**

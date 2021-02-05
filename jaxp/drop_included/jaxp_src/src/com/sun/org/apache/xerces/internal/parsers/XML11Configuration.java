@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 2001-2005 The Apache Software Foundation.
@@ -25,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import javax.xml.XMLConstants;
+import jdk.xml.internal.JdkXmlUtils;
 
 import com.sun.org.apache.xerces.internal.impl.Constants;
 import com.sun.org.apache.xerces.internal.impl.XML11DTDScannerImpl;
@@ -50,7 +50,6 @@ import com.sun.org.apache.xerces.internal.impl.xs.XMLSchemaValidator;
 import com.sun.org.apache.xerces.internal.impl.xs.XSMessageFormatter;
 import com.sun.org.apache.xerces.internal.util.ParserConfigurationSettings;
 import com.sun.org.apache.xerces.internal.util.SymbolTable;
-import com.sun.org.apache.xerces.internal.utils.XMLSecurityManager;
 import com.sun.org.apache.xerces.internal.xni.XMLDTDContentModelHandler;
 import com.sun.org.apache.xerces.internal.xni.XMLDTDHandler;
 import com.sun.org.apache.xerces.internal.xni.XMLDocumentHandler;
@@ -453,41 +452,43 @@ public class XML11Configuration extends ParserConfigurationSettings
 
         // add default recognized features
         final String[] recognizedFeatures =
-            {   
-            	CONTINUE_AFTER_FATAL_ERROR, LOAD_EXTERNAL_DTD, // from XMLDTDScannerImpl
-		VALIDATION,                 
-		NAMESPACES,
+            {
+                CONTINUE_AFTER_FATAL_ERROR, LOAD_EXTERNAL_DTD, // from XMLDTDScannerImpl
+                                VALIDATION,
+                                NAMESPACES,
                 NORMALIZE_DATA, SCHEMA_ELEMENT_DEFAULT, SCHEMA_AUGMENT_PSVI,
                 GENERATE_SYNTHETIC_ANNOTATIONS, VALIDATE_ANNOTATIONS,
                 HONOUR_ALL_SCHEMALOCATIONS, USE_GRAMMAR_POOL_ONLY,
-            	// NOTE: These shouldn't really be here but since the XML Schema
-            	//       validator is constructed dynamically, its recognized
-            	//       features might not have been set and it would cause a
-            	//       not-recognized exception to be thrown. -Ac
-            	XMLSCHEMA_VALIDATION, XMLSCHEMA_FULL_CHECKING, 			
-		EXTERNAL_GENERAL_ENTITIES,  
-		EXTERNAL_PARAMETER_ENTITIES,
-		PARSER_SETTINGS,
-                XMLConstants.FEATURE_SECURE_PROCESSING
-			};
+                // NOTE: These shouldn't really be here but since the XML Schema
+                //       validator is constructed dynamically, its recognized
+                //       features might not have been set and it would cause a
+                //       not-recognized exception to be thrown. -Ac
+                XMLSCHEMA_VALIDATION, XMLSCHEMA_FULL_CHECKING,
+                    EXTERNAL_GENERAL_ENTITIES,
+                    EXTERNAL_PARAMETER_ENTITIES,
+                    PARSER_SETTINGS,
+                    XMLConstants.FEATURE_SECURE_PROCESSING,
+                    JdkXmlUtils.OVERRIDE_PARSER
+                        };
 
         addRecognizedFeatures(recognizedFeatures);
-		// set state for default features
-	fFeatures.put(VALIDATION, Boolean.FALSE);
-	fFeatures.put(NAMESPACES, Boolean.TRUE);
-	fFeatures.put(EXTERNAL_GENERAL_ENTITIES, Boolean.TRUE);
-	fFeatures.put(EXTERNAL_PARAMETER_ENTITIES, Boolean.TRUE);
-	fFeatures.put(CONTINUE_AFTER_FATAL_ERROR, Boolean.FALSE);
-	fFeatures.put(LOAD_EXTERNAL_DTD, Boolean.TRUE);
-	fFeatures.put(SCHEMA_ELEMENT_DEFAULT, Boolean.TRUE);
-	fFeatures.put(NORMALIZE_DATA, Boolean.TRUE);
-	fFeatures.put(SCHEMA_AUGMENT_PSVI, Boolean.TRUE);
+                // set state for default features
+                fFeatures.put(VALIDATION, Boolean.FALSE);
+                fFeatures.put(NAMESPACES, Boolean.TRUE);
+                fFeatures.put(EXTERNAL_GENERAL_ENTITIES, Boolean.TRUE);
+                fFeatures.put(EXTERNAL_PARAMETER_ENTITIES, Boolean.TRUE);
+                fFeatures.put(CONTINUE_AFTER_FATAL_ERROR, Boolean.FALSE);
+                fFeatures.put(LOAD_EXTERNAL_DTD, Boolean.TRUE);
+                fFeatures.put(SCHEMA_ELEMENT_DEFAULT, Boolean.TRUE);
+                fFeatures.put(NORMALIZE_DATA, Boolean.TRUE);
+                fFeatures.put(SCHEMA_AUGMENT_PSVI, Boolean.TRUE);
         fFeatures.put(GENERATE_SYNTHETIC_ANNOTATIONS, Boolean.FALSE);
         fFeatures.put(VALIDATE_ANNOTATIONS, Boolean.FALSE);
         fFeatures.put(HONOUR_ALL_SCHEMALOCATIONS, Boolean.FALSE);
         fFeatures.put(USE_GRAMMAR_POOL_ONLY, Boolean.FALSE);
-	fFeatures.put(PARSER_SETTINGS, Boolean.TRUE);
+        fFeatures.put(PARSER_SETTINGS, Boolean.TRUE);
         fFeatures.put(XMLConstants.FEATURE_SECURE_PROCESSING, Boolean.TRUE);
+        fFeatures.put(JdkXmlUtils.OVERRIDE_PARSER, JdkXmlUtils.OVERRIDE_PARSER_DEFAULT);
 
         // add default recognized properties
         final String[] recognizedProperties =

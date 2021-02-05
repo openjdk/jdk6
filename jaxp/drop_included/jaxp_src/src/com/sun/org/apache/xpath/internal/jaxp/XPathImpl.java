@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 1999-2004 The Apache Software Foundation.
@@ -47,6 +46,9 @@ import javax.xml.parsers.*;
 
 import java.io.IOException;
 
+import jdk.xml.internal.JdkXmlFeatures;
+import jdk.xml.internal.JdkXmlUtils;
+
 /**
  * The XPathImpl class provides implementation for the methods defined  in
  * javax.xml.xpath.XPath interface. This provide simple access to the results
@@ -68,17 +70,21 @@ public class XPathImpl implements javax.xml.xpath.XPath {
     // Secure Processing Feature is set on XPathFactory then the invocation of
     // extensions function need to throw XPathFunctionException
     private boolean featureSecureProcessing = false;
+    private boolean overrideDefaultParser = true;
+    private final JdkXmlFeatures featureManager;
 
     XPathImpl( XPathVariableResolver vr, XPathFunctionResolver fr ) {
-        this.origVariableResolver = this.variableResolver = vr;
-        this.origFunctionResolver = this.functionResolver = fr;
+        this(vr, fr, false, new JdkXmlFeatures(false));
     }
 
     XPathImpl( XPathVariableResolver vr, XPathFunctionResolver fr,
-            boolean featureSecureProcessing ) {
+            boolean featureSecureProcessing, JdkXmlFeatures featureManager ) {
         this.origVariableResolver = this.variableResolver = vr;
         this.origFunctionResolver = this.functionResolver = fr;
         this.featureSecureProcessing = featureSecureProcessing;
+        this.featureManager = featureManager;
+        this.overrideDefaultParser = featureManager.getFeature(
+                JdkXmlFeatures.XmlFeature.JDK_OVERRIDE_PARSER);
     }
 
     /**
@@ -156,7 +162,7 @@ public class XPathImpl implements javax.xml.xpath.XPath {
 
     private static Document d = null;
 
-    private static DocumentBuilder getParser() {
+    private DocumentBuilder getParser() {
         try {
             // we'd really like to cache those DocumentBuilders, but we can't because:
             // 1. thread safety. parsers are not thread-safe, so at least
@@ -169,9 +175,7 @@ public class XPathImpl implements javax.xml.xpath.XPath {
             //
             // so we really have to create a fresh DocumentBuilder every time we need one
             // - KK
-            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            dbf.setNamespaceAware( true );
-            dbf.setValidating( false );
+            DocumentBuilderFactory dbf = JdkXmlUtils.getDOMFactory(overrideDefaultParser);
             return dbf.newDocumentBuilder();
         } catch (ParserConfigurationException e) {
             // this should never happen with a well-behaving JAXP implementation.
@@ -179,7 +183,7 @@ public class XPathImpl implements javax.xml.xpath.XPath {
         }
     }
 
-    private static Document getDummyDocument( ) {
+    private Document getDummyDocument( ) {
         // we don't need synchronization here; even if two threads
         // enter this code at the same time, we just waste a little time
         if(d==null) {
@@ -198,7 +202,7 @@ public class XPathImpl implements javax.xml.xpath.XPath {
         com.sun.org.apache.xpath.internal.XPathContext xpathSupport = null;
         if ( functionResolver != null ) {
             JAXPExtensionsProvider jep = new JAXPExtensionsProvider(
-                    functionResolver, featureSecureProcessing );
+                    functionResolver, featureSecureProcessing, featureManager );
             xpathSupport = new com.sun.org.apache.xpath.internal.XPathContext( jep );
         } else {
             xpathSupport = new com.sun.org.apache.xpath.internal.XPathContext();
@@ -397,9 +401,9 @@ public class XPathImpl implements javax.xml.xpath.XPath {
             com.sun.org.apache.xpath.internal.XPath xpath = new XPath (expression, null,
                     prefixResolver, com.sun.org.apache.xpath.internal.XPath.SELECT );
             // Can have errorListener
-            XPathExpressionImpl ximpl = new XPathExpressionImpl (xpath,
+            XPathExpressionImpl ximpl = new XPathExpressionImpl(xpath,
                     prefixResolver, functionResolver, variableResolver,
-                    featureSecureProcessing );
+                    featureSecureProcessing, featureManager);
             return ximpl;
         } catch ( javax.xml.transform.TransformerException te ) {
             throw new XPathExpressionException ( te ) ;
