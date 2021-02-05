@@ -38,6 +38,8 @@ public class AssertsTest {
         }
     }
 
+    private static final Foo NULL = null;
+
     public static void main(String[] args) throws Exception {
         testLessThan();
         testLessThanOrEqual();
@@ -71,7 +73,7 @@ public class AssertsTest {
 
     private static void testEquals() throws Exception {
         expectPass(Assertion.EQ, 1, 1);
-        expectPass(Assertion.EQ, null, null);
+        expectPass(Assertion.EQ, NULL, NULL);
 
         Foo f1 = new Foo(1);
         expectPass(Assertion.EQ, f1, f1);
@@ -108,13 +110,13 @@ public class AssertsTest {
         Foo f2 = new Foo(1);
         expectPass(Assertion.NE, f1, f2);
 
-        expectFail(Assertion.NE, null, null);
+        expectFail(Assertion.NE, NULL, NULL);
         expectFail(Assertion.NE, f1, f1);
         expectFail(Assertion.NE, 1, 1);
     }
 
     private static void testNull() throws Exception {
-        expectPass(Assertion.NULL, null);
+        expectPass(Assertion.NULL, NULL);
 
         expectFail(Assertion.NULL, 1);
     }
@@ -122,24 +124,29 @@ public class AssertsTest {
     private static void testNotNull() throws Exception {
         expectPass(Assertion.NOTNULL, 1);
 
-        expectFail(Assertion.NOTNULL, null);
+        expectFail(Assertion.NOTNULL, NULL);
     }
 
     private static void testTrue() throws Exception {
-        expectPass(Assertion.TRUE, true);
+        expectPassBool(Assertion.TRUE, true);
 
-        expectFail(Assertion.TRUE, false);
+        expectFailBool(Assertion.TRUE, false);
     }
 
     private static void testFalse() throws Exception {
-        expectPass(Assertion.FALSE, false);
+        expectPassBool(Assertion.FALSE, false);
 
-        expectFail(Assertion.FALSE, true);
+        expectFailBool(Assertion.FALSE, true);
     }
 
     private static <T extends Comparable<T>> void expectPass(Assertion assertion, T ... args)
         throws Exception {
         Assertion.run(assertion, args);
+    }
+
+    private static void expectPassBool(Assertion assertion, boolean bool)
+        throws Exception {
+        Assertion.runBool(assertion, bool);
     }
 
     private static <T extends Comparable<T>> void expectFail(Assertion assertion, T ... args)
@@ -153,13 +160,23 @@ public class AssertsTest {
                             " to throw a RuntimeException");
     }
 
+    private static void expectFailBool(Assertion assertion, boolean bool)
+        throws Exception {
+        try {
+            Assertion.runBool(assertion, bool);
+        } catch (RuntimeException e) {
+            return;
+        }
+        throw new Exception("Expected " + Assertion.format(assertion, bool +
+                                                           " to throw a RuntimeException"));
+    }
 }
 
 enum Assertion {
     LT, LTE, EQ, GTE, GT, NE, NULL, NOTNULL, FALSE, TRUE;
 
     public static <T extends Comparable<T>> void run(Assertion assertion, T ... args) {
-        String msg = "Expected " + format(assertion, args) + " to pass";
+        String msg = "Expected " + format(assertion, (Object[]) args) + " to pass";
         switch (assertion) {
             case LT:
                 assertLessThan(args[0], args[1], msg);
@@ -185,16 +202,26 @@ enum Assertion {
             case NOTNULL:
                 assertNotNull(args == null ? args : args[0], msg);
                 break;
-            case FALSE:
-                assertFalse((Boolean) args[0], msg);
-                break;
-            case TRUE:
-                assertTrue((Boolean) args[0], msg);
-                break;
-            default:
+           default:
                 // do nothing
         }
     }
+
+    public static void runBool(Assertion assertion, Boolean bool) {
+        String msg = "Expected " + format(assertion, bool) + " to pass";
+        switch (assertion) {
+            case FALSE:
+                System.err.println("assertFalse(" + bool + ", " + msg + ")");
+                assertFalse(bool, msg);
+                break;
+            case TRUE:
+                System.err.println("assertTrue(" + bool + ", " + msg + ")");
+                assertTrue(bool, msg);
+                break;
+           default:
+                // do nothing
+        }
+     }
 
     public static String format(Assertion assertion, Object ... args) {
         switch (assertion) {

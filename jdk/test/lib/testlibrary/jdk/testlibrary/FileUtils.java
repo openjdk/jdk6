@@ -23,14 +23,8 @@
 
 package jdk.testlibrary;
 
+import java.io.File;
 import java.io.IOException;
-import java.nio.file.DirectoryNotEmptyException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,7 +52,7 @@ public final class FileUtils {
      * @throws IOException
      *         if an I/O error occurs
      */
-    public static void deleteFileWithRetry(Path path)
+    public static void deleteFileWithRetry(File path)
         throws IOException
     {
         try {
@@ -82,46 +76,28 @@ public final class FileUtils {
      * @throws IOException
      *         if an I/O error occurs
      */
-    public static void deleteFileIfExistsWithRetry(Path path)
+    public static void deleteFileIfExistsWithRetry(File path)
         throws IOException
     {
         try {
-            if(Files.exists(path))
+            if (path.exists())
                 deleteFileWithRetry0(path);
         } catch (InterruptedException x) {
             throw new IOException("Interrupted while deleting.", x);
         }
     }
 
-    private static void deleteFileWithRetry0(Path path)
+    private static void deleteFileWithRetry0(File path)
         throws IOException, InterruptedException
     {
         int times = 0;
-        IOException ioe = null;
-        while (true) {
-            try {
-                Files.delete(path);
-                while (Files.exists(path)) {
-                    times++;
-                    if (times > MAX_RETRY_DELETE_TIMES)
-                        throw new IOException("File still exists after " + times + " waits.");
-                    Thread.sleep(RETRY_DELETE_MILLIS);
-                }
-                break;
-            } catch (NoSuchFileException | DirectoryNotEmptyException x) {
-                throw x;
-            } catch (IOException x) {
-                // Backoff/retry in case another process is accessing the file
-                times++;
-                if (ioe == null)
-                    ioe = x;
-                else
-                    ioe.addSuppressed(x);
-
-                if (times > MAX_RETRY_DELETE_TIMES)
-                    throw ioe;
-                Thread.sleep(RETRY_DELETE_MILLIS);
-            }
+        boolean result = path.delete();
+        while (!result) {
+            times++;
+            if (times > MAX_RETRY_DELETE_TIMES)
+                throw new IOException("File still exists after " + times + " waits.");
+            Thread.sleep(RETRY_DELETE_MILLIS);
+            result = path.delete();
         }
     }
 
@@ -137,58 +113,25 @@ public final class FileUtils {
      *          following exceptions are added as suppressed exceptions of the
      *          first one caught, which is then re-thrown.
      */
-    public static void deleteFileTreeWithRetry(Path dir)
+    public static void deleteFileTreeWithRetry(File dir)
          throws IOException
     {
-        IOException ioe = null;
-        final List<IOException> excs = deleteFileTreeUnchecked(dir);
-        if (!excs.isEmpty()) {
-            ioe = excs.remove(0);
-            for (IOException x : excs)
-                ioe.addSuppressed(x);
-        }
-        if (ioe != null)
-            throw ioe;
+        boolean failed = false;
+        final List<Boolean> results = deleteFileTreeUnchecked(dir);
+        failed = !results.isEmpty();
+        if (failed)
+            throw new IOException();
     }
 
-    public static List<IOException> deleteFileTreeUnchecked(Path dir) {
-        final List<IOException> excs = new ArrayList<>();
-        try {
-            java.nio.file.Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                    try {
-                        deleteFileWithRetry0(file);
-                    } catch (IOException x) {
-                        excs.add(x);
-                    } catch (InterruptedException x) {
-                        excs.add(new IOException("Interrupted while deleting.", x));
-                        return FileVisitResult.TERMINATE;
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-                @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
-                    try {
-                        deleteFileWithRetry0(dir);
-                    } catch (IOException x) {
-                        excs.add(x);
-                    } catch (InterruptedException x) {
-                        excs.add(new IOException("Interrupted while deleting.", x));
-                        return FileVisitResult.TERMINATE;
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-                @Override
-                public FileVisitResult visitFileFailed(Path file, IOException exc) {
-                    excs.add(exc);
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        } catch (IOException x) {
-            excs.add(x);
+    public static List<Boolean> deleteFileTreeUnchecked(File dir) {
+        final List<Boolean> results = new ArrayList<Boolean>();
+        for (File file : dir.listFiles()) {
+            if (file.isDirectory()) {
+                results.addAll(deleteFileTreeUnchecked(file));
+            } else {
+                results.add(file.delete());
+            }
         }
-        return excs;
+        return results;
     }
 }
-

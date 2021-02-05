@@ -533,8 +533,7 @@ class BufferStrategyPaintManager extends RepaintManager.PaintManager {
                     if (bufferStrategy.contentsRestored()) {
                         contentsLost = true;
                         if (LOGGER.isLoggable(Level.FINER)) {
-                            LOGGER.finer(
-                                "prepare: contents restored in prepare");
+                            LOGGER.finer("prepare: contents restored in prepare");
                         }
                     }
                 }

@@ -523,8 +523,8 @@ class ServerImpl implements TimeSource {
                         rheaders.set ("Connection", "close");
                     } else if (chdr.equalsIgnoreCase ("keep-alive")) {
                         rheaders.set ("Connection", "keep-alive");
-                        int idle=(int)ServerConfig.getIdleInterval()/1000;
-                        int max=(int)ServerConfig.getMaxIdleConnections();
+                        int idle=(int)(ServerConfig.getIdleInterval()/1000);
+                        int max=ServerConfig.getMaxIdleConnections();
                         String val = "timeout="+idle+", max="+max;
                         rheaders.set ("Keep-Alive", val);
                     }

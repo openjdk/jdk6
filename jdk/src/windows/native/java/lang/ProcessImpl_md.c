@@ -101,20 +101,70 @@ selectProcessFlag(JNIEnv *env, jstring cmd0)
     return newFlag;
 }
 
+/* We have THREE locales in action:
+ * 1. Thread default locale - dictates UNICODE-to-8bit conversion
+ * 2. System locale that defines the message localization
+ * 3. The file name locale
+ * Each locale could be an extended locale, that means that text cannot be
+ * mapped to 8bit sequence without multibyte encoding.
+ * VM is ready for that, if text is UTF-8.
+ * Here we make the work right from the beginning.
+ */
+size_t os_error_message(int errnum, WCHAR* utf16_OSErrorMsg, size_t maxMsgLength) {
+    size_t n = (size_t)FormatMessageW(
+            FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            (DWORD)errnum,
+            0,
+            utf16_OSErrorMsg,
+            (DWORD)maxMsgLength,
+            NULL);
+    if (n > 3) {
+        // Drop final '.', CR, LF
+        if (utf16_OSErrorMsg[n - 1] == L'\n') --n;
+        if (utf16_OSErrorMsg[n - 1] == L'\r') --n;
+        if (utf16_OSErrorMsg[n - 1] == L'.') --n;
+        utf16_OSErrorMsg[n] = L'\0';
+    }
+    return n;
+}
+
+#define MESSAGE_LENGTH (256 + 100)
+#define ARRAY_SIZE(x) (sizeof(x)/sizeof(*x))
+
 static void
-win32Error(JNIEnv *env, const char *functionName)
+win32Error(JNIEnv *env, const WCHAR *functionName)
 {
-    static const char * const format = "%s error=%d, %s";
-    static const char * const fallbackFormat = "%s failed, error=%d";
-    char buf[256];
-    char errmsg[sizeof(buf) + 100];
-    const int errnum = GetLastError();
-    const int n = JVM_GetLastErrorString(buf, sizeof(buf));
-    if (n > 0)
-        sprintf(errmsg, format, functionName, errnum, buf);
-    else
-        sprintf(errmsg, fallbackFormat, functionName, errnum);
-    JNU_ThrowIOException(env, errmsg);
+    WCHAR utf16_OSErrorMsg[MESSAGE_LENGTH - 100];
+    WCHAR utf16_javaMessage[MESSAGE_LENGTH];
+    /*Good suggestion about 2-bytes-per-symbol in localized error reports*/
+    char  utf8_javaMessage[MESSAGE_LENGTH*2];
+    const int errnum = (int)GetLastError();
+    int n = os_error_message(errnum, utf16_OSErrorMsg, ARRAY_SIZE(utf16_OSErrorMsg));
+    n = (n > 0)
+        ? swprintf(utf16_javaMessage, MESSAGE_LENGTH, L"%s error=%d, %s", functionName, errnum, utf16_OSErrorMsg)
+        : swprintf(utf16_javaMessage, MESSAGE_LENGTH, L"%s failed, error=%d", functionName, errnum);
+
+    if (n > 0) /*terminate '\0' is not a part of conversion procedure*/
+        n = WideCharToMultiByte(
+            CP_UTF8,
+            0,
+            utf16_javaMessage,
+            n, /*by creation n <= MESSAGE_LENGTH*/
+            utf8_javaMessage,
+            MESSAGE_LENGTH*2,
+            NULL,
+            NULL);
+
+    /*no way to die*/
+    {
+        const char *errorMessage = "Secondary error while OS message extraction";
+        if (n > 0) {
+            utf8_javaMessage[min(MESSAGE_LENGTH*2 - 1, n)] = '\0';
+            errorMessage = utf8_javaMessage;
+        }
+        JNU_ThrowIOException(env, errorMessage);
+    }
 }
 
 static void
@@ -142,10 +192,10 @@ Java_java_lang_ProcessImpl_create(JNIEnv *env, jclass ignored,
     HANDLE errWrite = 0;
     SECURITY_ATTRIBUTES sa;
     PROCESS_INFORMATION pi;
-    STARTUPINFO si;
-    LPTSTR  pcmd      = NULL;
-    LPCTSTR pdir      = NULL;
-    LPVOID  penvBlock = NULL;
+    STARTUPINFOW si;
+    const jchar*  pcmd = NULL;
+    const jchar*  pdir = NULL;
+    const jchar*  penvBlock = NULL;
     jlong ret = 0;
     OSVERSIONINFO ver;
     jboolean onNT = JNI_FALSE;
@@ -163,27 +213,22 @@ Java_java_lang_ProcessImpl_create(JNIEnv *env, jclass ignored,
     if (!(CreatePipe(&inRead,  &inWrite,  &sa, PIPE_SIZE) &&
           CreatePipe(&outRead, &outWrite, &sa, PIPE_SIZE) &&
           CreatePipe(&errRead, &errWrite, &sa, PIPE_SIZE))) {
-        win32Error(env, "CreatePipe");
+        win32Error(env, L"CreatePipe");
         goto Catch;
     }
 
     assert(cmd != NULL);
-    pcmd = (LPTSTR) JNU_GetStringPlatformChars(env, cmd, NULL);
+    pcmd = (*env)->GetStringChars(env, cmd, NULL);
     if (pcmd == NULL) goto Catch;
 
     if (dir != 0) {
-        pdir = (LPCTSTR) JNU_GetStringPlatformChars(env, dir, NULL);
+        pdir = (*env)->GetStringChars(env, dir, NULL);
         if (pdir == NULL) goto Catch;
-        pdir = (LPCTSTR) JVM_NativePath((char *)pdir);
     }
-
     if (envBlock != NULL) {
-        penvBlock = onNT
-            ? (LPVOID) ((*env)->GetStringChars(env, envBlock, NULL))
-            : (LPVOID) JNU_GetStringPlatformChars(env, envBlock, NULL);
+        penvBlock = ((*env)->GetStringChars(env, envBlock, NULL));
         if (penvBlock == NULL) goto Catch;
     }
-
     memset(&si, 0, sizeof(si));
     si.cb = sizeof(si);
     si.dwFlags = STARTF_USESTDHANDLES;
@@ -201,32 +246,19 @@ Java_java_lang_ProcessImpl_create(JNIEnv *env, jclass ignored,
     if (onNT)
         processFlag = CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT;
     else
-        processFlag = selectProcessFlag(env, cmd);
-
-    /* Java and Windows are both pure Unicode systems at heart.
-     * Windows has both a legacy byte-based API and a 16-bit Unicode
-     * "W" API.  The Right Thing here is to call CreateProcessW, since
-     * that will allow all process-related information like command
-     * line arguments to be passed properly to the child.  We don't do
-     * that currently, since we would first have to have "W" versions
-     * of JVM_NativePath and perhaps other functions.  In the
-     * meantime, we can call CreateProcess with the magic flag
-     * CREATE_UNICODE_ENVIRONMENT, which passes only the environment
-     * in "W" mode.  We will fix this later. */
-
-    ret = CreateProcess(0,           /* executable name */
-                        pcmd,        /* command line */
-                        0,           /* process security attribute */
-                        0,           /* thread security attribute */
-                        TRUE,        /* inherits system handles */
-                        processFlag, /* selected based on exe type */
-                        penvBlock,   /* environment block */
-                        pdir,        /* change to the new current directory */
-                        &si,         /* (in)  startup information */
-                        &pi);        /* (out) process information */
-
+        processFlag = selectProcessFlag(env, cmd) | CREATE_UNICODE_ENVIRONMENT;
+    ret = CreateProcessW(0,                /* executable name */
+                         (LPWSTR)pcmd,     /* command line */
+                         0,                /* process security attribute */
+                         0,                /* thread security attribute */
+                         TRUE,             /* inherits system handles */
+                         processFlag,      /* selected based on exe type */
+                         (LPVOID)penvBlock,/* environment block */
+                         (LPCWSTR)pdir,    /* change to the new current directory */
+                         &si,              /* (in)  startup information */
+                         &pi);             /* (out) process information */
     if (!ret) {
-        win32Error(env, "CreateProcess");
+        win32Error(env, L"CreateProcess");
         goto Catch;
     }
 
@@ -243,15 +275,11 @@ Java_java_lang_ProcessImpl_create(JNIEnv *env, jclass ignored,
     closeSafely(errWrite);
 
     if (pcmd != NULL)
-        JNU_ReleaseStringPlatformChars(env, cmd, (char *) pcmd);
+        (*env)->ReleaseStringChars(env, cmd, pcmd);
     if (pdir != NULL)
-        JNU_ReleaseStringPlatformChars(env, dir, (char *) pdir);
-    if (penvBlock != NULL) {
-        if (onNT)
-            (*env)->ReleaseStringChars(env, envBlock, (jchar *) penvBlock);
-        else
-            JNU_ReleaseStringPlatformChars(env, dir, (char *) penvBlock);
-    }
+        (*env)->ReleaseStringChars(env, dir, pdir);
+    if (penvBlock != NULL)
+        (*env)->ReleaseStringChars(env, envBlock, penvBlock);
     return ret;
 
  Catch:
@@ -267,7 +295,7 @@ Java_java_lang_ProcessImpl_getExitCodeProcess(JNIEnv *env, jclass ignored, jlong
 {
     DWORD exit_code;
     if (GetExitCodeProcess((HANDLE) handle, &exit_code) == 0)
-        win32Error(env, "GetExitCodeProcess");
+        win32Error(env, L"GetExitCodeProcess");
     return exit_code;
 }
 
@@ -288,7 +316,7 @@ Java_java_lang_ProcessImpl_waitForInterruptibly(JNIEnv *env, jclass ignored, jlo
                                FALSE,    /* Wait for ANY event */
                                INFINITE) /* Wait forever */
         == WAIT_FAILED)
-        win32Error(env, "WaitForMultipleObjects");
+        win32Error(env, L"WaitForMultipleObjects");
 }
 
 JNIEXPORT void JNICALL

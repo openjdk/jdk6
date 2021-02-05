@@ -415,8 +415,8 @@ public class JInternalFrame extends JComponent implements
         invalidate();
         Component[] children = getComponents();
         if (children != null) {
-            for(int i = 0; i < children.length; i++) {
-                SwingUtilities.updateComponentTreeUI(children[i]);
+            for (Component child : children) {
+                SwingUtilities.updateComponentTreeUI(child);
             }
         }
     }
@@ -1529,8 +1529,7 @@ public class JInternalFrame extends JComponent implements
      * @see #addInternalFrameListener
      */
     public InternalFrameListener[] getInternalFrameListeners() {
-        return (InternalFrameListener[])listenerList.getListeners(
-                InternalFrameListener.class);
+        return listenerList.getListeners(InternalFrameListener.class);
     }
 
     // remind: name ok? all one method ok? need to be synchronized?
@@ -2252,8 +2251,8 @@ public class JInternalFrame extends JComponent implements
             invalidate();
             Component[] children = getComponents();
             if (children != null) {
-                for(int i = 0; i < children.length; i++) {
-                    SwingUtilities.updateComponentTreeUI(children[i]);
+                for (Component child : children) {
+                    SwingUtilities.updateComponentTreeUI(child);
                 }
             }
         }

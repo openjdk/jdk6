@@ -172,6 +172,9 @@ java/beans/Introspector/4168475/Test4168475.java		generic-all
 java/beans/Introspector/4520754/Test4520754.java		generic-all
 java/beans/Introspector/Test4144543.java			generic-all
 
+# 8026393
+sun/security/tools/jarsigner/warnings/BadKeyUsageTest.java      generic-all
+
 ############################################################################
 
 # jdk_io

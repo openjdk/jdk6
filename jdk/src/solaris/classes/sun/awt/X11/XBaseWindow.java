@@ -160,7 +160,9 @@ public class XBaseWindow implements XConstants, XUtilConstants {
      * with class-specific values and perform post-initialization actions.
      */
     void postInit(XCreateWindowParams params) {
-        if (log.isLoggable(Level.FINE)) log.fine("WM name is " + getWMName());
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("WM name is " + getWMName());
+	}
         updateWMName();
 
         // Set WM_CLIENT_LEADER property
@@ -198,7 +200,9 @@ public class XBaseWindow implements XConstants, XUtilConstants {
             awtUnlock();
             throw re;
         } catch (Throwable t) {
-            log.log(Level.WARNING, "Exception during peer initialization", t);
+	    if (log.isLoggable(Level.WARNING)) {
+		log.log(Level.WARNING, "Exception during peer initialization", t);
+	    }
             awtLock();
             initialising = InitialiseState.FAILED_INITIALISATION;
             awtLockNotifyAll();
@@ -480,7 +484,9 @@ public class XBaseWindow implements XConstants, XUtilConstants {
     }
 
     public void setSizeHints(long flags, int x, int y, int width, int height) {
-        if (insLog.isLoggable(Level.FINER)) insLog.finer("Setting hints, flags " + XlibWrapper.hintsToString(flags));
+        if (insLog.isLoggable(Level.FINER)) {
+	    insLog.finer("Setting hints, flags " + XlibWrapper.hintsToString(flags));
+	}
         XToolkit.awtLock();
         try {
             XSizeHints hints = getHints();
@@ -541,8 +547,10 @@ public class XBaseWindow implements XConstants, XUtilConstants {
             flags |= XlibWrapper.PWinGravity;
             hints.set_flags(flags);
             hints.set_win_gravity((int)XlibWrapper.NorthWestGravity);
-            if (insLog.isLoggable(Level.FINER)) insLog.finer("Setting hints, resulted flags " + XlibWrapper.hintsToString(flags) +
-                                                             ", values " + hints);
+            if (insLog.isLoggable(Level.FINER)) {
+		insLog.finer("Setting hints, resulted flags " + XlibWrapper.hintsToString(flags) +
+			     ", values " + hints);
+	    }
             XlibWrapper.XSetWMNormalHints(XToolkit.getDisplay(), getWindow(), hints.pData);
         } finally {
             XToolkit.awtUnlock();
@@ -593,7 +601,9 @@ public class XBaseWindow implements XConstants, XUtilConstants {
     public void xRequestFocus(long time) {
         XToolkit.awtLock();
         try {
-            if (focusLog.isLoggable(Level.FINER)) focusLog.finer("XSetInputFocus on " + Long.toHexString(getWindow()) + " with time " + time);
+            if (focusLog.isLoggable(Level.FINER)) {
+		focusLog.finer("XSetInputFocus on " + Long.toHexString(getWindow()) + " with time " + time);
+	    }
             XlibWrapper.XSetInputFocus2(XToolkit.getDisplay(), getWindow(), time);
         } finally {
             XToolkit.awtUnlock();
@@ -602,8 +612,10 @@ public class XBaseWindow implements XConstants, XUtilConstants {
     public void xRequestFocus() {
         XToolkit.awtLock();
         try {
-            if (focusLog.isLoggable(Level.FINER)) focusLog.finer("XSetInputFocus on " + Long.toHexString(getWindow()));
-             XlibWrapper.XSetInputFocus(XToolkit.getDisplay(), getWindow());
+            if (focusLog.isLoggable(Level.FINER)) {
+		focusLog.finer("XSetInputFocus on " + Long.toHexString(getWindow()));
+	    }
+	    XlibWrapper.XSetInputFocus(XToolkit.getDisplay(), getWindow());
         } finally {
             XToolkit.awtUnlock();
         }
@@ -619,7 +631,9 @@ public class XBaseWindow implements XConstants, XUtilConstants {
     }
 
     public void xSetVisible(boolean visible) {
-        if (log.isLoggable(Level.FINE)) log.fine("Setting visible on " + this + " to " + visible);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("Setting visible on " + this + " to " + visible);
+	}
         XToolkit.awtLock();
         try {
             this.visible = visible;
@@ -704,7 +718,9 @@ public class XBaseWindow implements XConstants, XUtilConstants {
             insLog.warning("Attempt to resize uncreated window");
             throw new IllegalStateException("Attempt to resize uncreated window");
         }
-        insLog.fine("Setting bounds on " + this + " to (" + x + ", " + y + "), " + width + "x" + height);
+        if (insLog.isLoggable(Level.FINE)) {
+	    insLog.fine("Setting bounds on " + this + " to (" + x + ", " + y + "), " + width + "x" + height);
+	}
         if (width <= 0) {
             width = 1;
         }
@@ -906,7 +922,9 @@ public class XBaseWindow implements XConstants, XUtilConstants {
     static void checkSecurity() {
         if (XToolkit.isSecurityWarningEnabled() && XToolkit.isToolkitThread()) {
             StackTraceElement stack[] = (new Throwable()).getStackTrace();
-            log.warning(stack[1] + ": Security violation: calling user code on toolkit thread");
+            if (log.isLoggable(Level.WARNING)) {
+		log.warning(stack[1] + ": Security violation: calling user code on toolkit thread");
+	    }
         }
     }
 
@@ -1065,7 +1083,9 @@ public class XBaseWindow implements XConstants, XUtilConstants {
     }
 
     public void dispatchEvent(XEvent xev) {
-        if (eventLog.isLoggable(Level.FINEST)) eventLog.finest(xev.toString());
+        if (eventLog.isLoggable(Level.FINEST)) {
+	    eventLog.finest(xev.toString());
+	}
         int type = xev.get_type();
 
         if (isDisposed()) {

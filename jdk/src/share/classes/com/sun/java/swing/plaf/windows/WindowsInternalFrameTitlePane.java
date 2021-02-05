@@ -258,8 +258,8 @@ public class WindowsInternalFrameTitlePane extends BasicInternalFrameTitlePane {
                     g.fillRect(0, 0, w, h);
                 }
                 Icon icon = getIcon();
-                int iconWidth = 0;
-                int iconHeight = 0;
+                int iconWidth;
+                int iconHeight;
                 if (icon != null &&
                     (iconWidth = icon.getIconWidth()) > 0 &&
                     (iconHeight = icon.getIconHeight()) > 0) {
@@ -304,19 +304,28 @@ public class WindowsInternalFrameTitlePane extends BasicInternalFrameTitlePane {
     }
 
     protected void addSystemMenuItems(JPopupMenu menu) {
-        JMenuItem mi = (JMenuItem)menu.add(restoreAction);
-        mi.setMnemonic('R');
-        mi = (JMenuItem)menu.add(moveAction);
-        mi.setMnemonic('M');
-        mi = (JMenuItem)menu.add(sizeAction);
-        mi.setMnemonic('S');
-        mi = (JMenuItem)menu.add(iconifyAction);
-        mi.setMnemonic('n');
-        mi = (JMenuItem)menu.add(maximizeAction);
-        mi.setMnemonic('x');
-        systemPopupMenu.add(new JSeparator());
-        mi = (JMenuItem)menu.add(closeAction);
-        mi.setMnemonic('C');
+        JMenuItem mi = menu.add(restoreAction);
+        mi.setMnemonic(getButtonMnemonic("restore"));
+        mi = menu.add(moveAction);
+        mi.setMnemonic(getButtonMnemonic("move"));
+        mi = menu.add(sizeAction);
+        mi.setMnemonic(getButtonMnemonic("size"));
+        mi = menu.add(iconifyAction);
+        mi.setMnemonic(getButtonMnemonic("minimize"));
+        mi = menu.add(maximizeAction);
+        mi.setMnemonic(getButtonMnemonic("maximize"));
+        menu.add(new JSeparator());
+        mi = menu.add(closeAction);
+        mi.setMnemonic(getButtonMnemonic("close"));
+    }
+
+    private static int getButtonMnemonic(String button) {
+        try {
+            return Integer.parseInt(UIManager.getString(
+                    "InternalFrameTitlePane." + button + "Button.mnemonic"));
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     protected void showSystemMenu(){
@@ -441,7 +450,7 @@ public class WindowsInternalFrameTitlePane extends BasicInternalFrameTitlePane {
 
     public class WindowsPropertyChangeHandler extends PropertyChangeHandler {
         public void propertyChange(PropertyChangeEvent evt) {
-            String prop = (String)evt.getPropertyName();
+            String prop = evt.getPropertyName();
 
             // Update the internal frame icon for the system menu.
             if (JInternalFrame.FRAME_ICON_PROPERTY.equals(prop) &&

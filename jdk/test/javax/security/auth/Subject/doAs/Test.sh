@@ -48,6 +48,11 @@ case "$OS" in
     FS="/"
     RM="/bin/rm -f"
     ;;
+  CYGWIN* )
+    PS=";"
+    FS="/"
+    RM="rm"
+    ;;
   Windows* )
     PS=";"
     FS="\\"
@@ -66,7 +71,7 @@ WD=`pwd`
 cd ${TESTSRC}${FS}
 cd $WD
 echo $WD
-${TESTJAVA}${FS}bin${FS}java -classpath "${TESTCLASSES}${FS}" \
+${TESTJAVA}${FS}bin${FS}java ${TESTVMOPTS} -classpath "${TESTCLASSES}${FS}" \
 -Djava.security.manager  \
 -Djava.security.policy=${TESTSRC}${FS}policy \
 Test 

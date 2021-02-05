@@ -320,7 +320,7 @@ public class BasicInternalFrameUI extends InternalFrameUI
         if (resizing) {
             return;
         }
-        Cursor s = (Cursor)frame.getLastCursor();
+        Cursor s = frame.getLastCursor();
         if (s == null) {
             s = Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
         }
@@ -338,13 +338,13 @@ public class BasicInternalFrameUI extends InternalFrameUI
 
 
     public Dimension getPreferredSize(JComponent x)    {
-        if((JComponent)frame == x)
+        if(frame == x)
             return frame.getLayout().preferredLayoutSize(x);
         return new Dimension(100, 100);
     }
 
     public Dimension getMinimumSize(JComponent x)  {
-        if((JComponent)frame == x) {
+        if(frame == x) {
             return frame.getLayout().minimumLayoutSize(x);
         }
         return new Dimension(0, 0);
@@ -1095,7 +1095,7 @@ public class BasicInternalFrameUI extends InternalFrameUI
             updateFrameCursor();
         }
 
-    };    /// End BorderListener Class
+    }    /// End BorderListener Class
 
     protected class ComponentHandler implements ComponentListener {
       // NOTE: This class exists only for backward compatability. All
@@ -1198,7 +1198,6 @@ public class BasicInternalFrameUI extends InternalFrameUI
       }
     }
 
-    private static boolean isDragging = false;
     private class Handler implements ComponentListener, InternalFrameListener,
             LayoutManager, MouseInputListener, PropertyChangeListener,
             WindowFocusListener, SwingConstants {
@@ -1384,9 +1383,6 @@ public class BasicInternalFrameUI extends InternalFrameUI
 
 
         // MouseInputListener
-        private Component mouseEventTarget = null;
-        private Component dragSource = null;
-
         public void mousePressed(MouseEvent e) { }
 
         public void mouseEntered(MouseEvent e) { }
@@ -1403,7 +1399,7 @@ public class BasicInternalFrameUI extends InternalFrameUI
 
         // PropertyChangeListener
         public void propertyChange(PropertyChangeEvent evt) {
-            String prop = (String)evt.getPropertyName();
+            String prop = evt.getPropertyName();
             JInternalFrame f = (JInternalFrame)evt.getSource();
             Object newValue = evt.getNewValue();
             Object oldValue = evt.getOldValue();

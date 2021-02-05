@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2003, 2016, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2007, 2008, 2009, 2010, 2011, 2012 Red Hat, Inc.
+ * Copyright 2016 Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,6 +36,7 @@
 #include "oops/oop.inline.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "prims/jvmtiThreadState.hpp"
+#include "prims/methodHandles.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/frame.inline.hpp"

@@ -32,7 +32,7 @@ import javax.swing.*;
 import javax.swing.tree.*;
 import sun.tools.jconsole.JConsole;
 import sun.tools.jconsole.MBeansTab;
-import sun.tools.jconsole.Resources;
+import sun.tools.jconsole.Messages;
 import sun.tools.jconsole.inspector.XNodeInfo;
 import sun.tools.jconsole.inspector.XNodeInfo.Type;
 
@@ -197,7 +197,7 @@ public class XTree extends JTree {
      * Returns true if any of the children nodes is an MBean.
      */
     private boolean hasMBeanChildren(DefaultMutableTreeNode node) {
-        for (Enumeration e = node.children(); e.hasMoreElements(); ) {
+        for (Enumeration<?> e = node.children(); e.hasMoreElements();) {
             DefaultMutableTreeNode n = (DefaultMutableTreeNode) e.nextElement();
             if (((XNodeInfo) n.getUserObject()).getType().equals(Type.MBEAN)) {
                 return true;

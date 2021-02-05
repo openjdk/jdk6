@@ -186,7 +186,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
                 return SAVED_ERROR_HANDLER(display, event);
             }
         } catch (Throwable z) {
-            log.log(Level.FINE, "Error in GlobalErrorHandler", z);
+	    if (log.isLoggable(Level.FINE)) {
+		log.log(Level.FINE, "Error in GlobalErrorHandler", z);
+	    }
         }
         return 0;
     }
@@ -277,8 +279,11 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
         try {
             XlibWrapper.XSupportsLocale();
             if (XlibWrapper.XSetLocaleModifiers("") == null) {
-                log.finer("X locale modifiers are not supported, using default");
+		if (log.isLoggable(Level.FINER)) {
+		    log.finer("X locale modifiers are not supported, using default");
+		}
             }
+            tryXKB();
 
             AwtScreenData defaultScreen = new AwtScreenData(XToolkit.getDefaultScreenData());
             awt_defaultFg = defaultScreen.get_blackpixel();
@@ -291,23 +296,22 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             awtUnlock();
         }
 
-	if (log.isLoggable(Level.FINE)) {
-	    PrivilegedAction<Void> a = new PrivilegedAction<Void>() {
-		public Void run() {
-		    Thread shutdownThread = new Thread(ThreadGroupUtils.getRootThreadGroup(), "XToolkt-Shutdown-Thread") {
-			public void run() {
-			    if (log.isLoggable(Level.FINE)) {
-				dumpPeers();
-			    }
-			}
-		    };
-		    shutdownThread.setContextClassLoader(null);
-		    Runtime.getRuntime().addShutdownHook(shutdownThread);
-		    return null;
+	PrivilegedAction<Void> a = new PrivilegedAction<Void>() {
+                public Void run() {
+                    Thread shutdownThread = new Thread(ThreadGroupUtils.getRootThreadGroup(), "XToolkt-Shutdown-Thread") {
+                        public void run() {
+                            freeXKB();
+                            if (log.isLoggable(Level.FINE)) {
+                                dumpPeers();
+                            }
+                        }
+                    };
+                    shutdownThread.setContextClassLoader(null);
+                    Runtime.getRuntime().addShutdownHook(shutdownThread);
+                    return null;
                 }
             };
-	    AccessController.doPrivileged(a);
-	}
+	AccessController.doPrivileged(a);
     }
 
     static String getCorrectXIDString(String val) {
@@ -513,6 +517,16 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             processGlobalMotionEvent(ev);
         }
 
+        if( ev.get_type() == XConstants.MappingNotify ) {
+            // The 'window' field in this event is unused.
+            // This application itself does nothing to initiate such an event
+            // (no calls of XChangeKeyboardMapping etc.).
+            // SunRay server sends this event to the application once on every
+            // keyboard (not just layout) change which means, quite seldom.
+            XlibWrapper.XRefreshKeyboardMapping(ev.pData);
+            resetKeyboardSniffer();
+            setupModifierMap();
+        }
         XBaseWindow.dispatchToWindow(ev);
 
         Collection dispatchers = null;
@@ -575,6 +589,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
 
                 if (ev.get_type() != NoExpose) {
                     eventNumber++;
+                }
+                if (awt_UseXKB_Calls && ev.get_type() ==  awt_XKBBaseEventCode) {
+                    processXkbChanges(ev);
                 }
 
                 if (XDropTargetEventProcessor.processEvent(ev) ||
@@ -1092,6 +1109,19 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
     public Map mapInputMethodHighlight(InputMethodHighlight highlight)     {
         return XInputMethod.mapInputMethodHighlight(highlight);
     }
+    @Override
+    public boolean getLockingKeyState(int key) {
+        if (! (key == KeyEvent.VK_CAPS_LOCK || key == KeyEvent.VK_NUM_LOCK ||
+               key == KeyEvent.VK_SCROLL_LOCK || key == KeyEvent.VK_KANA_LOCK)) {
+            throw new IllegalArgumentException("invalid key for Toolkit.getLockingKeyState");
+        }
+        awtLock();
+        try {
+            return getModifierState( key );
+        } finally {
+            awtUnlock();
+        }
+    }
 
     public  Clipboard getSystemClipboard() {
         SecurityManager security = System.getSecurityManager();
@@ -1368,7 +1398,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
                 }
             } catch (InterruptedException ie) {
             // Note: the returned timeStamp can be incorrect in this case.
-                if (log.isLoggable(Level.FINE)) log.fine("Catched exception, timeStamp may not be correct (ie = " + ie + ")");
+                if (log.isLoggable(Level.FINE)) {
+		    log.fine("Catched exception, timeStamp may not be correct (ie = " + ie + ")");
+		}
             }
         } finally {
             awtUnlock();
@@ -1497,7 +1529,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
 
             name = "gnome." + name;
             setDesktopProperty(name, e.getValue());
-            log.fine("name = " + name + " value = " + e.getValue());
+            if (log.isLoggable(Level.FINE)) {
+                log.fine("name = " + name + " value = " + e.getValue());
+            }
 
             // XXX: we probably want to do something smarter.  In
             // particular, "Net" properties are of interest to the
@@ -1543,6 +1577,66 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
                 return 0;
             }
             return code;
+        } finally {
+            awtUnlock();
+        }
+    }
+    static boolean getModifierState( int jkc ) {
+        int iKeyMask = 0;
+        long ks = XKeysym.javaKeycode2Keysym( jkc );
+        int  kc = XlibWrapper.XKeysymToKeycode(getDisplay(), ks);
+        if (kc == 0) {
+            return false;
+        }
+        awtLock();
+        try {
+            XModifierKeymap modmap = new XModifierKeymap(
+                 XlibWrapper.XGetModifierMapping(getDisplay()));
+
+            int nkeys = modmap.get_max_keypermod();
+
+            long map_ptr = modmap.get_modifiermap();
+            for( int k = 0; k < 8; k++ ) {
+                for (int i = 0; i < nkeys; ++i) {
+                    int keycode = Native.getUByte(map_ptr, k * nkeys + i);
+                    if (keycode == 0) {
+                        continue; // ignore zero keycode
+                    }
+                    if (kc == keycode) {
+                        iKeyMask = 1 << k;
+                        break;
+                    }
+                }
+                if( iKeyMask != 0 ) {
+                    break;
+                }
+            }
+            XlibWrapper.XFreeModifiermap(modmap.pData);
+            if (iKeyMask == 0 ) {
+                return false;
+            }
+            // Now we know to which modifier is assigned the keycode
+            // correspondent to the keysym correspondent to the java
+            // keycode. We are going to check a state of this modifier.
+            // If a modifier is a weird one, we cannot help it.
+            long window = 0;
+            try{
+                // get any application window
+                window = ((Long)(winMap.firstKey())).longValue();
+            }catch(NoSuchElementException nex) {
+                // get root window
+                window = getDefaultRootWindow();
+            }
+            boolean res = XlibWrapper.XQueryPointer(getDisplay(), window,
+                                            XlibWrapper.larg1, //root
+                                            XlibWrapper.larg2, //child
+                                            XlibWrapper.larg3, //root_x
+                                            XlibWrapper.larg4, //root_y
+                                            XlibWrapper.larg5, //child_x
+                                            XlibWrapper.larg6, //child_y
+                                            XlibWrapper.larg7);//mask
+            int mask = Native.getInt(XlibWrapper.larg7);
+            return ((mask & iKeyMask) != 0);
         } finally {
             awtUnlock();
         }
@@ -1990,54 +2084,204 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
      */
     private static int backingStoreType;
 
-    static boolean awt_ServerInquired = false;
-    static boolean awt_IsXsunServer    = false;
-    static boolean awt_XKBInquired    = false;
+    static final int XSUN_KP_BEHAVIOR = 1;
+    static final int XORG_KP_BEHAVIOR = 2;
+    static final int    IS_SUN_KEYBOARD = 1;
+    static final int IS_NONSUN_KEYBOARD = 2;
+    static final int    IS_KANA_KEYBOARD = 1;
+    static final int IS_NONKANA_KEYBOARD = 2;
+
+
+    static int     awt_IsXsunKPBehavior = 0;
     static boolean awt_UseXKB         = false;
+    static boolean awt_UseXKB_Calls   = false;
+    static int     awt_XKBBaseEventCode = 0;
+    static int     awt_XKBEffectiveGroup = 0; // so far, I don't use it leaving all calculations
+                                              // to XkbTranslateKeyCode
+    static long    awt_XKBDescPtr     = 0;
+
     /**
-       Try to understand if it is Xsun server.
-       By now (2005) Sun is vendor of Xsun and Xorg servers; we only return true if Xsun is running.
-    */
-    static boolean isXsunServer() {
+     * Check for Xsun convention regarding numpad keys.
+     * Xsun and some other servers (i.e. derived from Xsun)
+     * under certain conditions process numpad keys unlike Xorg.
+     */
+    static boolean isXsunKPBehavior() {
         awtLock();
         try {
-            if( awt_ServerInquired ) {
-                return awt_IsXsunServer;
+            if( awt_IsXsunKPBehavior == 0 ) {
+                if( XlibWrapper.IsXsunKPBehavior(getDisplay()) ) {
+                    awt_IsXsunKPBehavior = XSUN_KP_BEHAVIOR;
+                }else{
+                    awt_IsXsunKPBehavior = XORG_KP_BEHAVIOR;
+                }
             }
-            if( ! XlibWrapper.ServerVendor(getDisplay()).startsWith("Sun Microsystems") ) {
-                awt_ServerInquired = true;
-                awt_IsXsunServer = false;
-                return false;
-            }
-            // Now, it's Sun. It still may be Xorg though, eg on Solaris 10, x86.
-            // Today (2005), VendorRelease of Xorg is a Big Number unlike Xsun.
-            if( XlibWrapper.VendorRelease(getDisplay()) > 10000 ) {
-                awt_ServerInquired = true;
-                awt_IsXsunServer = false;
-                return false;
-            }
-            awt_ServerInquired = true;
-            awt_IsXsunServer = true;
-            return true;
+            return awt_IsXsunKPBehavior == XSUN_KP_BEHAVIOR ? true : false;
         } finally {
             awtUnlock();
         }
     }
-    /**
-      Query XKEYBOARD extension.
-    */
+
+    static int  sunOrNotKeyboard = 0;
+    static int kanaOrNotKeyboard = 0;
+    static void resetKeyboardSniffer() {
+        sunOrNotKeyboard  = 0;
+        kanaOrNotKeyboard = 0;
+    }
+    static boolean isSunKeyboard() {
+        if( sunOrNotKeyboard == 0 ) {
+            if( XlibWrapper.IsSunKeyboard( getDisplay() )) {
+                sunOrNotKeyboard = IS_SUN_KEYBOARD;
+            }else{
+                sunOrNotKeyboard = IS_NONSUN_KEYBOARD;
+            }
+        }
+        return (sunOrNotKeyboard == IS_SUN_KEYBOARD);
+    }
+    static boolean isKanaKeyboard() {
+        if( kanaOrNotKeyboard == 0 ) {
+            if( XlibWrapper.IsKanaKeyboard( getDisplay() )) {
+                kanaOrNotKeyboard = IS_KANA_KEYBOARD;
+            }else{
+                kanaOrNotKeyboard = IS_NONKANA_KEYBOARD;
+            }
+        }
+        return (kanaOrNotKeyboard == IS_KANA_KEYBOARD);
+    }
     static boolean isXKBenabled() {
         awtLock();
         try {
-            if( awt_XKBInquired ) {
-                return awt_UseXKB;
-            }
-            awt_XKBInquired = true;
-            String name = "XKEYBOARD";
-            awt_UseXKB = XlibWrapper.XQueryExtension( getDisplay(), name, XlibWrapper.larg1, XlibWrapper.larg2, XlibWrapper.larg3);
             return awt_UseXKB;
         } finally {
             awtUnlock();
+        }
+    }
+
+    /**
+      Query XKEYBOARD extension.
+      If possible, initialize xkb library.
+    */
+    static boolean tryXKB() {
+        awtLock();
+        try {
+            String name = "XKEYBOARD";
+            // First, if there is extension at all.
+            awt_UseXKB = XlibWrapper.XQueryExtension( getDisplay(), name, XlibWrapper.larg1, XlibWrapper.larg2, XlibWrapper.larg3);
+            if( awt_UseXKB ) {
+                // There is a keyboard extension. Check if a client library is compatible.
+                // If not, don't use xkb calls.
+                // In this case we still may be Xkb-capable application.
+                awt_UseXKB_Calls = XlibWrapper.XkbLibraryVersion( XlibWrapper.larg1, XlibWrapper.larg2);
+                if( awt_UseXKB_Calls ) {
+                    awt_UseXKB_Calls = XlibWrapper.XkbQueryExtension( getDisplay(),  XlibWrapper.larg1, XlibWrapper.larg2,
+                                     XlibWrapper.larg3, XlibWrapper.larg4, XlibWrapper.larg5);
+                    if( awt_UseXKB_Calls ) {
+                        awt_XKBBaseEventCode = Native.getInt(XlibWrapper.larg2);
+                        XlibWrapper.XkbSelectEvents (getDisplay(),
+                                         XConstants.XkbUseCoreKbd,
+                                         XConstants.XkbNewKeyboardNotifyMask |
+                                                 XConstants.XkbMapNotifyMask ,//|
+                                                 //XConstants.XkbStateNotifyMask,
+                                         XConstants.XkbNewKeyboardNotifyMask |
+                                                 XConstants.XkbMapNotifyMask );//|
+                                                 //XConstants.XkbStateNotifyMask);
+
+                        XlibWrapper.XkbSelectEventDetails(getDisplay(), XConstants.XkbUseCoreKbd,
+                                                     XConstants.XkbStateNotify,
+                                                     XConstants.XkbGroupStateMask,
+                                                     XConstants.XkbGroupStateMask);
+                                                     //XXX ? XkbGroupLockMask last, XkbAllStateComponentsMask before last?
+                        awt_XKBDescPtr = XlibWrapper.XkbGetMap(getDisplay(),
+                                                     XConstants.XkbKeyTypesMask    |
+                                                     XConstants.XkbKeySymsMask     |
+                                                     XConstants.XkbModifierMapMask |
+                                                     XConstants.XkbVirtualModsMask,
+                                                     XConstants.XkbUseCoreKbd);
+                    }
+                }
+            }
+            return awt_UseXKB;
+        } finally {
+            awtUnlock();
+        }
+    }
+    static boolean canUseXKBCalls() {
+        awtLock();
+        try {
+            return awt_UseXKB_Calls;
+        } finally {
+            awtUnlock();
+        }
+    }
+    static int getXKBEffectiveGroup() {
+        awtLock();
+        try {
+            return awt_XKBEffectiveGroup;
+        } finally {
+            awtUnlock();
+        }
+    }
+    static int getXKBBaseEventCode() {
+        awtLock();
+        try {
+            return awt_XKBBaseEventCode;
+        } finally {
+            awtUnlock();
+        }
+    }
+    static long getXKBKbdDesc() {
+        awtLock();
+        try {
+            return awt_XKBDescPtr;
+        } finally {
+            awtUnlock();
+        }
+    }
+    void freeXKB() {
+        awtLock();
+        try {
+            if (awt_UseXKB_Calls && awt_XKBDescPtr != 0) {
+                XlibWrapper.XkbFreeKeyboard(awt_XKBDescPtr, 0xFF, true);
+            }
+        } finally {
+            awtUnlock();
+        }
+    }
+    private void processXkbChanges(XEvent ev) {
+        // mapping change --> refresh kbd map
+        // state change --> get a new effective group; do I really need it
+        //  or that should be left for XkbTranslateKeyCode?
+        XkbEvent xke = new XkbEvent( ev.getPData() );
+        int xkb_type = xke.get_any().get_xkb_type();
+        switch( xkb_type ) {
+            case XConstants.XkbNewKeyboardNotify :
+                 if( awt_XKBDescPtr != 0 ) {
+                     freeXKB();
+                 }
+                 awt_XKBDescPtr = XlibWrapper.XkbGetMap(getDisplay(),
+                                              XConstants.XkbKeyTypesMask    |
+                                              XConstants.XkbKeySymsMask     |
+                                              XConstants.XkbModifierMapMask |
+                                              XConstants.XkbVirtualModsMask,
+                                              XConstants.XkbUseCoreKbd);
+                 //System.out.println("XkbNewKeyboard:"+(xke.get_new_kbd()));
+                 break;
+            case XConstants.XkbMapNotify :
+                 //TODO: provide a simple unit test.
+                 XlibWrapper.XkbGetUpdatedMap(getDisplay(),
+                                              XConstants.XkbKeyTypesMask    |
+                                              XConstants.XkbKeySymsMask     |
+                                              XConstants.XkbModifierMapMask |
+                                              XConstants.XkbVirtualModsMask,
+                                              awt_XKBDescPtr);
+                 //System.out.println("XkbMap:"+(xke.get_map()));
+                 break;
+            case XConstants.XkbStateNotify :
+                 // May use it later e.g. to obtain an effective group etc.
+                 //System.out.println("XkbState:"+(xke.get_state()));
+                 break;
+            default:
+                 //System.out.println("XkbEvent of xkb_type "+xkb_type);
+                 break;
         }
     }
 
@@ -2099,7 +2343,10 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             // Wait for selection notify for oops on win
             long event_number = getEventNumber();
             XAtom atom = XAtom.get("WM_S0");
-            eventLog.log(Level.FINER, "WM_S0 selection owner {0}", new Object[] {XlibWrapper.XGetSelectionOwner(getDisplay(), atom.getAtom())});
+	    if (eventLog.isLoggable(Level.FINER)) {
+		eventLog.log(Level.FINER, "WM_S0 selection owner {0}",
+			     new Object[] {XlibWrapper.XGetSelectionOwner(getDisplay(), atom.getAtom())});
+	    }
             XlibWrapper.XConvertSelection(getDisplay(), atom.getAtom(),
                                           XAtom.get("VERSION").getAtom(), oops.getAtom(),
                                           win.getWindow(), XlibWrapper.CurrentTime);
@@ -2125,7 +2372,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
                 // If selection update failed we can simply wait some time
                 // hoping some events will arrive
                 awtUnlock();
-                eventLog.log(Level.FINEST, "Emergency sleep");
+		if (eventLog.isLoggable(Level.FINEST)) {
+		    eventLog.log(Level.FINEST, "Emergency sleep");
+		}
                 try {
                     Thread.sleep(WORKAROUND_SLEEP);
                 } catch (InterruptedException ie) {
@@ -2137,7 +2386,9 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             return getEventNumber() - event_number > 2;
         } finally {
             removeEventDispatcher(win.getWindow(), oops_waiter);
-            eventLog.log(Level.FINER, "Exiting syncNativeQueue");
+            if (eventLog.isLoggable(Level.FINER)) {
+		eventLog.log(Level.FINER, "Exiting syncNativeQueue");
+	    }
             awtUnlock();
         }
     }

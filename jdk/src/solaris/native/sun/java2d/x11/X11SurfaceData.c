@@ -423,6 +423,15 @@ Java_sun_java2d_x11_X11SurfaceData_initSurface(JNIEnv *env, jclass xsd,
         xsdo->drawable = drawable;
         xsdo->isPixmap = JNI_FALSE;
     } else {
+        /*
+         * width , height must be nonzero otherwise XCreatePixmap
+         * generates BadValue in error_handler
+         */
+        if (width <= 0 || height <= 0 || width > 32767 || height > 32767) {
+            JNU_ThrowOutOfMemoryError(env,
+                                  "Can't create offscreen surface");
+            return JNI_FALSE;
+        }
         xsdo->isPixmap = JNI_TRUE;
         /* REMIND: workaround for bug 4420220 on pgx32 boards:
            don't use DGA with pixmaps unless USE_DGA_PIXMAPS is set.

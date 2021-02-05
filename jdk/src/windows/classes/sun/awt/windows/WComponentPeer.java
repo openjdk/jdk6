@@ -241,7 +241,8 @@ public abstract class WComponentPeer extends WObjectPeer
 
     private static final double BANDING_DIVISOR = 4.0;
     private native int[] createPrintedPixels(int srcX, int srcY,
-                                             int srcW, int srcH);
+                                             int srcW, int srcH,
+                                             int alpha);
     public void print(Graphics g) {
 
         Component comp = (Component)target;
@@ -263,7 +264,9 @@ public abstract class WComponentPeer extends WObjectPeer
             }
             int h = endY - startY + 1;
 
-            int[] pix = createPrintedPixels(0, startY, totalW, h);
+            Color bgColor = comp.getBackground();
+            int[] pix = createPrintedPixels(0, startY, totalW, h,
+                                            bgColor == null ? 255 : bgColor.getAlpha());
             if (pix != null) {
                 BufferedImage bim = new BufferedImage(totalW, h,
                                               BufferedImage.TYPE_INT_ARGB);
@@ -949,10 +952,9 @@ public abstract class WComponentPeer extends WObjectPeer
      */
     public void applyShape(Region shape) {
         if (shapeLog.isLoggable(Level.FINER)) {
-            shapeLog.finer(
-                    "*** INFO: Setting shape: PEER: " + this
-                    + "; TARGET: " + target
-                    + "; SHAPE: " + shape);
+            shapeLog.finer("*** INFO: Setting shape: PEER: " + this
+                            + "; TARGET: " + target
+                            + "; SHAPE: " + shape);
         }
 
         if (shape != null) {

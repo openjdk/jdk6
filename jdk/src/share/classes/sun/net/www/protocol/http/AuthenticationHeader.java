@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2009, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,8 +26,10 @@
 package sun.net.www.protocol.http;
 
 import sun.net.www.*;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.HashMap;
+import java.util.Set;
 
 /**
  * This class is used to parse the information in WWW-Authenticate: and Proxy-Authenticate:
@@ -66,8 +68,8 @@ import java.util.HashMap;
  *      -Dhttp.auth.preference="scheme"
  *
  * which in this case, specifies that "scheme" should be used as the auth scheme when offered
- * disregarding the default prioritisation. If scheme is not offered then the default priority
- * is used.
+ * disregarding the default prioritisation. If scheme is not offered, or explicitly
+ * disabled, by {@code disabledSchemes}, then the default priority is used.
  *
  * Attention: when http.auth.preference is set as SPNEGO or Kerberos, it's actually "Negotiate
  * with SPNEGO" or "Negotiate with Kerberos", which means the user will prefer the Negotiate
@@ -110,15 +112,29 @@ public class AuthenticationHeader {
     String hdrname; // Name of the header to look for
 
     /**
-     * parse a set of authentication headers and choose the preferred scheme
-     * that we support for a given host
+     * Parses a set of authentication headers and chooses the preferred scheme
+     * that is supported for a given host.
      */
     public AuthenticationHeader (String hdrname, MessageHeader response, HttpCallerInfo hci) {
+        this(hdrname, response, hci, Collections.<String>emptySet());
+    }
+
+    /**
+     * Parses a set of authentication headers and chooses the preferred scheme
+     * that is supported for a given host.
+     *
+     * <p> The {@code disabledSchemes} parameter is a, possibly empty, set of
+     * authentication schemes that are disabled.
+     */
+    public AuthenticationHeader(String hdrname,
+                                MessageHeader response,
+                                HttpCallerInfo hci,
+                                Set<String> disabledSchemes) {
         this.hci = hci;
-        rsp = response;
+        this.rsp = response;
         this.hdrname = hdrname;
-        schemes = new HashMap();
-        parse();
+        this.schemes = new HashMap<String,SchemeMapValue>();
+        parse(disabledSchemes);
     }
 
     public HttpCallerInfo getHttpCallerInfo() {
@@ -131,19 +147,20 @@ public class AuthenticationHeader {
         HeaderParser parser;
     }
 
-    HashMap schemes;
+    HashMap<String, SchemeMapValue> schemes;
 
     /* Iterate through each header line, and then within each line.
      * If multiple entries exist for a particular scheme (unlikely)
      * then the last one will be used. The
      * preferred scheme that we support will be used.
      */
-    private void parse () {
-        Iterator iter = rsp.multiValueIterator (hdrname);
+    private void parse(Set<String> disabledSchemes) {
+        Iterator<String> iter = rsp.multiValueIterator(hdrname);
         while (iter.hasNext()) {
-            String raw = (String)iter.next();
-            HeaderParser hp = new HeaderParser (raw);
-            Iterator keys = hp.keys();
+            String raw = iter.next();
+            // HeaderParser lower cases everything, so can be used case-insensitively
+            HeaderParser hp = new HeaderParser(raw);
+            Iterator<String> keys = hp.keys();
             int i, lastSchemeIndex;
             for (i=0, lastSchemeIndex = -1; keys.hasNext(); i++) {
                 keys.next();
@@ -151,7 +168,8 @@ public class AuthenticationHeader {
                     if (lastSchemeIndex != -1) {
                         HeaderParser hpn = hp.subsequence (lastSchemeIndex, i);
                         String scheme = hpn.findKey(0);
-                        schemes.put (scheme, new SchemeMapValue (hpn, raw));
+                        if (!disabledSchemes.contains(scheme))
+                            schemes.put (scheme, new SchemeMapValue (hpn, raw));
                     }
                     lastSchemeIndex = i;
                 }
@@ -159,7 +177,8 @@ public class AuthenticationHeader {
             if (i > lastSchemeIndex) {
                 HeaderParser hpn = hp.subsequence (lastSchemeIndex, i);
                 String scheme = hpn.findKey(0);
-                schemes.put (scheme, new SchemeMapValue (hpn, raw));
+                if (!disabledSchemes.contains(scheme))
+                    schemes.put(scheme, new SchemeMapValue (hpn, raw));
             }
         }
 
@@ -167,10 +186,10 @@ public class AuthenticationHeader {
          * negotiate -> kerberos -> digest -> ntlm -> basic
          */
         SchemeMapValue v = null;
-        if (authPref == null || (v=(SchemeMapValue)schemes.get (authPref)) == null) {
+        if (authPref == null || (v=schemes.get (authPref)) == null) {
 
             if(v == null) {
-                SchemeMapValue tmp = (SchemeMapValue)schemes.get("negotiate");
+                SchemeMapValue tmp = schemes.get("negotiate");
                 if(tmp != null) {
                     if(hci == null || !NegotiateAuthentication.isSupported(new HttpCallerInfo(hci, "Negotiate"))) {
                         tmp = null;
@@ -180,7 +199,7 @@ public class AuthenticationHeader {
             }
 
             if(v == null) {
-                SchemeMapValue tmp = (SchemeMapValue)schemes.get("kerberos");
+                SchemeMapValue tmp = schemes.get("kerberos");
                 if(tmp != null) {
                     // the Kerberos scheme is only observed in MS ISA Server. In
                     // fact i think it's a Kerberos-mechnism-only Negotiate.
@@ -200,9 +219,9 @@ public class AuthenticationHeader {
             }
 
             if(v == null) {
-                if ((v=(SchemeMapValue)schemes.get ("digest")) == null) {
-                    if (((v=(SchemeMapValue)schemes.get("ntlm"))==null)) {
-                        v = (SchemeMapValue)schemes.get ("basic");
+                if ((v=schemes.get ("digest")) == null) {
+                    if (((v=schemes.get("ntlm"))==null)) {
+                        v = schemes.get ("basic");
                     }
                 }
             }

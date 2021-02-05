@@ -111,7 +111,9 @@ public class XMenuPeer extends XMenuItemPeer implements MenuPeer {
      * for adding separators
      */
     public void addSeparator() {
-        if (log.isLoggable(Level.FINER)) log.finer("addSeparator is not implemented");
+        if (log.isLoggable(Level.FINER)) {
+	    log.finer("addSeparator is not implemented");
+	}
     }
 
     public void addItem(MenuItem item) {

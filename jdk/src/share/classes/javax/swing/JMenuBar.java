@@ -412,7 +412,7 @@ public class JMenuBar extends JComponent implements Accessible,MenuElement
      */
     public MenuElement[] getSubElements() {
         MenuElement result[];
-        Vector tmp = new Vector();
+        Vector<MenuElement> tmp = new Vector<MenuElement>();
         int c = getComponentCount();
         int i;
         Component m;
@@ -420,12 +420,12 @@ public class JMenuBar extends JComponent implements Accessible,MenuElement
         for(i=0 ; i < c ; i++) {
             m = getComponent(i);
             if(m instanceof MenuElement)
-                tmp.addElement(m);
+                tmp.addElement((MenuElement) m);
         }
 
         result = new MenuElement[tmp.size()];
         for(i=0,c=tmp.size() ; i < c ; i++)
-            result[i] = (MenuElement) tmp.elementAt(i);
+            result[i] = tmp.elementAt(i);
         return result;
     }
 
@@ -662,9 +662,9 @@ public class JMenuBar extends JComponent implements Accessible,MenuElement
         boolean retValue = super.processKeyBinding(ks, e, condition, pressed);
         if (!retValue) {
             MenuElement[] subElements = getSubElements();
-            for (int i=0; i<subElements.length; i++) {
+            for (MenuElement subElement : subElements) {
                 if (processBindingForKeyStrokeRecursive(
-                                                        subElements[i], ks, e, condition, pressed)) {
+                        subElement, ks, e, condition, pressed)) {
                     return true;
                 }
             }
@@ -691,9 +691,8 @@ public class JMenuBar extends JComponent implements Accessible,MenuElement
         }
 
         MenuElement[] subElements = elem.getSubElements();
-        for(int i=0; i<subElements.length; i++) {
-            if (processBindingForKeyStrokeRecursive(subElements[i], ks, e,
-                                                    condition, pressed)) {
+        for (MenuElement subElement : subElements) {
+            if (processBindingForKeyStrokeRecursive(subElement, ks, e, condition, pressed)) {
                 return true;
                 // We don't, pass along to children JMenu's
             }

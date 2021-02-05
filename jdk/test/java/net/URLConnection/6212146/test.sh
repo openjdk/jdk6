@@ -41,6 +41,10 @@ case "$OS" in
     PS=":"
     FS="/"
     ;;
+  CYGWIN* )
+    PS=";"
+    FS="/"
+    ;;
   Windows* )
     PS=";"
     FS="\\"
@@ -63,7 +67,7 @@ ${TESTJAVA}${FS}bin${FS}javac -d . ${TESTSRC}${FS}Test.java
 
 WD=`pwd`
 ulimit -H -n 300
-${TESTJAVA}${FS}bin${FS}java Test ${WD}/jars/ test.jar 
+${TESTJAVA}${FS}bin${FS}java ${TESTVMOPTS} Test ${WD}/jars/ test.jar
 result=$?
 rm -rf jars
 exit $?

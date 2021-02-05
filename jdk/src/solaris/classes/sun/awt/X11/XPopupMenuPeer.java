@@ -123,7 +123,9 @@ public class XPopupMenuPeer extends XMenuWindow implements PopupMenuPeer {
      * for adding separators
      */
     public void addSeparator() {
-        if (log.isLoggable(Level.FINER)) log.finer("addSeparator is not implemented");
+        if (log.isLoggable(Level.FINER)) {
+	    log.finer("addSeparator is not implemented");
+	}
     }
 
     /*

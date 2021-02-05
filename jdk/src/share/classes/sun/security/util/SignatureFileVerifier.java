@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,43 +25,67 @@
 
 package sun.security.util;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.security.CodeSigner;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SignatureException;
 import java.security.cert.CertPath;
 import java.security.cert.X509Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
-import java.security.*;
-import java.io.*;
-import java.util.*;
-import java.util.jar.*;
 import java.io.ByteArrayOutputStream;
 
-import sun.security.pkcs.*;
-import sun.security.timestamp.TimestampToken;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.jar.Attributes;
+import java.util.jar.JarException;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
+
 import sun.misc.BASE64Decoder;
 
 import sun.security.jca.Providers;
+import sun.security.pkcs.PKCS7;
+import sun.security.pkcs.SignerInfo;
+import sun.security.util.CryptoPrimitive;
+import sun.security.x509.AlgorithmId;
 
 public class SignatureFileVerifier {
 
     /* Are we debugging ? */
     private static final Debug debug = Debug.getInstance("jar");
 
-    /* cache of CodeSigner objects */
+    private static final Set<CryptoPrimitive> DIGEST_PRIMITIVE_SET =
+            Collections.unmodifiableSet(EnumSet.of(CryptoPrimitive.MESSAGE_DIGEST));
+
+    private static final DisabledAlgorithmConstraints JAR_DISABLED_CHECK =
+            new DisabledAlgorithmConstraints(
+                    DisabledAlgorithmConstraints.PROPERTY_JAR_DISABLED_ALGS);
+
     private ArrayList<CodeSigner[]> signerCache;
 
     private static final String ATTR_DIGEST =
         ("-DIGEST-" + ManifestDigester.MF_MAIN_ATTRS).toUpperCase
         (Locale.ENGLISH);
 
-    /** the PKCS7 block for this .DSA/.RSA file */
+    /** the PKCS7 block for this .DSA/.RSA/.EC file */
     private PKCS7 block;
 
     /** the raw bytes of the .SF file */
     private byte sfBytes[];
 
     /** the name of the signature block file, uppercased and without
-     *  the extension (.DSA/.RSA)
+     *  the extension (.DSA/.RSA/.EC)
      */
     private String name;
 
@@ -80,7 +104,7 @@ public class SignatureFileVerifier {
     /**
      * Create the named SignatureFileVerifier.
      *
-     * @param name the name of the signature block file (.DSA/.RSA)
+     * @param name the name of the signature block file (.DSA/.RSA/.EC)
      *
      * @param rawBytes the raw bytes of the signature block file
      */
@@ -148,7 +172,8 @@ public class SignatureFileVerifier {
      */
     public static boolean isBlockOrSF(String s) {
         // we currently only support DSA and RSA PKCS7 blocks
-        if (s.endsWith(".SF") || s.endsWith(".DSA") || s.endsWith(".RSA")) {
+        if (s.endsWith(".SF") || s.endsWith(".DSA") ||
+                s.endsWith(".RSA") || s.endsWith(".EC")) {
             return true;
         }
         return false;
@@ -202,8 +227,15 @@ public class SignatureFileVerifier {
 
     /** get digest from cache */
 
-    private MessageDigest getDigest(String algorithm)
-    {
+    private MessageDigest getDigest(String algorithm) throws SignatureException {
+        // check that algorithm is not restricted
+        if (!JAR_DISABLED_CHECK.permits(DIGEST_PRIMITIVE_SET, algorithm, null)) {
+            SignatureException e =
+                    new SignatureException("SignatureFile check failed. " +
+                            "Disabled algorithm used: " + algorithm);
+            throw e;
+        }
+
         if (createdDigests == null)
             createdDigests = new HashMap<String, MessageDigest>();
 
@@ -322,7 +354,7 @@ public class SignatureFileVerifier {
                                        ManifestDigester md,
                                        BASE64Decoder decoder,
                                        List<Object> manifestDigests)
-         throws IOException
+         throws IOException, SignatureException
     {
         Attributes mattr = sf.getMainAttributes();
         boolean manifestSigned = false;
@@ -367,7 +399,7 @@ public class SignatureFileVerifier {
     private boolean verifyManifestMainAttrs(Manifest sf,
                                         ManifestDigester md,
                                         BASE64Decoder decoder)
-         throws IOException
+         throws IOException, SignatureException
     {
         Attributes mattr = sf.getMainAttributes();
         boolean attrsVerified = true;
@@ -434,14 +466,14 @@ public class SignatureFileVerifier {
                                   String name,
                                   ManifestDigester md,
                                   BASE64Decoder decoder)
-         throws IOException
+         throws IOException, SignatureException
     {
         boolean oneDigestVerified = false;
         ManifestDigester.Entry mde = md.get(name,block.isOldStyle());
 
         if (mde == null) {
             throw new SecurityException(
-                  "no manifiest section for signature file entry "+name);
+                  "no manifest section for signature file entry "+name);
         }
 
         if (sfAttr != null) {
@@ -529,7 +561,7 @@ public class SignatureFileVerifier {
                 signers = new ArrayList<CodeSigner>();
             }
             // Append the new code signer
-            signers.add(new CodeSigner(certChain, getTimestamp(info)));
+            signers.add(new CodeSigner(certChain, info.getTimestamp()));
 
             if (debug != null) {
                 debug.println("Signature Block Certificate: " +
@@ -541,89 +573,6 @@ public class SignatureFileVerifier {
             return signers.toArray(new CodeSigner[signers.size()]);
         } else {
             return null;
-        }
-    }
-
-    /*
-     * Examines a signature timestamp token to generate a timestamp object.
-     *
-     * Examines the signer's unsigned attributes for a
-     * <tt>signatureTimestampToken</tt> attribute. If present,
-     * then it is parsed to extract the date and time at which the
-     * timestamp was generated.
-     *
-     * @param info A signer information element of a PKCS 7 block.
-     *
-     * @return A timestamp token or null if none is present.
-     * @throws IOException if an error is encountered while parsing the
-     *         PKCS7 data.
-     * @throws NoSuchAlgorithmException if an error is encountered while
-     *         verifying the PKCS7 object.
-     * @throws SignatureException if an error is encountered while
-     *         verifying the PKCS7 object.
-     * @throws CertificateException if an error is encountered while generating
-     *         the TSA's certpath.
-     */
-    private Timestamp getTimestamp(SignerInfo info)
-        throws IOException, NoSuchAlgorithmException, SignatureException,
-            CertificateException {
-
-        Timestamp timestamp = null;
-
-        // Extract the signer's unsigned attributes
-        PKCS9Attributes unsignedAttrs = info.getUnauthenticatedAttributes();
-        if (unsignedAttrs != null) {
-            PKCS9Attribute timestampTokenAttr =
-                unsignedAttrs.getAttribute("signatureTimestampToken");
-            if (timestampTokenAttr != null) {
-                PKCS7 timestampToken =
-                    new PKCS7((byte[])timestampTokenAttr.getValue());
-                // Extract the content (an encoded timestamp token info)
-                byte[] encodedTimestampTokenInfo =
-                    timestampToken.getContentInfo().getData();
-                // Extract the signer (the Timestamping Authority)
-                // while verifying the content
-                SignerInfo[] tsa =
-                    timestampToken.verify(encodedTimestampTokenInfo);
-                // Expect only one signer
-                ArrayList<X509Certificate> chain =
-                                tsa[0].getCertificateChain(timestampToken);
-                CertPath tsaChain = certificateFactory.generateCertPath(chain);
-                // Create a timestamp token info object
-                TimestampToken timestampTokenInfo =
-                    new TimestampToken(encodedTimestampTokenInfo);
-                // Check that the signature timestamp applies to this signature
-                verifyTimestamp(timestampTokenInfo, info.getEncryptedDigest());
-                // Create a timestamp object
-                timestamp =
-                    new Timestamp(timestampTokenInfo.getDate(), tsaChain);
-            }
-        }
-        return timestamp;
-    }
-
-    /*
-     * Check that the signature timestamp applies to this signature.
-     * Match the hash present in the signature timestamp token against the hash
-     * of this signature.
-     */
-    private void verifyTimestamp(TimestampToken token, byte[] signature)
-        throws NoSuchAlgorithmException, SignatureException {
-
-        MessageDigest md =
-            MessageDigest.getInstance(token.getHashAlgorithm().getName());
-
-        if (!Arrays.equals(token.getHashedMessage(), md.digest(signature))) {
-            throw new SignatureException("Signature timestamp (#" +
-                token.getSerialNumber() + ") generated on " + token.getDate() +
-                " is inapplicable");
-        }
-
-        if (debug != null) {
-            debug.println();
-            debug.println("Detected signature timestamp (#" +
-                token.getSerialNumber() + ") generated on " + token.getDate());
-            debug.println();
         }
     }
 
