@@ -170,10 +170,11 @@ public class Logger {
     private static final int offValue = Level.OFF.intValue();
     private LogManager manager;
     private String name;
-    private ArrayList<Handler> handlers;
-    private String resourceBundleName;
-    private boolean useParentHandlers = true;
-    private Filter filter;
+    private final CopyOnWriteArrayList<Handler> handlers =
+        new CopyOnWriteArrayList<Handler>();
+    private volatile String resourceBundleName;
+    private volatile boolean useParentHandlers = true;
+    private volatile Filter filter;
     private boolean anonymous;
 
     private ResourceBundle catalog;     // Cached resource bundle
@@ -182,14 +183,15 @@ public class Logger {
 
     // The fields relating to parent-child relationships and levels
     // are managed under a separate lock, the treeLock.
-    private static Object treeLock = new Object();
+    private static final Object treeLock = new Object();
     // We keep weak references from parents to children, but strong
     // references from children to parents.
-    private Logger parent;    // our nearest parent.
+    private volatile Logger parent;    // our nearest parent.
     private ArrayList<LogManager.LoggerWeakRef> kids;   // WeakReferences to loggers that have us as parent
-    private Level levelObject;
+    private volatile Level levelObject;
     private volatile int levelValue;  // current effective level value
     private WeakReference<ClassLoader> callersClassLoaderRef;
+    private final boolean isSystemLogger;
 
     /**
      * GLOBAL_LOGGER_NAME is a name for the global logger.
@@ -245,11 +247,12 @@ public class Logger {
      *             no corresponding resource can be found.
      */
     protected Logger(String name, String resourceBundleName) {
-        this(name, resourceBundleName, null);
+        this(name, resourceBundleName, null, false);
     }
 
-    Logger(String name, String resourceBundleName, Class<?> caller) {
+    Logger(String name, String resourceBundleName, Class<?> caller, boolean isSystemLogger) {
         this.manager = LogManager.getLogManager();
+        this.isSystemLogger = isSystemLogger;
         setupResourceInfo(resourceBundleName, caller);
         this.name = name;
         levelValue = Level.INFO.intValue();
@@ -276,6 +279,7 @@ public class Logger {
     private Logger(String name) {
         // The manager field is not initialized here.
         this.name = name;
+        this.isSystemLogger = true;
         levelValue = Level.INFO.intValue();
     }
 
@@ -484,7 +488,7 @@ public class Logger {
         // cleanup some Loggers that have been GC'ed
         manager.drainLoggerRefQueueBounded();
         Logger result = new Logger(null, resourceBundleName,
-                                   Reflection.getCallerClass());
+                                   Reflection.getCallerClass(), false);
         result.anonymous = true;
         Logger root = manager.getLogger("");
         result.doSetParent(root);
@@ -525,7 +529,7 @@ public class Logger {
      * @exception  SecurityException  if a security manager exists and if
      *             the caller does not have LoggingPermission("control").
      */
-    public synchronized void setFilter(Filter newFilter) throws SecurityException {
+    public void setFilter(Filter newFilter) throws SecurityException {
         checkPermission();
         filter = newFilter;
     }
@@ -535,7 +539,7 @@ public class Logger {
      *
      * @return  a filter object (may be null)
      */
-    public synchronized Filter getFilter() {
+    public Filter getFilter() {
         return filter;
     }
 
@@ -552,10 +556,9 @@ public class Logger {
         if (record.getLevel().intValue() < levelValue || levelValue == offValue) {
             return;
         }
-        synchronized (this) {
-            if (filter != null && !filter.isLoggable(record)) {
-                return;
-            }
+        Filter theFilter = filter;
+        if (theFilter != null && !theFilter.isLoggable(record)) {
+            return;
         }
 
         // Post the LogRecord to all our Handlers, and then to
@@ -563,19 +566,22 @@ public class Logger {
 
         Logger logger = this;
         while (logger != null) {
-            Handler targets[] = logger.getHandlers();
-
-            if (targets != null) {
-                for (int i = 0; i < targets.length; i++) {
-                    targets[i].publish(record);
-                }
+            final Handler[] loggerHandlers = isSystemLogger
+                ? logger.accessCheckedHandlers()
+                : logger.getHandlers();
+            for (Handler handler : loggerHandlers) {
+                handler.publish(record);
             }
 
-            if (!logger.getUseParentHandlers()) {
+            final boolean useParentHdls = isSystemLogger
+                ? logger.useParentHandlers
+                : logger.getUseParentHandlers();
+
+            if (!useParentHdls) {
                 break;
             }
 
-            logger = logger.getParent();
+            logger = isSystemLogger ? logger.parent : logger.getParent();
         }
     }
 
@@ -1268,13 +1274,10 @@ public class Logger {
      * @exception  SecurityException  if a security manager exists and if
      *             the caller does not have LoggingPermission("control").
      */
-    public synchronized void addHandler(Handler handler) throws SecurityException {
+    public void addHandler(Handler handler) throws SecurityException {
         // Check for null handler
         handler.getClass();
         checkPermission();
-        if (handlers == null) {
-            handlers = new ArrayList<Handler>();
-        }
         handlers.add(handler);
     }
 
@@ -1287,7 +1290,7 @@ public class Logger {
      * @exception  SecurityException  if a security manager exists and if
      *             the caller does not have LoggingPermission("control").
      */
-    public synchronized void removeHandler(Handler handler) throws SecurityException {
+    public void removeHandler(Handler handler) throws SecurityException {
         checkPermission();
         if (handler == null) {
             return;
@@ -1303,11 +1306,14 @@ public class Logger {
      * <p>
      * @return  an array of all registered Handlers
      */
-    public synchronized Handler[] getHandlers() {
-        if (handlers == null) {
-            return emptyHandlers;
-        }
-        return handlers.toArray(new Handler[handlers.size()]);
+    public Handler[] getHandlers() {
+        return accessCheckedHandlers();
+    }
+
+    // This method should ideally be marked final - but unfortunately
+    // it needs to be overridden by LogManager.RootLogger
+    Handler[] accessCheckedHandlers() {
+        return handlers.toArray(emptyHandlers);
     }
 
     /**
@@ -1321,7 +1327,7 @@ public class Logger {
      * @exception  SecurityException  if a security manager exists and if
      *             the caller does not have LoggingPermission("control").
      */
-    public synchronized void setUseParentHandlers(boolean useParentHandlers) {
+    public void setUseParentHandlers(boolean useParentHandlers) {
         checkPermission();
         this.useParentHandlers = useParentHandlers;
     }
@@ -1332,7 +1338,7 @@ public class Logger {
      *
      * @return  true if output is to be sent to the logger's parent
      */
-    public synchronized boolean getUseParentHandlers() {
+    public boolean getUseParentHandlers() {
         return useParentHandlers;
     }
 
@@ -1505,9 +1511,12 @@ public class Logger {
      * @return nearest existing parent Logger
      */
     public Logger getParent() {
-        synchronized (treeLock) {
-            return parent;
-        }
+        // Note: this used to be synchronized on treeLock.  However, this only
+        // provided memory semantics, as there was no guarantee that the caller
+        // would synchronize on treeLock (in fact, there is no way for external
+        // callers to so synchronize).  Therefore, we have made parent volatile
+        // instead.
+        return parent;
     }
 
     /**
@@ -1636,11 +1645,13 @@ public class Logger {
     private String getEffectiveResourceBundleName() {
         Logger target = this;
         while (target != null) {
-            String rbn = target.getResourceBundleName();
+            final String rbn = isSystemLogger
+                ? target.resourceBundleName
+                : target.getResourceBundleName();
             if (rbn != null) {
                 return rbn;
             }
-            target = target.getParent();
+            target = isSystemLogger ? target.parent : target.getParent();
         }
         return null;
     }

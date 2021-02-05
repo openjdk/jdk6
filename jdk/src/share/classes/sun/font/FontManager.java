@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -54,6 +54,7 @@ import sun.awt.SunHints;
 import sun.awt.SunToolkit;
 import sun.java2d.HeadlessGraphicsEnvironment;
 import sun.java2d.SunGraphicsEnvironment;
+import sun.misc.ThreadGroupUtils;
 
 import java.awt.geom.GeneralPath;
 import java.awt.geom.Point2D;
@@ -245,9 +246,11 @@ public final class FontManager {
                osName = System.getProperty("os.name", "unknownOS");
                isSolaris = osName.startsWith("SunOS");
 
-               if (isSolaris) {
-                   String t2kStr= System.getProperty("sun.java2d.font.scaler");
+               String t2kStr = System.getProperty("sun.java2d.font.scaler");
+               if (t2kStr != null) {
                    useT2K = "t2k".equals(t2kStr);
+               }
+               if (isSolaris) {
                    String version = System.getProperty("os.version", "unk");
                    isSolaris8 = version.equals("5.8");
                    isSolaris9 = version.equals("5.9");
@@ -2405,23 +2408,19 @@ public final class FontManager {
                           });
                       }
                     };
-                    java.security.AccessController.doPrivileged(
-                       new java.security.PrivilegedAction() {
-                          public Object run() {
-                              /* The thread must be a member of a thread group
-                               * which will not get GCed before VM exit.
-                               * Make its parent the top-level thread group.
-                               */
-                              ThreadGroup tg =
-                                  Thread.currentThread().getThreadGroup();
-                              for (ThreadGroup tgn = tg;
-                                   tgn != null;
-                                   tg = tgn, tgn = tg.getParent());
-                              fileCloser = new Thread(tg, fileCloserRunnable);
-                              Runtime.getRuntime().addShutdownHook(fileCloser);
-                              return null;
-                          }
-                    });
+                    AccessController.doPrivileged(new PrivilegedAction<Void>() {
+			    public Void run() {
+                                /* The thread must be a member of a thread group
+                                 * which will not get GCed before VM exit.
+                                 * Make its parent the top-level thread group.
+                                 */
+                                ThreadGroup rootTG = ThreadGroupUtils.getRootThreadGroup();
+                                fileCloser = new Thread(rootTG, fileCloserRunnable);
+                                fileCloser.setContextClassLoader(null);
+                                Runtime.getRuntime().addShutdownHook(fileCloser);
+                                return null;
+			    }
+			});
                 }
             }
         }

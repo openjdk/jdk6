@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,12 +32,16 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsConfiguration;
 import java.awt.Rectangle;
 import java.awt.Window;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HashMap;
 
 import sun.java2d.opengl.GLXGraphicsConfig;
 import sun.java2d.loops.SurfaceType;
+
+import sun.misc.ThreadGroupUtils;
 
 /**
  * This is an implementation of a GraphicsDevice object for a single
@@ -385,6 +389,9 @@ public class X11GraphicsDevice
             throw new IllegalStateException("Must be in fullscreen mode " +
                                             "in order to set display mode");
         }
+        if (getDisplayMode().equals(dm)) {
+            return;
+        }
         if (dm == null ||
             (dm = getMatchingDisplayMode(dm)) == null)
         {
@@ -397,17 +404,25 @@ public class X11GraphicsDevice
             // is already in the original DisplayMode at that time, this
             // hook will have no effect)
             shutdownHookRegistered = true;
-            Runnable r = new Runnable() {
-                public void run() {
-                    Window old = getFullScreenWindow();
-                    if (old != null) {
-                        exitFullScreenExclusive(old);
-                        setDisplayMode(origDisplayMode);
-                    }
-                }
+            PrivilegedAction<Void> a = new PrivilegedAction<Void>() {
+                public Void run() {
+		    ThreadGroup rootTG = ThreadGroupUtils.getRootThreadGroup();
+                    Runnable r = new Runnable() {
+                            public void run() {
+                                Window old = getFullScreenWindow();
+                                if (old != null) {
+                                    exitFullScreenExclusive(old);
+                                    setDisplayMode(origDisplayMode);
+                                }
+                            }
+                        };
+		    Thread t = new Thread(rootTG, r,"Display-Change-Shutdown-Thread-"+screen);
+		    t.setContextClassLoader(null);
+		    Runtime.getRuntime().addShutdownHook(t);
+		    return null;
+		}
             };
-            Thread t = new Thread(r,"Display-Change-Shutdown-Thread-"+screen);
-            Runtime.getRuntime().addShutdownHook(t);
+            AccessController.doPrivileged(a);
         }
 
         // switch to the new DisplayMode
