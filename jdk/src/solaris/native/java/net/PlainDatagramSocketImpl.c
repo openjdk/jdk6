@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,8 +34,8 @@
 #include <fcntl.h>
 #endif
 #ifdef __linux__
-#include <linux/unistd.h>
-#include <linux/sysctl.h>
+#include <unistd.h>
+#include <sys/sysctl.h>
 #include <sys/utsname.h>
 #include <netinet/ip.h>
 
@@ -89,7 +89,6 @@ static jfieldID pdsi_ttlID;
 static jobject createInteger(JNIEnv *env, int i) {
     static jclass i_class;
     static jmethodID i_ctrID;
-    static jfieldID i_valueID;
 
     if (i_class == NULL) {
         jclass c = (*env)->FindClass(env, "java/lang/Integer");
@@ -109,7 +108,6 @@ static jobject createInteger(JNIEnv *env, int i) {
 static jobject createBoolean(JNIEnv *env, int b) {
     static jclass b_class;
     static jmethodID b_ctrID;
-    static jfieldID b_valueID;
 
     if (b_class == NULL) {
         jclass c = (*env)->FindClass(env, "java/lang/Boolean");
@@ -148,8 +146,6 @@ Java_java_net_PlainDatagramSocketImpl_init(JNIEnv *env, jclass cls) {
 #ifdef __linux__
     struct utsname sysinfo;
 #endif
-    char *s;
-
     pdsi_fdID = (*env)->GetFieldID(env, cls, "fd",
                                    "Ljava/io/FileDescriptor;");
     CHECK_NULL(pdsi_fdID);
@@ -373,7 +369,7 @@ Java_java_net_PlainDatagramSocketImpl_disconnect0(JNIEnv *env, jobject this, jin
         if (JVM_GetSockName(fd, (struct sockaddr *)&addr, &len) == -1) {
             return;
         }
-        localPort = NET_GetPortFromSockaddr(&addr);
+        localPort = NET_GetPortFromSockaddr((struct sockaddr *)&addr);
         if (localPort == 0) {
             localPort = (*env)->GetIntField(env, this, pdsi_localPortID);
 #ifdef AF_INET6
@@ -416,7 +412,6 @@ Java_java_net_PlainDatagramSocketImpl_send(JNIEnv *env, jobject this,
     /* The fdObj'fd */
     jint fd;
 
-    ssize_t n = -1;
     SOCKADDR rmtaddr, *rmtaddrP=&rmtaddr;
     int len;
 
@@ -632,9 +627,7 @@ Java_java_net_PlainDatagramSocketImpl_peekData(JNIEnv *env, jobject this,
     jint packetBufferOffset, packetBufferLen;
 
     int fd;
-    jbyteArray data;
 
-    int datalen;
     int n;
     SOCKADDR remote_addr;
     int len;
@@ -811,9 +804,7 @@ Java_java_net_PlainDatagramSocketImpl_receive0(JNIEnv *env, jobject this,
     jint packetBufferOffset, packetBufferLen;
 
     int fd;
-    jbyteArray data;
 
-    int datalen;
     int n;
     SOCKADDR remote_addr;
     int len;
@@ -1058,7 +1049,6 @@ Java_java_net_PlainDatagramSocketImpl_datagramSocketCreate(JNIEnv *env,
     jobject fdObj = (*env)->GetObjectField(env, this, pdsi_fdID);
     int fd;
 
-    int arg = -1;
     int t = 1;
 
     if (IS_NULL(fdObj)) {
@@ -1574,10 +1564,12 @@ jobject getMulticastInterface(JNIEnv *env, jobject this, int fd, jint opt) {
         static jmethodID ni_ctrID;
         static jfieldID ni_indexID;
         static jfieldID ni_addrsID;
+        static jfieldID ni_nameID;
 
         jobjectArray addrArray;
         jobject addr;
         jobject ni;
+        jobject ni_name;
 
         struct in_addr in;
         struct in_addr *inP = &in;
@@ -1640,6 +1632,8 @@ jobject getMulticastInterface(JNIEnv *env, jobject this, int fd, jint opt) {
             ni_addrsID = (*env)->GetFieldID(env, c, "addrs",
                                             "[Ljava/net/InetAddress;");
             CHECK_NULL_RETURN(ni_addrsID, NULL);
+            ni_nameID = (*env)->GetFieldID(env, c,"name", "Ljava/lang/String;");
+            CHECK_NULL_RETURN(ni_nameID, NULL);
             ni_class = (*env)->NewGlobalRef(env, c);
             CHECK_NULL_RETURN(ni_class, NULL);
         }
@@ -1661,6 +1655,9 @@ jobject getMulticastInterface(JNIEnv *env, jobject this, int fd, jint opt) {
         CHECK_NULL_RETURN(addrArray, NULL);
         (*env)->SetObjectArrayElement(env, addrArray, 0, addr);
         (*env)->SetObjectField(env, ni, ni_addrsID, addrArray);
+        if (ni_name != NULL) {
+            (*env)->SetObjectField(env, ni, ni_nameID, ni_name);
+        }
         return ni;
     }
 
@@ -1677,14 +1674,16 @@ jobject getMulticastInterface(JNIEnv *env, jobject this, int fd, jint opt) {
         static jfieldID ni_indexID;
         static jfieldID ni_addrsID;
         static jclass ia_class;
+        static jfieldID ni_nameID;
         static jmethodID ia_anyLocalAddressID;
 
-        int index;
+        int index = 0;
         int len = sizeof(index);
 
         jobjectArray addrArray;
         jobject addr;
         jobject ni;
+        jobject ni_name;
 
 #ifdef __linux__
         /*
@@ -1724,6 +1723,8 @@ jobject getMulticastInterface(JNIEnv *env, jobject this, int fd, jint opt) {
                                                              "anyLocalAddress",
                                                              "()Ljava/net/InetAddress;");
             CHECK_NULL_RETURN(ia_anyLocalAddressID, NULL);
+            ni_nameID = (*env)->GetFieldID(env, c,"name", "Ljava/lang/String;");
+            CHECK_NULL_RETURN(ni_nameID, NULL);
             ni_class = (*env)->NewGlobalRef(env, c);
             CHECK_NULL_RETURN(ni_class, NULL);
         }
@@ -1784,6 +1785,10 @@ jobject getMulticastInterface(JNIEnv *env, jobject this, int fd, jint opt) {
         CHECK_NULL_RETURN(addrArray, NULL);
         (*env)->SetObjectArrayElement(env, addrArray, 0, addr);
         (*env)->SetObjectField(env, ni, ni_addrsID, addrArray);
+        ni_name = (*env)->NewStringUTF(env, "");
+        if (ni_name != NULL) {
+            (*env)->SetObjectField(env, ni, ni_nameID, ni_name);
+        }
         return ni;
     }
 #endif

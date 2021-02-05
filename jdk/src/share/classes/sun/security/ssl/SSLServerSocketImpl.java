@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -144,8 +144,8 @@ class SSLServerSocketImpl extends SSLServerSocket
             throw new SSLException("No Authentication context given");
         }
         sslContext = context;
-        enabledCipherSuites = CipherSuiteList.getDefault();
-        enabledProtocols = ProtocolList.getDefault();
+        enabledCipherSuites = sslContext.getDefaultCipherSuiteList(true);
+        enabledProtocols = sslContext.getDefaultProtocolList(true);
     }
 
     /**
@@ -159,8 +159,7 @@ class SSLServerSocketImpl extends SSLServerSocket
      * @return an array of cipher suite names
      */
     public String[] getSupportedCipherSuites() {
-        CipherSuiteList.clearAvailableCache();
-        return CipherSuiteList.getSupported().toStringArray();
+        return sslContext.getSupportedCipherSuiteList().toStringArray();
     }
 
     /**
@@ -185,7 +184,7 @@ class SSLServerSocketImpl extends SSLServerSocket
     }
 
     public String[] getSupportedProtocols() {
-        return ProtocolList.getSupported().toStringArray();
+        return sslContext.getSuportedProtocolList().toStringArray();
     }
 
     /**
@@ -238,6 +237,16 @@ class SSLServerSocketImpl extends SSLServerSocket
      * rejoining the already-negotiated SSL connection.
      */
     public void setUseClientMode(boolean flag) {
+        /*
+         * If we need to change the socket mode and the enabled
+         * protocols haven't specifically been set by the user,
+         * change them to the corresponding default ones.
+         */
+        if (useServerMode != (!flag) &&
+                sslContext.isDefaultProtocolList(enabledProtocols)) {
+            enabledProtocols = sslContext.getDefaultProtocolList(!flag);
+        }
+
         useServerMode = !flag;
     }
 
@@ -262,15 +271,12 @@ class SSLServerSocketImpl extends SSLServerSocket
         return enableSessionCreation;
     }
 
-
     /**
      * Accept a new SSL connection.  This server identifies itself with
      * information provided in the authentication context which was
      * presented during construction.
      */
     public Socket accept() throws IOException {
-        checkEnabledSuites();
-
         SSLSocketImpl s = new SSLSocketImpl(sslContext, useServerMode,
             enabledCipherSuites, doClientAuth, enableSessionCreation,
             enabledProtocols);
@@ -279,56 +285,6 @@ class SSLServerSocketImpl extends SSLServerSocket
         s.doneConnect();
         return s;
     }
-
-
-    /*
-     * This is a sometimes helpful diagnostic check that is performed
-     * once for each ServerSocket to verify that the initial set of
-     * enabled suites are capable of supporting a successful handshake.
-     */
-    private void checkEnabledSuites() throws IOException {
-        //
-        // We want to report an error if no cipher suites were actually
-        // enabled, since this is an error users are known to make.  Then
-        // they get vastly confused by having clients report an error!
-        //
-        synchronized (this) {
-            if (checkedEnabled) {
-                return;
-            }
-            if (useServerMode == false) {
-                return;
-            }
-
-            SSLSocketImpl tmp = new SSLSocketImpl(sslContext, useServerMode,
-                         enabledCipherSuites, doClientAuth,
-                         enableSessionCreation, enabledProtocols);
-
-            try {
-                ServerHandshaker handshaker = tmp.getServerHandshaker();
-
-                for (Iterator<CipherSuite> t = enabledCipherSuites.iterator();
-                        t.hasNext();) {
-                    CipherSuite suite = t.next();
-                    if (handshaker.trySetCipherSuite(suite)) {
-                        checkedEnabled = true;
-                        return;
-                    }
-                }
-            } finally {
-                tmp.closeSocket();
-            }
-
-            //
-            // diagnostic text here is currently appropriate
-            // since it's only certificate unavailability that can
-            // cause such problems ... but that might change someday.
-            //
-            throw new SSLException("No available certificate or key corresponds"
-                + " to the SSL cipher suites which are enabled.");
-        }
-    }
-
 
     /**
      * Provides a brief description of this SSL socket.

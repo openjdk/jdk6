@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,10 @@
  *      5102005 5074431 6182685 6208712 6277020 6245766 6351682 6386647 6379382
  *      6414459 6455680 6498742 6558863 6488119 6547501 6497154 6558856 6481177
  *      6379214 6485516 6486607 4225362 4494727 6533691 6531591 6531593 6570259
- *      6573250 6450945 6509039 6610748 6645268 6645405 6650730 6609737
+ *      6509039 6609737 6610748 6645271 6507067 6873931 6450945 6645268 6646611
+ *      6645405 6650730 6910489 6573250 6870908 6585666 6716626 6914413 6916787
+ *      6919624 7019267 7020960 7025837 7020583 7036905 7066203 7189611 7171028
+ *      8013836 7028073 7195759 7085757 6931564 8027695
  * @summary Verify locale data
  *
  */
@@ -254,6 +257,15 @@ public class LocaleDataTest
         if (index == -1)
             index = key.length();
         resTag = key.substring(oldIndex, index);
+
+        // TimeZone name may have "/" in it, for example "Asia/Taipei", so use "Asia\/Taipei in LocaleData.
+        if(resTag.endsWith("\\")) {
+            resTag = resTag.substring(0, resTag.length() - 1);
+            oldIndex = index;
+            index = key.indexOf("/", oldIndex + 1);
+            if (index == -1) index = key.length();
+            resTag += key.substring(oldIndex, index);
+        }
 
         if (index < key.length() - 1)
             qualifier = key.substring(index + 1);
