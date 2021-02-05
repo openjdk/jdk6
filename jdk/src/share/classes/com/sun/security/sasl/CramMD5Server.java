@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,7 +38,7 @@ import java.util.logging.Level;
 
 /**
   * Implements the CRAM-MD5 SASL server-side mechanism.
-  * (<A HREF="ftp://ftp.isi.edu/in-notes/rfc2195.txt">RFC 2195</A>).
+  * (<A HREF="http://www.ietf.org/rfc/rfc2195.txt">RFC 2195</A>).
   * CRAM-MD5 has no initial response.
   *
   * client <---- M={random, timestamp, server-fqdn} ------- server

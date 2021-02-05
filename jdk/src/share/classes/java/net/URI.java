@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -457,7 +457,7 @@ import java.lang.NullPointerException;  // for javadoc
  * @author Mark Reinhold
  * @since 1.4
  *
- * @see <a href="http://ietf.org/rfc/rfc2279.txt"><i>RFC&nbsp;2279: UTF-8, a
+ * @see <a href="http://www.ietf.org/rfc/rfc2279.txt"><i>RFC&nbsp;2279: UTF-8, a
  * transformation format of ISO 10646</i></a>, <br><a
  * href="http://www.ietf.org/rfc/rfc2373.txt"><i>RFC&nbsp;2373: IPv6 Addressing
  * Architecture</i></a>, <br><a
