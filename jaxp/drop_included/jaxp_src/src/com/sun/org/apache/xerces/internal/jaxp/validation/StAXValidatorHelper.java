@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@
 
 package com.sun.org.apache.xerces.internal.jaxp.validation;
 
+import com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl;
 import com.sun.org.apache.xerces.internal.impl.Constants;
 import com.sun.org.apache.xerces.internal.utils.XMLSecurityManager;
 
@@ -41,6 +42,7 @@ import javax.xml.transform.sax.SAXTransformerFactory;
 import javax.xml.transform.sax.TransformerHandler;
 import javax.xml.transform.stax.StAXResult;
 import javax.xml.transform.stax.StAXSource;
+import jdk.xml.internal.JdkXmlUtils;
 
 import org.xml.sax.SAXException;
 
@@ -70,8 +72,11 @@ public final class StAXValidatorHelper implements ValidatorHelper {
          
             if( identityTransformer1==null ) {
                 try {
-                    SAXTransformerFactory tf = (SAXTransformerFactory)SAXTransformerFactory.newInstance();
-                    XMLSecurityManager securityManager = (XMLSecurityManager)fComponentManager.getProperty(Constants.SECURITY_MANAGER);
+                    SAXTransformerFactory tf = JdkXmlUtils.getSAXTransformFactory(
+                            fComponentManager.getFeature(JdkXmlUtils.OVERRIDE_PARSER));
+
+                    XMLSecurityManager securityManager =
+                            (XMLSecurityManager)fComponentManager.getProperty(Constants.SECURITY_MANAGER);
                     if (securityManager != null) {
                         for (XMLSecurityManager.Limit limit : XMLSecurityManager.Limit.values()) {
                             if (securityManager.isSet(limit.ordinal())){

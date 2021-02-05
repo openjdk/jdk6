@@ -769,7 +769,7 @@ Java_sun_security_jgss_wrapper_GSSLibStub_initContext(JNIEnv *env,
 {
   OM_uint32 minor, major;
   gss_cred_id_t credHdl ;
-  gss_ctx_id_t contextHdl;
+  gss_ctx_id_t contextHdl, contextHdlSave;
   gss_name_t targetName;
   gss_OID mech;
   OM_uint32 flags, aFlags;
@@ -785,7 +785,7 @@ Java_sun_security_jgss_wrapper_GSSLibStub_initContext(JNIEnv *env,
   debug(env, "[GSSLibStub_initContext]");
 
   credHdl = (gss_cred_id_t) pCred;
-  contextHdl = (gss_ctx_id_t)
+  contextHdl = contextHdlSave= (gss_ctx_id_t)
     (*env)->GetLongField(env, jcontextSpi, FID_NativeGSSContext_pContext);
   targetName = (gss_name_t) pName;
   mech = (gss_OID) (*env)->GetLongField(env, jobj, FID_GSSLibStub_pMech);
@@ -818,10 +818,18 @@ Java_sun_security_jgss_wrapper_GSSLibStub_initContext(JNIEnv *env,
           (long)outToken.length);
   debug(env, debugBuf);
 
+  // update context handle with the latest value if changed
+  // this is to work with both MIT and Solaris. Former deletes half-built
+  // context if error occurs
+  if (contextHdl != contextHdlSave) {
+    (*env)->SetLongField(env, jcontextSpi, FID_NativeGSSContext_pContext,
+                         (jlong) contextHdl);
+    sprintf(debugBuf, "[GSSLibStub_initContext] set pContext=%ld", (long)contextHdl);
+    debug(env, debugBuf);
+  }
+
   if (GSS_ERROR(major) == GSS_S_COMPLETE) {
     /* update member values if needed */
-    (*env)->SetLongField(env, jcontextSpi, FID_NativeGSSContext_pContext,
-                        (jlong) contextHdl);
     (*env)->SetIntField(env, jcontextSpi, FID_NativeGSSContext_flags, aFlags);
     sprintf(debugBuf, "[GSSLibStub_initContext] set flags=0x%x", aFlags);
     debug(env, debugBuf);
@@ -869,7 +877,7 @@ Java_sun_security_jgss_wrapper_GSSLibStub_acceptContext(JNIEnv *env,
 {
   OM_uint32 minor, major;
   OM_uint32 minor2, major2;
-  gss_ctx_id_t contextHdl;
+  gss_ctx_id_t contextHdl, contextHdlSave;
   gss_cred_id_t credHdl;
   gss_buffer_desc inToken;
   gss_channel_bindings_t cb;
@@ -889,7 +897,7 @@ Java_sun_security_jgss_wrapper_GSSLibStub_acceptContext(JNIEnv *env,
 
   debug(env, "[GSSLibStub_acceptContext]");
 
-  contextHdl = (gss_ctx_id_t)
+  contextHdl = contextHdlSave = (gss_ctx_id_t)
     (*env)->GetLongField(env, jcontextSpi, FID_NativeGSSContext_pContext);
   credHdl = (gss_cred_id_t) pCred;
   initGSSBuffer(env, jinToken, &inToken);
@@ -919,13 +927,19 @@ Java_sun_security_jgss_wrapper_GSSLibStub_acceptContext(JNIEnv *env,
         (long)credHdl, (long)contextHdl, (long) delCred);
   debug(env, debugBuf);
 
-  if (GSS_ERROR(major) == GSS_S_COMPLETE) {
-    /* update member values if needed */
+  // update context handle with the latest value if changed
+  // this is to work with both MIT and Solaris. Former deletes half-built
+  // context if error occurs
+  if (contextHdl != contextHdlSave) {
     (*env)->SetLongField(env, jcontextSpi, FID_NativeGSSContext_pContext,
-                        (jlong) contextHdl);
+			 (jlong) contextHdl);
     sprintf(debugBuf, "[GSSLibStub_acceptContext] set pContext=%ld",
             (long)contextHdl);
     debug(env, debugBuf);
+  }
+
+  if (GSS_ERROR(major) == GSS_S_COMPLETE) {
+    /* update member values if needed */
     // WORKAROUND for a Heimdal bug
     if (delCred == GSS_C_NO_CREDENTIAL) {
         aFlags &= 0xfffffffe;

@@ -1,4 +1,7 @@
 /*
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ */
+/*
  * reserved comment block
  * DO NOT REMOVE OR ALTER!
  */
@@ -196,6 +199,13 @@ public class CatalogManager {
   /** Current catalog class name. */
   private String catalogClassName = null;
 
+  /**
+   * Indicates whether implementation parts should use
+   *   service loader (or similar).
+   * Note the default value (false) is the safe option..
+   */
+  private boolean overrideDefaultParser;
+
   /** The manager's debug object. Used for printing debugging messages.
    *
    * <p>This field is public so that objects that have access to this
@@ -211,6 +221,8 @@ public class CatalogManager {
     // read from the propertyFile for some other reason. That way, there's
     // no attempt to read from the file before the caller has had a chance
     // to avoid it.
+
+    overrideDefaultParser =  (System.getSecurityManager() == null);
   }
 
   /** Constructor that specifies an explicit property file. */
@@ -223,6 +235,8 @@ public class CatalogManager {
     // read from the propertyFile for some other reason. That way, there's
     // no attempt to read from the file before the caller has had a chance
     // to avoid it.
+
+    overrideDefaultParser =  (System.getSecurityManager() == null);
   }
 
   /** Set the bootstrap resolver.*/
@@ -769,6 +783,10 @@ public class CatalogManager {
     }
 
     return oasisXMLCatalogPI.booleanValue();
+  }
+
+  public boolean overrideDefaultParser() {
+    return overrideDefaultParser;
   }
 
   /**

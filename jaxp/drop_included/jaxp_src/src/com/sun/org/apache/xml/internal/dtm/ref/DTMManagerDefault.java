@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 1999-2004 The Apache Software Foundation.
@@ -44,6 +43,7 @@ import com.sun.org.apache.xml.internal.utils.PrefixResolver;
 import com.sun.org.apache.xml.internal.utils.SystemIDResolver;
 import com.sun.org.apache.xml.internal.utils.XMLReaderManager;
 import com.sun.org.apache.xml.internal.utils.XMLStringFactory;
+import jdk.xml.internal.JdkXmlUtils;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -606,7 +606,7 @@ public class DTMManagerDefault extends DTMManager
       // If user did not supply a reader, ask for one from the reader manager
       if (null == reader) {
         if (m_readerManager == null) {
-            m_readerManager = XMLReaderManager.getInstance();
+            m_readerManager = XMLReaderManager.getInstance(super.overrideDefaultParser());
         }
 
         reader = m_readerManager.getXMLReader();
@@ -765,7 +765,7 @@ public class DTMManagerDefault extends DTMManager
 
     try
     {
-      DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+      DocumentBuilderFactory dbf = JdkXmlUtils.getDOMFactory(super.overrideDefaultParser());
 
       dbf.setNamespaceAware(true);
 

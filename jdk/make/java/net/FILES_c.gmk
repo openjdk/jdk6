@@ -37,6 +37,7 @@ FILES_c = \
 	SocketOutputStream.c \
 	net_util.c \
 	net_util_md.c \
+	portconfig.c \
 	ResolverConfigurationImpl.c \
 	DefaultProxySelector.c
 

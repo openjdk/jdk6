@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 2001-2004 The Apache Software Foundation.
@@ -29,7 +28,6 @@ import java.io.Reader;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
 import javax.xml.stream.XMLEventReader;
@@ -39,10 +37,10 @@ import javax.xml.transform.Source;
 import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.sax.SAXSource;
-import javax.xml.transform.stax.StAXResult;
 import javax.xml.transform.stax.StAXSource;
 import javax.xml.transform.stream.StreamSource;
-
+import jdk.xml.internal.JdkXmlFeatures;
+import jdk.xml.internal.JdkXmlUtils;
 import com.sun.org.apache.xalan.internal.utils.XMLSecurityManager;
 import com.sun.org.apache.xalan.internal.xsltc.compiler.XSLTC;
 import com.sun.org.apache.xalan.internal.xsltc.compiler.util.ErrorMsg;
@@ -54,12 +52,12 @@ import org.xml.sax.SAXException;
 import org.xml.sax.SAXNotRecognizedException;
 import org.xml.sax.SAXNotSupportedException;
 import org.xml.sax.XMLReader;
-import org.xml.sax.helpers.XMLReaderFactory;
 
 /**
  * @author Santiago Pericas-Geertsen
  */
 public final class Util {
+    private static final String property = "org.xml.sax.driver";
 
     public static String baseName(String name) {
         return com.sun.org.apache.xalan.internal.xsltc.compiler.util.Util.baseName(name);
@@ -95,71 +93,38 @@ public final class Util {
                 try {
                     XMLReader reader = sax.getXMLReader();
 
-                     /*
-                      * Fix for bug 24695
-                      * According to JAXP 1.2 specification if a SAXSource
-                      * is created using a SAX InputSource the Transformer or
-                      * TransformerFactory creates a reader via the
-                      * XMLReaderFactory if setXMLReader is not used
-                      */
-
                     if (reader == null) {
-                       try {
-                           reader= XMLReaderFactory.createXMLReader();
-                           try {
-                                reader.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING,
-                                            xsltc.isSecureProcessing());
-                           } catch (SAXNotRecognizedException e) {
-                                System.err.println("Warning:  " + reader.getClass().getName() + ": "
-                                        + e.getMessage());
-                           }
-                       } catch (Exception e ) {
-                           try {
-
-                               //Incase there is an exception thrown
-                               // resort to JAXP
-                               SAXParserFactory parserFactory =
-                                      SAXParserFactory.newInstance();
-                               parserFactory.setNamespaceAware(true);
-
-                               if (xsltc.isSecureProcessing()) {
-                                  try {
-                                      parserFactory.setFeature(
-                                          XMLConstants.FEATURE_SECURE_PROCESSING, true);
-                                  }
-                                  catch (org.xml.sax.SAXException se) {}
-                               }
-
-                               reader = parserFactory.newSAXParser()
-                                     .getXMLReader();
-
-
-                           } catch (ParserConfigurationException pce ) {
-                               throw new TransformerConfigurationException
-                                 ("ParserConfigurationException" ,pce);
-                           }
+                        if (reader == null) {
+                            boolean overrideDefaultParser = xsltc.getFeature(
+                                    JdkXmlFeatures.XmlFeature.JDK_OVERRIDE_PARSER);
+                            reader = JdkXmlUtils.getXMLReader(overrideDefaultParser,
+                                    xsltc.isSecureProcessing());
+                        } else {
+                            // compatibility for legacy applications
+                            reader.setFeature
+                                    (JdkXmlUtils.NAMESPACES_FEATURE,true);
+                            reader.setFeature
+                                    (JdkXmlUtils.NAMESPACE_PREFIXES_FEATURE,false);
                        }
                     }
-                    reader.setFeature
-                        ("http://xml.org/sax/features/namespaces",true);
-                    reader.setFeature
-                        ("http://xml.org/sax/features/namespace-prefixes",false);
 
+                    String lastProperty = "";
                     try {
                         XMLSecurityManager securityManager =
                                 (XMLSecurityManager)xsltc.getProperty(XalanConstants.SECURITY_MANAGER);
                         if (securityManager != null) {
                             for (XMLSecurityManager.Limit limit : XMLSecurityManager.Limit.values()) {
+                                lastProperty = limit.apiProperty();
                                 reader.setProperty(limit.apiProperty(),
                                         securityManager.getLimitValueAsString(limit));
                             }
                             if (securityManager.printEntityCountInfo()) {
+                                lastProperty = XalanConstants.JDK_ENTITY_COUNT_INFO;
                                 reader.setProperty(XalanConstants.JDK_ENTITY_COUNT_INFO, XalanConstants.JDK_YES);
                             }
                         }
                     } catch (SAXException se) {
-                        System.err.println("Warning:  " + reader.getClass().getName() + ": "
-                                    + se.getMessage());
+                        XMLSecurityManager.printWarning(reader.getClass().getName(), lastProperty, se);
                     }
                     xsltc.setXMLReader(reader);
                 }catch (SAXNotRecognizedException snre ) {
@@ -168,9 +133,6 @@ public final class Util {
                 }catch (SAXNotSupportedException snse ) {
                   throw new TransformerConfigurationException
                        ("SAXNotSupportedException ",snse);
-                }catch (SAXException se ) {
-                  throw new TransformerConfigurationException
-                       ("SAXException ",se);
                 }
 
             }

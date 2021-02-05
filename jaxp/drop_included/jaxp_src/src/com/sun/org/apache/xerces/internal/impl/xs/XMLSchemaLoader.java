@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -67,6 +67,7 @@ import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.Vector;
 import javax.xml.XMLConstants;
+import jdk.xml.internal.JdkXmlUtils;
 import org.w3c.dom.DOMConfiguration;
 import org.w3c.dom.DOMError;
 import org.w3c.dom.DOMErrorHandler;
@@ -136,8 +137,10 @@ XSLoader, DOMConfiguration {
         Constants.XERCES_FEATURE_PREFIX + Constants.SCHEMA_AUGMENT_PSVI;
     
     protected static final String PARSER_SETTINGS = 
-        Constants.XERCES_FEATURE_PREFIX + Constants.PARSER_SETTINGS;   
-    
+        Constants.XERCES_FEATURE_PREFIX + Constants.PARSER_SETTINGS;
+
+    protected static final String OVERRIDE_PARSER = JdkXmlUtils.OVERRIDE_PARSER;
+
     // recognized features:
     private static final String[] RECOGNIZED_FEATURES = {
         SCHEMA_FULL_CHECKING,
@@ -148,7 +151,8 @@ XSLoader, DOMConfiguration {
         DISALLOW_DOCTYPE,
         GENERATE_SYNTHETIC_ANNOTATIONS,
         VALIDATE_ANNOTATIONS,
-        HONOUR_ALL_SCHEMALOCATIONS
+        HONOUR_ALL_SCHEMALOCATIONS,
+        OVERRIDE_PARSER
     };
     
     // property identifiers
@@ -267,18 +271,14 @@ XSLoader, DOMConfiguration {
      * @param sHandler
      * @param builder
      */
-    XMLSchemaLoader(XMLErrorReporter errorReporter,
-            XSGrammarBucket grammarBucket,
+    XMLSchemaLoader(XMLErrorReporter errorReporter, XSGrammarBucket grammarBucket,
             SubstitutionGroupHandler sHandler, CMBuilder builder) {
         this(null, errorReporter, null, grammarBucket, sHandler, builder);
     }
     
-    XMLSchemaLoader(SymbolTable symbolTable,
-            XMLErrorReporter errorReporter,
-            XMLEntityManager entityResolver,
-            XSGrammarBucket grammarBucket,
-            SubstitutionGroupHandler sHandler,
-            CMBuilder builder) {
+    XMLSchemaLoader(SymbolTable symbolTable, XMLErrorReporter errorReporter,
+            XMLEntityManager entityResolver, XSGrammarBucket grammarBucket,
+            SubstitutionGroupHandler sHandler, CMBuilder builder) {
         
         // store properties and features in configuration
         fLoaderConfig.addRecognizedFeatures(RECOGNIZED_FEATURES);
@@ -1150,7 +1150,8 @@ XSLoader, DOMConfiguration {
                 name.equals(ALLOW_JAVA_ENCODINGS) ||
                 name.equals(STANDARD_URI_CONFORMANT_FEATURE) ||
                 name.equals(GENERATE_SYNTHETIC_ANNOTATIONS) ||
-                name.equals(HONOUR_ALL_SCHEMALOCATIONS)) {
+                name.equals(HONOUR_ALL_SCHEMALOCATIONS) ||
+                name.equals(OVERRIDE_PARSER)) {
                 return true;
                 
             }
@@ -1226,6 +1227,7 @@ XSLoader, DOMConfiguration {
             v.add(VALIDATE_ANNOTATIONS);
             v.add(GENERATE_SYNTHETIC_ANNOTATIONS);
             v.add(HONOUR_ALL_SCHEMALOCATIONS);
+            v.add(OVERRIDE_PARSER);
             fRecognizedParameters = new DOMStringListImpl(v);      	
         }
         return fRecognizedParameters;

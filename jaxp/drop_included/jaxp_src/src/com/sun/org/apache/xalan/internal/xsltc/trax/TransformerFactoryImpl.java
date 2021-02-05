@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -74,6 +74,8 @@ import com.sun.org.apache.xalan.internal.xsltc.dom.XSLTCDTMManager;
 import com.sun.org.apache.xalan.internal.utils.SecuritySupport;
 import com.sun.org.apache.xalan.internal.utils.XMLSecurityManager;
 
+import jdk.xml.internal.JdkXmlFeatures;
+import jdk.xml.internal.JdkXmlUtils;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLFilter;
 import org.xml.sax.XMLReader;
@@ -207,6 +209,16 @@ public class TransformerFactoryImpl
      * <p>State of secure mode.</p>
      */
     private boolean _isSecureMode = false;
+
+    /**
+     * Indicates whether 3rd party parser may be used to override the system-default
+     * Note the default value (false) is the safe option.
+     * Note same as the old property useServicesMechanism
+     */
+    private boolean _overrideDefaultParser;
+
+    private final JdkXmlFeatures _xmlFeatures;
+
     /**
      * javax.xml.transform.sax.TransformerFactory implementation.
      */
@@ -215,6 +227,10 @@ public class TransformerFactoryImpl
             _isSecureMode = true;
             _isNotSecureProcessing = false;
         }
+
+        _xmlFeatures = new JdkXmlFeatures(!_isNotSecureProcessing);
+        _overrideDefaultParser = _xmlFeatures.getFeature(
+                JdkXmlFeatures.XmlFeature.JDK_OVERRIDE_PARSER);
 
         //Parser's security manager
         _xmlSecurityManager = new XMLSecurityManager(true);
@@ -423,24 +439,37 @@ public class TransformerFactoryImpl
     public void setFeature(String name, boolean value)
         throws TransformerConfigurationException {
 
-	// feature name cannot be null
-	if (name == null) {
+        // feature name cannot be null
+        if (name == null) {
             ErrorMsg err = new ErrorMsg(ErrorMsg.JAXP_SET_FEATURE_NULL_NAME);
-    	    throw new NullPointerException(err.toString());
-	}		
-	// secure processing?
-	else if (name.equals(XMLConstants.FEATURE_SECURE_PROCESSING)) {
+            throw new NullPointerException(err.toString());
+        }
+        // secure processing?
+        else if (name.equals(XMLConstants.FEATURE_SECURE_PROCESSING)) {
             if ((_isSecureMode) && (!value)) {
                 ErrorMsg err = new ErrorMsg(ErrorMsg.JAXP_SECUREPROCESSING_FEATURE);
                 throw new TransformerConfigurationException(err.toString());
             }
-	    _isNotSecureProcessing = !value;
+            _isNotSecureProcessing = !value;
             _xmlSecurityManager.setSecureProcessing(value);
-	    // all done processing feature
-	    return;
-	}
-	else {	
-	    // unknown feature
+
+            if (value && _xmlFeatures != null) {
+                _xmlFeatures.setFeature(JdkXmlFeatures.XmlFeature.ENABLE_EXTENSION_FUNCTION,
+                        JdkXmlFeatures.State.FSP, false);
+            }
+        }
+        else {
+            if (_xmlFeatures != null &&
+                    _xmlFeatures.setFeature(name, JdkXmlFeatures.State.APIPROPERTY, value)) {
+                if (name.equals(JdkXmlUtils.OVERRIDE_PARSER) ||
+                        name.equals(JdkXmlFeatures.ORACLE_FEATURE_SERVICE_MECHANISM)) {
+                    _overrideDefaultParser = _xmlFeatures.getFeature(
+                            JdkXmlFeatures.XmlFeature.JDK_OVERRIDE_PARSER);
+                }
+                return;
+            }
+
+            // unknown feature
             ErrorMsg err = new ErrorMsg(ErrorMsg.JAXP_UNSUPPORTED_FEATURE, name);
             throw new TransformerConfigurationException(err.toString());
         }
@@ -456,40 +485,61 @@ public class TransformerFactoryImpl
      * @return 'true' if feature is supported, 'false' if not
      */
     @Override
-    public boolean getFeature(String name) { 
-	// All supported features should be listed here
-	String[] features = {
-	    DOMSource.FEATURE,
-	    DOMResult.FEATURE,
-	    SAXSource.FEATURE,
-	    SAXResult.FEATURE,
-	    StAXSource.FEATURE,
-	    StAXResult.FEATURE,
-	    StreamSource.FEATURE,
-	    StreamResult.FEATURE,
-	    SAXTransformerFactory.FEATURE,
-	    SAXTransformerFactory.FEATURE_XMLFILTER
-	};
+    public boolean getFeature(String name) {
+        // All supported features should be listed here
+        String[] features = {
+            DOMSource.FEATURE,
+            DOMResult.FEATURE,
+            SAXSource.FEATURE,
+            SAXResult.FEATURE,
+            StAXSource.FEATURE,
+            StAXResult.FEATURE,
+            StreamSource.FEATURE,
+            StreamResult.FEATURE,
+            SAXTransformerFactory.FEATURE,
+            SAXTransformerFactory.FEATURE_XMLFILTER
+        };
 
-	// feature name cannot be null
-	if (name == null) {
-    	    ErrorMsg err = new ErrorMsg(ErrorMsg.JAXP_GET_FEATURE_NULL_NAME);
-    	    throw new NullPointerException(err.toString());
-	}
+        // feature name cannot be null
+        if (name == null) {
+            ErrorMsg err = new ErrorMsg(ErrorMsg.JAXP_GET_FEATURE_NULL_NAME);
+            throw new NullPointerException(err.toString());
+        }
 
-	// Inefficient, but array is small
-	for (int i =0; i < features.length; i++) {
-	    if (name.equals(features[i])) {
-		return true;
-	    }
-	}
-	// secure processing?
-	if (name.equals(XMLConstants.FEATURE_SECURE_PROCESSING)) {
-		return !_isNotSecureProcessing;
-	}
+        // Inefficient, but array is small
+        for (int i =0; i < features.length; i++) {
+            if (name.equals(features[i])) {
+                return true;
 
-	// Feature not supported
-	return false;
+            }
+        }
+        // secure processing?
+        if (name.equals(XMLConstants.FEATURE_SECURE_PROCESSING)) {
+            return !_isNotSecureProcessing;
+        }
+
+        /** Check to see if the property is managed by the JdkXmlFeatures **/
+        int index = _xmlFeatures.getIndex(name);
+        if (index > -1) {
+            return _xmlFeatures.getFeature(index);
+        }
+
+        // Feature not supported
+        return false;
+    }
+
+    /**
+     * Return the state of the services mechanism feature.
+     */
+    public boolean overrideDefaultParser() {
+             return _overrideDefaultParser;
+    }
+
+    /**
+     * @return the feature manager
+    */
+    public JdkXmlFeatures getJdkXmlFeatures() {
+        return _xmlFeatures;
     }
 
     /**
@@ -541,9 +591,8 @@ public class TransformerFactoryImpl
 	throws TransformerConfigurationException {
 
         String baseId;
-        XMLReader reader;
+        XMLReader reader = null;
         InputSource isource;
-
 
         /**
          * Fix for bugzilla bug 24187
@@ -563,24 +612,15 @@ public class TransformerFactoryImpl
                 dom2sax.setContentHandler( _stylesheetPIHandler);
                 dom2sax.parse();
             } else {
+                if (source instanceof SAXSource) {
+                    reader = ((SAXSource)source).getXMLReader();
+                }
                 isource = SAXSource.sourceToInputSource(source);
                 baseId = isource.getSystemId();
 
-                SAXParserFactory factory = SAXParserFactory.newInstance();
-                factory.setNamespaceAware(true);
-                
-                if (!_isNotSecureProcessing) {
-                    try {
-                        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
-                    }
-                    catch (org.xml.sax.SAXException e) {}
-                }
-                
-                SAXParser jaxpParser = factory.newSAXParser();
-
-                reader = jaxpParser.getXMLReader();
                 if (reader == null) {
-                    reader = XMLReaderFactory.createXMLReader();
+                    reader = JdkXmlUtils.getXMLReader(_overrideDefaultParser,
+                            !_isNotSecureProcessing);
                 }
 
                 _stylesheetPIHandler.setBaseId(baseId);
@@ -595,22 +635,12 @@ public class TransformerFactoryImpl
 
         } catch (StopParseException e ) {
           // startElement encountered so do not parse further
-
-        } catch (javax.xml.parsers.ParserConfigurationException e) {
-
-             throw new TransformerConfigurationException(
-             "getAssociatedStylesheets failed", e);
-
         } catch (org.xml.sax.SAXException se) {
-
-             throw new TransformerConfigurationException(
-             "getAssociatedStylesheets failed", se);
-
-
+            throw new TransformerConfigurationException(
+                "getAssociatedStylesheets failed", se);
         } catch (IOException ioe ) {
-           throw new TransformerConfigurationException(
-           "getAssociatedStylesheets failed", ioe);
-
+            throw new TransformerConfigurationException(
+                "getAssociatedStylesheets failed", ioe);
         }
 
          return _stylesheetPIHandler.getAssociatedStylesheet();
@@ -779,7 +809,7 @@ public class TransformerFactoryImpl
 	}
 	
 	// Create and initialize a stylesheet compiler
-	final XSLTC xsltc = new XSLTC();
+	final XSLTC xsltc = new XSLTC(_xmlFeatures);
 	if (_debug) xsltc.setDebug(true);
 	if (_enableInlining) xsltc.setTemplateInlining(true);
 	if (!_isNotSecureProcessing) xsltc.setSecureProcessing(true);

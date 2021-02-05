@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -92,6 +92,7 @@ final class SSLSessionImpl implements SSLSession {
     private byte                compressionMethod;
     private final CipherSuite   cipherSuite;
     private SecretKey           masterSecret;
+    private final boolean       useExtendedMasterSecret;
 
     /*
      * Information not part of the SSLv3 protocol spec, but used
@@ -142,7 +143,7 @@ final class SSLSessionImpl implements SSLSession {
      */
     private SSLSessionImpl() {
         this(ProtocolVersion.NONE, CipherSuite.C_NULL,
-             new SessionId(false, null), null, -1);
+             new SessionId(false, null), null, -1, false);
     }
 
     /*
@@ -151,16 +152,18 @@ final class SSLSessionImpl implements SSLSession {
      * is intended mostly for use by serves.
      */
     SSLSessionImpl(ProtocolVersion protocolVersion, CipherSuite cipherSuite,
-            SecureRandom generator, String host, int port) {
+            SecureRandom generator, String host, int port,
+            boolean useExtendedMasterSecret) {
         this(protocolVersion, cipherSuite,
-             new SessionId(defaultRejoinable, generator), host, port);
+             new SessionId(defaultRejoinable, generator), host, port, useExtendedMasterSecret);
     }
 
     /*
      * Record a new session, using a given cipher spec and session ID.
      */
     SSLSessionImpl(ProtocolVersion protocolVersion, CipherSuite cipherSuite,
-            SessionId id, String host, int port) {
+            SessionId id, String host, int port,
+            boolean useExtendedMasterSecret) {
         this.protocolVersion = protocolVersion;
         sessionId = id;
         peerCerts = null;
@@ -170,6 +173,7 @@ final class SSLSessionImpl implements SSLSession {
         this.host = host;
         this.port = port;
         sessionCount = ++counter;
+        this.useExtendedMasterSecret = useExtendedMasterSecret;
 
         if (debug != null && Debug.isOn("session")) {
             System.out.println("%% Created:  " + this);
@@ -189,6 +193,10 @@ final class SSLSessionImpl implements SSLSession {
      */
     SecretKey getMasterSecret() {
         return masterSecret;
+    }
+
+    boolean getUseExtendedMasterSecret() {
+        return useExtendedMasterSecret;
     }
 
     void setPeerCertificates(X509Certificate[] peer) {

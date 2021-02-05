@@ -1,7 +1,6 @@
-/*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
- */
+ /*
+  * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+  */
 /*
  * Copyright 1999-2004 The Apache Software Foundation.
  *
@@ -21,26 +20,21 @@
 
 package com.sun.org.apache.xpath.internal.jaxp;
 
-import com.sun.org.apache.xpath.internal.*;
-import javax.xml.transform.TransformerException;
-
 import com.sun.org.apache.xpath.internal.objects.XObject;
 import com.sun.org.apache.xml.internal.dtm.DTM;
-import com.sun.org.apache.xml.internal.utils.PrefixResolver;
 import com.sun.org.apache.xpath.internal.res.XPATHErrorResources;
 import com.sun.org.apache.xalan.internal.res.XSLMessages;
 
-import javax.xml.namespace.NamespaceContext;
 import javax.xml.namespace.QName;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathFunctionResolver;
 import javax.xml.xpath.XPathVariableResolver;
-import javax.xml.xpath.XPathConstants;
 
+import jdk.xml.internal.JdkXmlFeatures;
+import jdk.xml.internal.JdkXmlUtils;
 import org.w3c.dom.Node;
 import org.w3c.dom.Document;
-import org.w3c.dom.DOMImplementation;
 import org.w3c.dom.traversal.NodeIterator;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
@@ -64,32 +58,36 @@ public class XPathExpressionImpl  implements javax.xml.xpath.XPathExpression{
     // extensions function need to throw XPathFunctionException
     private boolean featureSecureProcessing = false;
 
+    boolean overrideDefaultParser;
+    private final JdkXmlFeatures featureManager;
+
     /** Protected constructor to prevent direct instantiation; use compile()
      * from the context.
      */
-    protected XPathExpressionImpl() { };
-
-    protected XPathExpressionImpl(com.sun.org.apache.xpath.internal.XPath xpath,
-            JAXPPrefixResolver prefixResolver,
-            XPathFunctionResolver functionResolver,
-            XPathVariableResolver variableResolver ) {
-        this.xpath = xpath;
-        this.prefixResolver = prefixResolver;
-        this.functionResolver = functionResolver;
-        this.variableResolver = variableResolver;
-        this.featureSecureProcessing = false;
+    protected XPathExpressionImpl() {
+        this(null, null, null, null, false, new JdkXmlFeatures(false));
     };
 
     protected XPathExpressionImpl(com.sun.org.apache.xpath.internal.XPath xpath,
             JAXPPrefixResolver prefixResolver,
             XPathFunctionResolver functionResolver,
-            XPathVariableResolver variableResolver,
-            boolean featureSecureProcessing ) {
+            XPathVariableResolver variableResolver ) {
+        this(xpath, prefixResolver, functionResolver, variableResolver,
+                false, new JdkXmlFeatures(false));
+    };
+
+    protected XPathExpressionImpl(com.sun.org.apache.xpath.internal.XPath xpath,
+            JAXPPrefixResolver prefixResolver, XPathFunctionResolver functionResolver,
+            XPathVariableResolver variableResolver, boolean featureSecureProcessing,
+            JdkXmlFeatures featureManager) {
         this.xpath = xpath;
         this.prefixResolver = prefixResolver;
         this.functionResolver = functionResolver;
         this.variableResolver = variableResolver;
         this.featureSecureProcessing = featureSecureProcessing;
+        this.featureManager = featureManager;
+        this.overrideDefaultParser = featureManager.getFeature(
+                JdkXmlFeatures.XmlFeature.JDK_OVERRIDE_PARSER);
     };
 
     public void setXPath (com.sun.org.apache.xpath.internal.XPath xpath ) {
@@ -107,7 +105,7 @@ public class XPathExpressionImpl  implements javax.xml.xpath.XPathExpression{
         com.sun.org.apache.xpath.internal.XPathContext xpathSupport = null;
         if ( functionResolver != null ) {
             JAXPExtensionsProvider jep = new JAXPExtensionsProvider(
-                    functionResolver, featureSecureProcessing );
+                    functionResolver, featureSecureProcessing, featureManager );
             xpathSupport = new com.sun.org.apache.xpath.internal.XPathContext( jep );
         } else {
             xpathSupport = new com.sun.org.apache.xpath.internal.XPathContext();
@@ -286,9 +284,7 @@ public class XPathExpressionImpl  implements javax.xml.xpath.XPathExpression{
         }
         try {
             if ( dbf == null ) {
-                dbf = DocumentBuilderFactory.newInstance();
-                dbf.setNamespaceAware( true );
-                dbf.setValidating( false );
+                dbf = JdkXmlUtils.getDOMFactory(overrideDefaultParser);
             }
             db = dbf.newDocumentBuilder();
             Document document = db.parse( source );

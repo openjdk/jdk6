@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 2001-2004 The Apache Software Foundation.
@@ -45,6 +44,7 @@ import com.sun.org.apache.xerces.internal.xni.parser.XMLDTDScanner;
 import com.sun.org.apache.xerces.internal.xni.parser.XMLDocumentScanner;
 import com.sun.org.apache.xerces.internal.xni.parser.XMLInputSource;
 import com.sun.org.apache.xerces.internal.xni.parser.XMLPullParserConfiguration;
+import jdk.xml.internal.JdkXmlUtils;
 
 /**
  * This is the DTD-only parser configuration.  It extends the basic
@@ -301,6 +301,7 @@ public class DTDConfiguration
             //NOTIFY_BUILTIN_REFS,  // from XMLDocumentFragmentScannerImpl
             //NOTIFY_CHAR_REFS,		// from XMLDocumentFragmentScannerImpl
             //WARN_ON_DUPLICATE_ENTITYDEF,  // from XMLEntityManager
+            JdkXmlUtils.OVERRIDE_PARSER
         };
         addRecognizedFeatures(recognizedFeatures);
 
@@ -313,6 +314,7 @@ public class DTDConfiguration
         //setFeature(NOTIFY_BUILTIN_REFS, false);   // from XMLDocumentFragmentScannerImpl
         //setFeature(NOTIFY_CHAR_REFS, false);      // from XMLDocumentFragmentScannerImpl
         //setFeature(WARN_ON_DUPLICATE_ENTITYDEF, false);   // from XMLEntityManager
+        fFeatures.put(JdkXmlUtils.OVERRIDE_PARSER, JdkXmlUtils.OVERRIDE_PARSER_DEFAULT);
 
         // add default recognized properties
         final String[] recognizedProperties = {

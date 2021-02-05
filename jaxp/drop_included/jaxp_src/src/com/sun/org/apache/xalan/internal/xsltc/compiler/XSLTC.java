@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -48,6 +48,7 @@ import com.sun.org.apache.xalan.internal.xsltc.compiler.util.ErrorMsg;
 import com.sun.org.apache.xalan.internal.xsltc.compiler.util.Util;
 import com.sun.org.apache.xml.internal.dtm.DTM;
 
+import jdk.xml.internal.JdkXmlFeatures;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
 
@@ -108,6 +109,8 @@ public final class XSLTC {
 
     private XMLSecurityManager _xmlSecurityManager;
 
+    private final JdkXmlFeatures _xmlFeatures;
+
     // Compiler options (passed from command line or XSLTC client)
     private boolean _debug = false;      // -x
     private String  _jarFileName = null; // -j <jar-file-name>
@@ -135,11 +138,17 @@ public final class XSLTC {
      */
     private boolean _isSecureProcessing = false;
 
+    private boolean _overrideDefaultParser;
+
+
     /**
      * XSLTC compiler constructor
      */
-    public XSLTC() {
-        _parser = new Parser(this);
+    public XSLTC(JdkXmlFeatures featureManager) {
+        _overrideDefaultParser = featureManager.getFeature(
+                JdkXmlFeatures.XmlFeature.JDK_OVERRIDE_PARSER);
+        _parser = new Parser(this, _overrideDefaultParser);
+        _xmlFeatures = featureManager;
     }
 
     /**
@@ -154,6 +163,15 @@ public final class XSLTC {
      */
     public boolean isSecureProcessing() {
         return _isSecureProcessing;
+    }
+
+    /**
+     * Return the value of the specified feature
+     * @param name name of the feature
+     * @return true if the feature is enabled, false otherwise
+     */
+    public boolean getFeature(JdkXmlFeatures.XmlFeature name) {
+        return _xmlFeatures.getFeature(name);
     }
 
     /**

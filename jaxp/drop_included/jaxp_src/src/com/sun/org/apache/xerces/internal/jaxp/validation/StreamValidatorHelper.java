@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 2005 The Apache Software Foundation.
@@ -41,6 +40,7 @@ import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactoryConfigurationError;
+import jdk.xml.internal.JdkXmlUtils;
 import org.xml.sax.SAXException;
 
 /**
@@ -117,7 +117,9 @@ final class StreamValidatorHelper implements ValidatorHelper {
             
             if( result!=null ) {
                 try {
-                    SAXTransformerFactory tf = (SAXTransformerFactory)SAXTransformerFactory.newInstance();
+                    SAXTransformerFactory tf = JdkXmlUtils.getSAXTransformFactory(
+                            fComponentManager.getFeature(JdkXmlUtils.OVERRIDE_PARSER));
+
                     identityTransformerHandler = tf.newTransformerHandler();
                 } catch (TransformerConfigurationException e) {
                     throw new TransformerFactoryConfigurationError(e);

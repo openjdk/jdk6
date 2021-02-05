@@ -1,4 +1,7 @@
 /*
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ */
+/*
  * reserved comment block
  * DO NOT REMOVE OR ALTER!
  */
@@ -45,6 +48,7 @@ import javax.xml.parsers.SAXParser;
 import com.sun.org.apache.xml.internal.resolver.Catalog;
 import com.sun.org.apache.xml.internal.resolver.CatalogManager;
 import com.sun.org.apache.xml.internal.resolver.helpers.FileURL;
+import jdk.xml.internal.JdkXmlUtils;
 
 /**
  * A SAX Parser that performs catalog-based entity resolution.
@@ -122,8 +126,7 @@ public class ResolvingParser
   private void initParser() {
     catalogResolver = new CatalogResolver(catalogManager);
 
-    SAXParserFactory spf = SAXParserFactory.newInstance();
-    spf.setNamespaceAware(namespaceAware);
+    SAXParserFactory spf = JdkXmlUtils.getSAXFactory(catalogManager.overrideDefaultParser());
     spf.setValidating(validating);
 
     try {

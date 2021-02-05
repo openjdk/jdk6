@@ -1,6 +1,5 @@
 /*
- * reserved comment block
- * DO NOT REMOVE OR ALTER!
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  */
 /*
  * Copyright 2005 The Apache Software Foundation.
@@ -31,6 +30,8 @@ import javax.xml.transform.sax.SAXSource;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
+import jdk.xml.internal.JdkXmlFeatures;
+import jdk.xml.internal.JdkXmlUtils;
 
 import com.sun.org.apache.xerces.internal.impl.Constants;
 import com.sun.org.apache.xerces.internal.impl.xs.XMLSchemaLoader;
@@ -102,6 +103,15 @@ public final class XMLSchemaFactory extends SchemaFactory {
     
     /** The container for the real grammar pool. */ 
     private XMLGrammarPoolWrapper fXMLGrammarPoolWrapper;
+
+    private final JdkXmlFeatures fXmlFeatures;
+
+    /**
+     * Indicates whether 3rd party parser may be used to override the system-default
+     * Note the default value (false) is the safe option.
+     * Note same as the old property useServicesMechanism
+     */
+    private final boolean fOverrideDefaultParser;
     
     public XMLSchemaFactory() {
         fErrorHandlerWrapper = new ErrorHandlerWrapper(DraconianErrorHandler.getInstance());
@@ -115,6 +125,10 @@ public final class XMLSchemaFactory extends SchemaFactory {
         // Enable secure processing feature by default
         fSecurityManager = new XMLSecurityManager(true);
         fXMLSchemaLoader.setProperty(SECURITY_MANAGER, fSecurityManager);
+        fXmlFeatures = new JdkXmlFeatures(fSecurityManager.isSecureProcessing());
+        fOverrideDefaultParser = fXmlFeatures.getFeature(
+                JdkXmlFeatures.XmlFeature.JDK_OVERRIDE_PARSER);
+        fXMLSchemaLoader.setFeature(JdkXmlUtils.OVERRIDE_PARSER, fOverrideDefaultParser);
     }
     
     /**
@@ -293,8 +307,14 @@ public final class XMLSchemaFactory extends SchemaFactory {
                     SAXMessageFormatter.formatMessage(fXMLSchemaLoader.getLocale(),
                     "property-not-supported", new Object [] {name}));
         }
+        /** Check to see if the property is managed by the JdkXmlFeatues **/
+        int index = fXmlFeatures.getIndex(name);
+        if (index > -1) {
+            return fXmlFeatures.getFeature(index);
+        }
+
         try {
-	    return fXMLSchemaLoader.getProperty(name);
+            return fXMLSchemaLoader.getProperty(name);
         }
         catch (XMLConfigurationException e) {
             String identifier = e.getIdentifier();
@@ -326,6 +346,14 @@ public final class XMLSchemaFactory extends SchemaFactory {
 
             fSecurityManager.setSecureProcessing(value);
             fXMLSchemaLoader.setProperty(SECURITY_MANAGER, fSecurityManager);
+            return;
+        }
+
+        if ((fXmlFeatures != null) &&
+                fXmlFeatures.setFeature(name, JdkXmlFeatures.State.APIPROPERTY, value)) {
+            if (name.equals(JdkXmlUtils.OVERRIDE_PARSER)) {
+                fXMLSchemaLoader.setFeature(name, value);
+            }
             return;
         }
         try {
@@ -387,6 +415,7 @@ public final class XMLSchemaFactory extends SchemaFactory {
 
     private void propagateFeatures(AbstractXMLSchema schema) {
         schema.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, fSecurityManager != null);
+        schema.setFeature(JdkXmlUtils.OVERRIDE_PARSER, fOverrideDefaultParser);
         String[] features = fXMLSchemaLoader.getRecognizedFeatures();
         for (int i = 0; i < features.length; ++i) {
             boolean state = fXMLSchemaLoader.getFeature(features[i]);
