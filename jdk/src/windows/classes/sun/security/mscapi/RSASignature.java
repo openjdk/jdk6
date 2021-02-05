@@ -30,13 +30,9 @@ import java.security.PublicKey;
 import java.security.PrivateKey;
 import java.security.InvalidKeyException;
 import java.security.InvalidParameterException;
-import java.security.InvalidAlgorithmParameterException;
 import java.security.NoSuchAlgorithmException;
 import java.security.ProviderException;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
-import java.security.Signature;
-import java.security.SignatureSpi;
 import java.security.SignatureException;
 import java.math.BigInteger;
 
@@ -477,6 +473,7 @@ abstract class RSASignature extends java.security.SignatureSpi
      * #engineSetParameter(java.security.spec.AlgorithmParameterSpec)
      * engineSetParameter}.
      */
+    @Deprecated
     protected void engineSetParameter(String param, Object value)
         throws InvalidParameterException
     {
@@ -506,6 +503,7 @@ abstract class RSASignature extends java.security.SignatureSpi
      *
      * @deprecated
      */
+    @Deprecated
     protected Object engineGetParameter(String param)
         throws InvalidParameterException
     {
@@ -515,11 +513,13 @@ abstract class RSASignature extends java.security.SignatureSpi
     /**
      * Generates a public-key BLOB from a key's components.
      */
-    private native byte[] generatePublicKeyBlob(
+    // used by RSACipher
+    static native byte[] generatePublicKeyBlob(
         int keyBitLength, byte[] modulus, byte[] publicExponent);
 
     /**
      * Imports a public-key BLOB.
      */
-    private native RSAPublicKey importPublicKey(byte[] keyBlob, int keySize);
+    // used by RSACipher
+    static native RSAPublicKey importPublicKey(byte[] keyBlob, int keySize);
 }
