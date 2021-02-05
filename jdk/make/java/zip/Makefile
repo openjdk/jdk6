@@ -30,8 +30,6 @@ LIBRARY = zip
 PRODUCT = sun
 include $(BUILDDIR)/common/Defs.gmk
 
-ZLIB_VERSION = 1.1.3
-
 #
 # Files to compile.
 #
@@ -69,14 +67,14 @@ else
 CPPFLAGS += -UDEBUG 
 endif
 
-CPPFLAGS += -I$(SHARE_SRC)/native/java/util/zip/zlib-$(ZLIB_VERSION)
+CPPFLAGS += -I$(SHARE_SRC)/native/java/util/zip/zlib
 CPPFLAGS += -I$(SHARE_SRC)/native/java/io
 CPPFLAGS += -I$(PLATFORM_SRC)/native/java/io
 
 #
 # Add to ambient vpath so we pick up the library files
 #
-vpath %.c $(SHARE_SRC)/native/$(PKGDIR)/zlib-$(ZLIB_VERSION)
+vpath %.c $(SHARE_SRC)/native/$(PKGDIR)/zlib
 
 #
 # Link to JVM library for JVM_Zip* functions

@@ -28,7 +28,6 @@ package com.sun.crypto.provider;
 import java.security.*;
 import java.security.spec.*;
 import javax.crypto.*;
-import javax.crypto.spec.*;
 import javax.crypto.BadPaddingException;
 
 /**
@@ -140,7 +139,7 @@ abstract class AESCipher extends CipherSpi {
                 throw new InvalidKeyException("Key encoding must not be null");
             } else if (value.length != fixedKeySize) {
                 throw new InvalidKeyException("The key must be " +
-                    fixedKeySize*8 + " bits");
+                    fixedKeySize + " bytes");
             }
         }
     }
@@ -479,7 +478,7 @@ abstract class AESCipher extends CipherSpi {
             throw new InvalidKeyException("Invalid AES key length: " +
                                           encoded.length + " bytes");
         }
-        return encoded.length * 8;
+        return CipherCore.multiplyExact(encoded.length, 8);
     }
 
     /**

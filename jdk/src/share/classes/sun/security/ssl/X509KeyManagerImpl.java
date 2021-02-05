@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2004, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,6 +38,8 @@ import java.security.cert.Certificate;
 
 import javax.net.ssl.*;
 
+import sun.security.validator.Validator;
+
 /**
  * The new X509 key manager implementation. The main differences to the
  * old SunX509 key manager are:
@@ -60,7 +62,7 @@ final class X509KeyManagerImpl extends X509ExtendedKeyManager
 
     private static final Debug debug = Debug.getInstance("ssl");
 
-    private final static boolean useDebug =
+    private static final boolean useDebug =
                             (debug != null) && Debug.isOn("keymanager");
 
     // for unit testing only, set via privileged reflection
@@ -496,6 +498,15 @@ final class X509KeyManagerImpl extends X509ExtendedKeyManager
             } catch (CertificateException e) {
                 return CheckResult.EXPIRED;
             }
+        }
+
+        public String getValidator() {
+            if (this == CLIENT) {
+                return Validator.VAR_TLS_CLIENT;
+            } else if (this == SERVER) {
+                return Validator.VAR_TLS_SERVER;
+            }
+            return Validator.VAR_GENERIC;
         }
     }
 

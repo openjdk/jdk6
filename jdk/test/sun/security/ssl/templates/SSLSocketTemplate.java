@@ -246,7 +246,7 @@ public class SSLSocketTemplate {
          */
         if (exception != null) {
             if (exception != startException && startException != null) {
-                exception.addSuppressed(startException);
+                //exception.addSuppressed(startException);
             }
             throw exception;
         }

@@ -57,10 +57,9 @@ AwtTextField* AwtTextField::Create(jobject peer, jobject parent)
     try {
         PDATA pData;
         AwtCanvas* awtParent;
+
         JNI_CHECK_PEER_GOTO(parent, done);
         awtParent = (AwtCanvas*)pData;
-
-        JNI_CHECK_NULL_GOTO(awtParent, "null awtParent", done);
 
         target = env->GetObjectField(peer, AwtObject::targetID);
         JNI_CHECK_NULL_GOTO(target, "null target", done);
@@ -335,12 +334,9 @@ Java_sun_awt_windows_WTextFieldPeer_create(JNIEnv *env, jobject self,
 {
     TRY;
 
-    PDATA pData;
-    JNI_CHECK_PEER_RETURN(parent);
     AwtToolkit::CreateComponent(self, parent,
                                 (AwtToolkit::ComponentFactory)
                                 AwtTextField::Create);
-    JNI_CHECK_PEER_CREATION_RETURN(self);
 
     CATCH_BAD_ALLOC;
 }

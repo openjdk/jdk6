@@ -143,7 +143,7 @@ public class SSLSocketSSLEngineTemplate {
         }
 
         String [] protocols = new String [] {
-            "SSLv3", "TLSv1", "TLSv1.1", "TLSv1.2" };
+            "SSLv3", "TLSv1", "TLSv1.1" }; // "TLSv1.2" };
 
         for (String protocol : protocols) {
             log("Testing " + protocol);

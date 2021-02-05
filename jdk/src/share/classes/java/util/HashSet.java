@@ -25,6 +25,8 @@
 
 package java.util;
 
+import sun.misc.SharedSecrets;
+
 /**
  * This class implements the <tt>Set</tt> interface, backed by a hash table
  * (actually a <tt>HashMap</tt> instance).  It makes no guarantees as to the
@@ -296,6 +298,18 @@ public class HashSet<E>
         // Read in HashMap capacity and load factor and create backing HashMap
         int capacity = s.readInt();
         float loadFactor = s.readFloat();
+
+        // Check Map.Entry[].class since it's the nearest public type to
+        // what is actually created.
+        //
+        // Find a power of 2 >= capacity
+        int cap = 1;
+        while (cap < capacity)
+            cap <<= 1;
+
+        SharedSecrets.getJavaOISAccess()
+                .checkArray(s, Map.Entry[].class, cap);
+
         map = (((HashSet)this) instanceof LinkedHashSet ?
                new LinkedHashMap<E,Object>(capacity, loadFactor) :
                new HashMap<E,Object>(capacity, loadFactor));
