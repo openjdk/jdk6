@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
- * Copyright 2011, 2012 Red Hat, Inc.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,20 +22,28 @@
  *
  */
 
+#ifndef CPU_X86_VM_INTERP_MASM_X86_HPP
+#define CPU_X86_VM_INTERP_MASM_X86_HPP
 
-// Adapters
-enum /* platform_dependent_constants */ {
-  adapter_code_size = 0
-};
+#include "assembler_x86.inline.hpp"
+#include "interpreter/invocationCounter.hpp"
 
-class RicochetFrame : public ResourceObj {
-  friend class MethodHandles;
+// This file specializes the assember with interpreter-specific macros
+
+
+class InterpreterMacroAssembler: public MacroAssembler {
+
+#ifdef TARGET_ARCH_MODEL_x86_32
+# include "interp_masm_x86_32.hpp"
+#endif
+#ifdef TARGET_ARCH_MODEL_x86_64
+# include "interp_masm_x86_64.hpp"
+#endif
+
  public:
-
-static void generate_ricochet_blob(MacroAssembler* _masm,
-                                     // output params:
-                                     int* bounce_offset,
-                                     int* exception_offset,
-                                     int* frame_size_in_words);
+  // narrow int return value
+  void narrow(Register result);
 
 };
+
+#endif // CPU_X86_VM_INTERP_MASM_X86_HPP
