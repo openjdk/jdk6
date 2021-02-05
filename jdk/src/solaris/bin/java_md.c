@@ -1844,5 +1844,5 @@ FindBootStrapClass(JNIEnv *env, const char* classname)
            return NULL;
        }
    }
-   return findBootClass(env, classname, JNI_FALSE);
+   return findBootClass(env, classname);
 }

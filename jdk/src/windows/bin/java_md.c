@@ -1411,11 +1411,10 @@ jclass FindBootStrapClass(JNIEnv *env, const char *classname)
        findBootClass = (FindClassFromBootLoader_t *)GetProcAddress(hJvm,
             "JVM_FindClassFromBootLoader");
        if (findBootClass == NULL) {
-          JLI_ReportErrorMessage(DLL_ERROR4,
-              "JVM_FindClassBootLoader");
+          JLI_ReportErrorMessage(DLL_ERROR4, "JVM_FindClassFromBootLoader");
           return NULL;
        }
    }
-   return findBootClass(env, classname, JNI_FALSE);
+   return findBootClass(env, classname);
 }
 
