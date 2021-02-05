@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -107,10 +107,10 @@ import java.util.StringTokenizer;
  * significant in the <code><em>url-path</em></code>.</p>
  *
  * @see <a
- * href="ftp://ftp.rfc-editor.org/in-notes/rfc2609.txt">RFC 2609,
+ * href="http://www.ietf.org/rfc/rfc2609.txt">RFC 2609,
  * "Service Templates and <code>Service:</code> Schemes"</a>
  * @see <a
- * href="ftp://ftp.rfc-editor.org/in-notes/rfc3111.txt">RFC 3111,
+ * href="http://www.ietf.org/rfc/rfc3111.txt">RFC 3111,
  * "Service Location Protocol Modifications for IPv6"</a>
  *
  * @since 1.5
