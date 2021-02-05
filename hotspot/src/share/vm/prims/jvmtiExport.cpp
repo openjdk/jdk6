@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2003-2010 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -319,7 +319,27 @@ address JvmtiExport::get_field_modification_count_addr() {
 
 jint
 JvmtiExport::get_jvmti_interface(JavaVM *jvm, void **penv, jint version) {
-  /* To Do: add version checks */
+  // The JVMTI_VERSION_INTERFACE_JVMTI part of the version number
+  // has already been validated in JNI GetEnv().
+  int major, minor, micro;
+
+  // micro version doesn't matter here (yet?)
+  decode_version_values(version, &major, &minor, &micro);
+  switch (major) {
+  case 1:
+      switch (minor) {
+      case 0:  // version 1.0.<micro> is recognized
+      case 1:  // version 1.1.<micro> is recognized
+          break;
+
+      default:
+          return JNI_EVERSION;  // unsupported minor version number
+      }
+      break;
+
+  default:
+      return JNI_EVERSION;  // unsupported major version number
+  }
 
   if (JvmtiEnv::get_phase() == JVMTI_PHASE_LIVE) {
     JavaThread* current_thread = (JavaThread*) ThreadLocalStorage::thread();
@@ -328,13 +348,13 @@ JvmtiExport::get_jvmti_interface(JavaVM *jvm, void **penv, jint version) {
     __ENTRY(jvmtiEnv*, JvmtiExport::get_jvmti_interface, current_thread)
     debug_only(VMNativeEntryWrapper __vew;)
 
-    JvmtiEnv *jvmti_env = JvmtiEnv::create_a_jvmti();
+    JvmtiEnv *jvmti_env = JvmtiEnv::create_a_jvmti(version);
     *penv = jvmti_env->jvmti_external();  // actual type is jvmtiEnv* -- not to be confused with JvmtiEnv*
     return JNI_OK;
 
   } else if (JvmtiEnv::get_phase() == JVMTI_PHASE_ONLOAD) {
     // not live, no thread to transition
-    JvmtiEnv *jvmti_env = JvmtiEnv::create_a_jvmti();
+    JvmtiEnv *jvmti_env = JvmtiEnv::create_a_jvmti(version);
     *penv = jvmti_env->jvmti_external();  // actual type is jvmtiEnv* -- not to be confused with JvmtiEnv*
     return JNI_OK;
 
@@ -343,6 +363,15 @@ JvmtiExport::get_jvmti_interface(JavaVM *jvm, void **penv, jint version) {
     *penv = NULL;
     return JNI_EDETACHED;
   }
+}
+
+
+void
+JvmtiExport::decode_version_values(jint version, int * major, int * minor,
+                                   int * micro) {
+  *major = (version & JVMTI_VERSION_MASK_MAJOR) >> JVMTI_VERSION_SHIFT_MAJOR;
+  *minor = (version & JVMTI_VERSION_MASK_MINOR) >> JVMTI_VERSION_SHIFT_MINOR;
+  *micro = (version & JVMTI_VERSION_MASK_MICRO) >> JVMTI_VERSION_SHIFT_MICRO;
 }
 
 void JvmtiExport::enter_primordial_phase() {
@@ -657,11 +686,11 @@ class JvmtiCompiledMethodLoadEventMark : public JvmtiMethodEventMark {
   jvmtiAddrLocationMap *_map;
   const void *_compile_info;
  public:
-  JvmtiCompiledMethodLoadEventMark(JavaThread *thread, nmethod *nm)
+  JvmtiCompiledMethodLoadEventMark(JavaThread *thread, nmethod *nm, void* compile_info_ptr = NULL)
           : JvmtiMethodEventMark(thread,methodHandle(thread, nm->method())) {
     _code_data = nm->code_begin();
     _code_size = nm->code_size();
-    _compile_info = NULL; /* no info for our VM. */
+    _compile_info = compile_info_ptr; // Set void pointer of compiledMethodLoad Event. Default value is NULL.
     JvmtiCodeBlobEvents::build_jvmti_addr_location_map(nm, &_map, &_map_length);
   }
   ~JvmtiCompiledMethodLoadEventMark() {
@@ -1723,6 +1752,46 @@ void JvmtiExport::post_native_method_bind(methodOop method, address* function_pt
   }
 }
 
+// Returns a record containing inlining information for the given nmethod
+jvmtiCompiledMethodLoadInlineRecord* create_inline_record(nmethod* nm) {
+  jint numstackframes = 0;
+  jvmtiCompiledMethodLoadInlineRecord* record = (jvmtiCompiledMethodLoadInlineRecord*)NEW_RESOURCE_OBJ(jvmtiCompiledMethodLoadInlineRecord);
+  record->header.kind = JVMTI_CMLR_INLINE_INFO;
+  record->header.next = NULL;
+  record->header.majorinfoversion = JVMTI_CMLR_MAJOR_VERSION_1;
+  record->header.minorinfoversion = JVMTI_CMLR_MINOR_VERSION_0;
+  record->numpcs = 0;
+  for(PcDesc* p = nm->scopes_pcs_begin(); p < nm->scopes_pcs_end(); p++) {
+   if(p->scope_decode_offset() == DebugInformationRecorder::serialized_null) continue;
+   record->numpcs++;
+  }
+  record->pcinfo = (PCStackInfo*)(NEW_RESOURCE_ARRAY(PCStackInfo, record->numpcs));
+  int scope = 0;
+  for(PcDesc* p = nm->scopes_pcs_begin(); p < nm->scopes_pcs_end(); p++) {
+    if(p->scope_decode_offset() == DebugInformationRecorder::serialized_null) continue;
+    void* pc_address = (void*)p->real_pc(nm);
+    assert(pc_address != NULL, "pc_address must be non-null");
+    record->pcinfo[scope].pc = pc_address;
+    numstackframes=0;
+    for(ScopeDesc* sd = nm->scope_desc_at(p->real_pc(nm));sd != NULL;sd = sd->sender()) {
+      numstackframes++;
+    }
+    assert(numstackframes != 0, "numstackframes must be nonzero.");
+    record->pcinfo[scope].methods = (jmethodID *)NEW_RESOURCE_ARRAY(jmethodID, numstackframes);
+    record->pcinfo[scope].bcis = (jint *)NEW_RESOURCE_ARRAY(jint, numstackframes);
+    record->pcinfo[scope].numstackframes = numstackframes;
+    int stackframe = 0;
+    for(ScopeDesc* sd = nm->scope_desc_at(p->real_pc(nm));sd != NULL;sd = sd->sender()) {
+      // sd->method() can be NULL for stubs but not for nmethods. To be completely robust, include an assert that we should never see a null sd->method()
+      assert(!sd->method().is_null(), "sd->method() cannot be null.");
+      record->pcinfo[scope].methods[stackframe] = sd->method()->jmethod_id();
+      record->pcinfo[scope].bcis[stackframe] = sd->bci();
+      stackframe++;
+    }
+    scope++;
+  }
+  return record;
+}
 
 void JvmtiExport::post_compiled_method_load(nmethod *nm) {
   // If there are pending CompiledMethodUnload events then these are
@@ -1751,7 +1820,11 @@ void JvmtiExport::post_compiled_method_load(nmethod *nm) {
                 (nm->method() == NULL) ? "NULL" : nm->method()->name()->as_C_string()));
 
       ResourceMark rm(thread);
-      JvmtiCompiledMethodLoadEventMark jem(thread, nm);
+
+      // Add inlining information
+      jvmtiCompiledMethodLoadInlineRecord* inlinerecord = create_inline_record(nm);
+      // Pass inlining information through the void pointer
+      JvmtiCompiledMethodLoadEventMark jem(thread, nm, inlinerecord);
       JvmtiJavaThreadEventTransition jet(thread);
       jvmtiEventCompiledMethodLoad callback = env->callbacks()->CompiledMethodLoad;
       if (callback != NULL) {
