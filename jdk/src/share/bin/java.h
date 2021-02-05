@@ -123,8 +123,6 @@ extern jboolean _launcher_debug;
  *
  */
 typedef jclass (JNICALL FindClassFromBootLoader_t(JNIEnv *env,
-                                                const char *name,
-                                                jboolean throwError));
-
+                                                  const char *name));
 jclass FindBootStrapClass(JNIEnv *env, const char *classname);
 #endif /* _JAVA_H_ */
