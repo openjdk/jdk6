@@ -58,6 +58,10 @@ case "$OS" in
     PATHSEP=":"
     FILESEP="/"
     ;;
+  CYGWIN* )
+    PATHSEP=";"
+    FILESEP="/"
+    ;;
   Windows* )
     PATHSEP=";"
     FILESEP="\\"
@@ -79,8 +83,8 @@ ${TESTJAVA}${FILESEP}bin${FILESEP}javac \
 	${TESTSRC}${FILESEP}DynSignedProvFirst.java
 
 # run the test
-${TESTJAVA}${FILESEP}bin${FILESEP}java \
-	-classpath ${TESTCLASSES}${PATHSEP}${TESTSRC}${FILESEP}exp.jar \
+${TESTJAVA}${FILESEP}bin${FILESEP}java ${TESTVMOPTS} \
+	-classpath "${TESTCLASSES}${PATHSEP}${TESTSRC}${FILESEP}exp.jar" \
 	DynSignedProvFirst
 
 exit $?

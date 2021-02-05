@@ -1258,7 +1258,7 @@ public class BasicTreeUI extends TreeUI
     }
 
     private Rectangle getDropLineRect(JTree.DropLocation loc) {
-        Rectangle rect = null;
+        Rectangle rect;
         TreePath path = loc.getPath();
         int index = loc.getChildIndex();
         boolean ltr = leftToRight;
@@ -2133,7 +2133,7 @@ public class BasicTreeUI extends TreeUI
                                  compositeRequestFocus(editingComponent);
                 boolean selectAll = true;
 
-                if(event != null && event instanceof MouseEvent) {
+                if(event != null) {
                     /* Find the component that will get forwarded all the
                        mouse events until mouseReleased. */
                     Point          componentPoint = SwingUtilities.convertPoint
@@ -3130,7 +3130,7 @@ public class BasicTreeUI extends TreeUI
 
     private static final TransferHandler defaultTransferHandler = new TreeTransferHandler();
 
-    static class TreeTransferHandler extends TransferHandler implements UIResource, Comparator {
+    static class TreeTransferHandler extends TransferHandler implements UIResource, Comparator<TreePath> {
 
         private JTree tree;
 
@@ -3161,9 +3161,7 @@ public class BasicTreeUI extends TreeUI
                 TreePath lastPath = null;
                 TreePath[] displayPaths = getDisplayOrderPaths(paths);
 
-                for (int i = 0; i < displayPaths.length; i++) {
-                    TreePath path = displayPaths[i];
-
+                for (TreePath path : displayPaths) {
                     Object node = path.getLastPathComponent();
                     boolean leaf = model.isLeaf(node);
                     String label = getDisplayString(path, true, leaf);
@@ -3184,9 +3182,9 @@ public class BasicTreeUI extends TreeUI
             return null;
         }
 
-        public int compare(Object o1, Object o2) {
-            int row1 = tree.getRowForPath((TreePath)o1);
-            int row2 = tree.getRowForPath((TreePath)o2);
+        public int compare(TreePath o1, TreePath o2) {
+            int row1 = tree.getRowForPath(o1);
+            int row2 = tree.getRowForPath(o2);
             return row1 - row2;
         }
 
@@ -3205,15 +3203,15 @@ public class BasicTreeUI extends TreeUI
          */
         TreePath[] getDisplayOrderPaths(TreePath[] paths) {
             // sort the paths to display order rather than selection order
-            ArrayList selOrder = new ArrayList();
-            for (int i = 0; i < paths.length; i++) {
-                selOrder.add(paths[i]);
+            ArrayList<TreePath> selOrder = new ArrayList<TreePath>();
+            for (TreePath path : paths) {
+                selOrder.add(path);
             }
             Collections.sort(selOrder, this);
             int n = selOrder.size();
             TreePath[] displayPaths = new TreePath[n];
             for (int i = 0; i < n; i++) {
-                displayPaths[i] = (TreePath) selOrder.get(i);
+                displayPaths[i] = selOrder.get(i);
             }
             return displayPaths;
         }
@@ -3326,10 +3324,7 @@ public class BasicTreeUI extends TreeUI
             InputMap inputMap = tree.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
             KeyStroke key = KeyStroke.getKeyStrokeForEvent(event);
 
-            if (inputMap != null && inputMap.get(key) != null) {
-                return true;
-            }
-            return false;
+            return inputMap != null && inputMap.get(key) != null;
         }
 
 

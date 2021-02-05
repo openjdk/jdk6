@@ -1845,8 +1845,7 @@ public class JList extends JComponent implements Scrollable, Accessible
      * @since 1.4
      */
     public ListSelectionListener[] getListSelectionListeners() {
-        return (ListSelectionListener[])listenerList.getListeners(
-                ListSelectionListener.class);
+        return listenerList.getListeners(ListSelectionListener.class);
     }
 
 
@@ -2216,9 +2215,9 @@ public class JList extends JComponent implements Scrollable, Accessible
         ListSelectionModel sm = getSelectionModel();
         sm.clearSelection();
         int size = getModel().getSize();
-        for(int i = 0; i < indices.length; i++) {
-            if (indices[i] < size) {
-                sm.addSelectionInterval(indices[i], indices[i]);
+        for (int i : indices) {
+            if (i < size) {
+                sm.addSelectionInterval(i, i);
             }
         }
     }
@@ -2720,7 +2719,7 @@ public class JList extends JComponent implements Scrollable, Accessible
             return true;
         }
         if (getParent() instanceof JViewport) {
-            return (((JViewport)getParent()).getWidth() > getPreferredSize().width);
+            return (getParent().getWidth() > getPreferredSize().width);
         }
         return false;
     }
@@ -2745,7 +2744,7 @@ public class JList extends JComponent implements Scrollable, Accessible
             return true;
         }
         if (getParent() instanceof JViewport) {
-            return (((JViewport)getParent()).getHeight() > getPreferredSize().height);
+            return (getParent().getHeight() > getPreferredSize().height);
         }
         return false;
     }
@@ -3157,7 +3156,7 @@ public class JList extends JComponent implements Scrollable, Accessible
             private AccessibleContext getCurrentAccessibleContext() {
                 Component c = getComponentAtIndex(indexInParent);
                 if (c instanceof Accessible) {
-                    return ((Accessible) c).getAccessibleContext();
+                    return c.getAccessibleContext();
                 } else {
                     return null;
                 }

@@ -68,7 +68,7 @@ public class MetalRadioButtonUI extends BasicRadioButtonUI {
     // ********************************
     public static ComponentUI createUI(JComponent c) {
         AppContext appContext = AppContext.getAppContext();
-        MetalRadioButtonUI metalRadioButtonUI = 
+        MetalRadioButtonUI metalRadioButtonUI =
                 (MetalRadioButtonUI) appContext.get(METAL_RADIO_BUTTON_UI_KEY);
         if (metalRadioButtonUI == null) {
             metalRadioButtonUI = new MetalRadioButtonUI();
@@ -173,15 +173,15 @@ public class MetalRadioButtonUI extends BasicRadioButtonUI {
                 }
             } else if(model.isSelected()) {
                 if(b.isRolloverEnabled() && model.isRollover()) {
-                        altIcon = (Icon) b.getRolloverSelectedIcon();
+                        altIcon = b.getRolloverSelectedIcon();
                         if (altIcon == null) {
-                                altIcon = (Icon) b.getSelectedIcon();
+                                altIcon = b.getSelectedIcon();
                         }
                 } else {
-                        altIcon = (Icon) b.getSelectedIcon();
+                        altIcon = b.getSelectedIcon();
                 }
             } else if(b.isRolloverEnabled() && model.isRollover()) {
-                altIcon = (Icon) b.getRolloverIcon();
+                altIcon = b.getRolloverIcon();
             }
 
             if(altIcon == null) {

@@ -47,10 +47,10 @@ import javax.management.*;
 import javax.management.openmbean.CompositeData;
 import javax.management.openmbean.TabularData;
 
-import sun.tools.jconsole.Resources;
 import sun.tools.jconsole.MBeansTab;
 import sun.tools.jconsole.Plotter;
 import sun.tools.jconsole.JConsole;
+import sun.tools.jconsole.Messages;
 import sun.tools.jconsole.ProxyClient.SnapshotMBeanServerConnection;
 
 /*IMPORTANT :
@@ -62,8 +62,8 @@ import sun.tools.jconsole.ProxyClient.SnapshotMBeanServerConnection;
 @SuppressWarnings("serial")
 public class XMBeanAttributes extends XTable {
     private final static String[] columnNames =
-    {Resources.getText("Name"),
-     Resources.getText("Value")};
+    {Messages.NAME,
+     Messages.VALUE};
 
     private boolean editable = true;
 
@@ -228,7 +228,7 @@ public class XMBeanAttributes extends XTable {
 
     public boolean isColumnEditable(int column) {
         if (column < getColumnCount()) {
-            return getColumnName(column).equals(Resources.getText("Value"));
+            return getColumnName(column).equals(Messages.VALUE);
         }
         else {
             return false;
@@ -272,7 +272,7 @@ public class XMBeanAttributes extends XTable {
             if (value != null) {
                 tip = value.toString();
                 if(isAttributeViewable(row, VALUE_COLUMN))
-                    tip = Resources.getText("Double click to expand/collapse")+
+                    tip = Messages.DOUBLE_CLICK_TO_EXPAND_FORWARD_SLASH_COLLAPSE+
                         ". " + tip;
             }
 
@@ -504,7 +504,7 @@ public class XMBeanAttributes extends XTable {
                               comp,
                               rowMinHeight);
 
-                    mbeansTab.getDataViewer().registerForMouseEvent(
+                    XDataViewer.registerForMouseEvent(
                             comp, mouseListener);
                 } else
                     return cell;
@@ -583,7 +583,7 @@ public class XMBeanAttributes extends XTable {
                         mbeansTab.getDataViewer().createAttributeViewer(
                             value, mbean, attribute, XMBeanAttributes.this);
                     cell.init(cell.getMinRenderer(), comp, cell.getMinHeight());
-                    mbeansTab.getDataViewer().registerForMouseEvent(comp, mouseListener);
+                    XDataViewer.registerForMouseEvent(comp, mouseListener);
                 }
             } else {
                 cell = new ZoomedCell(value);
@@ -594,7 +594,7 @@ public class XMBeanAttributes extends XTable {
         }
     }
 
-    //will be called in a synchronzed block
+    //will be called in a synchronized block
     protected void addTableData(DefaultTableModel tableModel,
                                 XMBean mbean,
                                 MBeanAttributeInfo[] attributesInfo,
@@ -608,7 +608,7 @@ public class XMBeanAttributes extends XTable {
         for (int i = 0; i < attributesInfo.length; i++) {
             rowData[0] = (attributesInfo[i].getName());
             if (unavailableAttributes.containsKey(rowData[0])) {
-                rowData[1] = Resources.getText("Unavailable");
+                rowData[1] = Messages.UNAVAILABLE;
             } else if (viewableAttributes.containsKey(rowData[0])) {
                 rowData[1] = viewableAttributes.get(rowData[0]);
                 if (!attributesInfo[i].isWritable() ||
@@ -881,7 +881,7 @@ public class XMBeanAttributes extends XTable {
                                 String message = (ex.getMessage() != null) ? ex.getMessage() : ex.toString();
                                 EventQueue.invokeLater(new ThreadDialog(component,
                                                                         message+"\n",
-                                                                        Resources.getText("Problem setting attribute"),
+									Messages.PROBLEM_SETTING_ATTRIBUTE,
                                                                         JOptionPane.ERROR_MESSAGE));
                             }
                             refreshAttributes();

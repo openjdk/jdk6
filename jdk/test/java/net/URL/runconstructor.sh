@@ -31,6 +31,10 @@ case "$OS" in
     PS=":"
     FS="/"
     ;;
+  CYGWIN* )
+    PS=";"
+    FS="/"
+    ;;
   Windows* )
     PS=";"
     FS="\\"
@@ -46,7 +50,7 @@ failures=0
 
 go() {
     echo ''
-    ${TESTJAVA}${FS}bin${FS}java Constructor $1
+    ${TESTJAVA}${FS}bin${FS}java ${TESTVMOPTS} Constructor $1
     if [ $? != 0 ]; then failures=`expr $failures + 1`; fi
 }
 

@@ -42,6 +42,10 @@ case "$OS" in
     PS=":"
     FS="/"
     ;;
+  CYGWIN* )
+    PS=";"
+    FS="/"
+    ;;
   Windows* )
     PS=";"
     FS="\\"
@@ -57,5 +61,5 @@ cp ${TESTSRC}${FS}foo.jar .
 ${TESTJAVA}${FS}bin${FS}javac -d . ${TESTSRC}${FS}B5077773.java
 
 WD=`pwd`
-${TESTJAVA}${FS}bin${FS}java B5077773
+${TESTJAVA}${FS}bin${FS}java ${TESTVMOPTS} B5077773
 

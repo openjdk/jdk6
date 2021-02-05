@@ -108,7 +108,9 @@ public class XContentWindow extends XWindow implements XConstants {
             boolean needHandleResize = !(newBounds.equals(getBounds()));
             reshape(newBounds);
             if (needHandleResize) {
-                insLog.fine("Sending RESIZED");
+		if (insLog.isLoggable(Level.FINE)) {
+		    insLog.fine("Sending RESIZED");
+		}
                 handleResize(newBounds);
             }
         } finally {

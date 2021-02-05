@@ -847,9 +847,6 @@ public class MetalLookAndFeel extends BasicLookAndFeel
             "FileChooser.newFolderIcon", new SwingLazyValue("javax.swing.plaf.metal.MetalIconFactory", "getFileChooserNewFolderIcon"),
             "FileChooser.upFolderIcon", new SwingLazyValue("javax.swing.plaf.metal.MetalIconFactory", "getFileChooserUpFolderIcon"),
 
-            "FileChooser.lookInLabelMnemonic", new Integer(KeyEvent.VK_I),
-            "FileChooser.fileNameLabelMnemonic", new Integer(KeyEvent.VK_N),
-            "FileChooser.filesOfTypeLabelMnemonic", new Integer(KeyEvent.VK_T),
             "FileChooser.usesSingleFilePane", Boolean.TRUE,
             "FileChooser.ancestorInputMap",
                new UIDefaults.LazyInputMap(new Object[] {
@@ -2218,9 +2215,9 @@ public class MetalLookAndFeel extends BasicLookAndFeel
                 if (methodName == null) {
                     return c.newInstance();
                 }
-                Method method = (Method)AccessController.doPrivileged(
-                    new PrivilegedAction() {
-                    public Object run() {
+                Method method = AccessController.doPrivileged(
+                    new PrivilegedAction<Method>() {
+                    public Method run() {
                         Method[] methods = c.getDeclaredMethods();
                         for (int counter = methods.length - 1; counter >= 0;
                              counter--) {
@@ -2283,7 +2280,7 @@ public class MetalLookAndFeel extends BasicLookAndFeel
         }
     }
 
-    static ReferenceQueue queue = new ReferenceQueue();
+    static ReferenceQueue<LookAndFeel> queue = new ReferenceQueue<LookAndFeel>();
 
     static void flushUnreferenced() {
         AATextListener aatl;
@@ -2293,7 +2290,7 @@ public class MetalLookAndFeel extends BasicLookAndFeel
     }
 
     static class AATextListener
-        extends WeakReference implements PropertyChangeListener {
+        extends WeakReference<LookAndFeel> implements PropertyChangeListener {
 
         private String key = SunToolkit.DESKTOPFONTHINTS;
 
@@ -2304,7 +2301,7 @@ public class MetalLookAndFeel extends BasicLookAndFeel
         }
 
         public void propertyChange(PropertyChangeEvent pce) {
-            LookAndFeel laf = (LookAndFeel)get();
+            LookAndFeel laf = get();
             if (laf == null || laf != UIManager.getLookAndFeel()) {
                 dispose();
                 return;
@@ -2328,8 +2325,8 @@ public class MetalLookAndFeel extends BasicLookAndFeel
         private static void updateWindowUI(Window window) {
             SwingUtilities.updateComponentTreeUI(window);
             Window ownedWins[] = window.getOwnedWindows();
-            for (int i=0; i < ownedWins.length; i++) {
-                updateWindowUI(ownedWins[i]);
+            for (Window w : ownedWins) {
+                updateWindowUI(w);
             }
         }
 
@@ -2338,8 +2335,8 @@ public class MetalLookAndFeel extends BasicLookAndFeel
          */
         private static void updateAllUIs() {
             Frame appFrames[] = Frame.getFrames();
-            for (int j=0; j < appFrames.length; j++) {
-                updateWindowUI(appFrames[j]);
+            for (Frame frame : appFrames) {
+                updateWindowUI(frame);
             }
         }
 

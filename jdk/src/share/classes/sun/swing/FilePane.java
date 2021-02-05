@@ -35,6 +35,7 @@ import java.text.MessageFormat;
 import java.util.*;
 import java.util.List;
 
+import javax.accessibility.AccessibleContext;
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.*;
@@ -81,6 +82,9 @@ public class FilePane extends JPanel implements PropertyChangeListener {
     private JPanel[] viewPanels = new JPanel[VIEWTYPE_COUNT];
     private JPanel currentViewPanel;
     private String[] viewTypeActionNames;
+
+    private String filesListAccessibleName = null;
+    private String filesDetailsAccessibleName = null;
 
     private JPopupMenu contextMenu;
     private JMenu viewMenu;
@@ -449,6 +453,9 @@ public class FilePane extends JPanel implements PropertyChangeListener {
         gigaByteString = UIManager.getString("FileChooser.fileSizeGigaBytes", l);
         fullRowSelection = UIManager.getBoolean("FileView.fullRowSelection");
 
+        filesListAccessibleName = UIManager.getString("FileChooser.filesListAccessibleName", l);
+        filesDetailsAccessibleName = UIManager.getString("FileChooser.filesDetailsAccessibleName", l);
+
         renameErrorTitleText = UIManager.getString("FileChooser.renameErrorTitleText", l);
         renameErrorText = UIManager.getString("FileChooser.renameErrorText", l);
     }
@@ -546,8 +553,7 @@ public class FilePane extends JPanel implements PropertyChangeListener {
 
     public static void addActionsToMap(ActionMap map, Action[] actions) {
         if (map != null && actions != null) {
-            for (int i = 0; i < actions.length; i++) {
-                Action a = actions[i];
+            for (Action a : actions) {
                 String cmd = (String)a.getValue(Action.ACTION_COMMAND_KEY);
                 if (cmd == null) {
                     cmd = (String)a.getValue(Action.NAME);
@@ -633,6 +639,9 @@ public class FilePane extends JPanel implements PropertyChangeListener {
         if (listViewBorder != null) {
             scrollpane.setBorder(listViewBorder);
         }
+
+        list.putClientProperty(AccessibleContext.ACCESSIBLE_NAME_PROPERTY, filesListAccessibleName);
+
         p.add(scrollpane, BorderLayout.CENTER);
         return p;
     }
@@ -715,13 +724,13 @@ public class FilePane extends JPanel implements PropertyChangeListener {
             visibleColumns.toArray(columns);
             columnMap = Arrays.copyOf(columnMap, columns.length);
 
-            List<RowSorter.SortKey> sortKeys =
+            List<? extends RowSorter.SortKey> sortKeys =
                     (rowSorter == null) ? null : rowSorter.getSortKeys();
             fireTableStructureChanged();
             restoreSortKeys(sortKeys);
         }
 
-        private void restoreSortKeys(List<RowSorter.SortKey> sortKeys) {
+        private void restoreSortKeys(List<? extends RowSorter.SortKey> sortKeys) {
             if (sortKeys != null) {
                 // check if preserved sortKeys are valid for this folder
                 for (int i = 0; i < sortKeys.size(); i++) {
@@ -883,7 +892,7 @@ public class FilePane extends JPanel implements PropertyChangeListener {
         return rowSorter;
     }
 
-    private class DetailsTableRowSorter extends TableRowSorter {
+    private class DetailsTableRowSorter extends TableRowSorter<TableModel> {
         public DetailsTableRowSorter() {
             setModelWrapper(new SorterModelWrapper());
         }
@@ -903,8 +912,8 @@ public class FilePane extends JPanel implements PropertyChangeListener {
             updateComparators(detailsTableModel.getColumns());
         }
 
-        private class SorterModelWrapper extends ModelWrapper {
-            public Object getModel() {
+        private class SorterModelWrapper extends ModelWrapper<TableModel, Integer> {
+            public TableModel getModel() {
                 return getDetailsTableModel();
             }
 
@@ -920,7 +929,7 @@ public class FilePane extends JPanel implements PropertyChangeListener {
                 return FilePane.this.getModel().getElementAt(row);
             }
 
-            public Object getIdentifier(int row) {
+            public Integer getIdentifier(int row) {
                 return row;
             }
         }
@@ -1206,6 +1215,8 @@ public class FilePane extends JPanel implements PropertyChangeListener {
         p.add(scrollpane, BorderLayout.CENTER);
 
         detailsTableModel.fireTableStructureChanged();
+
+        detailsTable.putClientProperty(AccessibleContext.ACCESSIBLE_NAME_PROPERTY, filesDetailsAccessibleName);
 
         return p;
     } // createDetailsView
@@ -1710,9 +1721,9 @@ public class FilePane extends JPanel implements PropertyChangeListener {
     private void updateViewMenu() {
         if (viewMenu != null) {
             Component[] comps = viewMenu.getMenuComponents();
-            for (int i = 0; i < comps.length; i++) {
-                if (comps[i] instanceof JRadioButtonMenuItem) {
-                    JRadioButtonMenuItem mi = (JRadioButtonMenuItem)comps[i];
+            for (Component comp : comps) {
+                if (comp instanceof JRadioButtonMenuItem) {
+                    JRadioButtonMenuItem mi = (JRadioButtonMenuItem) comp;
                     if (((ViewTypeAction)mi.getAction()).viewType == viewType) {
                         mi.setSelected(true);
                     }

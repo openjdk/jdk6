@@ -74,11 +74,11 @@ import sun.util.CoreResourceBundleControl;
  */
 public class UIDefaults extends Hashtable<Object,Object>
 {
-    private static final Object PENDING = new String("Pending");
+    private static final Object PENDING = "Pending";
 
     private SwingPropertyChangeSupport changeSupport;
 
-    private Vector resourceBundles;
+    private Vector<String> resourceBundles;
 
     private Locale defaultLocale = Locale.getDefault();
 
@@ -88,7 +88,7 @@ public class UIDefaults extends Hashtable<Object,Object>
      * Access to this should be done while holding a lock on the
      * UIDefaults, eg synchronized(this).
      */
-    private Map resourceCache;
+    private Map<Locale, Map<String, Object>> resourceCache;
 
     /**
      * Creates an empty defaults table.
@@ -108,7 +108,7 @@ public class UIDefaults extends Hashtable<Object,Object>
      */
     public UIDefaults(int initialCapacity, float loadFactor) {
         super(initialCapacity, loadFactor);
-        resourceCache = new HashMap();
+        resourceCache = new HashMap<Locale, Map<String, Object>>();
     }
 
 
@@ -283,24 +283,24 @@ public class UIDefaults extends Hashtable<Object,Object>
             if( defaultLocale == null )
                 return null;
             else
-                l = (Locale)defaultLocale;
+                l = defaultLocale;
         }
 
         synchronized(this) {
-            return getResourceCache(l).get((String)key);
+            return getResourceCache(l).get(key);
         }
     }
 
     /**
      * Returns a Map of the known resources for the given locale.
      */
-    private Map getResourceCache(Locale l) {
-        Map values = (Map)resourceCache.get(l);
+    private Map<String, Object> getResourceCache(Locale l) {
+        Map<String, Object> values = resourceCache.get(l);
 
         if (values == null) {
-            values = new HashMap();
+            values = new TextAndMnemonicHashMap();
             for (int i=resourceBundles.size()-1; i >= 0; i--) {
-                String bundleName = (String)resourceBundles.get(i);
+                String bundleName = resourceBundles.get(i);
                 try {
                     Control c = CoreResourceBundleControl.getRBControlInstance(bundleName);
                     ResourceBundle b;
@@ -755,7 +755,7 @@ public class UIDefaults extends Hashtable<Object,Object>
         Object cl = get("ClassLoader");
         ClassLoader uiClassLoader =
             (cl != null) ? (ClassLoader)cl : target.getClass().getClassLoader();
-        Class uiClass = getUIClass(target.getUIClassID(), uiClassLoader);
+        Class<? extends ComponentUI> uiClass = getUIClass(target.getUIClassID(), uiClassLoader);
         Object uiObject = null;
 
         if (uiClass == null) {
@@ -765,8 +765,7 @@ public class UIDefaults extends Hashtable<Object,Object>
             try {
                 Method m = (Method)get(uiClass);
                 if (m == null) {
-                    Class acClass = javax.swing.JComponent.class;
-                    m = uiClass.getMethod("createUI", new Class[]{acClass});
+                    m = uiClass.getMethod("createUI", new Class[]{JComponent.class});
                     put(uiClass, m);
                 }
                 uiObject = MethodUtil.invoke(m, null, new Object[]{target});
@@ -866,7 +865,7 @@ public class UIDefaults extends Hashtable<Object,Object>
             return;
         }
         if( resourceBundles == null ) {
-            resourceBundles = new Vector(5);
+            resourceBundles = new Vector<String>(5);
         }
         if (!resourceBundles.contains(bundleName)) {
             resourceBundles.add( bundleName );
@@ -1068,7 +1067,7 @@ public class UIDefaults extends Hashtable<Object,Object>
             className = c;
             methodName = m;
             if (o != null) {
-                args = (Object[])o.clone();
+                args = o.clone();
             }
         }
 
@@ -1086,10 +1085,10 @@ public class UIDefaults extends Hashtable<Object,Object>
             if (acc == null && System.getSecurityManager() != null) {
                 throw new SecurityException("null AccessControlContext");
             } 
-            return AccessController.doPrivileged(new PrivilegedAction() {
+            return AccessController.doPrivileged(new PrivilegedAction<Object>() {
                 public Object run() {
                     try {
-                        Class c;
+                        Class<?> c;
                         Object cl;
                         // See if we should use a separate ClassLoader
                         if (table == null || !((cl = table.get("ClassLoader"))
@@ -1212,4 +1211,120 @@ public class UIDefaults extends Hashtable<Object,Object>
             return null;
         }
     }
+
+    /**
+     * <code>TextAndMnemonicHashMap</code> stores swing resource strings. Many of strings
+     * can have a mnemonic. For example:
+     *   FileChooser.saveButton.textAndMnemonic=&Save
+     * For this case method get returns "Save" for the key "FileChooser.saveButtonText" and
+     * mnemonic "S" for the key "FileChooser.saveButtonMnemonic"
+     *
+     * There are several patterns for the text and mnemonic suffixes which are checked by the
+     * <code>TextAndMnemonicHashMap</code> class.
+     * Patterns which are converted to the xxx.textAndMnemonic key:
+     * (xxxNameText, xxxNameMnemonic)
+     * (xxxNameText, xxxMnemonic)
+     * (xxx.nameText, xxx.mnemonic)
+     * (xxxText, xxxMnemonic)
+     *
+     * These patterns can have a mnemonic index in format
+     * (xxxDisplayedMnemonicIndex)
+     *
+     * Pattern which is converted to the xxx.titleAndMnemonic key:
+     * (xxxTitle, xxxMnemonic)
+     *
+     */
+    private static class TextAndMnemonicHashMap extends HashMap<String, Object> {
+
+        static final String AND_MNEMONIC = "AndMnemonic";
+        static final String TITLE_SUFFIX = ".titleAndMnemonic";
+        static final String TEXT_SUFFIX = ".textAndMnemonic";
+
+        @Override
+        public Object get(Object key) {
+
+            Object value = super.get(key);
+
+            if (value == null) {
+
+                boolean checkTitle = false;
+
+                String stringKey = key.toString();
+                String compositeKey = null;
+
+                if (stringKey.endsWith(AND_MNEMONIC)) {
+                    return null;
+                }
+
+                if (stringKey.endsWith(".mnemonic")) {
+                    compositeKey = composeKey(stringKey, 9, TEXT_SUFFIX);
+                } else if (stringKey.endsWith("NameMnemonic")) {
+                    compositeKey = composeKey(stringKey, 12, TEXT_SUFFIX);
+                } else if (stringKey.endsWith("Mnemonic")) {
+                    compositeKey = composeKey(stringKey, 8, TEXT_SUFFIX);
+                    checkTitle = true;
+                }
+
+                if (compositeKey != null) {
+                    value = super.get(compositeKey);
+                    if (value == null && checkTitle) {
+                        compositeKey = composeKey(stringKey, 8, TITLE_SUFFIX);
+                        value = super.get(compositeKey);
+                    }
+
+                    return value == null ? null : getMnemonicFromProperty(value.toString());
+                }
+
+                if (stringKey.endsWith("NameText")) {
+                    compositeKey = composeKey(stringKey, 8, TEXT_SUFFIX);
+                } else if (stringKey.endsWith(".nameText")) {
+                    compositeKey = composeKey(stringKey, 9, TEXT_SUFFIX);
+                } else if (stringKey.endsWith("Text")) {
+                    compositeKey = composeKey(stringKey, 4, TEXT_SUFFIX);
+                } else if (stringKey.endsWith("Title")) {
+                    compositeKey = composeKey(stringKey, 5, TITLE_SUFFIX);
+                }
+
+                if (compositeKey != null) {
+                    value = super.get(compositeKey);
+                    return value == null ? null : getTextFromProperty(value.toString());
+                }
+
+                if (stringKey.endsWith("DisplayedMnemonicIndex")) {
+                    compositeKey = composeKey(stringKey, 22, TEXT_SUFFIX);
+                    value = super.get(compositeKey);
+                    if (value == null) {
+                        compositeKey = composeKey(stringKey, 22, TITLE_SUFFIX);
+                        value = super.get(compositeKey);
+                    }
+                    return value == null ? null : getIndexFromProperty(value.toString());
+                }
+            }
+
+            return value;
+        }
+
+        String composeKey(String key, int reduce, String sufix) {
+            return key.substring(0, key.length() - reduce) + sufix;
+        }
+
+        String getTextFromProperty(String text) {
+            return text.replace("&", "");
+        }
+
+        String getMnemonicFromProperty(String text) {
+            int index = text.indexOf('&');
+            if (0 <= index && index < text.length() - 1) {
+                char c = text.charAt(index + 1);
+                return Integer.toString((int) Character.toUpperCase(c));
+            }
+            return null;
+        }
+
+        String getIndexFromProperty(String text) {
+            int index = text.indexOf('&');
+            return (index == -1) ? null : Integer.toString(index);
+        }
+    }
+
 }

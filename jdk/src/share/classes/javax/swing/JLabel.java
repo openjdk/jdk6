@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,6 +43,7 @@ import javax.swing.text.html.*;
 import javax.swing.plaf.basic.*;
 import java.util.*;
 
+import sun.awt.AWTAccessor;
 
 /**
  * A display area for a short text string or an image,
@@ -501,10 +502,10 @@ public class JLabel extends JComponent implements SwingConstants, Accessible
      * @see #setDisplayedMnemonic(int)
      */
     public void setDisplayedMnemonic(char aChar) {
-        int vk = (int) aChar;
-        if(vk >= 'a' && vk <='z')
-            vk -= ('a' - 'A');
-        setDisplayedMnemonic(vk);
+        int vk = AWTAccessor.getKeyEventAccessor().getExtendedKeyCodeForChar(aChar);
+        if (vk != java.awt.event.KeyEvent.VK_UNDEFINED) {
+            setDisplayedMnemonic(vk);
+        }
     }
 
 

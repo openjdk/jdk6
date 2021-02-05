@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -73,7 +73,7 @@ public class MsgAppletViewer_de extends ListResourceBundle {
             {"appletviewer.parse.warning.embed.requiresheight", "Warnung: F\u00FCr <embed>-Tag ist ein \"height\"-Attribut erforderlich."},
             {"appletviewer.parse.warning.embed.requireswidth", "Warnung: F\u00FCr <embed>-Tag ist ein \"width\"-Attribut erforderlich."},
             {"appletviewer.parse.warning.appnotLongersupported", "Warnung: <app>-Tag wird nicht mehr unterst\u00FCtzt. Verwenden Sie stattdessen <applet>:"},
-            {"appletviewer.usage", "Verwendung: appletviewer <Optionen> url(s)\n\nwobei die <Optionen> Folgendes umfassen:\n  -debug                  Applet Viewer im Java-Debugger starten\n  -encoding <Codierung>    Zeichencodierung f\u00FCr HTML-Dateien angeben\n  -J <Laufzeitkennzeichen>        Argument an den Java-Interpreter \u00FCbergeben\n\nDie Option \"-J\" ist nicht standardm\u00E4\u00DFig und kann ohne vorherige Ank\u00FCndigung ge\u00E4ndert werden."},
+            {"appletviewer.usage", "Verwendung: appletviewer <Optionen> url(s)\n\nwobei die <Optionen> Folgendes umfassen:\n  -debug                  Applet Viewer im Java-Debugger starten\n  -encoding <Codierung>    Zeichencodierung f\u00FCr HTML-Dateien angeben\n  -J<Laufzeitkennzeichen>        Argument an den Java-Interpreter \u00FCbergeben\n\nDie Option \"-J\" ist nicht standardm\u00E4\u00DFig und kann ohne vorherige Ank\u00FCndigung ge\u00E4ndert werden."},
             {"appletviewer.main.err.unsupportedopt", "Nicht unterst\u00FCtzte Option: {0}"},
             {"appletviewer.main.err.unrecognizedarg", "Unbekanntes Argument: {0}"},
             {"appletviewer.main.err.dupoption", "Doppelte Verwendung von Option: {0}"},
@@ -103,14 +103,13 @@ public class MsgAppletViewer_de extends ListResourceBundle {
             {"appletclassloader.fileexception", "{0}-Ausnahme beim Laden von: {1}"},
             {"appletclassloader.filedeath", "{0} abgebrochen beim Laden von: {1}"},
             {"appletclassloader.fileerror", "{0}-Fehler beim Laden von: {1}"},
-            {"appletclassloader.findclass.verbose.findclass", "{0} Klasse {1} suchen"},
             {"appletclassloader.findclass.verbose.openstream", "\u00D6ffnen von Stream zu: {0}, um {1} abzurufen"},
             {"appletclassloader.getresource.verbose.forname", "AppletClassLoader.getResource f\u00FCr Name: {0}"},
             {"appletclassloader.getresource.verbose.found", "Ressource {0} als Systemressource gefunden"},
             {"appletclassloader.getresourceasstream.verbose", "Ressource {0} als Systemressource gefunden"},
             {"appletpanel.runloader.err", "Objekt oder Codeparameter."},
             {"appletpanel.runloader.exception", "Ausnahme beim Deserialisieren von {0}"},
-            {"appletpanel.destroyed", "Applet endg\u00FCltig gel\u00F6scht."},
+            {"appletpanel.destroyed", "Applet zerst\u00F6rt."},
             {"appletpanel.loaded", "Applet geladen."},
             {"appletpanel.started", "Applet gestartet."},
             {"appletpanel.inited", "Applet initialisiert."},
@@ -128,8 +127,8 @@ public class MsgAppletViewer_de extends ListResourceBundle {
             {"appletpanel.notloaded", "Init.: Applet nicht geladen."},
             {"appletpanel.notinited", "Starten: Applet nicht initialisiert."},
             {"appletpanel.notstarted", "Stoppen: Applet nicht gestartet."},
-            {"appletpanel.notstopped", "Endg\u00FCltig l\u00F6schen: Applet nicht gestoppt."},
-            {"appletpanel.notdestroyed", "Verwerfen: Applet nicht endg\u00FCltig gel\u00F6scht."},
+            {"appletpanel.notstopped", "Zerst\u00F6ren: Applet nicht gestoppt."},
+            {"appletpanel.notdestroyed", "Verwerfen: Applet nicht zerst\u00F6rt."},
             {"appletpanel.notdisposed", "Laden: Applet nicht verworfen."},
             {"appletpanel.bail", "Unterbrochen: Zur\u00FCckziehen."},
             {"appletpanel.filenotfound", "Datei nicht gefunden beim Suchen nach: {0}"},

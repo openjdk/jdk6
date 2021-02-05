@@ -215,14 +215,14 @@ public class BasicPopupMenuUI extends PopupMenuUI {
         return popup;
     }
 
-    static List getPopups() {
+    static List<JPopupMenu> getPopups() {
         MenuSelectionManager msm = MenuSelectionManager.defaultManager();
         MenuElement[] p = msm.getSelectedPath();
 
-        List list = new ArrayList(p.length);
-        for(int i = 0; i < p.length; i++) {
-            if (p[i] instanceof JPopupMenu) {
-                list.add((JPopupMenu)p[i]);
+        List<JPopupMenu> list = new ArrayList<JPopupMenu>(p.length);
+        for (MenuElement element : p) {
+            if (element instanceof JPopupMenu) {
+                list.add((JPopupMenu) element);
             }
         }
         return list;
@@ -280,14 +280,14 @@ public class BasicPopupMenuUI extends PopupMenuUI {
                 MenuElement subitem = findEnabledChild(
                         subpopup.getSubElements(), -1, true);
 
-                ArrayList lst = new ArrayList(Arrays.asList(e.getPath()));
+                ArrayList<MenuElement> lst = new ArrayList<MenuElement>(Arrays.asList(e.getPath()));
                 lst.add(menuToOpen);
                 lst.add(subpopup);
                 if (subitem != null) {
                     lst.add(subitem);
                 }
-                MenuElement newPath[] = new MenuElement[0];;
-                newPath = (MenuElement[])lst.toArray(newPath);
+                MenuElement newPath[] = new MenuElement[0];
+                newPath = lst.toArray(newPath);
                 MenuSelectionManager.defaultManager().setSelectedPath(newPath);
                 e.consume();
             }
@@ -335,7 +335,7 @@ public class BasicPopupMenuUI extends PopupMenuUI {
             }
 
             if (matches == 0) {
-                ; // no op
+                // no op
             } else if (matches == 1) {
                 // Invoke the menu action
                 JMenuItem item = (JMenuItem)items[firstMatch];
@@ -352,7 +352,7 @@ public class BasicPopupMenuUI extends PopupMenuUI {
                 // Select the menu item with the matching mnemonic. If
                 // the same mnemonic has been invoked then select the next
                 // menu item in the cycle.
-                MenuElement newItem = null;
+                MenuElement newItem;
 
                 newItem = items[indexes[(currentIndex + 1) % matches]];
 
@@ -362,7 +362,6 @@ public class BasicPopupMenuUI extends PopupMenuUI {
                 manager.setSelectedPath(newPath);
                 e.consume();
             }
-            return;
         }
 
         public void menuKeyReleased(MenuKeyEvent e) {
@@ -615,7 +614,7 @@ public class BasicPopupMenuUI extends PopupMenuUI {
             // 4234793: This action should call JPopupMenu.firePopupMenuCanceled but it's
             // a protected method. The real solution could be to make
             // firePopupMenuCanceled public and call it directly.
-            JPopupMenu lastPopup = (JPopupMenu)getLastPopup();
+            JPopupMenu lastPopup = getLastPopup();
             if (lastPopup != null) {
                 lastPopup.putClientProperty("JPopupMenu.firePopupMenuCanceled", Boolean.TRUE);
             }
@@ -693,7 +692,7 @@ public class BasicPopupMenuUI extends PopupMenuUI {
 
     static MenuElement findEnabledChild(MenuElement e[], int fromIndex,
                                                 boolean forward) {
-        MenuElement result = null;
+        MenuElement result;
         if (forward) {
             result = nextEnabledChild(e, fromIndex+1, e.length-1);
             if (result == null) result = nextEnabledChild(e, 0, fromIndex-1);
@@ -742,7 +741,7 @@ public class BasicPopupMenuUI extends PopupMenuUI {
             // A grab needs to be added
             final Toolkit tk = Toolkit.getDefaultToolkit();
             java.security.AccessController.doPrivileged(
-                new java.security.PrivilegedAction() {
+                new java.security.PrivilegedAction<Object>() {
                     public Object run() {
                         tk.addAWTEventListener(MouseGrabber.this,
                                 AWTEvent.MOUSE_EVENT_MASK |
@@ -775,7 +774,7 @@ public class BasicPopupMenuUI extends PopupMenuUI {
             final Toolkit tk = Toolkit.getDefaultToolkit();
             // The grab should be removed
              java.security.AccessController.doPrivileged(
-                new java.security.PrivilegedAction() {
+                new java.security.PrivilegedAction<Object>() {
                     public Object run() {
                         tk.removeAWTEventListener(MouseGrabber.this);
                         return null;
@@ -901,10 +900,8 @@ public class BasicPopupMenuUI extends PopupMenuUI {
                 // 4234793: This action should call firePopupMenuCanceled but it's
                 // a protected method. The real solution could be to make
                 // firePopupMenuCanceled public and call it directly.
-                List popups = getPopups();
-                Iterator iter = popups.iterator();
-                while (iter.hasNext()) {
-                    JPopupMenu popup = (JPopupMenu) iter.next();
+                List<JPopupMenu> popups = getPopups();
+                for (JPopupMenu popup : popups) {
                     popup.putClientProperty("JPopupMenu.firePopupMenuCanceled", Boolean.TRUE);
                 }
                 MenuSelectionManager.defaultManager().clearSelectedPath();

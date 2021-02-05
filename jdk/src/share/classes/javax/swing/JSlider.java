@@ -913,7 +913,7 @@ public class JSlider extends JComponent implements SwingConstants, Accessible {
             throw new IllegalArgumentException( "Label incremement must be > 0" );
         }
 
-        class SmartHashtable extends Hashtable implements PropertyChangeListener {
+        class SmartHashtable extends Hashtable<Object, Object> implements PropertyChangeListener {
             int increment = 0;
             int start = 0;
             boolean startAtMin = false;
@@ -962,7 +962,7 @@ public class JSlider extends JComponent implements SwingConstants, Accessible {
 
                     Enumeration keys = getLabelTable().keys();
                     Object key = null;
-                    Hashtable hashtable = new Hashtable();
+                    Hashtable<Object, Object> hashtable = new Hashtable<Object, Object>();
 
                     // Save the labels that were added by the developer
                     while ( keys.hasMoreElements() ) {

@@ -87,14 +87,14 @@ Sys "$javac" -d jarDir StubPreferencesFactory.java StubPreferences.java
 
 case "`uname`" in Windows*|CYGWIN* ) CPS=';';; *) CPS=':';; esac
 
-Sys "$java" "-cp" "$TESTCLASSES${CPS}extDir/PrefsSpi.jar" \
+Sys "$java" "${TESTVMOPTS}" "-cp" "$TESTCLASSES${CPS}extDir/PrefsSpi.jar" \
     -Djava.util.prefs.PreferencesFactory=StubPreferencesFactory \
     PrefsSpi "StubPreferences"
-Sys "$java" "-cp" "$TESTCLASSES" \
+Sys "$java" "${TESTVMOPTS}" "-cp" "$TESTCLASSES" \
     PrefsSpi "java.util.prefs.*"
-Sys "$java" "-cp" "$TESTCLASSES${CPS}extDir/PrefsSpi.jar" \
+Sys "$java" "${TESTVMOPTS}" "-cp" "$TESTCLASSES${CPS}extDir/PrefsSpi.jar" \
     PrefsSpi "StubPreferences"
-Sys "$java" "-cp" "$TESTCLASSES" "-Djava.ext.dirs=extDir" \
+Sys "$java" "${TESTVMOPTS}" "-cp" "$TESTCLASSES" "-Djava.ext.dirs=extDir" \
     PrefsSpi "StubPreferences"
 
 rm -rf jarDir extDir

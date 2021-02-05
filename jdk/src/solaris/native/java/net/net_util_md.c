@@ -180,9 +180,7 @@ int cmpScopeID (unsigned int scope, struct sockaddr *him) {
 void
 NET_ThrowByNameWithLastError(JNIEnv *env, const char *name,
                    const char *defaultDetail) {
-    char errmsg[255];
-    sprintf(errmsg, "errno: %d, error: %s\n", errno, defaultDetail);
-    JNU_ThrowByNameWithLastError(env, name, errmsg);
+    JNU_ThrowByNameWithMessageAndLastError(env, name, defaultDetail);
 }
 
 void

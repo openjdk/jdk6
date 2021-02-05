@@ -196,20 +196,28 @@ class SynthInternalFrameTitlePane extends BasicInternalFrameTitlePane
     }
 
     protected void addSystemMenuItems(JPopupMenu menu) {
-        // PENDING: this should all be localizable!
-        JMenuItem mi = (JMenuItem)menu.add(restoreAction);
-        mi.setMnemonic('R');
-        mi = (JMenuItem)menu.add(moveAction);
-        mi.setMnemonic('M');
-        mi = (JMenuItem)menu.add(sizeAction);
-        mi.setMnemonic('S');
-        mi = (JMenuItem)menu.add(iconifyAction);
-        mi.setMnemonic('n');
-        mi = (JMenuItem)menu.add(maximizeAction);
-        mi.setMnemonic('x');
+        JMenuItem mi = menu.add(restoreAction);
+        mi.setMnemonic(getButtonMnemonic("restore"));
+        mi = menu.add(moveAction);
+        mi.setMnemonic(getButtonMnemonic("move"));
+        mi = menu.add(sizeAction);
+        mi.setMnemonic(getButtonMnemonic("size"));
+        mi = menu.add(iconifyAction);
+        mi.setMnemonic(getButtonMnemonic("minimize"));
+        mi = menu.add(maximizeAction);
+        mi.setMnemonic(getButtonMnemonic("maximize"));
         menu.add(new JSeparator());
-        mi = (JMenuItem)menu.add(closeAction);
-        mi.setMnemonic('C');
+        mi = menu.add(closeAction);
+        mi.setMnemonic(getButtonMnemonic("close"));
+    }
+
+    private static int getButtonMnemonic(String button) {
+        try {
+            return Integer.parseInt(UIManager.getString(
+                    "InternalFrameTitlePane." + button + "Button.mnemonic"));
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     protected void showSystemMenu() {

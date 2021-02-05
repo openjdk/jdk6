@@ -614,7 +614,7 @@ DisplayChangedListener {
     }
 
     @Override
-    public void updateWindow(BufferedImage backBuffer) {
+    public void updateWindow() {
         // no-op
     }
 

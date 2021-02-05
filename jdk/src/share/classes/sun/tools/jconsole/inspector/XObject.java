@@ -27,17 +27,6 @@ package sun.tools.jconsole.inspector;
 // java import
 import javax.swing.*;
 
-//
-
-// java import
-import java.io.*;
-import java.awt.*;
-import java.awt.dnd.*;
-import java.awt.datatransfer.*;
-import java.net.*;
-//
-
-
 /**
  * This provides a wrapper to the Object class to allow it to be
  displayed/manipulated as a GUI object.
