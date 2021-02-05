@@ -412,6 +412,8 @@ static void *CCalloc(context_type *context, int size, jboolean zero);
 
 static fullinfo_type cp_index_to_class_fullinfo(context_type *, int, int);
 
+static const char* get_result_signature(const char* signature);
+
 static char signature_to_fieldtype(context_type *context,
                                    const char **signature_p, fullinfo_type *info);
 
@@ -2690,7 +2692,10 @@ push_stack(context_type *context, unsigned int inumber, stack_info_type *new_sta
                                                                 operand);
             const char *result_signature;
             check_and_push(context, signature, VM_STRING_UTF);
-            result_signature = strchr(signature, JVM_SIGNATURE_ENDFUNC) + 1;
+            result_signature = get_result_signature(signature);
+            if (result_signature++ == NULL) {
+                CCerror(context, "Illegal signature %s", signature);
+            }
             if (result_signature[0] == JVM_SIGNATURE_VOID) {
                 stack_results = "";
             } else {
@@ -3609,19 +3614,54 @@ CFerror(context_type *context, char *format, ...)
     longjmp(context->jump_buffer, 1);
 }
 
+/*
+ * Need to scan the entire signature to find the result type because
+ * types in the arg list and the result type could contain embedded ')'s.
+ */
+static const char* get_result_signature(const char* signature) {
+    const char *p;
+    for (p = signature; *p != JVM_SIGNATURE_ENDFUNC; p++) {
+        switch (*p) {
+          case JVM_SIGNATURE_BOOLEAN:
+          case JVM_SIGNATURE_BYTE:
+          case JVM_SIGNATURE_CHAR:
+          case JVM_SIGNATURE_SHORT:
+          case JVM_SIGNATURE_INT:
+          case JVM_SIGNATURE_FLOAT:
+          case JVM_SIGNATURE_DOUBLE:
+          case JVM_SIGNATURE_LONG:
+          case JVM_SIGNATURE_FUNC:  /* ignore initial (, if given */
+            break;
+          case JVM_SIGNATURE_CLASS:
+            while (*p != JVM_SIGNATURE_ENDCLASS) p++;
+            break;
+          case JVM_SIGNATURE_ARRAY:
+            while (*p == JVM_SIGNATURE_ARRAY) p++;
+            /* If an array of classes, skip over class name, too. */
+            if (*p == JVM_SIGNATURE_CLASS) {
+                while (*p != JVM_SIGNATURE_ENDCLASS) p++;
+            }
+            break;
+          default:
+            /* Indicate an error. */
+            return NULL;
+        }
+    }
+    return p++; /* skip over ')'. */
+}
+
 static char
 signature_to_fieldtype(context_type *context,
                        const char **signature_p, fullinfo_type *full_info_p)
 {
     const char *p = *signature_p;
-    fullinfo_type full_info = MAKE_FULLINFO(0, 0, 0);
+    fullinfo_type full_info = MAKE_FULLINFO(ITEM_Bogus, 0, 0);
     char result;
     int array_depth = 0;
 
     for (;;) {
         switch(*p++) {
             default:
-                full_info = MAKE_FULLINFO(ITEM_Bogus, 0, 0);
                 result = 0;
                 break;
 
@@ -3674,7 +3714,14 @@ signature_to_fieldtype(context_type *context,
                 char buffer_space[256];
                 char *buffer = buffer_space;
                 char *finish = strchr(p, JVM_SIGNATURE_ENDCLASS);
-                int length = finish - p;
+                int length;
+                if (finish == NULL) {
+                    /* Signature must have ';' after the class name.
+                     * If it does not, return 0 and ITEM_Bogus in full_info. */
+                    result = 0;
+                    break;
+                }
+                length = finish - p;
                 if (length + 1 > sizeof(buffer_space)) {
                     buffer = malloc(length + 1);
                     check_and_push(context, buffer, VM_MALLOC_BLK);
