@@ -289,6 +289,10 @@ static ColorData *BufImg_SetupICM(JNIEnv *env,
             ((*env)->GetPrimitiveArrayCritical(env, bisdo->lutarray, NULL));
         CHECK_NULL_RETURN(pRgb, (ColorData*)NULL);
         cData->img_clr_tbl = initCubemap(pRgb, bisdo->lutsize, 32);
+        if (cData->img_clr_tbl == NULL) {
+            free(cData);
+            return (ColorData*)NULL;
+        }
         if (allGray == JNI_TRUE) {
             initInverseGrayLut(pRgb, bisdo->lutsize, cData);
         }
