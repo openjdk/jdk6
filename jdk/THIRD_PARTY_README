@@ -83,7 +83,7 @@ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-%% This notice is provided with respect to zlib 1.1.3, which may be included with this software:   
+%% This notice is provided with respect to zlib 1.2.11, which may be included with this software:   
 
 Acknowledgments:
 
@@ -94,7 +94,7 @@ Acknowledgments:
 
 Copyright notice:
 
- (C) 1995-1998 Jean-loup Gailly and Mark Adler
+ (C) 1995-2017 Jean-loup Gailly and Mark Adler
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages

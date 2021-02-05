@@ -25,6 +25,8 @@
 
 package java.util;
 
+import sun.misc.SharedSecrets;
+
 /**
  * Resizable-array implementation of the <tt>List</tt> interface.  Implements
  * all optional list operations, and permits all elements, including
@@ -689,6 +691,7 @@ public class ArrayList<E> extends AbstractList<E>
 
         // Read in array length and allocate array
         int arrayLength = s.readInt();
+        SharedSecrets.getJavaOISAccess().checkArray(s, Object[].class, arrayLength);
         Object[] a = elementData = new Object[arrayLength];
 
         // Read in all elements in the proper order.

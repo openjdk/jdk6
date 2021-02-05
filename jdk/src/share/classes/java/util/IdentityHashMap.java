@@ -24,6 +24,8 @@
  */
 
 package java.util;
+import sun.misc.SharedSecrets;
+
 import java.io.*;
 
 /**
@@ -1197,7 +1199,9 @@ public class IdentityHashMap<K,V>
         int size = s.readInt();
 
         // Allow for 33% growth (i.e., capacity is >= 2* size()).
-        init(capacity((size*4)/3));
+        int cap = capacity((size*4)/3);
+        SharedSecrets.getJavaOISAccess().checkArray(s, Object[].class, cap);
+        init(cap);
 
         // Read the keys and values, and put the mappings in the table
         for (int i=0; i<size; i++) {

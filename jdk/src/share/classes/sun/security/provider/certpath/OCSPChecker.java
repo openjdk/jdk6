@@ -336,8 +336,12 @@ class OCSPChecker extends PKIXCertPathChecker {
             try {
                 certId = new CertId
                     (issuerCert, currCertImpl.getSerialNumberObject());
-                response = OCSP.check(Collections.singletonList(certId), uri,
-                    responderCert, pkixParams.getDate());
+                String variant = null;
+                if (pkixParams instanceof PKIXExtendedParameters) {
+                    variant = ((PKIXExtendedParameters)pkixParams).getVariant();
+                }
+                response = OCSP.check(Collections.singletonList(certId), uri, null,
+                        responderCert, pkixParams.getDate(), variant);
             } catch (Exception e) {
                 if (e instanceof CertPathValidatorException) {
                     throw (CertPathValidatorException) e;

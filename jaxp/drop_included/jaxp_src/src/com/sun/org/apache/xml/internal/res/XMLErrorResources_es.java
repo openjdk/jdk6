@@ -231,7 +231,7 @@ public class XMLErrorResources_es extends ListResourceBundle
       "La r\u00e9plica del iterador no est\u00e1 soportada"},
 
     { ER_UNKNOWN_AXIS_TYPE,
-      "Tipo de cruce de eje desconocido: {0}"},
+      "Tipo de recorrido de eje desconocido: {0}"},
 
     { ER_AXIS_NOT_SUPPORTED,
       "Cruzador de eje no soportado: {0}"},

@@ -49,7 +49,8 @@ SUBDIRS =                   \
   jdwpgen                   \
   makeclasslist             \
   spp                       \
-  strip_properties
+  strip_properties          \
+  customizesecurityfile
 
 ifndef DISABLE_NIMBUS
   SUBDIRS += generate_nimbus

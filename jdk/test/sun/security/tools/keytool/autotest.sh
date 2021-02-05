@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2006, 2017, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -102,14 +102,5 @@ echo | ${TESTJAVA}${FS}bin${FS}java -Dfile -Dnss \
    KeyToolTest || exit 12
 
 STATUS=$?
-
-rm -f p11-nss.txt
-rm -f cert8.db
-rm -f key3.db
-rm -f secmod.db
-
-rm HumanInputStream*.class
-rm KeyToolTest.class
-rm TestException.class 
 
 exit ${STATUS}

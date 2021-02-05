@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -155,7 +155,7 @@ class KrbAsRep extends KrbKdcRep {
         creds = new Credentials(
                                 rep.ticket,
                                 req.reqBody.cname,
-                                rep.ticket.sname,
+                                enc_part.sname,
                                 enc_part.key,
                                 enc_part.flags,
                                 enc_part.authtime,

@@ -24,6 +24,8 @@
  */
 
 package java.util;
+import sun.misc.SharedSecrets;
+
 import java.io.*;
 
 /**
@@ -867,6 +869,9 @@ public class Hashtable<K,V>
         if (origlength > 0 && length > origlength)
             length = origlength;
 
+        // Check Map.Entry[].class since it's the nearest public type to
+        // what we're actually creating.
+        SharedSecrets.getJavaOISAccess().checkArray(s, Map.Entry[].class, length);
         Entry[] table = new Entry[length];
         count = 0;
 

@@ -137,7 +137,7 @@ public final class DESedeWrapCipher extends CipherSpi {
         if (decrypting) {
             result = inputLen - 16;
         } else {
-            result = inputLen + 16;
+            result = CipherCore.addExact(inputLen, 16);
         }
         return (result < 0? 0:result);
     }
@@ -453,12 +453,15 @@ public final class DESedeWrapCipher extends CipherSpi {
         }
 
         byte[] cks = getChecksum(keyVal);
-        byte[] out = new byte[iv.length + keyVal.length + cks.length];
+        byte[] out = new byte[CipherCore.addExact(iv.length,
+                CipherCore.addExact(keyVal.length, cks.length))];
 
         System.arraycopy(keyVal, 0, out, iv.length, keyVal.length);
-        System.arraycopy(cks, 0, out, iv.length+keyVal.length, cks.length);
-        cipher.encrypt(out, iv.length, keyVal.length+cks.length,
-                       out, iv.length);
+        System.arraycopy(cks, 0, out,
+                CipherCore.addExact(iv.length, keyVal.length), cks.length);
+
+        cipher.encrypt(out, iv.length,
+                CipherCore.addExact(keyVal.length, cks.length), out, iv.length);
 
         System.arraycopy(iv, 0, out, 0, iv.length);
         // reverse the array content

@@ -32,12 +32,7 @@ import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Hashtable;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import javax.lang.model.SourceVersion;
 
@@ -142,6 +137,10 @@ public class SerialFilterTest implements Serializable {
         Object[] objArray = new Object[7];
         objArray[objArray.length - 1] = objArray;
 
+        List<Class<?>> classList = new ArrayList<>();
+        classList.add(HashSet.class);
+        classList.addAll(Collections.nCopies(21, Map.Entry[].class));
+
         Object[][] objects = {
                 { null, 0, -1, 0, 0, 0,
                         Arrays.asList()},        // no callback, no values
@@ -153,8 +152,9 @@ public class SerialFilterTest implements Serializable {
                         Arrays.asList(SerialFilterTest.class)},
                 { new byte[14], 2, 14, 2, 1, 27,
                         Arrays.asList(byteArray.getClass(), byteArray.getClass())},
-                { deepHashSet(10), 48, -1, 50, 11, 619,
-                        Arrays.asList(HashSet.class)},
+                // maxarray changed for Java 6 from "4" to "16"
+                // HashSet.readObject isn't optimal, see JDK-8016252
+                { deepHashSet(10), 69, 16, 50, 11, 619, classList },
         };
         return objects;
     }
