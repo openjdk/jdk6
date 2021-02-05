@@ -386,6 +386,18 @@ public class JPEGImageReader extends ImageReader {
         }
     }
 
+    private void skipPastImage(int imageIndex) {
+        cbLock.lock();
+        try {
+            gotoImage(imageIndex);
+            skipImage();
+        } catch (IOException e) {
+        } catch (IndexOutOfBoundsException e) {
+        } finally {
+            cbLock.unlock();
+        }
+    }
+
     private int getNumImagesOnThread(boolean allowSearch)
       throws IOException {
         if (numImages != 0) {
@@ -1216,7 +1228,8 @@ public class JPEGImageReader extends ImageReader {
         // Note that getData disables acceleration on buffer, but it is
         // just a 1-line intermediate data transfer buffer that will not
         // affect the acceleration of the resulting image.
-        aborted = readImage(structPointer,
+        aborted = readImage(imageIndex,
+                            structPointer,
                             buffer.getData(),
                             numRasterBands,
                             srcBands,
@@ -1378,7 +1391,8 @@ public class JPEGImageReader extends ImageReader {
     /**
      * Returns <code>true</code> if the read was aborted.
      */
-    private native boolean readImage(long structPointer,
+    private native boolean readImage(int imageIndex,
+                                     long structPointer,
                                      byte [] buffer,
                                      int numRasterBands,
                                      int [] srcBands,
