@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -465,6 +465,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _code_buffer("Compile::Fill_buffer"),
                   _orig_pc_slot(0),
                   _orig_pc_slot_offset_in_bytes(0),
+                  _has_method_handle_invokes(false),
                   _node_bundling_limit(0),
                   _node_bundling_base(NULL),
                   _java_calls(0),
@@ -759,6 +760,7 @@ Compile::Compile( ciEnv* ci_env,
     _do_escape_analysis(false),
     _failure_reason(NULL),
     _code_buffer("Compile::Fill_buffer"),
+    _has_method_handle_invokes(false),
     _node_bundling_limit(0),
     _node_bundling_base(NULL),
     _java_calls(0),
@@ -932,6 +934,7 @@ void Compile::Init(int aliaslevel) {
 
   _intrinsics = NULL;
   _macro_nodes = new GrowableArray<Node*>(comp_arena(), 8,  0, NULL);
+  _predicate_opaqs = new GrowableArray<Node*>(comp_arena(), 8,  0, NULL);
   register_library_intrinsics();
 }
 
@@ -1553,6 +1556,19 @@ void Compile::Finish_Warm() {
   }
 }
 
+//---------------------cleanup_loop_predicates-----------------------
+// Remove the opaque nodes that protect the predicates so that all unused
+// checks and uncommon_traps will be eliminated from the ideal graph
+void Compile::cleanup_loop_predicates(PhaseIterGVN &igvn) {
+  if (predicate_count()==0) return;
+  for (int i = predicate_count(); i > 0; i--) {
+    Node * n = predicate_opaque1_node(i-1);
+    assert(n->Opcode() == Op_Opaque1, "must be");
+    igvn.replace_node(n, n->in(1));
+  }
+  assert(predicate_count()==0, "should be clean!");
+  igvn.optimize();
+}
 
 //------------------------------Optimize---------------------------------------
 // Given a graph, optimize it.
@@ -1594,7 +1610,7 @@ void Compile::Optimize() {
   if((loop_opts_cnt > 0) && (has_loops() || has_split_ifs())) {
     {
       TracePhase t2("idealLoop", &_t_idealLoop, true);
-      PhaseIdealLoop ideal_loop( igvn, NULL, true );
+      PhaseIdealLoop ideal_loop( igvn, true, UseLoopPredicate);
       loop_opts_cnt--;
       if (major_progress()) print_method("PhaseIdealLoop 1", 2);
       if (failing())  return;
@@ -1602,7 +1618,7 @@ void Compile::Optimize() {
     // Loop opts pass if partial peeling occurred in previous pass
     if(PartialPeelLoop && major_progress() && (loop_opts_cnt > 0)) {
       TracePhase t3("idealLoop", &_t_idealLoop, true);
-      PhaseIdealLoop ideal_loop( igvn, NULL, false );
+      PhaseIdealLoop ideal_loop( igvn, false, UseLoopPredicate);
       loop_opts_cnt--;
       if (major_progress()) print_method("PhaseIdealLoop 2", 2);
       if (failing())  return;
@@ -1610,9 +1626,14 @@ void Compile::Optimize() {
     // Loop opts pass for loop-unrolling before CCP
     if(major_progress() && (loop_opts_cnt > 0)) {
       TracePhase t4("idealLoop", &_t_idealLoop, true);
-      PhaseIdealLoop ideal_loop( igvn, NULL, false );
+      PhaseIdealLoop ideal_loop( igvn, false, UseLoopPredicate);
       loop_opts_cnt--;
       if (major_progress()) print_method("PhaseIdealLoop 3", 2);
+    }
+    if (!failing()) {
+      // Verify that last round of loop opts produced a valid graph
+      NOT_PRODUCT( TracePhase t2("idealLoopVerify", &_t_idealLoopVerify, TimeCompiler); )
+      PhaseIdealLoop::verify(igvn);
     }
   }
   if (failing())  return;
@@ -1643,15 +1664,31 @@ void Compile::Optimize() {
   // peeling, unrolling, etc.
   if(loop_opts_cnt > 0) {
     debug_only( int cnt = 0; );
+    bool loop_predication = UseLoopPredicate;
     while(major_progress() && (loop_opts_cnt > 0)) {
       TracePhase t2("idealLoop", &_t_idealLoop, true);
       assert( cnt++ < 40, "infinite cycle in loop optimization" );
-      PhaseIdealLoop ideal_loop( igvn, NULL, true );
+      PhaseIdealLoop ideal_loop( igvn, true, loop_predication);
       loop_opts_cnt--;
       if (major_progress()) print_method("PhaseIdealLoop iterations", 2);
       if (failing())  return;
+      // Perform loop predication optimization during first iteration after CCP.
+      // After that switch it off and cleanup unused loop predicates.
+      if (loop_predication) {
+        loop_predication = false;
+        cleanup_loop_predicates(igvn);
+        if (failing())  return;
+      }
     }
   }
+
+  {
+    // Verify that all previous optimizations produced a valid graph
+    // at least to this point, even if no loop optimizations were done.
+    NOT_PRODUCT( TracePhase t2("idealLoopVerify", &_t_idealLoopVerify, TimeCompiler); )
+    PhaseIdealLoop::verify(igvn);
+  }
+
   {
     NOT_PRODUCT( TracePhase t2("macroExpand", &_t_macroExpand, TimeCompiler); )
     PhaseMacroExpand  mex(igvn);
@@ -1839,6 +1876,7 @@ void Compile::dump_asm(int *pcs, uint pc_limit) {
           !n->is_Phi() &&       // a few noisely useless nodes
           !n->is_Proj() &&
           !n->is_MachTemp() &&
+          !n->is_SafePointScalarObject() &&
           !n->is_Catch() &&     // Would be nice to print exception table targets
           !n->is_MergeMem() &&  // Not very interesting
           !n->is_top() &&       // Debug info table constants
@@ -2593,7 +2631,7 @@ bool Compile::final_graph_reshaping() {
 
   // If original bytecodes contained a mixture of floats and doubles
   // check if the optimizer has made it homogenous, item (3).
-  if( Use24BitFPMode && Use24BitFP &&
+  if( Use24BitFPMode && Use24BitFP && UseSSE == 0 &&
       frc.get_float_count() > 32 &&
       frc.get_double_count() == 0 &&
       (10 * frc.get_call_count() < frc.get_float_count()) ) {

@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -26,7 +26,7 @@
  * @test
  * @bug 6865031
  * @summary Application gives bad result (throws bad exception) with compressed oops
- * @run main/othervm -XX:+UseCompressedOops -XX:HeapBaseMinAddress=32g -XX:-LoopUnswitching -XX:CompileCommand=inline,AbstractMemoryEfficientList.equals Test hello goodbye
+ * @run main/othervm -XX:+IgnoreUnrecognizedVMOptions -XX:+UseCompressedOops -XX:HeapBaseMinAddress=32g -XX:-LoopUnswitching -XX:CompileCommand=inline,AbstractMemoryEfficientList.equals Test hello goodbye
  */
 
 import java.lang.ref.ReferenceQueue;

@@ -1,12 +1,12 @@
 /*
- * Copyright 2005-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2005, 2006, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
+ * published by the Free Software Foundation.  Oracle designates this
  * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -18,9 +18,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.sun.java.swing.plaf.nimbus;
 
@@ -261,6 +261,42 @@ public class NimbusLookAndFeel extends SynthLookAndFeel {
      */
     @Override public boolean shouldUpdateStyleOnAncestorChanged() {
         return true;
+    }
+
+    /**
+     * <p>
+     * Returns whether or not the UIs should update their styles when a
+     * particular event occurs.  Returns {@code true} when one of the following
+     * properties change:
+     * </p>
+     * <ul>
+     *   <li>{@code "name"}
+     *   <li>{@code "ancestor"}
+     *   <li>{@code "Nimbus.Overrides"}
+     *   <li>{@code "Nimbus.Overrides.InheritDefaults"}
+     *   <li>{@code "JComponent.sizeVariant"}
+     * </ul>
+     *
+     * @param ev a {@code PropertyChangeEvent}
+     * @return whether or not the UIs should update their styles
+     *
+     */
+    public boolean shouldUpdateStyleOnEvent(PropertyChangeEvent ev) {
+        String eName = ev.getPropertyName();
+
+        // These properties affect style cached inside NimbusDefaults (6860433)
+        if ("name" == eName ||
+            "ancestor" == eName ||
+            "Nimbus.Overrides" == eName ||
+            "Nimbus.Overrides.InheritDefaults" == eName ||
+            "JComponent.sizeVariant" == eName) {
+
+            JComponent c = (JComponent) ev.getSource();
+            defaults.clearOverridesCache(c);
+            return true;
+        }
+
+        return false;
     }
 
     /**
