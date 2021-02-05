@@ -67,8 +67,6 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
     private SecureRandom random;
 
     // useful constants
-    private static final BigInteger ZERO = BigInteger.valueOf(0);
-    private static final BigInteger ONE = BigInteger.valueOf(1);
     private static final BigInteger TWO = BigInteger.valueOf(2);
 
     public DSAParameterGenerator() {
@@ -83,11 +81,11 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
      */
     @Override
     protected void engineInit(int strength, SecureRandom random) {
-        if ((strength != 2048) &&
+        if ((strength != 2048) && (strength != 3072) &&
             ((strength < 512) || (strength > 1024) || (strength % 64 != 0))) {
             throw new InvalidParameterException(
                 "Unexpected strength (size of prime): " + strength +
-                ". Prime size should be 512-1024, or 2048");
+                ". Prime size should be 512-1024, 2048, or 3072");
         }
         this.valueL = strength;
         this.valueN = getDefDSASubprimeSize(strength);
@@ -113,10 +111,7 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
             throw new InvalidAlgorithmParameterException("Invalid parameter");
         }
         DSAGenParameterSpec dsaGenParams = (DSAGenParameterSpec)genParamSpec;
-        if (dsaGenParams.getPrimePLength() > 2048) {
-            throw new InvalidParameterException
-                ("Prime size should be 512 - 1024, or 2048");
-        }
+
         // directly initialize using the already validated values
         this.valueL = dsaGenParams.getPrimePLength();
         this.valueN = dsaGenParams.getSubprimeQLength();
@@ -129,6 +124,7 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
      *
      * @return the new AlgorithmParameters object
      */
+    @Override
     protected AlgorithmParameters engineGenerateParameters() {
         AlgorithmParameters algParams = null;
         try {
@@ -207,8 +203,9 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
             primeCertainty = 80;
         } else if (valueL == 2048) {
             primeCertainty = 112;
+        } else if (valueL == 3072) {
+            primeCertainty = 128;
         }
-
         if (primeCertainty < 0) {
             throw new ProviderException("Invalid valueL: " + valueL);
         }
@@ -225,11 +222,14 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
                     mod(TWO.pow(valueN - 1));
 
                 /* Step 7 */
-                resultQ = TWO.pow(valueN - 1).add(U).add(ONE). subtract(U.mod(TWO));
+                resultQ = TWO.pow(valueN - 1)
+                            .add(U)
+                            .add(BigInteger.ONE)
+                            .subtract(U.mod(TWO));
             } while (!resultQ.isProbablePrime(primeCertainty));
 
             /* Step 10 */
-            BigInteger offset = ONE;
+            BigInteger offset = BigInteger.ONE;
             /* Step 11 */
             for (counter = 0; counter < 4*valueL; counter++) {
                 BigInteger V[] = new BigInteger[n + 1];
@@ -245,13 +245,14 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
                 for (int i = 1; i < n; i++) {
                     W = W.add(V[i].multiply(TWO.pow(i * outLen)));
                 }
-                W = W.add((V[n].mod(TWO.pow(b))).multiply(TWO.pow(n * outLen)));
+                W = W.add((V[n].mod(TWO.pow(b)))
+                               .multiply(TWO.pow(n * outLen)));
                 /* Step 11.3 */
                 BigInteger twoLm1 = TWO.pow(valueL - 1);
                 BigInteger X = W.add(twoLm1);
                 /* Step 11.4, 11.5 */
                 BigInteger c = X.mod(resultQ.multiply(TWO));
-                resultP = X.subtract(c.subtract(ONE));
+                resultP = X.subtract(c.subtract(BigInteger.ONE));
                 /* Step 11.6, 11.7 */
                 if (resultP.compareTo(twoLm1) > -1
                     && resultP.isProbablePrime(primeCertainty)) {
@@ -261,7 +262,7 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
                     return result;
                 }
                 /* Step 11.9 */
-                offset = offset.add(BigInteger.valueOf(n)).add(ONE);
+                offset = offset.add(BigInteger.valueOf(n)).add(BigInteger.ONE);
              }
         }
 
@@ -276,14 +277,14 @@ public class DSAParameterGenerator extends AlgorithmParameterGeneratorSpi {
      * @param the <code>g</code>
      */
     private static BigInteger generateG(BigInteger p, BigInteger q) {
-        BigInteger h = ONE;
+        BigInteger h = BigInteger.ONE;
         /* Step 1 */
-        BigInteger pMinusOneOverQ = (p.subtract(ONE)).divide(q);
-        BigInteger resultG = ONE;
+        BigInteger pMinusOneOverQ = (p.subtract(BigInteger.ONE)).divide(q);
+        BigInteger resultG = BigInteger.ONE;
         while (resultG.compareTo(TWO) < 0) {
             /* Step 3 */
             resultG = h.modPow(pMinusOneOverQ, p);
-            h = h.add(ONE);
+            h = h.add(BigInteger.ONE);
         }
         return resultG;
     }

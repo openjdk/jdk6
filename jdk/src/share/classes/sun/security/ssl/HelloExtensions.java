@@ -94,6 +94,8 @@ final class HelloExtensions {
                         new SupportedEllipticPointFormatsExtension(s, extlen);
             } else if (extType == ExtensionType.EXT_RENEGOTIATION_INFO) {
                 extension = new RenegotiationInfoExtension(s, extlen);
+            } else if (extType == ExtensionType.EXT_EXTENDED_MASTER_SECRET) {
+                extension = new ExtendedMasterSecretExtension(s, extlen);
             } else {
                 extension = new UnknownExtension(s, extlen, extType);
             }
@@ -176,7 +178,7 @@ final class ExtensionType {
     }
 
     static List<ExtensionType> knownExtensions =
-                                            new ArrayList<ExtensionType>(9);
+                                            new ArrayList<ExtensionType>(14);
 
     static ExtensionType get(int id) {
         for (ExtensionType ext : knownExtensions) {
@@ -228,6 +230,10 @@ final class ExtensionType {
     // extensions defined in RFC 5246
     final static ExtensionType EXT_SIGNATURE_ALGORITHMS =
             e(0x000D, "signature_algorithms");   // IANA registry value: 13
+
+    // extensions defined in RFC 7627
+    static final ExtensionType EXT_EXTENDED_MASTER_SECRET =
+            e(0x0017, "extended_master_secret"); // IANA registry value: 23
 
     // extensions defined in RFC 5746
     final static ExtensionType EXT_RENEGOTIATION_INFO =

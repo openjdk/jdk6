@@ -256,6 +256,10 @@ static final class ClientHello extends HandshakeMessage {
         extensions.add(renegotiationInfo);
     }
 
+    void addExtendedMasterSecretExtension() {
+        extensions.add(new ExtendedMasterSecretExtension());
+    }
+
     @Override
     int messageType() { return ht_client_hello; }
 
@@ -893,7 +897,7 @@ class ECDH_ServerKeyExchange extends ServerKeyExchange
         }
 
         Signature sig = getSignature(privateKey.getAlgorithm());
-        sig.initSign(privateKey);
+        sig.initSign(privateKey, sr);
 
         updateSignature(sig, clntNonce, svrNonce);
         signatureBytes = sig.sign();

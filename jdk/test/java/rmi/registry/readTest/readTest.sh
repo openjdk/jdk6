@@ -29,6 +29,10 @@
 # @run shell readTest.sh
 
 OS=`uname -s`
+VER=`uname -r`
+ARGS=""
+REGARGS=""
+
 case "$OS" in
   SunOS | Linux | Darwin | AIX )
     PS=":"
@@ -39,11 +43,19 @@ case "$OS" in
     PS=";"
     FS="\\"
     FILEURL="file:/"
+    if [ "$VER" -eq "5" ]; then
+        ARGS="-Djdk.net.ephemeralPortRange.low=1024 -Djdk.net.ephemeralPortRange.high=65000"
+        REGARGS="-J-Djdk.net.ephemeralPortRange.low=1024 -J-Djdk.net.ephemeralPortRange.high=65000"
+    fi
     ;;
   CYGWIN* )
     PS=";"
     FS="/"
     FILEURL="file:/"
+    if [ "${VER}" -eq "5" ]; then
+        ARGS="-Djdk.net.ephemeralPortRange.low=1024 -Djdk.net.ephemeralPortRange.high=65000"
+        REGARGS="-J-Djdk.net.ephemeralPortRange.low=1024 -J-Djdk.net.ephemeralPortRange.high=65000"
+    fi
     ;;
   * )
     echo "Unrecognized system!"
@@ -51,7 +63,7 @@ case "$OS" in
     ;;
 esac
 
-TEST_CLASSPATH=.$PS$TESTCLASSES
+TEST_CLASSPATH=.${PS}${TESTCLASSES}${PS}${TESTCLASSES}{FS}..{FS}..{FS}testlibrary
 cp -r ${TESTSRC}${FS}* .
 ${TESTJAVA}${FS}bin${FS}javac testPkg${FS}*java
 ${TESTJAVA}${FS}bin${FS}javac -cp $TEST_CLASSPATH readTest.java
@@ -60,8 +72,8 @@ mkdir rmi_tmp
 RMIREG_OUT=rmi.out
 #start rmiregistry without any local classes on classpath
 cd rmi_tmp
-${TESTJAVA}${FS}bin${FS}rmiregistry -J-Djava.rmi.server.useCodebaseOnly=false \
-    ${TESTTOOLVMOPTS} 64005 > ..${FS}${RMIREG_OUT} 2>&1 &
+${TESTJAVA}${FS}bin${FS}rmiregistry ${REGARGS} -J-Djava.rmi.server.useCodebaseOnly=false \
+    ${TESTTOOLVMOPTS} 60005 > ..${FS}${RMIREG_OUT} 2>&1 &
 RMIREG_PID=$!
 # allow some time to start
 sleep 3
@@ -76,7 +88,7 @@ case "$OS" in
     ;;  
 esac
 # trailing / after code base is important for rmi codebase property.
-${TESTJAVA}${FS}bin${FS}java ${TESTVMOPTS} -cp $TEST_CLASSPATH -Djava.rmi.server.codebase=${FILEURL}$CODEBASE/ readTest > OUT.TXT 2>&1 &
+${TESTJAVA}${FS}bin${FS}java ${TESTVMOPTS} -cp $TEST_CLASSPATH ${ARGS} -Djava.rmi.server.codebase=${FILEURL}$CODEBASE/ readTest > OUT.TXT 2>&1 &
 TEST_PID=$!
 #bulk of testcase - let it run for a while
 sleep 5
@@ -99,7 +111,7 @@ grep "Test passed" OUT.TXT
 result2=$?
 
 if [ $result1 -eq 0  -a $result2 -eq 0 ]
-then 
+then
     echo "Passed"
     exitCode=0;
 else
@@ -107,6 +119,6 @@ else
     exitCode=1
 fi
 rm -rf OUT.TXT ${RMIREG_OUT} rmi_tmp
-exit ${exitCode}    
+exit ${exitCode}
 
 

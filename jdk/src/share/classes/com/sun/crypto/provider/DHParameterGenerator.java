@@ -25,6 +25,7 @@
 
 package com.sun.crypto.provider;
 
+import java.math.BigInteger;
 import java.security.*;
 import java.security.spec.*;
 import javax.crypto.spec.DHParameterSpec;
@@ -47,8 +48,7 @@ import static sun.security.util.SecurityProviderConstants.DEF_DH_KEY_SIZE;
  * @see java.security.spec.AlgorithmParameterSpec
  * @see DHParameters
  */
-public final class DHParameterGenerator
-extends AlgorithmParameterGeneratorSpi {
+public final class DHParameterGenerator extends AlgorithmParameterGeneratorSpi {
 
     // The size in bits of the prime modulus
     private int primeSize = DEF_DH_KEY_SIZE;
@@ -59,6 +59,19 @@ extends AlgorithmParameterGeneratorSpi {
     // The source of randomness
     private SecureRandom random = null;
 
+    private static void checkKeySize(int keysize)
+            throws InvalidParameterException {
+        boolean supported = ((keysize == 2048) || (keysize == 3072) ||
+            ((keysize >= 512) && (keysize <= 1024) && ((keysize & 0x3F) == 0)));
+
+        if (!supported) {
+            throw new InvalidParameterException(
+                    "DH key size must be multiple of 64 and range " +
+                    "from 512 to 1024 (inclusive), or 2048, 3072. " +
+                    "The specific key size " + keysize + " is not supported");
+        }
+    }
+
     /**
      * Initializes this parameter generator for a certain keysize
      * and source of randomness.
@@ -67,13 +80,9 @@ extends AlgorithmParameterGeneratorSpi {
      * @param keysize the keysize (size of prime modulus) in bits
      * @param random the source of randomness
      */
+    @Override
     protected void engineInit(int keysize, SecureRandom random) {
-        if ((keysize < 512) || (keysize > 2048) || (keysize % 64 != 0)) {
-            throw new InvalidParameterException("Keysize must be multiple "
-                                                + "of 64, and can only range "
-                                                + "from 512 to 2048 "
-                                                + "(inclusive)");
-        }
+        checkKeySize(keysize);
         this.primeSize = keysize;
         this.random = random;
     }
@@ -89,34 +98,31 @@ extends AlgorithmParameterGeneratorSpi {
      * @exception InvalidAlgorithmParameterException if the given parameter
      * generation values are inappropriate for this parameter generator
      */
+    @Override
     protected void engineInit(AlgorithmParameterSpec genParamSpec,
-                              SecureRandom random)
-        throws InvalidAlgorithmParameterException {
-            if (!(genParamSpec instanceof DHGenParameterSpec)) {
-                throw new InvalidAlgorithmParameterException
-                    ("Inappropriate parameter type");
-            }
+          SecureRandom random) throws InvalidAlgorithmParameterException {
 
-            DHGenParameterSpec dhParamSpec = (DHGenParameterSpec)genParamSpec;
+        if (!(genParamSpec instanceof DHGenParameterSpec)) {
+            throw new InvalidAlgorithmParameterException
+                ("Inappropriate parameter type");
+        }
 
-            primeSize = dhParamSpec.getPrimeSize();
-            if ((primeSize<512) || (primeSize>2048) || (primeSize%64 != 0)) {
-                throw new InvalidAlgorithmParameterException
-                    ("Modulus size must be multiple of 64, and can only range "
-                     + "from 512 to 2048 (inclusive)");
-            }
+        DHGenParameterSpec dhParamSpec = (DHGenParameterSpec)genParamSpec;
+        primeSize = dhParamSpec.getPrimeSize();
+        exponentSize = dhParamSpec.getExponentSize();
+        if ((exponentSize <= 0) || (exponentSize >= primeSize)) {
+            throw new InvalidAlgorithmParameterException(
+                    "Exponent size (" + exponentSize +
+                    ") must be positive and less than modulus size (" +
+                    primeSize + ")");
+        }
+        try {
+            checkKeySize(primeSize);
+        } catch (InvalidParameterException ipe) {
+            throw new InvalidAlgorithmParameterException(ipe.getMessage());
+        }
 
-            exponentSize = dhParamSpec.getExponentSize();
-            if (exponentSize <= 0) {
-                throw new InvalidAlgorithmParameterException
-                    ("Exponent size must be greater than zero");
-            }
-
-            // Require exponentSize < primeSize
-            if (exponentSize >= primeSize) {
-                throw new InvalidAlgorithmParameterException
-                    ("Exponent size must be less than modulus size");
-            }
+        this.random = random;
     }
 
     /**
@@ -124,24 +130,26 @@ extends AlgorithmParameterGeneratorSpi {
      *
      * @return the new AlgorithmParameters object
      */
+    @Override
     protected AlgorithmParameters engineGenerateParameters() {
-        AlgorithmParameters algParams = null;
 
         if (this.exponentSize == 0) {
             this.exponentSize = this.primeSize - 1;
         }
+        if (random == null) {
+            random = SunJCE.RANDOM;
+        }
 
-        if (this.random == null)
-            this.random = SunJCE.RANDOM;
+        BigInteger paramP = null;
+        BigInteger paramG = null;
 
         try {
-            AlgorithmParameterGenerator paramGen;
-            DSAParameterSpec dsaParamSpec;
-
-            paramGen = AlgorithmParameterGenerator.getInstance("DSA");
-            paramGen.init(this.primeSize, random);
-            algParams = paramGen.generateParameters();
-            dsaParamSpec = algParams.getParameterSpec(DSAParameterSpec.class);
+            AlgorithmParameterGenerator dsaParamGen =
+                    AlgorithmParameterGenerator.getInstance("DSA");
+            dsaParamGen.init(primeSize, random);
+            AlgorithmParameters dsaParams = dsaParamGen.generateParameters();
+            DSAParameterSpec dsaParamSpec =
+                    dsaParams.getParameterSpec(DSAParameterSpec.class);
 
             DHParameterSpec dhParamSpec;
             if (this.exponentSize > 0) {
@@ -152,19 +160,13 @@ extends AlgorithmParameterGeneratorSpi {
                 dhParamSpec = new DHParameterSpec(dsaParamSpec.getP(),
                                                   dsaParamSpec.getG());
             }
-            algParams = AlgorithmParameters.getInstance("DH", "SunJCE");
+            AlgorithmParameters algParams =
+                    AlgorithmParameters.getInstance("DH", "SunJCE");
             algParams.init(dhParamSpec);
-        } catch (InvalidParameterSpecException e) {
-            // this should never happen
-            throw new RuntimeException(e.getMessage());
-        } catch (NoSuchAlgorithmException e) {
-            // this should never happen, because we provide it
-            throw new RuntimeException(e.getMessage());
-        } catch (NoSuchProviderException e) {
-            // this should never happen, because we provide it
-            throw new RuntimeException(e.getMessage());
-        }
 
-        return algParams;
+            return algParams;
+        } catch (Exception ex) {
+            throw new ProviderException("Unexpected exception", ex);
+        }
     }
 }

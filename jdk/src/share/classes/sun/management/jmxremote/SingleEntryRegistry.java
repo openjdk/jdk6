@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,7 +43,12 @@ import sun.rmi.registry.RegistryImpl;
 public class SingleEntryRegistry extends RegistryImpl {
     SingleEntryRegistry(int port, String name, Remote object)
             throws RemoteException {
-        super(port);
+        super(port, null, null, new ObjectInputFilter() {
+            @Override
+            public Status checkInput(FilterInfo info) {
+                return SingleEntryRegistry.singleRegistryFilter(info);
+            }
+        });
         this.name = name;
         this.object = object;
     }
@@ -54,7 +59,12 @@ public class SingleEntryRegistry extends RegistryImpl {
                         String name,
                         Remote object)
             throws RemoteException {
-        super(port, csf, ssf, singleRegistryFilter());
+        super(port, csf, ssf, new ObjectInputFilter() {
+            @Override
+            public Status checkInput(FilterInfo info) {
+                return SingleEntryRegistry.singleRegistryFilter(info);
+            }
+        });
         this.name = name;
         this.object = object;
     }
@@ -90,18 +100,13 @@ public class SingleEntryRegistry extends RegistryImpl {
      * @param info a reference to the serialization filter information
      * @return Status.REJECTED if parameters are out of range
      */
-    private static ObjectInputFilter singleRegistryFilter() {
-        return new ObjectInputFilter() {
-            @Override
-            public Status checkInput(FilterInfo info) {
-                return (info.serialClass() != null ||
-                        info.depth() > 2 ||
-                        info.references() > 4 ||
-                        info.arrayLength() >= 0)
-                        ? ObjectInputFilter.Status.REJECTED
-                        : ObjectInputFilter.Status.ALLOWED;
-            }
-        };
+    private static ObjectInputFilter.Status singleRegistryFilter(ObjectInputFilter.FilterInfo info) {
+        return (info.serialClass() != null ||
+                info.depth() > 2 ||
+                info.references() > 4 ||
+                info.arrayLength() >= 0)
+                ? ObjectInputFilter.Status.REJECTED
+                : ObjectInputFilter.Status.ALLOWED;
     }
 
     private final String name;

@@ -81,10 +81,11 @@ public class CheckPackageAccess {
         "com.sun.script.",
         "oracle.jrockit.jfr.",
         "org.jcp.xml.dsig.internal.",
+        "jdk.xml.internal."
     };
 
     public static void main(String[] args) throws Exception {
-        List<String> pkgs = new ArrayList<>(Arrays.asList(packages));
+        List<String> pkgs = new ArrayList<String>(Arrays.asList(packages));
         String osName = System.getProperty("os.name");
         if (osName.contains("OS X")) {
             pkgs.add("apple.");  // add apple package for OS X
@@ -140,7 +141,7 @@ public class CheckPackageAccess {
     }
 
     private static List<String> getPackages(String p) {
-        List<String> packages = new ArrayList<>();
+        List<String> packages = new ArrayList<String>();
         if (p != null && !p.equals("")) {
             StringTokenizer tok = new StringTokenizer(p, ",");
             while (tok.hasMoreElements()) {
