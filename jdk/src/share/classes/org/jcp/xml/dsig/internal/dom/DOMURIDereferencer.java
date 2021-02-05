@@ -72,6 +72,11 @@ public class DOMURIDereferencer implements URIDereferencer {
 
         boolean secVal = Utils.secureValidation(context);
 
+        if (secVal && Policy.restrictReferenceUriScheme(uri)) {
+            throw new URIReferenceException(
+                "Uri " + uri + " is forbidden when secure validation is enabled");
+        }
+
         // Check if same-document URI and already registered on the context
         if (uri != null && uri.length() != 0 && uri.charAt(0) == '#') {
             String id = uri.substring(1);
@@ -82,21 +87,28 @@ public class DOMURIDereferencer implements URIDereferencer {
                 id = id.substring(i1+1, i2);
             }
 
-            Node refElem = dcc.getElementById(id);
-            if (refElem != null) {
-                if (secVal) {
+            // check if element is registered by Id
+            Node referencedElem = uriAttr.getOwnerDocument().getElementById(id);
+            if (referencedElem == null) {
+                // see if element is registered in DOMCryptoContext
+                referencedElem = dcc.getElementById(id);
+            }
+
+            if (referencedElem != null) {
+                if (secVal && Policy.restrictDuplicateIds()) {
                     Element start =
-                        refElem.getOwnerDocument().getDocumentElement();
+                        referencedElem.getOwnerDocument().getDocumentElement();
                     if (!XMLUtils.protectAgainstWrappingAttack(start,
-                                                               (Element)refElem,
+                                                               (Element)referencedElem,
                                                                id)) {
-                        String error = "Multiple Elements with the same ID " +
-                                       id + " were detected";
+                        String error = "Multiple Elements with the same ID "
+                            + id + " detected when secure validation"
+                            + " is enabled";
                         throw new URIReferenceException(error);
                     }
                 }
 
-                XMLSignatureInput result = new XMLSignatureInput(refElem);
+                XMLSignatureInput result = new XMLSignatureInput(referencedElem);
                 if (!uri.substring(1).startsWith("xpointer(id(")) {
                     result.setExcludeComments(true);
                 }

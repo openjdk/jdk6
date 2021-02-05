@@ -22,7 +22,7 @@
 #
 
 # @test
-# @bug 6543940
+# @bug 6543940 6868865
 # @summary Exception thrown when signing a jarfile in java 1.5
 #
 # @run shell oldsig.sh
@@ -77,5 +77,6 @@ ${TESTJAVA}${FS}bin${FS}jar uvf B.jar B.class
 ${TESTJAVA}${FS}bin${FS}jarsigner \
     -keystore ${TESTSRC}${FS}JarSigning.keystore \
     -storepass bbbbbb \
+    -digestalg SHA1 \
     B.jar c
 ${TESTJAVA}${FS}bin${FS}jarsigner -verify B.jar

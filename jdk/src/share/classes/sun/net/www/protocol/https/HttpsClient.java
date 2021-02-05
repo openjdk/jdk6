@@ -469,12 +469,16 @@ final class HttpsClient extends HttpClient
         }
 
         Certificate[] peerCerts = null;
+        String cipher = session.getCipherSuite();
         try {
             HostnameChecker checker = HostnameChecker.getInstance(
                                                 HostnameChecker.TYPE_TLS);
 
             Principal principal = getPeerPrincipal();
-            if (principal instanceof KerberosPrincipal) {
+            // X.500 principal or Kerberos principal.
+            // (Use ciphersuite check to determine whether Kerberos is present.)
+            if (cipher.startsWith("TLS_KRB5") &&
+                    principal instanceof KerberosPrincipal) {
                 if (!HostnameChecker.match(host, (KerberosPrincipal)principal)) {
                     throw new SSLPeerUnverifiedException("Hostname checker" +
                                 " failed for Kerberos");
@@ -507,7 +511,6 @@ final class HttpsClient extends HttpClient
             // ignore
         }
 
-        String cipher = session.getCipherSuite();
         if ((cipher != null) && (cipher.indexOf("_anon_") != -1)) {
             return;
         } else if ((hostnameVerifier != null) &&

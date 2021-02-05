@@ -145,11 +145,7 @@ public class Config {
             configFile = loadConfigFile();
             stanzaTable = parseStanzaTable(configFile);
 	} catch (IOException ioe) {
-	    KrbException ke = new KrbException("Could not load " +
-					       "configuration file " +
-					       ioe.getMessage());
-	    ke.initCause(ioe);
-	    throw(ke);
+            // No krb5.conf, no problem. We'll use DNS etc.
 	}
     }
 

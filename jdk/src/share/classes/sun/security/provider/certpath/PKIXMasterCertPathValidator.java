@@ -152,7 +152,8 @@ class PKIXMasterCertPathValidator {
                      */
                     CertPathValidatorException currentCause =
                         new CertPathValidatorException(cpve.getMessage(),
-                            cpve.getCause(), cpOriginal, cpSize - (i + 1));
+                            (cpve.getCause() != null) ? cpve.getCause() : cpve,
+                            cpOriginal, cpSize - (i + 1));
 
                     // Check if OCSP has confirmed that the cert was revoked
                     if (cpve instanceof CertificateRevokedException) {
