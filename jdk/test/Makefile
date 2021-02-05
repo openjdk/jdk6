@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -354,9 +354,10 @@ endif
 ifndef USE_JTREG_SAMEVM
   USE_JTREG_SAMEVM=false
 endif
-# With samevm, you cannot use -javaoptions?
+# With samevm, you cannot use -javaoptions? (-agentvm is more reliable -samevm)
 ifeq ($(USE_JTREG_SAMEVM),true)
-  JTREG_SAMEVM_OPTION = -samevm
+  #JTREG_SAMEVM_OPTION = -samevm
+  JTREG_SAMEVM_OPTION = -agentvm
   EXTRA_JTREG_OPTIONS += $(JTREG_SAMEVM_OPTION) $(JAVA_ARGS) $(JAVA_ARGS:%=-vmoption:%)
   JTREG_TEST_OPTIONS = $(JAVA_VM_ARGS:%=-vmoption:%)
 else
@@ -543,7 +544,7 @@ jdk_text: java/text sun/text
 #  This could be a hotspot vm issue. So someday, change this to Samevm.
 JDK_ALL_TARGETS += jdk_tools1
 jdk_tools1: com/sun/jdi
-	$(call RunOthevmBatch)
+	$(call RunOthervmBatch)
 
 # Stable othervm testruns (minus items from PROBLEM_LIST)
 #   Using samevm has serious problems with these tests
