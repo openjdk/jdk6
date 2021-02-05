@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -651,7 +651,8 @@ final class ClientHandshaker extends Handshaker {
         // Create a new session, we need to do the full handshake
         session = new SSLSessionImpl(protocolVersion, cipherSuite,
                             mesg.sessionId, getHostSE(), getPortSE(),
-                            (extendedMasterSecretExt != null));
+                            (extendedMasterSecretExt != null),
+                            getEndpointIdentificationAlgorithmSE());
         if (debug != null && Debug.isOn("handshake")) {
             System.out.println("** " + cipherSuite);
         }
@@ -1257,6 +1258,24 @@ final class ClientHandshaker extends Handshaker {
                         // by discarding abbreviate handshake.
                         session = null;
                     }
+                }
+            }
+
+            // ensure that the endpoint identification algorithm matches the
+            // one in the session
+            String identityAlg = getEndpointIdentificationAlgorithmSE();
+            if (session != null && identityAlg != null) {
+
+                String sessionIdentityAlg =
+                    session.getEndpointIdentificationAlgorithm();
+                if (!objectsEquals(identityAlg, sessionIdentityAlg)) {
+
+                    if (debug != null && Debug.isOn("session")) {
+                        System.out.println("%% can't resume, endpoint id" +
+                            " algorithm does not match, requested: " +
+                            identityAlg + ", cached: " + sessionIdentityAlg);
+                    }
+                    session = null;
                 }
             }
 
