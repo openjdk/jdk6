@@ -26,8 +26,9 @@
 #include "incls/_markSweep.cpp.incl"
 
 Stack<oop>              MarkSweep::_marking_stack;
-Stack<Klass*>           MarkSweep::_revisit_klass_stack;
 Stack<DataLayout*>      MarkSweep::_revisit_mdo_stack;
+Stack<Klass*>           MarkSweep::_revisit_klass_stack;
+Stack<ObjArrayTask>     MarkSweep::_objarray_stack;
 
 Stack<oop>              MarkSweep::_preserved_oop_stack;
 Stack<markOop>          MarkSweep::_preserved_mark_stack;
@@ -109,11 +110,19 @@ void MarkSweep::MarkAndPushClosure::do_oop(oop* p)       { mark_and_push(p); }
 void MarkSweep::MarkAndPushClosure::do_oop(narrowOop* p) { mark_and_push(p); }
 
 void MarkSweep::follow_stack() {
-  while (!_marking_stack.is_empty()) {
-    oop obj = _marking_stack.pop();
-    assert (obj->is_gc_marked(), "p must be marked");
-    obj->follow_contents();
-  }
+  do {
+    while (!_marking_stack.is_empty()) {
+      oop obj = _marking_stack.pop();
+      assert (obj->is_gc_marked(), "p must be marked");
+      obj->follow_contents();
+    }
+    // Process ObjArrays one at a time to avoid marking stack bloat.
+    if (!_objarray_stack.is_empty()) {
+      ObjArrayTask task = _objarray_stack.pop();
+      objArrayKlass* const k = (objArrayKlass*)task.obj()->blueprint();
+      k->oop_follow_contents(task.obj(), task.index());
+    }
+  } while (!_marking_stack.is_empty() || !_objarray_stack.is_empty());
 }
 
 MarkSweep::FollowStackClosure MarkSweep::follow_stack_closure;
@@ -127,7 +136,7 @@ void MarkSweep::preserve_mark(oop obj, markOop mark) {
   // We try to store preserved marks in the to space of the new generation since
   // this is storage which should be available.  Most of the time this should be
   // sufficient space for the marks we need to preserve but if it isn't we fall
-  // back in using Stacks to keep track of the overflow.
+  // back to using Stacks to keep track of the overflow.
   if (_preserved_count < _preserved_count_max) {
     _preserved_marks[_preserved_count++].init(obj, mark);
   } else {

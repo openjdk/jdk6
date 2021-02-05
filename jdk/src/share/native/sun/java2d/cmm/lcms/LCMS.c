@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -190,12 +190,12 @@ JNIEXPORT jlong JNICALL Java_sun_java2d_cmm_lcms_LCMS_createNativeTransform
                                        "sTrans.xf == NULL");
         JNU_ThrowByName(env, "java/awt/color/CMMException",
                         "Cannot get color transform");
+    } else {
+        Disposer_AddRecord(env, disposerRef, LCMS_freeTransform, sTrans.j);
     }
-
     if (iccArray != &_iccArray[0]) {
         free(iccArray);
     }
-    Disposer_AddRecord(env, disposerRef, LCMS_freeTransform, sTrans.j);
     return sTrans.j;
 }
 

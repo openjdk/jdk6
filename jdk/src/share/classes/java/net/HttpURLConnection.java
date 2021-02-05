@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -344,6 +344,12 @@ abstract public class HttpURLConnection extends URLConnection {
 
         for (int i = 0; i < methods.length; i++) {
             if (methods[i].equals(method)) {
+		if (method.equals("TRACE")) {
+		    SecurityManager s = System.getSecurityManager();
+		    if (s != null) {
+		        s.checkPermission(new NetPermission("allowHttpTrace"));
+		    }
+		}
                 this.method = method;
                 return;
             }
