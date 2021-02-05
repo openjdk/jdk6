@@ -46,14 +46,6 @@ class AwtMenu;
 
 class AwtMenuItem : public AwtObject {
 public:
-    // id's for methods executed on toolkit thread
-    enum {
-        MENUITEM_SETLABEL,
-        MENUITEM_ENABLE,
-        MENUITEM_SETSTATE,
-        MENUITEM_LAST
-    };
-
     /* java.awt.MenuComponent fields */
     static jfieldID fontID;
     static jfieldID appContextID;
@@ -78,7 +70,6 @@ public:
 
     virtual LPCTSTR GetClassName();
 
-    void AwtMenuItem::LinkObjects(jobject peer);
     static AwtMenuItem* Create(jobject self, jobject menu);
 
     INLINE AwtMenu* GetMenuContainer() { return m_menuContainer; }
@@ -148,6 +139,8 @@ public:
 
     void SetLabel(LPCTSTR sb);
     virtual void Enable(BOOL isEnabled);
+    virtual void UpdateContainerLayout();
+    virtual void RedrawMenuBar();
     void SetState(BOOL isChecked);
 
     /*
@@ -155,14 +148,16 @@ public:
      */
     MsgRouting WmNotify(UINT notifyCode);
 
-    virtual LRESULT WinThreadExecProc(ExecuteArgs * args);
     virtual BOOL IsDisabledAndPopup() {
         return FALSE;
     }
     virtual BOOL IsSeparator();
 
     // invoked on Toolkit thread
+    static void _SetState(void *param);
+    static void _SetEnable(void *param);
     static void _SetLabel(void *param);
+    static void _UpdateLayout(void *param);
 
 protected:
     AwtMenu* m_menuContainer;  /* The menu object containing this item */

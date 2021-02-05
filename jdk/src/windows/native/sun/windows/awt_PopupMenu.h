@@ -48,7 +48,7 @@ public:
     virtual LPCTSTR GetClassName();
 
     /* Create a new AwtPopupMenu.  This must be run on the main thread. */
-    static AwtPopupMenu* Create(jobject self, AwtComponent* parent);
+    static AwtPopupMenu* Create(jobject self, jobject parent);
 
     /* Display the popup modally. */
     void Show(JNIEnv *env, jobject event, BOOL isTrayIconPopup);

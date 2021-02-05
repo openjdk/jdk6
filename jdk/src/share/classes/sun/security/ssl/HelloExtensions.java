@@ -345,6 +345,9 @@ final class ServerNameExtension extends HelloExtension {
 
 final class SupportedEllipticCurvesExtension extends HelloExtension {
 
+    /* Class and subclass dynamic debugging support */
+    private static final Debug debug = Debug.getInstance("ssl");
+
     private static final int ARBITRARY_PRIME = 0xff01;
     private static final int ARBITRARY_CHAR2 = 0xff02;
 
@@ -461,6 +464,11 @@ final class SupportedEllipticCurvesExtension extends HelloExtension {
                     }   // ignore unknown curves
                 }
             }
+            if (idList.isEmpty() && JsseJce.isEcAvailable()) {
+                throw new IllegalArgumentException(
+                        "System property jdk.tls.namedGroups(" + property + ") " +
+                                "contains no supported elliptic curves");
+            }
         } else {        // default curves
             int[] ids;
             if (requireFips) {
@@ -485,16 +493,17 @@ final class SupportedEllipticCurvesExtension extends HelloExtension {
             }
         }
 
-        if (idList.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "System property jdk.tls.namedGroups(" + property + ") " +
-                            "contains no supported elliptic curves");
-        } else {
-            supportedCurveIds = new int[idList.size()];
-            int i = 0;
-            for (Integer id : idList) {
-                supportedCurveIds[i++] = id;
-            }
+        if (debug != null && idList.isEmpty()) {
+            debug.println(
+                    "Initialized [jdk.tls.namedGroups|default] list contains " +
+                            "no available elliptic curves. " +
+                            (property != null ? "(" + property + ")" : "[Default]"));
+        }
+
+        supportedCurveIds = new int[idList.size()];
+        int i = 0;
+        for (Integer id : idList) {
+            supportedCurveIds[i++] = id;
         }
     }
 
