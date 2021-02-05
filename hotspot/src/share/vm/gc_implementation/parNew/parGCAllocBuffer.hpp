@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)parGCAllocBuffer.hpp	1.30 07/05/29 09:44:13 JVM"
-#endif
 /*
- * Copyright 2001-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Forward decl.
@@ -44,8 +41,8 @@ protected:
   size_t    _allocated;     // in HeapWord units
   size_t    _wasted;        // in HeapWord units
   char tail[32];
-  static const size_t FillerHeaderSize;
-  static const size_t AlignmentReserve;
+  static size_t FillerHeaderSize;
+  static size_t AlignmentReserve;
 
 public:
   // Initializes the buffer to be empty, but with the given "word_sz".
@@ -66,22 +63,20 @@ public:
   // return NULL.
   HeapWord* allocate(size_t word_sz) {
     HeapWord* res = _top;
-    HeapWord* new_top = _top + word_sz;
-    if (new_top <= _end) {
-      _top = new_top;
+    if (pointer_delta(_end, _top) >= word_sz) {
+      _top = _top + word_sz;
       return res;
     } else {
       return NULL;
     }
   }
 
-  // Undo the last allocation in the buffer, which is required to be of the 
+  // Undo the last allocation in the buffer, which is required to be of the
   // "obj" of the given "word_sz".
   void undo_allocation(HeapWord* obj, size_t word_sz) {
-    assert(_top - word_sz >= _bottom
-	   && _top - word_sz == obj,
-	   "Bad undo_allocation");
-    _top = _top - word_sz;
+    assert(pointer_delta(_top, _bottom) >= word_sz, "Bad undo");
+    assert(pointer_delta(_top, obj)     == word_sz, "Bad undo");
+    _top = obj;
   }
 
   // The total (word) size of the buffer, including both allocated and
@@ -155,7 +150,7 @@ class PLABStats VALUE_OBJ_CLASS_SPEC {
   size_t _desired_plab_sz;// output of filter (below), suitably trimmed and quantized
   AdaptiveWeightedAverage
          _filter;         // integrator with decay
-  
+
  public:
   PLABStats(size_t desired_plab_sz_, unsigned wt) :
     _allocated(0),

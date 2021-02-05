@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)compile.hpp	1.232 07/09/28 10:23:10 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class Block;
@@ -34,6 +31,7 @@ class InlineTree;
 class Int_Array;
 class Matcher;
 class MachNode;
+class MachSafePointNode;
 class Node;
 class Node_Array;
 class Node_Notes;
@@ -55,12 +53,9 @@ class TypeFunc;
 class Unique_Node_List;
 class nmethod;
 class WarmCallInfo;
-#ifdef ENABLE_ZAP_DEAD_LOCALS
-class MachSafePointNode;
-#endif
 
 //------------------------------Compile----------------------------------------
-// This class defines a top-level Compiler invocation. 
+// This class defines a top-level Compiler invocation.
 
 class Compile : public Phase {
  public:
@@ -130,6 +125,7 @@ class Compile : public Phase {
   const int             _compile_id;
   const bool            _save_argument_registers; // save/restore arg regs for trampolines
   const bool            _subsume_loads;         // Load can be matched as part of a larger op.
+  const bool            _do_escape_analysis;    // Do escape analysis.
   ciMethod*             _method;                // The method being compiled.
   int                   _entry_bci;             // entry bci for osr methods.
   const TypeFunc*       _tf;                    // My kind of signature
@@ -158,12 +154,14 @@ class Compile : public Phase {
   uint                  _decompile_count;       // Cumulative decompilation counts.
   bool                  _do_inlining;           // True if we intend to do inlining
   bool                  _do_scheduling;         // True if we intend to do scheduling
+  bool                  _do_freq_based_layout;  // True if we intend to do frequency based block layout
   bool                  _do_count_invocations;  // True if we generate code to count invocations
   bool                  _do_method_data_update; // True if we generate code to update methodDataOops
   int                   _AliasLevel;            // Locally-adjusted version of AliasLevel flag.
   bool                  _print_assembly;        // True if we should dump assembly code for this compilation
 #ifndef PRODUCT
   bool                  _trace_opto_output;
+  bool                  _parsed_irreducible_loop; // True if ciTypeFlow detected irreducible loops during parsing
 #endif
 
   // Compilation environment.
@@ -225,7 +223,7 @@ class Compile : public Phase {
   PhaseCFG*             _cfg;                   // Results of CFG finding
   bool                  _select_24_bit_instr;   // We selected an instruction with a 24-bit result
   bool                  _in_24_bit_fp_mode;     // We are emitting instructions with 24-bit results
-  bool                  _has_java_calls;        // True if the method has java calls 
+  bool                  _has_java_calls;        // True if the method has java calls
   Matcher*              _matcher;               // Engine to map ideal to machine instructions
   PhaseRegAlloc*        _regalloc;              // Results of register allocation.
   int                   _frame_slots;           // Size of total frame in stack slots
@@ -263,6 +261,8 @@ class Compile : public Phase {
   // instructions that subsume a load may result in an unschedulable
   // instruction sequence.
   bool              subsume_loads() const       { return _subsume_loads; }
+  // Do escape analysis.
+  bool              do_escape_analysis() const  { return _do_escape_analysis; }
   bool              save_argument_registers() const { return _save_argument_registers; }
 
 
@@ -308,6 +308,8 @@ class Compile : public Phase {
   void          set_do_inlining(bool z)         { _do_inlining = z; }
   bool              do_scheduling() const       { return _do_scheduling; }
   void          set_do_scheduling(bool z)       { _do_scheduling = z; }
+  bool              do_freq_based_layout() const{ return _do_freq_based_layout; }
+  void          set_do_freq_based_layout(bool z){ _do_freq_based_layout = z; }
   bool              do_count_invocations() const{ return _do_count_invocations; }
   void          set_do_count_invocations(bool z){ _do_count_invocations = z; }
   bool              do_method_data_update() const { return _do_method_data_update; }
@@ -321,6 +323,8 @@ class Compile : public Phase {
   }
 #ifndef PRODUCT
   bool          trace_opto_output() const       { return _trace_opto_output; }
+  bool              parsed_irreducible_loop() const { return _parsed_irreducible_loop; }
+  void          set_parsed_irreducible_loop(bool z) { _parsed_irreducible_loop = z; }
 #endif
 
   void begin_method() {
@@ -363,14 +367,14 @@ class Compile : public Phase {
   bool              failure_reason_is(const char* r) { return (r==_failure_reason) || (r!=NULL && _failure_reason!=NULL && strcmp(r, _failure_reason)==0); }
 
   void record_failure(const char* reason);
-  void record_method_not_compilable(const char* reason, bool all_tiers = false) { 
+  void record_method_not_compilable(const char* reason, bool all_tiers = false) {
     // All bailouts cover "all_tiers" when TieredCompilation is off.
     if (!TieredCompilation) all_tiers = true;
     env()->record_method_not_compilable(reason, all_tiers);
     // Record failure reason.
     record_failure(reason);
   }
-  void record_method_not_compilable_all_tiers(const char* reason) { 
+  void record_method_not_compilable_all_tiers(const char* reason) {
     record_method_not_compilable(reason, true);
   }
   bool check_node_count(uint margin, const char* reason) {
@@ -487,7 +491,6 @@ class Compile : public Phase {
   PhaseGVN*         initial_gvn()               { return _initial_gvn; }
   Unique_Node_List* for_igvn()                  { return _for_igvn; }
   inline void       record_for_igvn(Node* n);   // Body is after class Unique_Node_List.
-  void              record_for_escape_analysis(Node* n);
   void          set_initial_gvn(PhaseGVN *gvn)           { _initial_gvn = gvn; }
   void          set_for_igvn(Unique_Node_List *for_igvn) { _for_igvn = for_igvn; }
 
@@ -563,11 +566,11 @@ class Compile : public Phase {
   // replacement, entry_bci indicates the bytecode for which to compile a
   // continuation.
   Compile(ciEnv* ci_env, C2Compiler* compiler, ciMethod* target,
-          int entry_bci, bool subsume_loads);
+          int entry_bci, bool subsume_loads, bool do_escape_analysis);
 
   // Second major entry point.  From the TypeFunc signature, generate code
   // to pass arguments from the Java calling convention to the C calling
-  // convention.  
+  // convention.
   Compile(ciEnv* ci_env, const TypeFunc *(*gen)(),
           address stub_function, const char *stub_name,
           int is_fancy_jump, bool pass_tls,
@@ -595,7 +598,7 @@ class Compile : public Phase {
 
   // returns true if adr overlaps with the given alias category
   bool can_alias(const TypePtr* adr, int alias_idx);
-  
+
   // Driver for converting compiler's IR into machine code bits
   void Output();
 
@@ -608,8 +611,20 @@ class Compile : public Phase {
 
   // Build OopMaps for each GC point
   void BuildOopMaps();
-  // Append debug info for the node to the array
-  void FillLocArray( int idx, Node *local, GrowableArray<ScopeValue*> *array );
+
+  // Append debug info for the node "local" at safepoint node "sfpt" to the
+  // "array",   May also consult and add to "objs", which describes the
+  // scalar-replaced objects.
+  void FillLocArray( int idx, MachSafePointNode* sfpt,
+                     Node *local, GrowableArray<ScopeValue*> *array,
+                     GrowableArray<ScopeValue*> *objs );
+
+  // If "objs" contains an ObjectValue whose id is "id", returns it, else NULL.
+  static ObjectValue* sv_for_node_id(GrowableArray<ScopeValue*> *objs, int id);
+  // Requres that "objs" does not contains an ObjectValue whose id matches
+  // that of "sv.  Appends "sv".
+  static void set_sv_for_object_node(GrowableArray<ScopeValue*> *objs,
+                                     ObjectValue* sv );
 
   // Process an OopMap Element while emitting nodes
   void Process_OopMap_Node(MachNode *mach, int code_offset);
@@ -620,7 +635,7 @@ class Compile : public Phase {
   // Determine which variable sized branches can be shortened
   void Shorten_branches(Label *labels, int& code_size, int& reloc_size, int& stub_size, int& const_size);
 
-  // Compute the size of first NumberOfLoopInstrToAlign instructions 
+  // Compute the size of first NumberOfLoopInstrToAlign instructions
   // at the head of a loop.
   void compute_loop_first_inst_sizes();
 
@@ -633,7 +648,7 @@ class Compile : public Phase {
   uint in_preserve_stack_slots();
 
   // "Top of Stack" slots that may be unused by the calling convention but must
-  // otherwise be preserved.  
+  // otherwise be preserved.
   // On Intel these are not necessary and the value can be zero.
   // On Sparc this describes the words reserved for storing a register window
   // when an interrupt occurs.

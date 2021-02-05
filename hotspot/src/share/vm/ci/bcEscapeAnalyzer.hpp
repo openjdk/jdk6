@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)bcEscapeAnalyzer.hpp	1.6 07/05/05 17:05:11 JVM"
-#endif
 /*
- * Copyright 2005-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 define_array(ciObjectArray, ciObject*);
@@ -38,7 +35,7 @@ class  ciBlock;
 class BCEscapeAnalyzer : public ResourceObj {
  private:
   bool              _conservative; // If true, return maximally
-				   // conservative results.
+                                   // conservative results.
   ciMethod*         _method;
   ciMethodData*     _methodData;
   int               _arg_size;
@@ -49,10 +46,13 @@ class BCEscapeAnalyzer : public ResourceObj {
   BitMap            _arg_stack;
   BitMap            _arg_returned;
   BitMap            _dirty;
+  enum{ ARG_OFFSET_MAX = 31};
+  uint              *_arg_modified;
 
   bool              _return_local;
-  bool              _allocated_escapes;
   bool              _return_allocated;
+  bool              _allocated_escapes;
+  bool              _unknown_modified;
 
   ciObjectList     _dependencies;
 
@@ -83,6 +83,7 @@ class BCEscapeAnalyzer : public ResourceObj {
   void set_method_escape(ArgumentMap vars);
   void set_global_escape(ArgumentMap vars);
   void set_dirty(ArgumentMap vars);
+  void set_modified(ArgumentMap vars, int offs, int size);
 
   bool is_recursive_call(ciMethod* callee);
   void add_dependence(ciKlass *klass, ciMethod *meth);
@@ -143,6 +144,18 @@ class BCEscapeAnalyzer : public ResourceObj {
     return !_conservative && _return_allocated && !_allocated_escapes;
   }
 
+  // Tracking of argument modification
+
+  enum {OFFSET_ANY = -1};
+  bool is_arg_modified(int arg, int offset, int size_in_bytes);
+  void set_arg_modified(int arg, int offset, int size_in_bytes);
+  bool has_non_arg_side_affects()    { return _unknown_modified; }
+
   // Copy dependencies from this analysis into "deps"
   void copy_dependencies(Dependencies *deps);
+
+#ifndef PRODUCT
+  // dump escape information
+  void dump();
+#endif
 };

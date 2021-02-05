@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)hpi.cpp	1.18 07/05/17 16:05:48 JVM"
-#endif
 /*
- * Copyright 1998-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -30,7 +27,8 @@
 
 extern "C" {
   static void unimplemented_panic(const char *fmt, ...) {
-    Unimplemented();
+    // mitigate testing damage from bug 6626677
+    warning("hpi::unimplemented_panic called");
   }
 
   static void unimplemented_monitorRegister(sys_mon_t *mid, char *info_str) {
@@ -42,7 +40,7 @@ static vm_calls_t callbacks = {
   jio_fprintf,
   unimplemented_panic,
   unimplemented_monitorRegister,
-  
+
   NULL, // unused
   NULL, // unused
   NULL  // unused
@@ -59,28 +57,28 @@ jint hpi::initialize()
   initialize_get_interface(&callbacks);
   if (_get_interface == NULL)
     return JNI_ERR;
-  
+
   jint result;
-  
+
   result = (*_get_interface)((void **)&_file, "File", 1);
   if (result != 0) {
     if (TraceHPI) tty->print_cr("Can't find HPI_FileInterface");
     return JNI_ERR;
   }
-  
-  
+
+
   result = (*_get_interface)((void **)&_library, "Library", 1);
   if (result != 0) {
     if (TraceHPI) tty->print_cr("Can't find HPI_LibraryInterface");
     return JNI_ERR;
   }
-  
+
   result = (*_get_interface)((void **)&_system, "System", 1);
   if (result != 0) {
     if (TraceHPI) tty->print_cr("Can't find HPI_SystemInterface");
     return JNI_ERR;
   }
-  
+
   return JNI_OK;
 }
 
@@ -92,13 +90,13 @@ jint hpi::initialize_socket_library()
     }
     return JNI_ERR;
   }
-  
+
   jint result;
   result = (*_get_interface)((void **)&_socket, "Socket", 1);
   if (result != 0) {
     if (TraceHPI) tty->print_cr("Can't find HPI_SocketInterface");
     return JNI_ERR;
   }
-  
+
   return JNI_OK;
 }

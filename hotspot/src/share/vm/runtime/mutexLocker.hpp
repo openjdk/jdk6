@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)mutexLocker.hpp	1.152 07/07/09 15:31:19 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Mutexes used in the VM.
@@ -40,8 +37,8 @@ extern Mutex*   JmethodIdCreation_lock;          // a lock on creating JNI metho
 extern Mutex*   JfieldIdCreation_lock;           // a lock on creating JNI static field identifiers
 extern Monitor* JNICritical_lock;                // a lock used while entering and exiting JNI critical regions, allows GC to sometimes get in
 extern Mutex*   JvmtiThreadState_lock;           // a lock on modification of JVMTI thread data
-extern Monitor*	JvmtiPendingEvent_lock;		 // a lock on the JVMTI pending events list
-extern Mutex*   Heap_lock;                       // a lock on the heap
+extern Monitor* JvmtiPendingEvent_lock;          // a lock on the JVMTI pending events list
+extern Monitor* Heap_lock;                       // a lock on the heap
 extern Mutex*   ExpandHeap_lock;                 // a lock on expanding the heap
 extern Mutex*   AdapterHandlerLibrary_lock;      // a lock on the AdapterHandlerLibrary
 extern Mutex*   SignatureHandlerLibrary_lock;    // a lock on the SignatureHandlerLibrary
@@ -51,21 +48,42 @@ extern Mutex*   StringTable_lock;                // a lock on the interned strin
 extern Mutex*   CodeCache_lock;                  // a lock on the CodeCache, rank is special, use MutexLockerEx
 extern Mutex*   MethodData_lock;                 // a lock on installation of method data
 extern Mutex*   RetData_lock;                    // a lock on installation of RetData inside method data
-extern Mutex*	DerivedPointerTableGC_lock;	 // a lock to protect the derived pointer table
-extern Monitor* VMOperationQueue_lock;	         // a lock on queue of vm_operations waiting to execute
+extern Mutex*   DerivedPointerTableGC_lock;      // a lock to protect the derived pointer table
+extern Monitor* VMOperationQueue_lock;           // a lock on queue of vm_operations waiting to execute
 extern Monitor* VMOperationRequest_lock;         // a lock on Threads waiting for a vm_operation to terminate
 extern Monitor* Safepoint_lock;                  // a lock used by the safepoint abstraction
-extern Monitor* SerializePage_lock;              // a lock used when VMThread changing serialize memory page permission during safepoint
-extern Monitor* Threads_lock;                    // a lock on the Threads table of active Java threads 
+extern Monitor* Threads_lock;                    // a lock on the Threads table of active Java threads
                                                  // (also used by Safepoints too to block threads creation/destruction)
-extern Monitor* CGC_lock;                        // used for coordination between 
+extern Monitor* CGC_lock;                        // used for coordination between
                                                  // fore- & background GC threads.
 extern Mutex*   STS_init_lock;                   // coordinate initialization of SuspendibleThreadSets.
 extern Monitor* SLT_lock;                        // used in CMS GC for acquiring PLL
 extern Monitor* iCMS_lock;                       // CMS incremental mode start/stop notification
 extern Monitor* FullGCCount_lock;                // in support of "concurrent" full gc
+extern Monitor* CMark_lock;                      // used for concurrent mark thread coordination
+extern Monitor* ZF_mon;                          // used for G1 conc zero-fill.
+extern Monitor* Cleanup_mon;                     // used for G1 conc cleanup.
+extern Monitor* G1ConcRefine_mon;                // used for G1 conc-refine
+                                                 // coordination.
+
+extern Mutex*   SATB_Q_FL_lock;                  // Protects SATB Q
+                                                 // buffer free list.
+extern Monitor* SATB_Q_CBL_mon;                  // Protects SATB Q
+                                                 // completed buffer queue.
+extern Mutex*   Shared_SATB_Q_lock;              // Lock protecting SATB
+                                                 // queue shared by
+                                                 // non-Java threads.
+
+extern Mutex*   DirtyCardQ_FL_lock;              // Protects dirty card Q
+                                                 // buffer free list.
+extern Monitor* DirtyCardQ_CBL_mon;              // Protects dirty card Q
+                                                 // completed buffer queue.
+extern Mutex*   Shared_DirtyCardQ_lock;          // Lock protecting dirty card
+                                                 // queue shared by
+                                                 // non-Java threads.
                                                  // (see option ExplicitGCInvokesConcurrent)
 extern Mutex*   ParGCRareEvent_lock;             // Synchronizes various (rare) parallel GC ops.
+extern Mutex*   EvacFailureStack_lock;           // guards the evac failure scan stack
 extern Mutex*   Compile_lock;                    // a lock held when Compilation is updating code (used to block CodeCache traversal, CHA updates, etc)
 extern Monitor* MethodCompileQueue_lock;         // a lock held when method compilations are enqueued, dequeued
 #ifdef TIERED
@@ -91,11 +109,15 @@ extern Mutex*   Debug1_lock;                     // A bunch of pre-allocated loc
 extern Mutex*   Debug2_lock;                     // down synchronization related bugs!
 extern Mutex*   Debug3_lock;
 
-extern Mutex*   RawMonitor_lock;             
+extern Mutex*   RawMonitor_lock;
 extern Mutex*   PerfDataMemAlloc_lock;           // a lock on the allocator for PerfData memory for performance data
 extern Mutex*   PerfDataManager_lock;            // a long on access to PerfDataManager resources
 extern Mutex*   ParkerFreeList_lock;
 extern Mutex*   OopMapCacheAlloc_lock;           // protects allocation of oop_map caches
+
+extern Mutex*   MMUTracker_lock;                 // protects the MMU
+                                                 // tracker data structures
+extern Mutex*   HotCardCache_lock;               // protects the hot card cache
 
 extern Mutex*   Management_lock;                 // a lock used to serialize JVM management
 extern Monitor* LowMemory_lock;                  // a lock used for low memory detection
@@ -139,7 +161,7 @@ class MutexLocker: StackObj {
     _mutex->lock(thread);
   }
 
-  ~MutexLocker() {    
+  ~MutexLocker() {
     _mutex->unlock();
   }
 
@@ -169,11 +191,11 @@ class MutexLockerEx: public StackObj {
     _mutex = mutex;
     if (_mutex != NULL) {
       assert(mutex->rank() > Mutex::special || no_safepoint_check,
-	"Mutexes with rank special or lower should not do safepoint checks");
+        "Mutexes with rank special or lower should not do safepoint checks");
       if (no_safepoint_check)
-	_mutex->lock_without_safepoint_check();
+        _mutex->lock_without_safepoint_check();
       else
-	_mutex->lock();
+        _mutex->lock();
     }
   }
 
@@ -313,17 +335,16 @@ class VerifyMutexLocker: StackObj {
     _reentrant = mutex->owned_by_self();
     if (!_reentrant) {
       // We temp. diable strict safepoint checking, while we require the lock
-      FlagSetting fs(StrictSafepointChecks, false);    
+      FlagSetting fs(StrictSafepointChecks, false);
       _mutex->lock();
     }
   }
-  
+
   ~VerifyMutexLocker() {
-    if (!_reentrant) {     
+    if (!_reentrant) {
       _mutex->unlock();
     }
   }
 };
 
 #endif
-

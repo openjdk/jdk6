@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)cardTableRS.cpp	1.45 07/05/25 12:54:50 JVM"
-#endif
 /*
- * Copyright 2001-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +19,33 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
 # include "incls/_cardTableRS.cpp.incl"
 
 CardTableRS::CardTableRS(MemRegion whole_heap,
-			 int max_covered_regions) :
-  GenRemSet(&_ct_bs),
-  _ct_bs(whole_heap, max_covered_regions),
-  _cur_youngergen_card_val(youngergenP1_card)
+                         int max_covered_regions) :
+  GenRemSet(),
+  _cur_youngergen_card_val(youngergenP1_card),
+  _regions_to_iterate(max_covered_regions - 1)
 {
+#ifndef SERIALGC
+  if (UseG1GC) {
+    if (G1RSBarrierUseQueue) {
+      _ct_bs = new G1SATBCardTableLoggingModRefBS(whole_heap,
+                                                  max_covered_regions);
+    } else {
+      _ct_bs = new G1SATBCardTableModRefBS(whole_heap, max_covered_regions);
+    }
+  } else {
+    _ct_bs = new CardTableModRefBSForCTRS(whole_heap, max_covered_regions);
+  }
+#else
+  _ct_bs = new CardTableModRefBSForCTRS(whole_heap, max_covered_regions);
+#endif
+  set_bs(_ct_bs);
   _last_cur_val_in_gen = new jbyte[GenCollectedHeap::max_gens + 1];
   if (_last_cur_val_in_gen == NULL) {
     vm_exit_during_initialization("Could not last_cur_val_in_gen array.");
@@ -41,23 +53,22 @@ CardTableRS::CardTableRS(MemRegion whole_heap,
   for (int i = 0; i < GenCollectedHeap::max_gens + 1; i++) {
     _last_cur_val_in_gen[i] = clean_card_val();
   }
-  _ct_bs.set_CTRS(this);
+  _ct_bs->set_CTRS(this);
 }
 
 void CardTableRS::resize_covered_region(MemRegion new_region) {
-  _ct_bs.resize_covered_region(new_region);
+  _ct_bs->resize_covered_region(new_region);
 }
 
 jbyte CardTableRS::find_unused_youngergenP_card_value() {
-  GenCollectedHeap* gch = GenCollectedHeap::heap();
   for (jbyte v = youngergenP1_card;
        v < cur_youngergen_and_prev_nonclean_card;
        v++) {
     bool seen = false;
-    for (int g = 0; g < gch->n_gens()+1; g++) {
+    for (int g = 0; g < _regions_to_iterate; g++) {
       if (_last_cur_val_in_gen[g] == v) {
-	seen = true;
-	break;
+        seen = true;
+        break;
       }
     }
     if (!seen) return v;
@@ -82,7 +93,7 @@ void CardTableRS::prepare_for_younger_refs_iterate(bool parallel) {
 }
 
 void CardTableRS::younger_refs_iterate(Generation* g,
-				       OopsInGenClosure* blk) {
+                                       OopsInGenClosure* blk) {
   _last_cur_val_in_gen[g->level()+1] = cur_youngergen_card_val();
   g->younger_refs_iterate(blk);
 }
@@ -92,50 +103,50 @@ class ClearNoncleanCardWrapper: public MemRegionClosure {
   CardTableRS* _ct;
   bool _is_par;
 private:
-  // Clears the given card, return true if the corresponding card should be 
+  // Clears the given card, return true if the corresponding card should be
   // processed.
   bool clear_card(jbyte* entry) {
     if (_is_par) {
       while (true) {
-	// In the parallel case, we may have to do this several times.
-	jbyte entry_val = *entry;
-	assert(entry_val != CardTableRS::clean_card_val(),
-	       "We shouldn't be looking at clean cards, and this should "
-	       "be the only place they get cleaned.");
-	if (CardTableRS::card_is_dirty_wrt_gen_iter(entry_val)
-	    || _ct->is_prev_youngergen_card_val(entry_val)) {
-	  jbyte res =
-	    Atomic::cmpxchg(CardTableRS::clean_card_val(), entry, entry_val);
-	  if (res == entry_val) {
-	    break;
-	  } else {
-	    assert(res == CardTableRS::cur_youngergen_and_prev_nonclean_card,
-		   "The CAS above should only fail if another thread did "
-		   "a GC write barrier.");
-	  }
-	} else if (entry_val ==
-		   CardTableRS::cur_youngergen_and_prev_nonclean_card) {
-	  // Parallelism shouldn't matter in this case.  Only the thread
-	  // assigned to scan the card should change this value.
-	  *entry = _ct->cur_youngergen_card_val();
-	  break;
-	} else {
-	  assert(entry_val == _ct->cur_youngergen_card_val(),
-		 "Should be the only possibility.");
-	  // In this case, the card was clean before, and become
-	  // cur_youngergen only because of processing of a promoted object.
-	  // We don't have to look at the card.
-	  return false;
-	}
+        // In the parallel case, we may have to do this several times.
+        jbyte entry_val = *entry;
+        assert(entry_val != CardTableRS::clean_card_val(),
+               "We shouldn't be looking at clean cards, and this should "
+               "be the only place they get cleaned.");
+        if (CardTableRS::card_is_dirty_wrt_gen_iter(entry_val)
+            || _ct->is_prev_youngergen_card_val(entry_val)) {
+          jbyte res =
+            Atomic::cmpxchg(CardTableRS::clean_card_val(), entry, entry_val);
+          if (res == entry_val) {
+            break;
+          } else {
+            assert(res == CardTableRS::cur_youngergen_and_prev_nonclean_card,
+                   "The CAS above should only fail if another thread did "
+                   "a GC write barrier.");
+          }
+        } else if (entry_val ==
+                   CardTableRS::cur_youngergen_and_prev_nonclean_card) {
+          // Parallelism shouldn't matter in this case.  Only the thread
+          // assigned to scan the card should change this value.
+          *entry = _ct->cur_youngergen_card_val();
+          break;
+        } else {
+          assert(entry_val == _ct->cur_youngergen_card_val(),
+                 "Should be the only possibility.");
+          // In this case, the card was clean before, and become
+          // cur_youngergen only because of processing of a promoted object.
+          // We don't have to look at the card.
+          return false;
+        }
       }
       return true;
     } else {
       jbyte entry_val = *entry;
       assert(entry_val != CardTableRS::clean_card_val(),
-	     "We shouldn't be looking at clean cards, and this should "
-	     "be the only place they get cleaned.");
+             "We shouldn't be looking at clean cards, and this should "
+             "be the only place they get cleaned.");
       assert(entry_val != CardTableRS::cur_youngergen_and_prev_nonclean_card,
-	     "This should be possible in the sequential case.");
+             "This should be possible in the sequential case.");
       *entry = CardTableRS::clean_card_val();
       return true;
     }
@@ -143,7 +154,7 @@ private:
 
 public:
   ClearNoncleanCardWrapper(MemRegionClosure* dirty_card_closure,
-			   CardTableRS* ct) :
+                           CardTableRS* ct) :
     _dirty_card_closure(dirty_card_closure), _ct(ct) {
     _is_par = (SharedHeap::heap()->n_par_threads() > 0);
   }
@@ -190,11 +201,11 @@ public:
 };
 // clean (by dirty->clean before) ==> cur_younger_gen
 // dirty                          ==> cur_youngergen_and_prev_nonclean_card
-// precleaned			  ==> cur_youngergen_and_prev_nonclean_card
+// precleaned                     ==> cur_youngergen_and_prev_nonclean_card
 // prev-younger-gen               ==> cur_youngergen_and_prev_nonclean_card
 // cur-younger-gen                ==> cur_younger_gen
 // cur_youngergen_and_prev_nonclean_card ==> no change.
-void CardTableRS::write_ref_field_gc_par(oop* field, oop new_val) {
+void CardTableRS::write_ref_field_gc_par(void* field, oop new_val) {
   jbyte* entry = ct_bs()->byte_for(field);
   do {
     jbyte entry_val = *entry;
@@ -204,7 +215,7 @@ void CardTableRS::write_ref_field_gc_par(oop* field, oop new_val) {
       *entry = cur_youngergen_card_val();
       return;
     } else if (card_is_dirty_wrt_gen_iter(entry_val)
-	       || is_prev_youngergen_card_val(entry_val)) {
+               || is_prev_youngergen_card_val(entry_val)) {
       // Mark it as both cur and prev youngergen; card cleaning thread will
       // eventually remove the previous stuff.
       jbyte new_val = cur_youngergen_and_prev_nonclean_card;
@@ -215,20 +226,20 @@ void CardTableRS::write_ref_field_gc_par(oop* field, oop new_val) {
       continue;
     } else {
       assert(entry_val == cur_youngergen_and_prev_nonclean_card
-	     || entry_val == cur_youngergen_card_val(),
-	     "should be only possibilities.");
+             || entry_val == cur_youngergen_card_val(),
+             "should be only possibilities.");
       return;
     }
   } while (true);
 }
 
-void CardTableRS::younger_refs_in_space_iterate(Space* sp, 
-						OopsInGenClosure* cl) {
-  DirtyCardToOopClosure* dcto_cl = sp->new_dcto_cl(cl, _ct_bs.precision(),
+void CardTableRS::younger_refs_in_space_iterate(Space* sp,
+                                                OopsInGenClosure* cl) {
+  DirtyCardToOopClosure* dcto_cl = sp->new_dcto_cl(cl, _ct_bs->precision(),
                                                    cl->gen_boundary());
   ClearNoncleanCardWrapper clear_cl(dcto_cl, this);
 
-  _ct_bs.non_clean_card_iterate(sp, sp->used_region_at_save_marks(),
+  _ct_bs->non_clean_card_iterate(sp, sp->used_region_at_save_marks(),
                                 dcto_cl, &clear_cl, false);
 }
 
@@ -293,28 +304,36 @@ void CardTableRS::invalidate_or_clear(Generation* gen, bool younger,
 
 
 class VerifyCleanCardClosure: public OopClosure {
-  HeapWord* boundary;
-  HeapWord* begin; HeapWord* end;
-public:
-  void do_oop(oop* p) {
+private:
+  HeapWord* _boundary;
+  HeapWord* _begin;
+  HeapWord* _end;
+protected:
+  template <class T> void do_oop_work(T* p) {
     HeapWord* jp = (HeapWord*)p;
-    if (jp >= begin && jp < end) {
-      guarantee(*p == NULL || (HeapWord*)p < boundary
-		|| (HeapWord*)(*p) >= boundary,
-		"pointer on clean card crosses boundary");
+    if (jp >= _begin && jp < _end) {
+      oop obj = oopDesc::load_decode_heap_oop(p);
+      guarantee(obj == NULL ||
+                (HeapWord*)p < _boundary ||
+                (HeapWord*)obj >= _boundary,
+                "pointer on clean card crosses boundary");
     }
   }
-  VerifyCleanCardClosure(HeapWord* b, HeapWord* _begin, HeapWord* _end) :
-    boundary(b), begin(_begin), end(_end) {}
+public:
+  VerifyCleanCardClosure(HeapWord* b, HeapWord* begin, HeapWord* end) :
+    _boundary(b), _begin(begin), _end(end) {}
+  virtual void do_oop(oop* p)       { VerifyCleanCardClosure::do_oop_work(p); }
+  virtual void do_oop(narrowOop* p) { VerifyCleanCardClosure::do_oop_work(p); }
 };
 
 class VerifyCTSpaceClosure: public SpaceClosure {
+private:
   CardTableRS* _ct;
   HeapWord* _boundary;
 public:
   VerifyCTSpaceClosure(CardTableRS* ct, HeapWord* boundary) :
     _ct(ct), _boundary(boundary) {}
-  void do_space(Space* s) { _ct->verify_space(s, _boundary); }
+  virtual void do_space(Space* s) { _ct->verify_space(s, _boundary); }
 };
 
 class VerifyCTGenClosure: public GenCollectedHeap::GenClosure {
@@ -341,8 +360,8 @@ void CardTableRS::verify_space(Space* s, HeapWord* gen_boundary) {
     if (*cur_entry == CardTableModRefBS::clean_card) {
       jbyte* first_dirty = cur_entry+1;
       while (first_dirty < limit &&
-	     *first_dirty == CardTableModRefBS::clean_card) {
-	first_dirty++;
+             *first_dirty == CardTableModRefBS::clean_card) {
+        first_dirty++;
       }
       // If the first object is a regular object, and it has a
       // young-to-old field, that would mark the previous card.
@@ -352,27 +371,27 @@ void CardTableRS::verify_space(Space* s, HeapWord* gen_boundary) {
       HeapWord* begin = boundary;             // Until proven otherwise.
       HeapWord* start_block = boundary_block; // Until proven otherwise.
       if (boundary_block < boundary) {
-	if (s->block_is_obj(boundary_block) && s->obj_is_alive(boundary_block)) {
-	  oop boundary_obj = oop(boundary_block);
-	  if (!boundary_obj->is_objArray() &&
-	      !boundary_obj->is_typeArray()) {
-	    guarantee(cur_entry > byte_for(used.start()),
-		      "else boundary would be boundary_block");
-	    if (*byte_for(boundary_block) != CardTableModRefBS::clean_card) {
-	      begin = boundary_block + s->block_size(boundary_block);
-	      start_block = begin;
-	    }
-	  }
-	}
+        if (s->block_is_obj(boundary_block) && s->obj_is_alive(boundary_block)) {
+          oop boundary_obj = oop(boundary_block);
+          if (!boundary_obj->is_objArray() &&
+              !boundary_obj->is_typeArray()) {
+            guarantee(cur_entry > byte_for(used.start()),
+                      "else boundary would be boundary_block");
+            if (*byte_for(boundary_block) != CardTableModRefBS::clean_card) {
+              begin = boundary_block + s->block_size(boundary_block);
+              start_block = begin;
+            }
+          }
+        }
       }
       // Now traverse objects until end.
       HeapWord* cur = start_block;
       VerifyCleanCardClosure verify_blk(gen_boundary, begin, end);
       while (cur < end) {
-	if (s->block_is_obj(cur) && s->obj_is_alive(cur)) {
-	  oop(cur)->oop_iterate(&verify_blk);
-	}
-	cur += s->block_size(cur);
+        if (s->block_is_obj(cur) && s->obj_is_alive(cur)) {
+          oop(cur)->oop_iterate(&verify_blk);
+        }
+        cur += s->block_size(cur);
       }
       cur_entry = first_dirty;
     } else {
@@ -380,7 +399,7 @@ void CardTableRS::verify_space(Space* s, HeapWord* gen_boundary) {
       // is a transient value, that cannot be in the card table
       // except during GC, and thus assert that:
       // guarantee(*cur_entry != cur_youngergen_and_prev_nonclean_card,
-      //	"Illegal CT value");
+      //        "Illegal CT value");
       // That however, need not hold, as will become clear in the
       // following...
 
@@ -389,8 +408,8 @@ void CardTableRS::verify_space(Space* s, HeapWord* gen_boundary) {
       // from the current value) in the card table, and so we'd like to
       // assert that:
       // guarantee(cur_youngergen_card_val() == youngergen_card
-      //	   || !is_prev_youngergen_card_val(*cur_entry),
-      //	   "Illegal CT value");
+      //           || !is_prev_youngergen_card_val(*cur_entry),
+      //           "Illegal CT value");
       // That, however, may not hold occasionally, because of
       // CMS or MSC in the old gen. To wit, consider the
       // following two simple illustrative scenarios:
@@ -445,7 +464,7 @@ void CardTableRS::verify_space(Space* s, HeapWord* gen_boundary) {
       // "derivative" case to consider, where we have a stale
       // "cur_younger_gen_and_prev_non_clean" value, as will become
       // apparent in the case analysis below.
-      // o Case 1. If the stale value corresponds to a younger_gen_n 
+      // o Case 1. If the stale value corresponds to a younger_gen_n
       //   value other than the cur_younger_gen value then the code
       //   treats this as being tantamount to a prev_younger_gen
       //   card. This means that the card may be unnecessarily scanned.
@@ -544,7 +563,7 @@ void CardTableRS::verify() {
 
   if (ch->kind() == CollectedHeap::GenCollectedHeap) {
     GenCollectedHeap::heap()->generation_iterate(&blk, false);
-    _ct_bs.verify();
+    _ct_bs->verify();
 
     // If the old gen collections also collect perm, then we are only
     // interested in perm-to-young pointers, not perm-to-old pointers.
@@ -559,10 +578,16 @@ void CardTableRS::verify() {
 }
 
 
-void CardTableRS::verify_empty(MemRegion mr) {
+void CardTableRS::verify_aligned_region_empty(MemRegion mr) {
   if (!mr.is_empty()) {
     jbyte* cur_entry = byte_for(mr.start());
     jbyte* limit = byte_after(mr.last());
+    // The region mr may not start on a card boundary so
+    // the first card may reflect a write to the space
+    // just prior to mr.
+    if (!is_aligned(mr.start())) {
+      cur_entry++;
+    }
     for (;cur_entry < limit; cur_entry++) {
       guarantee(*cur_entry == CardTableModRefBS::clean_card,
                 "Unexpected dirty card found");

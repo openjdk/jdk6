@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)os_linux.cpp	1.259 08/11/24 12:20:22 JVM"
-#endif
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1999-2009 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // do not include  precompiled  header file
@@ -97,6 +94,9 @@ static pid_t _initial_pid = 0;
 static int SR_signum = SIGUSR2;
 sigset_t SR_sigset;
 
+/* Used to protect dlsym() calls */
+static pthread_mutex_t dl_mutex;
+
 ////////////////////////////////////////////////////////////////////////////////
 // utility functions
 
@@ -111,7 +111,7 @@ julong os::Linux::available_memory() {
   // values in struct sysinfo are "unsigned long"
   struct sysinfo si;
   sysinfo(&si);
-  
+
   return (julong)si.freeram * si.mem_unit;
 }
 
@@ -163,14 +163,14 @@ bool os::have_special_privileges() {
 #ifndef SYS_gettid
 // i386: 224, ia64: 1105, amd64: 186, sparc 143
 #ifdef __ia64__
-#define SYS_gettid 1105     
+#define SYS_gettid 1105
 #elif __i386__
-#define SYS_gettid 224     
+#define SYS_gettid 224
 #elif __amd64__
 #define SYS_gettid 186
 #elif __sparc__
 #define SYS_gettid 143
-#else 
+#else
 #error define gettid for the arch
 #endif
 #endif
@@ -203,7 +203,7 @@ static char cpu_arch[] = "sparc";
 //
 pid_t os::Linux::gettid() {
   int rslt = syscall(SYS_gettid);
-  if (rslt == -1) {        
+  if (rslt == -1) {
      // old kernel, no NPTL support
      return getpid();
   } else {
@@ -217,8 +217,8 @@ pid_t os::Linux::gettid() {
 // a single processor and elide locking (see is_MP() call).
 static bool unsafe_chroot_detected = false;
 static const char *unstable_chroot_error = "/proc file system not found.\n"
-                    "Java may be unstable running multithreaded in a chroot "
-                    "environment on Linux when /proc filesystem is not mounted.";
+                     "Java may be unstable running multithreaded in a chroot "
+                     "environment on Linux when /proc filesystem is not mounted.";
 
 void os::Linux::initialize_system_info() {
   _processor_count = sysconf(_SC_NPROCESSORS_CONF);
@@ -247,8 +247,8 @@ void os::init_system_properties_values() {
   // This library should be located at:
   // <JAVA_HOME>/jre/lib/<arch>/{client|server}/libjvm[_g].so.
   //
-  // If "/jre/lib/" appears at the right place in the path, then we 
-  // assume libjvm[_g].so is installed in a JDK and we use this path. 
+  // If "/jre/lib/" appears at the right place in the path, then we
+  // assume libjvm[_g].so is installed in a JDK and we use this path.
   //
   // Otherwise exit with message: "Could not create the Java virtual machine."
   //
@@ -262,9 +262,9 @@ void os::init_system_properties_values() {
   // it looks like libjvm[_g].so is installed there
   // <JAVA_HOME>/jre/lib/<arch>/hotspot/libjvm[_g].so.
   //
-  // Otherwise exit. 
+  // Otherwise exit.
   //
-  // Important note: if the location of libjvm.so changes this 
+  // Important note: if the location of libjvm.so changes this
   // code needs to be changed accordingly.
 
   // The next few definitions allow the code to be verbatim:
@@ -273,57 +273,57 @@ void os::init_system_properties_values() {
 
 /*
  * See ld(1):
- *	The linker uses the following search paths to locate required
- *	shared libraries:
- *	  1: ...
- *	  ...
- *	  7: The default directories, normally /lib and /usr/lib.
+ *      The linker uses the following search paths to locate required
+ *      shared libraries:
+ *        1: ...
+ *        ...
+ *        7: The default directories, normally /lib and /usr/lib.
  */
-#define DEFAULT_LIBPATH	"/lib:/usr/lib"
+#define DEFAULT_LIBPATH "/lib:/usr/lib"
 
-#define EXTENSIONS_DIR	"/lib/ext"
-#define ENDORSED_DIR	"/lib/endorsed"
-#define REG_DIR		"/usr/java/packages"
+#define EXTENSIONS_DIR  "/lib/ext"
+#define ENDORSED_DIR    "/lib/endorsed"
+#define REG_DIR         "/usr/java/packages"
 
   {
     /* sysclasspath, java_home, dll_dir */
     {
         char *home_path;
-	char *dll_path;
-	char *pslash;
+        char *dll_path;
+        char *pslash;
         char buf[MAXPATHLEN];
-	os::jvm_path(buf, sizeof(buf));
+        os::jvm_path(buf, sizeof(buf));
 
-	// Found the full path to libjvm.so. 
-	// Now cut the path to <java_home>/jre if we can. 
-	*(strrchr(buf, '/')) = '\0';  /* get rid of /libjvm.so */
-	pslash = strrchr(buf, '/');
-	if (pslash != NULL)
-	    *pslash = '\0';           /* get rid of /{client|server|hotspot} */
-	dll_path = malloc(strlen(buf) + 1);
-	if (dll_path == NULL)
-	    return;
-	strcpy(dll_path, buf);
+        // Found the full path to libjvm.so.
+        // Now cut the path to <java_home>/jre if we can.
+        *(strrchr(buf, '/')) = '\0';  /* get rid of /libjvm.so */
+        pslash = strrchr(buf, '/');
+        if (pslash != NULL)
+            *pslash = '\0';           /* get rid of /{client|server|hotspot} */
+        dll_path = malloc(strlen(buf) + 1);
+        if (dll_path == NULL)
+            return;
+        strcpy(dll_path, buf);
         Arguments::set_dll_dir(dll_path);
 
-	if (pslash != NULL) {
-	    pslash = strrchr(buf, '/');
-	    if (pslash != NULL) {
-		*pslash = '\0';       /* get rid of /<arch> */ 
-		pslash = strrchr(buf, '/');
-		if (pslash != NULL)
-		    *pslash = '\0';   /* get rid of /lib */
-	    }
-	}
+        if (pslash != NULL) {
+            pslash = strrchr(buf, '/');
+            if (pslash != NULL) {
+                *pslash = '\0';       /* get rid of /<arch> */
+                pslash = strrchr(buf, '/');
+                if (pslash != NULL)
+                    *pslash = '\0';   /* get rid of /lib */
+            }
+        }
 
-	home_path = malloc(strlen(buf) + 1);
-	if (home_path == NULL)
-	    return;
-	strcpy(home_path, buf);
+        home_path = malloc(strlen(buf) + 1);
+        if (home_path == NULL)
+            return;
+        strcpy(home_path, buf);
         Arguments::set_java_home(home_path);
 
-	if (!set_boot_path('/', ':'))
-	    return;
+        if (!set_boot_path('/', ':'))
+            return;
     }
 
     /*
@@ -339,31 +339,31 @@ void os::init_system_properties_values() {
      * Eventually, all the library path setting will be done here.
      */
     {
-	char *ld_library_path;
+        char *ld_library_path;
 
-	/*
-	 * Construct the invariant part of ld_library_path. Note that the
-	 * space for the colon and the trailing null are provided by the
-	 * nulls included by the sizeof operator (so actually we allocate
-	 * a byte more than necessary).
-	 */
-	ld_library_path = (char *) malloc(sizeof(REG_DIR) + sizeof("/lib/") +
-	    strlen(cpu_arch) + sizeof(DEFAULT_LIBPATH));
-	sprintf(ld_library_path, REG_DIR "/lib/%s:" DEFAULT_LIBPATH, cpu_arch);
+        /*
+         * Construct the invariant part of ld_library_path. Note that the
+         * space for the colon and the trailing null are provided by the
+         * nulls included by the sizeof operator (so actually we allocate
+         * a byte more than necessary).
+         */
+        ld_library_path = (char *) malloc(sizeof(REG_DIR) + sizeof("/lib/") +
+            strlen(cpu_arch) + sizeof(DEFAULT_LIBPATH));
+        sprintf(ld_library_path, REG_DIR "/lib/%s:" DEFAULT_LIBPATH, cpu_arch);
 
-	/*
-	 * Get the user setting of LD_LIBRARY_PATH, and prepended it.  It
-	 * should always exist (until the legacy problem cited above is
-	 * addressed).
-	 */
-	char *v = getenv("LD_LIBRARY_PATH");
-	if (v != NULL) {
-	    char *t = ld_library_path;
-	    /* That's +1 for the colon and +1 for the trailing '\0' */
-	    ld_library_path = (char *) malloc(strlen(v) + 1 + strlen(t) + 1);
-	    sprintf(ld_library_path, "%s:%s", v, t);
-	}
-	Arguments::set_library_path(ld_library_path);
+        /*
+         * Get the user setting of LD_LIBRARY_PATH, and prepended it.  It
+         * should always exist (until the legacy problem cited above is
+         * addressed).
+         */
+        char *v = getenv("LD_LIBRARY_PATH");
+        if (v != NULL) {
+            char *t = ld_library_path;
+            /* That's +1 for the colon and +1 for the trailing '\0' */
+            ld_library_path = (char *) malloc(strlen(v) + 1 + strlen(t) + 1);
+            sprintf(ld_library_path, "%s:%s", v, t);
+        }
+        Arguments::set_library_path(ld_library_path);
     }
 
     /*
@@ -374,18 +374,18 @@ void os::init_system_properties_values() {
      * than necessary is allocated).
      */
     {
-	char *buf = malloc(strlen(Arguments::get_java_home()) +
-	    sizeof(EXTENSIONS_DIR) + sizeof(REG_DIR) + sizeof(EXTENSIONS_DIR));
-	sprintf(buf, "%s" EXTENSIONS_DIR ":" REG_DIR EXTENSIONS_DIR,
-	    Arguments::get_java_home());
-	Arguments::set_ext_dirs(buf);
+        char *buf = malloc(strlen(Arguments::get_java_home()) +
+            sizeof(EXTENSIONS_DIR) + sizeof(REG_DIR) + sizeof(EXTENSIONS_DIR));
+        sprintf(buf, "%s" EXTENSIONS_DIR ":" REG_DIR EXTENSIONS_DIR,
+            Arguments::get_java_home());
+        Arguments::set_ext_dirs(buf);
     }
 
     /* Endorsed standards default directory. */
     {
-	char * buf;
-	buf = malloc(strlen(Arguments::get_java_home()) + sizeof(ENDORSED_DIR));
-	sprintf(buf, "%s" ENDORSED_DIR, Arguments::get_java_home());
+        char * buf;
+        buf = malloc(strlen(Arguments::get_java_home()) + sizeof(ENDORSED_DIR));
+        sprintf(buf, "%s" ENDORSED_DIR, Arguments::get_java_home());
         Arguments::set_endorsed_dirs(buf);
     }
   }
@@ -423,7 +423,7 @@ bool os::Linux::is_sig_ignored(int sig) {
                                      : CAST_FROM_FN_PTR(void*,  oact.sa_handler);
       if (ohlr == CAST_FROM_FN_PTR(void*, SIG_IGN))
            return true;
-      else 
+      else
            return false;
 }
 
@@ -498,7 +498,7 @@ void os::Linux::hotspot_sigmask(Thread* thread) {
   //Save caller's signal mask before setting VM signal mask
   sigset_t caller_sigmask;
   pthread_sigmask(SIG_BLOCK, NULL, &caller_sigmask);
- 
+
   OSThread* osthread = thread->osthread();
   osthread->set_caller_sigmask(caller_sigmask);
 
@@ -520,7 +520,7 @@ void os::Linux::hotspot_sigmask(Thread* thread) {
 
 void os::Linux::libpthread_init() {
   // Save glibc and pthread version strings. Note that _CS_GNU_LIBC_VERSION
-  // and _CS_GNU_LIBPTHREAD_VERSION are supported in glibc >= 2.3.2. Use a 
+  // and _CS_GNU_LIBPTHREAD_VERSION are supported in glibc >= 2.3.2. Use a
   // generic name for earlier versions.
   // Define macros here so we can build HotSpot on old systems.
 # ifndef _CS_GNU_LIBC_VERSION
@@ -538,7 +538,7 @@ void os::Linux::libpthread_init() {
   } else {
      // _CS_GNU_LIBC_VERSION is not supported, try gnu_get_libc_version()
      static char _gnu_libc_version[32];
-     jio_snprintf(_gnu_libc_version, sizeof(_gnu_libc_version), 
+     jio_snprintf(_gnu_libc_version, sizeof(_gnu_libc_version),
               "glibc %s %s", gnu_get_libc_version(), gnu_get_libc_release());
      os::Linux::set_glibc_version(_gnu_libc_version);
   }
@@ -547,33 +547,32 @@ void os::Linux::libpthread_init() {
   if (n > 0) {
      char *str = (char *)malloc(n);
      confstr(_CS_GNU_LIBPTHREAD_VERSION, str, n);
-
      // Vanilla RH-9 (glibc 2.3.2) has a bug that confstr() always tells
      // us "NPTL-0.29" even we are running with LinuxThreads. Check if this
-     // is the case. LinuxThreads has a hard limit on max number of threads. 
+     // is the case. LinuxThreads has a hard limit on max number of threads.
      // So sysconf(_SC_THREAD_THREADS_MAX) will return a positive value.
      // On the other hand, NPTL does not have such a limit, sysconf()
      // will return -1 and errno is not changed. Check if it is really NPTL.
      if (strcmp(os::Linux::glibc_version(), "glibc 2.3.2") == 0 &&
-         strstr(str, "NPTL") && 
+         strstr(str, "NPTL") &&
          sysconf(_SC_THREAD_THREADS_MAX) > 0) {
        free(str);
        os::Linux::set_libpthread_version("linuxthreads");
      } else {
        os::Linux::set_libpthread_version(str);
-     } 
+     }
   } else {
     // glibc before 2.3.2 only has LinuxThreads.
     os::Linux::set_libpthread_version("linuxthreads");
   }
-  
+
   if (strstr(libpthread_version(), "NPTL")) {
     os::Linux::set_is_NPTL();
   } else {
     os::Linux::set_is_LinuxThreads();
   }
-  
-  // LinuxThreads have two flavors: floating-stack mode, which allows variable 
+
+  // LinuxThreads have two flavors: floating-stack mode, which allows variable
   // stack size; and fixed-stack mode. NPTL is always floating-stack.
   if (os::Linux::is_NPTL() || os::Linux::supports_variable_stack_size()) {
     os::Linux::set_is_floating_stack();
@@ -587,30 +586,30 @@ void os::Linux::libpthread_init() {
 // to the stack guard, caller should block all signals.
 //
 // MAP_GROWSDOWN:
-//   A special mmap() flag that is used to implement thread stacks. It tells 
-//   kernel that the memory region should extend downwards when needed. This 
-//   allows early versions of LinuxThreads to only mmap the first few pages 
+//   A special mmap() flag that is used to implement thread stacks. It tells
+//   kernel that the memory region should extend downwards when needed. This
+//   allows early versions of LinuxThreads to only mmap the first few pages
 //   when creating a new thread. Linux kernel will automatically expand thread
-//   stack as needed (on page faults). 
+//   stack as needed (on page faults).
 //
 //   However, because the memory region of a MAP_GROWSDOWN stack can grow on
 //   demand, if a page fault happens outside an already mapped MAP_GROWSDOWN
-//   region, it's hard to tell if the fault is due to a legitimate stack 
-//   access or because of reading/writing non-exist memory (e.g. buffer 
-//   overrun). As a rule, if the fault happens below current stack pointer, 
-//   Linux kernel does not expand stack, instead a SIGSEGV is sent to the 
+//   region, it's hard to tell if the fault is due to a legitimate stack
+//   access or because of reading/writing non-exist memory (e.g. buffer
+//   overrun). As a rule, if the fault happens below current stack pointer,
+//   Linux kernel does not expand stack, instead a SIGSEGV is sent to the
 //   application (see Linux kernel fault.c).
 //
 //   This Linux feature can cause SIGSEGV when VM bangs thread stack for
 //   stack overflow detection.
 //
-//   Newer version of LinuxThreads (since glibc-2.2, or, RH-7.x) and NPTL do 
+//   Newer version of LinuxThreads (since glibc-2.2, or, RH-7.x) and NPTL do
 //   not use this flag. However, the stack of initial thread is not created
-//   by pthread, it is still MAP_GROWSDOWN. Also it's possible (though 
+//   by pthread, it is still MAP_GROWSDOWN. Also it's possible (though
 //   unlikely) that user code can create a thread with MAP_GROWSDOWN stack
 //   and then attach the thread to JVM.
 //
-// To get around the problem and allow stack banging on Linux, we need to 
+// To get around the problem and allow stack banging on Linux, we need to
 // manually expand thread stack after receiving the SIGSEGV.
 //
 // There are two ways to expand thread stack to address "bottom", we used
@@ -626,10 +625,10 @@ void os::Linux::libpthread_init() {
 // That will destroy the mmap() frame and cause VM to crash.
 //
 // The following code works by adjusting sp first, then accessing the "bottom"
-// page to force a page fault. Linux kernel will then automatically expand the 
-// stack mapping. 
+// page to force a page fault. Linux kernel will then automatically expand the
+// stack mapping.
 //
-// _expand_stack_to() assumes its frame size is less than page size, which 
+// _expand_stack_to() assumes its frame size is less than page size, which
 // should always be true if the function is not inlined.
 
 #if __GNUC__ < 3    // gcc 2.x does not support noinline attribute
@@ -651,7 +650,7 @@ static void _expand_stack_to(address bottom) {
   bottom += os::Linux::page_size() - 1;
 
   // sp might be slightly above current stack pointer; if that's the case, we
-  // will alloca() a little more space than necessary, which is OK. Don't use 
+  // will alloca() a little more space than necessary, which is OK. Don't use
   // os::current_stack_pointer(), as its result can be slightly below current
   // stack pointer, causing us to not alloca enough to reach "bottom".
   sp = (address)&sp;
@@ -692,11 +691,11 @@ static bool _thread_safety_check(Thread* thread) {
     //   Heap is mmap'ed at lower end of memory space. Thread stacks are
     //   allocated (MAP_FIXED) from high address space. Every thread stack
     //   occupies a fixed size slot (usually 2Mbytes, but user can change
-    //   it to other values if they rebuild LinuxThreads). 
+    //   it to other values if they rebuild LinuxThreads).
     //
     // Problem with MAP_FIXED is that mmap() can still succeed even part of
-    // the memory region has already been mmap'ed. That means if we have too 
-    // many threads and/or very large heap, eventually thread stack will 
+    // the memory region has already been mmap'ed. That means if we have too
+    // many threads and/or very large heap, eventually thread stack will
     // collide with heap.
     //
     // Here we try to prevent heap/stack collision by comparing current
@@ -821,10 +820,10 @@ bool os::create_thread(Thread* thread, ThreadType thr_type, size_t stack_size) {
           break;
         } // else fall through:
           // use VMThreadStackSize if CompilerThreadStackSize is not defined
-      case os::vm_thread: 
-      case os::pgc_thread: 
-      case os::cgc_thread: 
-      case os::watcher_thread: 
+      case os::vm_thread:
+      case os::pgc_thread:
+      case os::cgc_thread:
+      case os::watcher_thread:
         if (VMThreadStackSize > 0) stack_size = (size_t)(VMThreadStackSize * K);
         break;
       }
@@ -941,7 +940,7 @@ bool os::create_attached_thread(JavaThread* thread) {
     // It is also useful to get around the heap-stack-gap problem on SuSE
     // kernel (see 4821821 for details). We first expand stack to the top
     // of yellow zone, then enable stack yellow zone (order is significant,
-    // enabling yellow zone first will crash JVM on SuSE Linux), so there 
+    // enabling yellow zone first will crash JVM on SuSE Linux), so there
     // is no gap between the last two virtual memory regions.
 
     JavaThread *jt = (JavaThread *)thread;
@@ -972,13 +971,13 @@ void os::pd_start_thread(Thread* thread) {
 // Free Linux resources related to the OSThread
 void os::free_thread(OSThread* osthread) {
   assert(osthread != NULL, "osthread not set");
- 
+
   if (Thread::current()->osthread() == osthread) {
     // Restore caller's signal mask
     sigset_t sigmask = osthread->caller_sigmask();
     pthread_sigmask(SIG_SETMASK, &sigmask, NULL);
    }
- 
+
   delete osthread;
 }
 
@@ -1051,7 +1050,7 @@ static bool find_vma(address addr, address* vma_low, address* vma_high) {
 }
 
 // Locate initial thread stack. This special handling of initial thread stack
-// is needed because pthread_getattr_np() on most (all?) Linux distros returns 
+// is needed because pthread_getattr_np() on most (all?) Linux distros returns
 // bogus value for initial thread.
 void os::Linux::capture_initial_stack(size_t max_size) {
   // stack size is the easy part, get it from RLIMIT_STACK
@@ -1082,21 +1081,21 @@ void os::Linux::capture_initial_stack(size_t max_size) {
   // Try to figure out where the stack base (top) is. This is harder.
   //
   // When an application is started, glibc saves the initial stack pointer in
-  // a global variable "__libc_stack_end", which is then used by system 
+  // a global variable "__libc_stack_end", which is then used by system
   // libraries. __libc_stack_end should be pretty close to stack top. The
   // variable is available since the very early days. However, because it is
   // a private interface, it could disappear in the future.
   //
   // Linux kernel saves start_stack information in /proc/<pid>/stat. Similar
   // to __libc_stack_end, it is very close to stack top, but isn't the real
-  // stack top. Note that /proc may not exist if VM is running as a chroot 
+  // stack top. Note that /proc may not exist if VM is running as a chroot
   // program, so reading /proc/<pid>/stat could fail. Also the contents of
   // /proc/<pid>/stat could change in the future (though unlikely).
   //
   // We try __libc_stack_end first. If that doesn't work, look for
   // /proc/<pid>/stat. If neither of them works, we use current stack pointer
   // as a hint, which should work well in most cases.
-  
+
   uintptr_t stack_start;
 
   // try __libc_stack_end first
@@ -1149,8 +1148,8 @@ void os::Linux::capture_initial_stack(size_t max_size) {
       // Skip pid and the command string. Note that we could be dealing with
       // weird command names, e.g. user could decide to rename java launcher
       // to "java 1.4.2 :)", then the stat file would look like
-      //                1234 (java 1.4.2 :)) R ... ... 
-      // We don't really need to know the command string, just find the last 
+      //                1234 (java 1.4.2 :)) R ... ...
+      // We don't really need to know the command string, just find the last
       // occurrence of ")" and then start parsing from there. See bug 4726580.
       char * s = strrchr(stat, ')');
 
@@ -1161,33 +1160,36 @@ void os::Linux::capture_initial_stack(size_t max_size) {
 
         /*                                     1   1   1   1   1   1   1   1   1   1   2   2   2   2   2   2   2   2   2 */
         /*              3  4  5  6  7  8   9   0   1   2   3   4   5   6   7   8   9   0   1   2   3   4   5   6   7   8 */
-        i = sscanf(s, "%c %d %d %d %d %d %lu %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld %lu %lu %ld %lu %lu %lu %lu", 
-	     &state,          /* 3  %c  */
-	     &ppid,           /* 4  %d  */
-	     &pgrp,           /* 5  %d  */
-	     &session,        /* 6  %d  */
-	     &nr,             /* 7  %d  */
-	     &tpgrp,          /* 8  %d  */
-	     &flags,          /* 9  %lu  */
-	     &minflt,         /* 10 %lu  */
-	     &cminflt,        /* 11 %lu  */
-	     &majflt,         /* 12 %lu  */
-	     &cmajflt,        /* 13 %lu  */
-	     &utime,          /* 14 %lu  */
-	     &stime,          /* 15 %lu  */
-	     &cutime,         /* 16 %ld  */
-	     &cstime,         /* 17 %ld  */
-	     &prio,           /* 18 %ld  */
-	     &nice,           /* 19 %ld  */
-	     &junk,           /* 20 %ld  */
-	     &it_real,        /* 21 %ld  */
-	     &start,          /* 22 %lu  */
-	     &vsize,          /* 23 %lu  */
-	     &rss,            /* 24 %ld  */
-	     &rsslim,         /* 25 %lu  */
-	     &scodes,         /* 26 %lu  */
-	     &ecode,          /* 27 %lu  */
-	     &stack_start);   /* 28 %lu  */
+        i = sscanf(s, "%c %d %d %d %d %d %lu %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld "
+                   UINTX_FORMAT UINTX_FORMAT UINTX_FORMAT
+                   " %lu "
+                   UINTX_FORMAT UINTX_FORMAT UINTX_FORMAT,
+             &state,          /* 3  %c  */
+             &ppid,           /* 4  %d  */
+             &pgrp,           /* 5  %d  */
+             &session,        /* 6  %d  */
+             &nr,             /* 7  %d  */
+             &tpgrp,          /* 8  %d  */
+             &flags,          /* 9  %lu  */
+             &minflt,         /* 10 %lu  */
+             &cminflt,        /* 11 %lu  */
+             &majflt,         /* 12 %lu  */
+             &cmajflt,        /* 13 %lu  */
+             &utime,          /* 14 %lu  */
+             &stime,          /* 15 %lu  */
+             &cutime,         /* 16 %ld  */
+             &cstime,         /* 17 %ld  */
+             &prio,           /* 18 %ld  */
+             &nice,           /* 19 %ld  */
+             &junk,           /* 20 %ld  */
+             &it_real,        /* 21 %ld  */
+             &start,          /* 22 UINTX_FORMAT  */
+             &vsize,          /* 23 UINTX_FORMAT  */
+             &rss,            /* 24 UINTX_FORMAT  */
+             &rsslim,         /* 25 %lu  */
+             &scodes,         /* 26 UINTX_FORMAT  */
+             &ecode,          /* 27 UINTX_FORMAT  */
+             &stack_start);   /* 28 UINTX_FORMAT  */
       }
 
       if (i != 28 - 2) {
@@ -1199,20 +1201,20 @@ void os::Linux::capture_initial_stack(size_t max_size) {
       }
     } else {
       // For some reason we can't open /proc/self/stat (for example, running on
-      // FreeBSD with a Linux emulator, or inside chroot), this should work for 
+      // FreeBSD with a Linux emulator, or inside chroot), this should work for
       // most cases, so don't abort:
       warning("Can't detect initial thread stack location - no /proc/self/stat");
       stack_start = (uintptr_t) &rlim;
     }
   }
 
-  // Now we have a pointer (stack_start) very close to the stack top, the 
+  // Now we have a pointer (stack_start) very close to the stack top, the
   // next thing to do is to figure out the exact location of stack top. We
-  // can find out the virtual memory area that contains stack_start by 
+  // can find out the virtual memory area that contains stack_start by
   // reading /proc/self/maps, it should be the last vma in /proc/self/maps,
-  // and its upper limit is the real stack top. (again, this would fail if 
+  // and its upper limit is the real stack top. (again, this would fail if
   // running inside chroot, because /proc may not exist.)
-  
+
   uintptr_t stack_top;
   address low, high;
   if (find_vma((address)stack_start, &low, &high)) {
@@ -1222,7 +1224,7 @@ void os::Linux::capture_initial_stack(size_t max_size) {
   } else {
     // failed, likely because /proc/self/maps does not exist
     warning("Can't detect initial thread stack location - find_vma failed");
-    // best effort: stack_start is normally within a few pages below the real 
+    // best effort: stack_start is normally within a few pages below the real
     // stack top, use it as stack top, and reduce stack size so we won't put
     // guard page outside stack.
     stack_top = stack_start;
@@ -1262,17 +1264,22 @@ jlong os::elapsed_frequency() {
   return (1000 * 1000);
 }
 
-jlong os::timeofday() {
+// For now, we say that linux does not support vtime.  I have no idea
+// whether it can actually be made to (DLD, 9/13/05).
+
+bool os::supports_vtime() { return false; }
+bool os::enable_vtime()   { return false; }
+bool os::vtime_enabled()  { return false; }
+double os::elapsedVTime() {
+  // better than nothing, but not much
+  return elapsedTime();
+}
+
+jlong os::javaTimeMillis() {
   timeval time;
   int status = gettimeofday(&time, NULL);
   assert(status != -1, "linux error");
   return jlong(time.tv_sec) * 1000  +  jlong(time.tv_usec / 1000);
-}
-
-// Must return millis since Jan 1 1970 for JVM_CurrentTimeMillis
-// _use_global_time is only set if CacheTimeMillis is true
-jlong os::javaTimeMillis() {
-  return (_use_global_time ? read_global_time() : timeofday());
 }
 
 #ifndef CLOCK_MONOTONIC
@@ -1288,9 +1295,9 @@ void os::Linux::clock_init() {
   }
 
   if (handle) {
-    int (*clock_getres_func)(clockid_t, struct timespec*) = 
+    int (*clock_getres_func)(clockid_t, struct timespec*) =
            (int(*)(clockid_t, struct timespec*))dlsym(handle, "clock_getres");
-    int (*clock_gettime_func)(clockid_t, struct timespec*) = 
+    int (*clock_gettime_func)(clockid_t, struct timespec*) =
            (int(*)(clockid_t, struct timespec*))dlsym(handle, "clock_gettime");
     if (clock_getres_func && clock_gettime_func) {
       // See if monotonic clock is supported by the kernel. Note that some
@@ -1333,7 +1340,7 @@ void os::Linux::fast_thread_clock_init() {
   }
   clockid_t clockid;
   struct timespec tp;
-  int (*pthread_getcpuclockid_func)(pthread_t, clockid_t *) = 
+  int (*pthread_getcpuclockid_func)(pthread_t, clockid_t *) =
       (int(*)(pthread_t, clockid_t *)) dlsym(RTLD_DEFAULT, "pthread_getcpuclockid");
 
   // Switch to using fast clocks for thread cpu time if
@@ -1372,18 +1379,18 @@ jlong os::javaTimeNanos() {
 
 void os::javaTimeNanos_info(jvmtiTimerInfo *info_ptr) {
   if (Linux::supports_monotonic_clock()) {
-    info_ptr->max_value = ALL_64_BITS; 
+    info_ptr->max_value = ALL_64_BITS;
 
     // CLOCK_MONOTONIC - amount of time since some arbitrary point in the past
     info_ptr->may_skip_backward = false;      // not subject to resetting or drifting
     info_ptr->may_skip_forward = false;       // not subject to resetting or drifting
   } else {
     // gettimeofday - based on time in seconds since the Epoch thus does not wrap
-    info_ptr->max_value = ALL_64_BITS;  
+    info_ptr->max_value = ALL_64_BITS;
 
     // gettimeofday is a real time clock so it skips
-    info_ptr->may_skip_backward = true;  
-    info_ptr->may_skip_forward = true; 
+    info_ptr->may_skip_backward = true;
+    info_ptr->may_skip_forward = true;
   }
 
   info_ptr->kind = JVMTI_TIMER_ELAPSED;                // elapsed not CPU time
@@ -1416,9 +1423,13 @@ char * os::local_time_string(char *buf, size_t buflen) {
   time(&long_time);
   localtime_r(&long_time, &t);
   jio_snprintf(buf, buflen, "%d-%02d-%02d %02d:%02d:%02d",
-               t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, 
+               t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
                t.tm_hour, t.tm_min, t.tm_sec);
   return buf;
+}
+
+struct tm* os::localtime_pd(const time_t* clock, struct tm*  res) {
+  return localtime_r(clock, res);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1450,7 +1461,7 @@ void os::shutdown() {
 // called from signal handler. Before adding something to os::abort(), make
 // sure it is async-safe and can handle partially initialized VM.
 void os::abort(bool dump_core) {
-  os::shutdown(); 
+  os::shutdown();
   if (dump_core) {
 #ifndef PRODUCT
     fdStream out(defaultStream::output_fd());
@@ -1468,7 +1479,7 @@ void os::abort(bool dump_core) {
 
 // Die immediately, no exit hook, no abort hook, no cleanup.
 void os::die() {
-  // _exit() on LinuxThreads only kills current thread 
+  // _exit() on LinuxThreads only kills current thread
   ::abort();
 }
 
@@ -1478,16 +1489,16 @@ void os::set_error_file(const char *logfile) {}
 intx os::current_thread_id() { return (intx)pthread_self(); }
 int os::current_process_id() {
 
-  // Under the old linux thread library, linux gives each thread 
-  // its own process id. Because of this each thread will return 
-  // a different pid if this method were to return the result 
-  // of getpid(2). Linux provides no api that returns the pid 
-  // of the launcher thread for the vm. This implementation 
-  // returns a unique pid, the pid of the launcher thread 
+  // Under the old linux thread library, linux gives each thread
+  // its own process id. Because of this each thread will return
+  // a different pid if this method were to return the result
+  // of getpid(2). Linux provides no api that returns the pid
+  // of the launcher thread for the vm. This implementation
+  // returns a unique pid, the pid of the launcher thread
   // that starts the vm 'process'.
 
-  // Under the NPTL, getpid() returns the same pid as the 
-  // launcher thread rather than a unique pid per thread. 
+  // Under the NPTL, getpid() returns the same pid as the
+  // launcher thread rather than a unique pid per thread.
   // Use gettid() if you want the old pre NPTL behaviour.
 
   // if you are looking for the result of a call to getpid() that
@@ -1502,6 +1513,54 @@ int os::current_process_id() {
 const char* os::dll_file_extension() { return ".so"; }
 
 const char* os::get_temp_directory() { return "/tmp/"; }
+
+static bool file_exists(const char* filename) {
+  struct stat statbuf;
+  if (filename == NULL || strlen(filename) == 0) {
+    return false;
+  }
+  return os::stat(filename, &statbuf) == 0;
+}
+
+void os::dll_build_name(char* buffer, size_t buflen,
+                        const char* pname, const char* fname) {
+  // Copied from libhpi
+  const size_t pnamelen = pname ? strlen(pname) : 0;
+
+  // Quietly truncate on buffer overflow.  Should be an error.
+  if (pnamelen + strlen(fname) + 10 > (size_t) buflen) {
+    *buffer = '\0';
+    return;
+  }
+
+  if (pnamelen == 0) {
+    snprintf(buffer, buflen, "lib%s.so", fname);
+  } else if (strchr(pname, *os::path_separator()) != NULL) {
+    int n;
+    char** pelements = split_path(pname, &n);
+    for (int i = 0 ; i < n ; i++) {
+      // Really shouldn't be NULL, but check can't hurt
+      if (pelements[i] == NULL || strlen(pelements[i]) == 0) {
+        continue; // skip the empty path values
+      }
+      snprintf(buffer, buflen, "%s/lib%s.so", pelements[i], fname);
+      if (file_exists(buffer)) {
+        break;
+      }
+    }
+    // release the storage
+    for (int i = 0 ; i < n ; i++) {
+      if (pelements[i] != NULL) {
+        FREE_C_HEAP_ARRAY(char, pelements[i]);
+      }
+    }
+    if (pelements != NULL) {
+      FREE_C_HEAP_ARRAY(char*, pelements);
+    }
+  } else {
+    snprintf(buffer, buflen, "%s/lib%s.so", pname, fname);
+  }
+}
 
 const char* os::get_current_directory(char *buf, int buflen) {
   return getcwd(buf, buflen);
@@ -1547,7 +1606,7 @@ struct _address_to_library_name {
   address base;          //         library base addr
 };
 
-static int address_to_library_name_callback(struct dl_phdr_info *info, 
+static int address_to_library_name_callback(struct dl_phdr_info *info,
                                             size_t size, void *data) {
   int i;
   bool found = false;
@@ -1564,7 +1623,7 @@ static int address_to_library_name_callback(struct dl_phdr_info *info,
         libbase = segbase;
       }
       // see if 'addr' is within current segment
-      if (segbase <= d->addr && 
+      if (segbase <= d->addr &&
           d->addr < segbase + info->dlpi_phdr[i].p_memsz) {
         found = true;
       }
@@ -1615,7 +1674,7 @@ bool os::dll_address_to_library_name(address addr, char* buf,
   }
 }
 
-  // Loads .dll/.so and 
+  // Loads .dll/.so and
   // in case of error it checks if .dll/.so was built for the
   // same architecture as Hotspot is running on
 
@@ -1671,7 +1730,7 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
   #define EM_486          6               /* Intel 80486 */
   #endif
 
-  static const arch_t arch_array[]={ 
+  static const arch_t arch_array[]={
     {EM_386,         EM_386,     ELFCLASS32, ELFDATA2LSB, (char*)"IA 32"},
     {EM_486,         EM_386,     ELFCLASS32, ELFDATA2LSB, (char*)"IA 32"},
     {EM_IA_64,       EM_IA_64,   ELFCLASS64, ELFDATA2LSB, (char*)"IA 64"},
@@ -1684,19 +1743,19 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
   };
 
   #if  (defined IA32)
-    static  Elf32_Half running_arch_code=EM_386; 
+    static  Elf32_Half running_arch_code=EM_386;
   #elif   (defined AMD64)
-    static  Elf32_Half running_arch_code=EM_X86_64; 
-  #elif  (defined IA64) 
-    static  Elf32_Half running_arch_code=EM_IA_64; 
-  #elif  (defined __sparc) && (defined _LP64)  
-    static  Elf32_Half running_arch_code=EM_SPARCV9; 
-  #elif  (defined __sparc) && (!defined _LP64)  
-    static  Elf32_Half running_arch_code=EM_SPARC; 
-  #elif  (defined __powerpc64__)  
-    static  Elf32_Half running_arch_code=EM_PPC64; 
-  #elif  (defined __powerpc__)  
-    static  Elf32_Half running_arch_code=EM_PPC; 
+    static  Elf32_Half running_arch_code=EM_X86_64;
+  #elif  (defined IA64)
+    static  Elf32_Half running_arch_code=EM_IA_64;
+  #elif  (defined __sparc) && (defined _LP64)
+    static  Elf32_Half running_arch_code=EM_SPARCV9;
+  #elif  (defined __sparc) && (!defined _LP64)
+    static  Elf32_Half running_arch_code=EM_SPARC;
+  #elif  (defined __powerpc64__)
+    static  Elf32_Half running_arch_code=EM_PPC64;
+  #elif  (defined __powerpc__)
+    static  Elf32_Half running_arch_code=EM_PPC;
   #else
     #error Method os::dll_load requires that one of following is defined:\
          IA32, AMD64, IA64, __sparc, __powerpc__
@@ -1718,28 +1777,28 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
     }
   }
 
-  assert(running_arch_index != -1, 
+  assert(running_arch_index != -1,
     "Didn't find running architecture code (running_arch_code) in arch_array");
   if (running_arch_index == -1) {
     // Even though running architecture detection failed
     // we may still continue with reporting dlerror() message
-    return NULL; 
+    return NULL;
   }
 
   if (lib_arch.endianess != arch_array[running_arch_index].endianess) {
     ::snprintf(diag_msg_buf, diag_msg_max_length-1," (Possible cause: endianness mismatch)");
-    return NULL; 
+    return NULL;
   }
 
   if (lib_arch.elf_class != arch_array[running_arch_index].elf_class) {
     ::snprintf(diag_msg_buf, diag_msg_max_length-1," (Possible cause: architecture word width mismatch)");
-    return NULL; 
+    return NULL;
   }
 
   if (lib_arch.compat_class != arch_array[running_arch_index].compat_class) {
     if ( lib_arch.name!=NULL ) {
       ::snprintf(diag_msg_buf, diag_msg_max_length-1,
-        " (Possible cause: can't load %s-bit .so on a %s-bit platform)", 
+        " (Possible cause: can't load %s-bit .so on a %s-bit platform)",
         lib_arch.name, arch_array[running_arch_index].name);
     } else {
       ::snprintf(diag_msg_buf, diag_msg_max_length-1,
@@ -1752,7 +1811,17 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen)
   return NULL;
 }
 
-
+/*
+ * glibc-2.0 libdl is not MT safe.  If you are building with any glibc,
+ * chances are you might want to run the generated bits against glibc-2.0
+ * libdl.so, so always use locking for any version of glibc.
+ */
+void* os::dll_lookup(void* handle, const char* name) {
+  pthread_mutex_lock(&dl_mutex);
+  void* res = dlsym(handle, name);
+  pthread_mutex_unlock(&dl_mutex);
+  return res;
+}
 
 
 bool _print_ascii_file(const char* filename, outputStream* st) {
@@ -1791,7 +1860,7 @@ void os::print_os_info(outputStream* st) {
 
   // Try to identify popular distros.
   // Most Linux distributions have /etc/XXX-release file, which contains
-  // the OS version string. Some have more than one /etc/XXX-release file 
+  // the OS version string. Some have more than one /etc/XXX-release file
   // (e.g. Mandrake has both /etc/mandrake-release and /etc/redhat-release.),
   // so the order is important.
   if (!_print_ascii_file("/etc/mandrake-release", st) &&
@@ -1869,14 +1938,14 @@ void os::print_os_info(outputStream* st) {
 }
 
 void os::print_memory_info(outputStream* st) {
-    
+
   st->print("Memory:");
   st->print(" %dk page", os::vm_page_size()>>10);
 
   // values in struct sysinfo are "unsigned long"
   struct sysinfo si;
   sysinfo(&si);
-  
+
   st->print(", physical " UINT64_FORMAT "k",
             os::physical_memory() >> 10);
   st->print("(" UINT64_FORMAT "k free)",
@@ -1952,7 +2021,7 @@ void os::print_siginfo(outputStream* st, void* siginfo) {
 }
 
 
-static void print_signal_handler(outputStream* st, int sig, 
+static void print_signal_handler(outputStream* st, int sig,
                                  char* buf, size_t buflen);
 
 void os::print_signal_handlers(outputStream* st, char* buf, size_t buflen) {
@@ -1992,7 +2061,8 @@ void os::jvm_path(char *buf, jint len) {
                 CAST_FROM_FN_PTR(address, os::jvm_path),
                 dli_fname, sizeof(dli_fname), NULL);
   assert(ret != 0, "cannot locate libjvm");
-  realpath(dli_fname, buf);
+  if (realpath(dli_fname, buf) == NULL)
+    return;
 
   if (strcmp(Arguments::sun_java_launcher(), "gamma") == 0) {
     // Support for the gamma launcher.  Typical value for buf is
@@ -2016,21 +2086,23 @@ void os::jvm_path(char *buf, jint len) {
         assert(strstr(p, "/libjvm") == p, "invalid library name");
         p = strstr(p, "_g") ? "_g" : "";
 
-        realpath(java_home_var, buf);
+        if (realpath(java_home_var, buf) == NULL)
+          return;
         sprintf(buf + strlen(buf), "/jre/lib/%s", cpu_arch);
         if (0 == access(buf, F_OK)) {
-	  // Use current module name "libjvm[_g].so" instead of 
-	  // "libjvm"debug_only("_g")".so" since for fastdebug version
-	  // we should have "libjvm.so" but debug_only("_g") adds "_g"!
-	  // It is used when we are choosing the HPI library's name 
-	  // "libhpi[_g].so" in hpi::initialize_get_interface().
-	  sprintf(buf + strlen(buf), "/hotspot/libjvm%s.so", p);
+          // Use current module name "libjvm[_g].so" instead of
+          // "libjvm"debug_only("_g")".so" since for fastdebug version
+          // we should have "libjvm.so" but debug_only("_g") adds "_g"!
+          // It is used when we are choosing the HPI library's name
+          // "libhpi[_g].so" in hpi::initialize_get_interface().
+          sprintf(buf + strlen(buf), "/hotspot/libjvm%s.so", p);
         } else {
           // Go back to path of .so
-          realpath(dli_fname, buf);
+          if (realpath(dli_fname, buf) == NULL)
+            return;
         }
       }
-    } 
+    }
   }
 
   strcpy(saved_jvm_path, buf);
@@ -2054,10 +2126,10 @@ UserHandler(int sig, void *siginfo, void *context) {
   // 4511530 - sem_post is serialized and handled by the manager thread. When
   // the program is interrupted by Ctrl-C, SIGINT is sent to every thread. We
   // don't want to flood the manager thread with sem_post requests.
-  if (sig == SIGINT && Atomic::add(1, &sigint_count) > 1) 
+  if (sig == SIGINT && Atomic::add(1, &sigint_count) > 1)
       return;
 
-  // Ctrl-C is pressed during error reporting, likely because the error 
+  // Ctrl-C is pressed during error reporting, likely because the error
   // handler fails to abort. Let VM die immediately.
   if (sig == SIGINT && is_error_reported()) {
      os::die();
@@ -2184,14 +2256,14 @@ int os::vm_allocation_granularity() {
   return os::Linux::page_size();
 }
 
-// Rationale behind this function: 
+// Rationale behind this function:
 //  current (Mon Apr 25 20:12:18 MSD 2005) oprofile drops samples without executable
 //  mapping for address (see lookup_dcookie() in the kernel module), thus we cannot get
 //  samples for JITted code. Here we create private executable mapping over the code cache
 //  and then we can use standard (well, almost, as mapping can change) way to provide
 //  info for the reporting script by storing timestamp and location of symbol
 void linux_wrap_code(char* base, size_t size) {
-  static volatile jint cnt = 0;  
+  static volatile jint cnt = 0;
 
   if (!UseOprofile) {
     return;
@@ -2202,16 +2274,16 @@ void linux_wrap_code(char* base, size_t size) {
 
   sprintf(buf, "/tmp/hs-vm-%d-%d", os::current_process_id(), num);
   unlink(buf);
- 
+
   int fd = open(buf, O_CREAT | O_RDWR, S_IRWXU);
 
   if (fd != -1) {
     off_t rv = lseek(fd, size-2, SEEK_SET);
     if (rv != (off_t)-1) {
       if (write(fd, "", 1) == 1) {
-	mmap(base, size,
-	     PROT_READ|PROT_WRITE|PROT_EXEC,
-	     MAP_PRIVATE|MAP_FIXED|MAP_NORESERVE, fd, 0);
+        mmap(base, size,
+             PROT_READ|PROT_WRITE|PROT_EXEC,
+             MAP_PRIVATE|MAP_FIXED|MAP_NORESERVE, fd, 0);
       }
     }
     close(fd);
@@ -2219,10 +2291,10 @@ void linux_wrap_code(char* base, size_t size) {
   }
 }
 
-// NOTE: Linux kernel does not really reserve the pages for us. 
-//       All it does is to check if there are enough free pages 
-//       left at the time of mmap(). This could be a potential  
-//       problem.                                               
+// NOTE: Linux kernel does not really reserve the pages for us.
+//       All it does is to check if there are enough free pages
+//       left at the time of mmap(). This could be a potential
+//       problem.
 bool os::commit_memory(char* addr, size_t size) {
   uintptr_t res = (uintptr_t) ::mmap(addr, size,
                                    PROT_READ|PROT_WRITE|PROT_EXEC,
@@ -2235,18 +2307,42 @@ bool os::commit_memory(char* addr, size_t size, size_t alignment_hint) {
 }
 
 void os::realign_memory(char *addr, size_t bytes, size_t alignment_hint) { }
-void os::free_memory(char *addr, size_t bytes)         { }
-void os::numa_make_global(char *addr, size_t bytes)    { }
-void os::numa_make_local(char *addr, size_t bytes)     { }
-bool os::numa_topology_changed()                       { return false; }
-size_t os::numa_get_groups_num()                       { return 1; }
-int os::numa_get_group_id()                            { return 0; }
-size_t os::numa_get_leaf_groups(int *ids, size_t size) {
-  if (size > 0) {
-    ids[0] = 0;
-    return 1;
+
+void os::free_memory(char *addr, size_t bytes) {
+  uncommit_memory(addr, bytes);
+}
+
+void os::numa_make_global(char *addr, size_t bytes) {
+  Linux::numa_interleave_memory(addr, bytes);
+}
+
+void os::numa_make_local(char *addr, size_t bytes, int lgrp_hint) {
+  Linux::numa_tonode_memory(addr, bytes, lgrp_hint);
+}
+
+bool os::numa_topology_changed()   { return false; }
+
+size_t os::numa_get_groups_num() {
+  int max_node = Linux::numa_max_node();
+  return max_node > 0 ? max_node + 1 : 1;
+}
+
+int os::numa_get_group_id() {
+  int cpu_id = Linux::sched_getcpu();
+  if (cpu_id != -1) {
+    int lgrp_id = Linux::get_node_by_cpu(cpu_id);
+    if (lgrp_id != -1) {
+      return lgrp_id;
+    }
   }
   return 0;
+}
+
+size_t os::numa_get_leaf_groups(int *ids, size_t size) {
+  for (size_t i = 0; i < size; i++) {
+    ids[i] = i;
+  }
+  return size;
 }
 
 bool os::get_page_info(char *start, page_info* info) {
@@ -2257,10 +2353,99 @@ char *os::scan_pages(char *start, char* end, page_info* page_expected, page_info
   return end;
 }
 
+extern "C" void numa_warn(int number, char *where, ...) { }
+extern "C" void numa_error(char *where) { }
+
+bool os::Linux::libnuma_init() {
+  // sched_getcpu() should be in libc.
+  set_sched_getcpu(CAST_TO_FN_PTR(sched_getcpu_func_t,
+                                  dlsym(RTLD_DEFAULT, "sched_getcpu")));
+
+  if (sched_getcpu() != -1) { // Does it work?
+    void *handle = dlopen("libnuma.so.1", RTLD_LAZY);
+    if (handle != NULL) {
+      set_numa_node_to_cpus(CAST_TO_FN_PTR(numa_node_to_cpus_func_t,
+                                           dlsym(handle, "numa_node_to_cpus")));
+      set_numa_max_node(CAST_TO_FN_PTR(numa_max_node_func_t,
+                                       dlsym(handle, "numa_max_node")));
+      set_numa_available(CAST_TO_FN_PTR(numa_available_func_t,
+                                        dlsym(handle, "numa_available")));
+      set_numa_tonode_memory(CAST_TO_FN_PTR(numa_tonode_memory_func_t,
+                                            dlsym(handle, "numa_tonode_memory")));
+      set_numa_interleave_memory(CAST_TO_FN_PTR(numa_interleave_memory_func_t,
+                                            dlsym(handle, "numa_interleave_memory")));
+
+
+      if (numa_available() != -1) {
+        set_numa_all_nodes((unsigned long*)dlsym(handle, "numa_all_nodes"));
+        // Create a cpu -> node mapping
+        _cpu_to_node = new (ResourceObj::C_HEAP) GrowableArray<int>(0, true);
+        rebuild_cpu_to_node_map();
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// rebuild_cpu_to_node_map() constructs a table mapping cpud id to node id.
+// The table is later used in get_node_by_cpu().
+void os::Linux::rebuild_cpu_to_node_map() {
+  const size_t NCPUS = 32768; // Since the buffer size computation is very obscure
+                              // in libnuma (possible values are starting from 16,
+                              // and continuing up with every other power of 2, but less
+                              // than the maximum number of CPUs supported by kernel), and
+                              // is a subject to change (in libnuma version 2 the requirements
+                              // are more reasonable) we'll just hardcode the number they use
+                              // in the library.
+  const size_t BitsPerCLong = sizeof(long) * CHAR_BIT;
+
+  size_t cpu_num = os::active_processor_count();
+  size_t cpu_map_size = NCPUS / BitsPerCLong;
+  size_t cpu_map_valid_size =
+    MIN2((cpu_num + BitsPerCLong - 1) / BitsPerCLong, cpu_map_size);
+
+  cpu_to_node()->clear();
+  cpu_to_node()->at_grow(cpu_num - 1);
+  size_t node_num = numa_get_groups_num();
+
+  unsigned long *cpu_map = NEW_C_HEAP_ARRAY(unsigned long, cpu_map_size);
+  for (size_t i = 0; i < node_num; i++) {
+    if (numa_node_to_cpus(i, cpu_map, cpu_map_size * sizeof(unsigned long)) != -1) {
+      for (size_t j = 0; j < cpu_map_valid_size; j++) {
+        if (cpu_map[j] != 0) {
+          for (size_t k = 0; k < BitsPerCLong; k++) {
+            if (cpu_map[j] & (1UL << k)) {
+              cpu_to_node()->at_put(j * BitsPerCLong + k, i);
+            }
+          }
+        }
+      }
+    }
+  }
+  FREE_C_HEAP_ARRAY(unsigned long, cpu_map);
+}
+
+int os::Linux::get_node_by_cpu(int cpu_id) {
+  if (cpu_to_node() != NULL && cpu_id >= 0 && cpu_id < cpu_to_node()->length()) {
+    return cpu_to_node()->at(cpu_id);
+  }
+  return -1;
+}
+
+GrowableArray<int>* os::Linux::_cpu_to_node;
+os::Linux::sched_getcpu_func_t os::Linux::_sched_getcpu;
+os::Linux::numa_node_to_cpus_func_t os::Linux::_numa_node_to_cpus;
+os::Linux::numa_max_node_func_t os::Linux::_numa_max_node;
+os::Linux::numa_available_func_t os::Linux::_numa_available;
+os::Linux::numa_tonode_memory_func_t os::Linux::_numa_tonode_memory;
+os::Linux::numa_interleave_memory_func_t os::Linux::_numa_interleave_memory;
+unsigned long* os::Linux::_numa_all_nodes;
+
 bool os::uncommit_memory(char* addr, size_t size) {
   return ::mmap(addr, size,
-		PROT_READ|PROT_WRITE|PROT_EXEC,
-		MAP_PRIVATE|MAP_FIXED|MAP_NORESERVE|MAP_ANONYMOUS, -1, 0)
+                PROT_READ|PROT_WRITE|PROT_EXEC,
+                MAP_PRIVATE|MAP_FIXED|MAP_NORESERVE|MAP_ANONYMOUS, -1, 0)
     != MAP_FAILED;
 }
 
@@ -2301,13 +2486,13 @@ static char* anon_mmap(char* requested_addr, size_t bytes, bool fixed) {
 // Don't update _highest_vm_reserved_address, because there might be memory
 // regions above addr + size. If so, releasing a memory region only creates
 // a hole in the address space, it doesn't help prevent heap-stack collision.
-// 
+//
 static int anon_munmap(char * addr, size_t size) {
   return ::munmap(addr, size) == 0;
 }
 
 char* os::reserve_memory(size_t bytes, char* requested_addr,
-			 size_t alignment_hint) {
+                         size_t alignment_hint) {
   return anon_mmap(requested_addr, bytes, (requested_addr != NULL));
 }
 
@@ -2323,10 +2508,10 @@ static bool linux_mprotect(char* addr, size_t size, int prot) {
   // Linux wants the mprotect address argument to be page aligned.
   char* bottom = (char*)align_size_down((intptr_t)addr, os::Linux::page_size());
 
-  // According to SUSv3, mprotect() should only be used with mappings 
+  // According to SUSv3, mprotect() should only be used with mappings
   // established by mmap(), and mmap() always maps whole pages. Unaligned
-  // 'addr' likely indicates problem in the VM (e.g. trying to change 
-  // protection of malloc'ed or statically allocated memory). Check the 
+  // 'addr' likely indicates problem in the VM (e.g. trying to change
+  // protection of malloc'ed or statically allocated memory). Check the
   // caller if you hit this assert.
   assert(addr == bottom, "sanity check");
 
@@ -2334,8 +2519,20 @@ static bool linux_mprotect(char* addr, size_t size, int prot) {
   return ::mprotect(bottom, size, prot) == 0;
 }
 
-bool os::protect_memory(char* addr, size_t size) {
-  return linux_mprotect(addr, size, PROT_READ);
+// Set protections specified
+bool os::protect_memory(char* addr, size_t bytes, ProtType prot,
+                        bool is_committed) {
+  unsigned int p = 0;
+  switch (prot) {
+  case MEM_PROT_NONE: p = PROT_NONE; break;
+  case MEM_PROT_READ: p = PROT_READ; break;
+  case MEM_PROT_RW:   p = PROT_READ|PROT_WRITE; break;
+  case MEM_PROT_RWX:  p = PROT_READ|PROT_WRITE|PROT_EXEC; break;
+  default:
+    ShouldNotReachHere();
+  }
+  // is_committed is unused.
+  return linux_mprotect(addr, bytes, p);
 }
 
 bool os::guard_memory(char* addr, size_t size) {
@@ -2343,7 +2540,7 @@ bool os::guard_memory(char* addr, size_t size) {
 }
 
 bool os::unguard_memory(char* addr, size_t size) {
-  return linux_mprotect(addr, size, PROT_READ|PROT_WRITE|PROT_EXEC);
+  return linux_mprotect(addr, size, PROT_READ|PROT_WRITE);
 }
 
 // Large page support
@@ -2357,9 +2554,9 @@ bool os::large_page_init() {
     _large_page_size = LargePageSizeInBytes;
   } else {
     // large_page_size on Linux is used to round up heap size. x86 uses either
-    // 2M or 4M page, depending on whether PAE (Physical Address Extensions) 
-    // mode is enabled. AMD64/EM64T uses 2M page in 64bit mode. IA64 can use 
-    // page as large as 256M. 
+    // 2M or 4M page, depending on whether PAE (Physical Address Extensions)
+    // mode is enabled. AMD64/EM64T uses 2M page in 64bit mode. IA64 can use
+    // page as large as 256M.
     //
     // Here we try to figure out page size by parsing /proc/meminfo and looking
     // for a line with the following format:
@@ -2417,7 +2614,7 @@ char* os::reserve_memory_special(size_t bytes) {
   key_t key = IPC_PRIVATE;
   char *addr;
 
-  bool warn_on_failure = UseLargePages && 
+  bool warn_on_failure = UseLargePages &&
                         (!FLAG_IS_DEFAULT(UseLargePages) ||
                          !FLAG_IS_DEFAULT(LargePageSizeInBytes)
                         );
@@ -2439,7 +2636,7 @@ char* os::reserve_memory_special(size_t bytes) {
      //            e.g. on Redhat AS-3 it is "hugetlb_pool".
      //      Note 2: it's possible there's enough physical memory available but
      //            they are so fragmented after a long run that they can't
-     //            coalesce into large pages. Try to reserve large pages when 
+     //            coalesce into large pages. Try to reserve large pages when
      //            the system is still "fresh".
      if (warn_on_failure) {
        jio_snprintf(msg, sizeof(msg), "Failed to reserve shared memory (errno = %d).", errno);
@@ -2481,9 +2678,13 @@ size_t os::large_page_size() {
 
 // Linux does not support anonymous mmap with large page memory. The only way
 // to reserve large page memory without file backing is through SysV shared
-// memory API. The entire memory region is committed and pinned upfront. 
+// memory API. The entire memory region is committed and pinned upfront.
 // Hopefully this will change in the future...
 bool os::can_commit_large_page_memory() {
+  return false;
+}
+
+bool os::can_execute_large_page_memory() {
   return false;
 }
 
@@ -2504,13 +2705,13 @@ char* os::attempt_reserve_memory_at(size_t bytes, char* requested_addr) {
   assert(bytes % os::vm_page_size() == 0, "reserving unexpected size block");
 
   // Repeatedly allocate blocks until the block is allocated at the
-  // right spot. Give up after max_tries. Note that reserve_memory() will 
-  // automatically update _highest_vm_reserved_address if the call is 
+  // right spot. Give up after max_tries. Note that reserve_memory() will
+  // automatically update _highest_vm_reserved_address if the call is
   // successful. The variable tracks the highest memory address every reserved
   // by JVM. It is used to detect heap-stack collision if running with
   // fixed-stack LinuxThreads. Because here we may attempt to reserve more
-  // space than needed, it could confuse the collision detecting code. To 
-  // solve the problem, save current _highest_vm_reserved_address and 
+  // space than needed, it could confuse the collision detecting code. To
+  // solve the problem, save current _highest_vm_reserved_address and
   // calculate the correct value before return.
   address old_highest = _highest_vm_reserved_address;
 
@@ -2525,7 +2726,7 @@ char* os::attempt_reserve_memory_at(size_t bytes, char* requested_addr) {
      // mmap() is successful but it fails to reserve at the requested address
      anon_munmap(addr, bytes);
   }
-  
+
   int i;
   for (i = 0; i < max_tries; ++i) {
     base[i] = reserve_memory(bytes);
@@ -2576,10 +2777,10 @@ char* os::attempt_reserve_memory_at(size_t bytes, char* requested_addr) {
 
 size_t os::read(int fd, void *buf, unsigned int nBytes) {
   return ::read(fd, buf, nBytes);
-}  
+}
 
 // TODO-FIXME: reconcile Solaris' os::sleep with the linux variation.
-// Solaris uses poll(), linux uses park().  
+// Solaris uses poll(), linux uses park().
 // Poll() is likely a better choice, assuming that Thread.interrupt()
 // generates a SIGUSRx signal. Note that SIGUSR1 can interfere with
 // SIGSEGV, see 4355769.
@@ -2590,8 +2791,8 @@ int os::sleep(Thread* thread, jlong millis, bool interruptible) {
   assert(thread == Thread::current(),  "thread consistency check");
 
   ParkEvent * const slp = thread->_SleepEvent ;
-  slp->reset() ; 
-  OrderAccess::fence() ; 
+  slp->reset() ;
+  OrderAccess::fence() ;
 
   if (interruptible) {
     jlong prevtime = javaTimeNanos();
@@ -2638,7 +2839,7 @@ int os::sleep(Thread* thread, jlong millis, bool interruptible) {
     jlong prevtime = javaTimeNanos();
 
     for (;;) {
-      // It'd be nice to avoid the back-to-back javaTimeNanos() calls on 
+      // It'd be nice to avoid the back-to-back javaTimeNanos() calls on
       // the 1st iteration ...
       jlong newtime = javaTimeNanos();
 
@@ -2650,7 +2851,7 @@ int os::sleep(Thread* thread, jlong millis, bool interruptible) {
         millis -= (newtime - prevtime) / NANOSECS_PER_MILLISECS;
       }
 
-      if(millis <= 0) break ; 
+      if(millis <= 0) break ;
 
       prevtime = newtime;
       slp->park(millis);
@@ -2680,7 +2881,7 @@ void os::yield() {
   sched_yield();
 }
 
-os::YieldResult os::NakedYield() { sched_yield(); return os::YIELD_UNKNOWN ;} 
+os::YieldResult os::NakedYield() { sched_yield(); return os::YIELD_UNKNOWN ;}
 
 void os::yield_all(int attempts) {
   // Yields to all threads, including threads with lower priorities
@@ -2778,7 +2979,7 @@ void os::hint_no_preempt() {}
 //  code that used to be used.
 //
 //  The protocol is quite simple:
-//  - suspend: 
+//  - suspend:
 //      - sends a signal to the target thread
 //      - polls the suspend state of the osthread using a yield loop
 //      - target thread signal handler (SR_handler) sets suspend state
@@ -2788,7 +2989,7 @@ void os::hint_no_preempt() {}
 //      - sends signal to end the sigsuspend loop in the SR_handler
 //
 //  Note that the SR_lock plays no role in this suspend/resume protocol.
-// 
+//
 
 static void resume_clear_context(OSThread *osthread) {
   osthread->set_ucontext(NULL);
@@ -2806,7 +3007,7 @@ static void suspend_save_context(OSThread *osthread, siginfo_t* siginfo, ucontex
 //
 // Handler function invoked when a thread's execution is suspended or
 // resumed. We have to be careful that only async-safe functions are
-// called here (Note: most pthread functions are not async safe and 
+// called here (Note: most pthread functions are not async safe and
 // should be avoided.)
 //
 // Note: sigwait() is a more natural fit than sigsuspend() from an
@@ -2869,7 +3070,7 @@ static int SR_initialize() {
   if ((s = ::getenv("_JAVA_SR_SIGNUM")) != 0) {
     int sig = ::strtol(s, 0, 10);
     if (sig > 0 || sig < _NSIG) {
-	SR_signum = sig;
+        SR_signum = sig;
     }
   }
 
@@ -2882,7 +3083,7 @@ static int SR_initialize() {
   /* Set up signal handler for suspend/resume */
   act.sa_flags = SA_RESTART|SA_SIGINFO;
   act.sa_handler = (void (*)(int)) SR_handler;
-  
+
   // SR_signum is blocked by default.
   // 4528190 - We also need to block pthread restart signal (32 on all
   // supported Linux platforms). Note that LinuxThreads need to block
@@ -2956,16 +3157,16 @@ void os::interrupt(Thread* thread) {
     // resulting in multiple notifications.  We do, however, want the store
     // to interrupted() to be visible to other threads before we execute unpark().
     OrderAccess::fence();
-    ParkEvent * const slp = thread->_SleepEvent ; 
-    if (slp != NULL) slp->unpark() ; 
+    ParkEvent * const slp = thread->_SleepEvent ;
+    if (slp != NULL) slp->unpark() ;
   }
 
   // For JSR166. Unpark even if interrupt status already was set
-  if (thread->is_Java_thread()) 
+  if (thread->is_Java_thread())
     ((JavaThread*)thread)->parker()->unpark();
 
-  ParkEvent * ev = thread->_ParkEvent ; 
-  if (ev != NULL) ev->unpark() ; 
+  ParkEvent * ev = thread->_ParkEvent ;
+  if (ev != NULL) ev->unpark() ;
 
 }
 
@@ -3036,7 +3237,7 @@ get_signal_t os::Linux::get_signal_action = NULL;
 
 struct sigaction* os::Linux::get_chained_signal_action(int sig) {
   struct sigaction *actp = NULL;
- 
+
   if (libjsig_is_loaded) {
     // Retrieve the old signal handler from libjsig
     actp = (*get_signal_action)(sig);
@@ -3139,7 +3340,7 @@ void os::Linux::set_signal_handler(int sig, bool set_installed) {
 
   void* oldhand = oldAct.sa_sigaction
                 ? CAST_FROM_FN_PTR(void*,  oldAct.sa_sigaction)
-		: CAST_FROM_FN_PTR(void*,  oldAct.sa_handler);
+                : CAST_FROM_FN_PTR(void*,  oldAct.sa_handler);
   if (oldhand != CAST_FROM_FN_PTR(void*, SIG_DFL) &&
       oldhand != CAST_FROM_FN_PTR(void*, SIG_IGN) &&
       oldhand != CAST_FROM_FN_PTR(void*, (sa_sigaction_t)signalHandler)) {
@@ -3220,14 +3421,14 @@ void os::Linux::install_signal_handlers() {
     // and if UserSignalHandler is installed all bets are off
     if (CheckJNICalls) {
       if (libjsig_is_loaded) {
-	tty->print_cr("Info: libjsig is activated, all active signal checking is disabled");
-	check_signals = false;
+        tty->print_cr("Info: libjsig is activated, all active signal checking is disabled");
+        check_signals = false;
       }
       if (AllowUserSignalHandlers) {
-	tty->print_cr("Info: AllowUserSignalHandlers is activated, all active signal checking is disabled");
-	check_signals = false;
+        tty->print_cr("Info: AllowUserSignalHandlers is activated, all active signal checking is disabled");
+        check_signals = false;
       }
-    }      
+    }
   }
 }
 
@@ -3250,15 +3451,15 @@ jlong os::Linux::fast_thread_cpu_time(clockid_t clockid) {
 // glibc on Linux platform uses non-documented flag
 // to indicate, that some special sort of signal
 // trampoline is used.
-// We will never set this flag, and we should 
+// We will never set this flag, and we should
 // ignore this flag in our diagnostic
 #ifdef SIGNIFICANT_SIGNAL_MASK
 #undef SIGNIFICANT_SIGNAL_MASK
 #endif
 #define SIGNIFICANT_SIGNAL_MASK (~0x04000000)
 
-static const char* get_signal_handler_name(address handler, 
-					   char* buf, int buflen) {
+static const char* get_signal_handler_name(address handler,
+                                           char* buf, int buflen) {
   int offset;
   bool found = os::dll_address_to_library_name(handler, buf, buflen, &offset);
   if (found) {
@@ -3274,12 +3475,12 @@ static const char* get_signal_handler_name(address handler,
   return buf;
 }
 
-static void print_signal_handler(outputStream* st, int sig, 
+static void print_signal_handler(outputStream* st, int sig,
                                  char* buf, size_t buflen) {
   struct sigaction sa;
 
   sigaction(sig, NULL, &sa);
-  
+
   // See comment for SIGNIFICANT_SIGNAL_MASK define
   sa.sa_flags &= SIGNIFICANT_SIGNAL_MASK;
 
@@ -3315,8 +3516,8 @@ static void print_signal_handler(outputStream* st, int sig,
     // check for flags, reset system-used one!
     if((int)sa.sa_flags != os::Linux::get_our_sigflags(sig)) {
       st->print(
-		", flags was changed from " PTR32_FORMAT ", consider using jsig library",
-		os::Linux::get_our_sigflags(sig));
+                ", flags was changed from " PTR32_FORMAT ", consider using jsig library",
+                os::Linux::get_our_sigflags(sig));
     }
   }
   st->cr();
@@ -3333,9 +3534,9 @@ static void print_signal_handler(outputStream* st, int sig,
 void os::run_periodic_checks() {
 
   if (check_signals == false) return;
-  
-  // SEGV and BUS if overridden could potentially prevent 
-  // generation of hs*.log in the event of a crash, debugging 
+
+  // SEGV and BUS if overridden could potentially prevent
+  // generation of hs*.log in the event of a crash, debugging
   // such a case can be very challenging, so we absolutely
   // check the following for a good measure:
   DO_SIGNAL_CHECK(SIGSEGV);
@@ -3348,7 +3549,7 @@ void os::run_periodic_checks() {
 
   // ReduceSignalUsage allows the user to override these handlers
   // see comments at the very top and jvm_solaris.h
-  if (!ReduceSignalUsage) { 
+  if (!ReduceSignalUsage) {
     DO_SIGNAL_CHECK(SHUTDOWN1_SIGNAL);
     DO_SIGNAL_CHECK(SHUTDOWN2_SIGNAL);
     DO_SIGNAL_CHECK(SHUTDOWN3_SIGNAL);
@@ -3360,12 +3561,12 @@ void os::run_periodic_checks() {
 }
 
 typedef int (*os_sigaction_t)(int, const struct sigaction *, struct sigaction *);
-  
+
 static os_sigaction_t os_sigaction = NULL;
 
 void os::Linux::check_signal_handler(int sig) {
   char buf[O_BUFLEN];
-  address jvmHandler = NULL; 
+  address jvmHandler = NULL;
 
 
   struct sigaction act;
@@ -3374,13 +3575,13 @@ void os::Linux::check_signal_handler(int sig) {
     os_sigaction = (os_sigaction_t)dlsym(RTLD_DEFAULT, "sigaction");
     if (os_sigaction == NULL) return;
   }
- 
+
   os_sigaction(sig, (struct sigaction*)NULL, &act);
 
 
   act.sa_flags &= SIGNIFICANT_SIGNAL_MASK;
- 
-  address thisHandler = (act.sa_flags & SA_SIGINFO) 
+
+  address thisHandler = (act.sa_flags & SA_SIGINFO)
     ? CAST_FROM_FN_PTR(address, act.sa_sigaction)
     : CAST_FROM_FN_PTR(address, act.sa_handler) ;
 
@@ -3398,7 +3599,7 @@ void os::Linux::check_signal_handler(int sig) {
   case SHUTDOWN1_SIGNAL:
   case SHUTDOWN2_SIGNAL:
   case SHUTDOWN3_SIGNAL:
-  case BREAK_SIGNAL:   
+  case BREAK_SIGNAL:
     jvmHandler = (address)user_handler();
     break;
 
@@ -3410,15 +3611,15 @@ void os::Linux::check_signal_handler(int sig) {
     if (sig == SR_signum) {
       jvmHandler = CAST_FROM_FN_PTR(address, (sa_sigaction_t)SR_handler);
     } else {
-      return; 
+      return;
     }
     break;
-  } 
+  }
 
   if (thisHandler != jvmHandler) {
     tty->print("Warning: %s handler ", exception_name(sig, buf, O_BUFLEN));
-    tty->print("expected:%s", get_signal_handler_name(jvmHandler, buf, O_BUFLEN)); 
-    tty->print_cr("  found:%s", get_signal_handler_name(thisHandler, buf, O_BUFLEN)); 
+    tty->print("expected:%s", get_signal_handler_name(jvmHandler, buf, O_BUFLEN));
+    tty->print_cr("  found:%s", get_signal_handler_name(thisHandler, buf, O_BUFLEN));
     // No need to check this sig any longer
     sigaddset(&check_signal_done, sig);
   } else if(os::Linux::get_our_sigflags(sig) != 0 && (int)act.sa_flags != os::Linux::get_our_sigflags(sig)) {
@@ -3429,7 +3630,7 @@ void os::Linux::check_signal_handler(int sig) {
     sigaddset(&check_signal_done, sig);
   }
 
-  // Dump all the signal 
+  // Dump all the signal
   if (sigismember(&check_signal_done, sig)) {
     print_signal_handlers(tty, buf, O_BUFLEN);
   }
@@ -3453,7 +3654,7 @@ const char* os::exception_name(int exception_code, char* buf, size_t size) {
 
 // this is called _before_ the most of global arguments have been parsed
 void os::init(void) {
-  char dummy;	/* used to get a guess on initial stack address */
+  char dummy;   /* used to get a guess on initial stack address */
 //  first_hrtime = gethrtime();
 
   // With LinuxThreads the JavaMain thread pid (primordial thread)
@@ -3485,6 +3686,7 @@ void os::init(void) {
 
   Linux::clock_init();
   initial_time_count = os::elapsed_counter();
+  pthread_mutex_init(&dl_mutex, NULL);
 }
 
 // To install functions for atexit system call
@@ -3550,9 +3752,23 @@ jint os::init_2(void)
 
   Linux::libpthread_init();
   if (PrintMiscellaneous && (Verbose || WizardMode)) {
-     tty->print_cr("[HotSpot is running with %s, %s(%s)]\n", 
-          Linux::glibc_version(), Linux::libpthread_version(), 
+     tty->print_cr("[HotSpot is running with %s, %s(%s)]\n",
+          Linux::glibc_version(), Linux::libpthread_version(),
           Linux::is_floating_stack() ? "floating stack" : "fixed stack");
+  }
+
+  if (UseNUMA) {
+    if (!Linux::libnuma_init()) {
+      UseNUMA = false;
+    } else {
+      if ((Linux::numa_max_node() < 1)) {
+        // There's only one node(they start from 0), disable NUMA.
+        UseNUMA = false;
+      }
+    }
+    if (!UseNUMA && ForceNUMA) {
+      UseNUMA = true;
+    }
   }
 
   if (MaxFDLimit) {
@@ -3616,8 +3832,9 @@ void os::make_polling_page_unreadable(void) {
 
 // Mark the polling page as readable
 void os::make_polling_page_readable(void) {
-  if( !protect_memory((char *)_polling_page, Linux::page_size()) )
+  if( !linux_mprotect((char *)_polling_page, Linux::page_size(), PROT_READ)) {
     fatal("Could not enable polling page");
+  }
 };
 
 int os::active_processor_count() {
@@ -3638,7 +3855,7 @@ bool os::bind_to_processor(uint processor_id) {
   return false;
 }
 
-/// 
+///
 
 // Suspends the target using the signal mechanism and then grabs the PC before
 // resuming the target. Used by the flat-profiler only
@@ -3728,7 +3945,7 @@ bool os::find(address addr) {
       if (begin < lowest)  begin = lowest;
       Dl_info dlinfo2;
       if (dladdr(end, &dlinfo2) && dlinfo2.dli_saddr != dlinfo.dli_saddr
-	  && end > dlinfo2.dli_saddr && dlinfo2.dli_saddr > begin)
+          && end > dlinfo2.dli_saddr && dlinfo2.dli_saddr > begin)
         end = (address) dlinfo2.dli_saddr;
       Disassembler::decode(begin, end);
     }
@@ -3868,7 +4085,7 @@ char* os::remap_memory(int fd, const char* file_name, size_t file_offset,
                        bool allow_exec) {
   // same as map_memory() on this OS
   return os::map_memory(fd, file_name, file_offset, addr, bytes, read_only,
-			allow_exec);
+                        allow_exec);
 }
 
 
@@ -3889,7 +4106,7 @@ static clockid_t thread_cpu_clockid(Thread* thread) {
   return clockid;
 }
 
-// current_thread_cpu_time(bool) and thread_cpu_time(Thread*, bool) 
+// current_thread_cpu_time(bool) and thread_cpu_time(Thread*, bool)
 // are used by JVM M&M and JVMTI to get user+sys or user CPU time
 // of a thread.
 //
@@ -3932,7 +4149,7 @@ jlong os::thread_cpu_time(Thread *thread, bool user_sys_cpu_time) {
 
 //
 //  -1 on error.
-// 
+//
 
 static jlong slow_thread_cpu_time(Thread *thread, bool user_sys_cpu_time) {
   static bool proc_pid_cpu_avail = true;
@@ -4007,11 +4224,11 @@ static jlong slow_thread_cpu_time(Thread *thread, bool user_sys_cpu_time) {
   // Skip blank chars
   do s++; while (isspace(*s));
 
-  count = sscanf(s,"%c %d %d %d %d %d %lu %lu %lu %lu %lu %lu %lu", 
-		 &idummy, &idummy, &idummy, &idummy, &idummy, &idummy, 
-                 &ldummy, &ldummy, &ldummy, &ldummy, &ldummy, 
+  count = sscanf(s,"%*c %d %d %d %d %d %lu %lu %lu %lu %lu %lu %lu",
+                 &idummy, &idummy, &idummy, &idummy, &idummy,
+                 &ldummy, &ldummy, &ldummy, &ldummy, &ldummy,
                  &user_time, &sys_time);
-  if ( count != 13 ) return -1;
+  if ( count != 12 ) return -1;
   if (user_sys_cpu_time) {
     return ((jlong)sys_time + (jlong)user_time) * (1000000000 / clock_tics_per_sec);
   } else {
@@ -4060,7 +4277,7 @@ void os::pause() {
       (void)::poll(NULL, 0, 100);
     }
   } else {
-    jio_fprintf(stderr, 
+    jio_fprintf(stderr,
       "Could not open pause file '%s', continuing immediately.\n", filename);
   }
 }
@@ -4106,8 +4323,8 @@ jdk_pthread_sigmask(int how , const sigset_t* newmask, sigset_t* oldmask) {
 
 // Refer to the comments in os_solaris.cpp park-unpark.
 //
-// Beware -- Some versions of NPTL embody a flaw where pthread_cond_timedwait() can 
-// hang indefinitely.  For instance NPTL 0.60 on 2.4.21-4ELsmp is vulnerable.  
+// Beware -- Some versions of NPTL embody a flaw where pthread_cond_timedwait() can
+// hang indefinitely.  For instance NPTL 0.60 on 2.4.21-4ELsmp is vulnerable.
 // For specifics regarding the bug see GLIBC BUGID 261237 :
 //    http://www.mail-archive.com/debian-glibc@lists.debian.org/msg10837.html.
 // Briefly, pthread_cond_timedwait() calls with an expiry time that's not in the future
@@ -4116,7 +4333,7 @@ jdk_pthread_sigmask(int how , const sigset_t* newmask, sigset_t* oldmask) {
 // hang).  The JVM is vulernable via sleep(), Object.wait(timo), LockSupport.parkNanos()
 // and monitorenter when we're using 1-0 locking.  All those operations may result in
 // calls to pthread_cond_timedwait().  Using LD_ASSUME_KERNEL to use an older version
-// of libpthread avoids the problem, but isn't practical.  
+// of libpthread avoids the problem, but isn't practical.
 //
 // Possible remedies:
 //
@@ -4125,21 +4342,21 @@ jdk_pthread_sigmask(int how , const sigset_t* newmask, sigset_t* oldmask) {
 //      between the call to compute_abstime() and pthread_cond_timedwait(), more
 //      than the minimum period may have passed, and the abstime may be stale (in the
 //      past) resultin in a hang.   Using this technique reduces the odds of a hang
-//      but the JVM is still vulnerable, particularly on heavily loaded systems.  
+//      but the JVM is still vulnerable, particularly on heavily loaded systems.
 //
-// 2.   Modify park-unpark to use per-thread (per ParkEvent) pipe-pairs instead 
-//      of the usual flag-condvar-mutex idiom.  The write side of the pipe is set 
+// 2.   Modify park-unpark to use per-thread (per ParkEvent) pipe-pairs instead
+//      of the usual flag-condvar-mutex idiom.  The write side of the pipe is set
 //      NDELAY. unpark() reduces to write(), park() reduces to read() and park(timo)
 //      reduces to poll()+read().  This works well, but consumes 2 FDs per extant
-//      thread.  
-//      
+//      thread.
+//
 // 3.   Embargo pthread_cond_timedwait() and implement a native "chron" thread
 //      that manages timeouts.  We'd emulate pthread_cond_timedwait() by enqueuing
 //      a timeout request to the chron thread and then blocking via pthread_cond_wait().
 //      This also works well.  In fact it avoids kernel-level scalability impediments
 //      on certain platforms that don't handle lots of active pthread_cond_timedwait()
-//      timers in a graceful fashion.  
-// 
+//      timers in a graceful fashion.
+//
 // 4.   When the abstime value is in the past it appears that control returns
 //      correctly from pthread_cond_timedwait(), but the condvar is left corrupt.
 //      Subsequent timedwait/wait calls may hang indefinitely.  Given that, we
@@ -4151,16 +4368,16 @@ jdk_pthread_sigmask(int how , const sigset_t* newmask, sigset_t* oldmask) {
 //      within critical sections protected by the adjunct mutex.  This prevents
 //      cond_signal() from "seeing" a condvar that's in the midst of being
 //      reinitialized or that is corrupt.  Sadly, this invariant obviates the
-//      desirable signal-after-unlock optimization that avoids futile context switching. 
+//      desirable signal-after-unlock optimization that avoids futile context switching.
 //
 //      I'm also concerned that some versions of NTPL might allocate an auxilliary
-//      structure when a condvar is used or initialized.  cond_destroy()  would 
+//      structure when a condvar is used or initialized.  cond_destroy()  would
 //      release the helper structure.  Our reinitialize-after-timedwait fix
-//      put excessive stress on malloc/free and locks protecting the c-heap. 
+//      put excessive stress on malloc/free and locks protecting the c-heap.
 //
 // We currently use (4).  See the WorkAroundNTPLTimedWaitHang flag.
 // It may be possible to refine (4) by checking the kernel and NTPL verisons
-// and only enabling the work-around for vulnerable environments. 
+// and only enabling the work-around for vulnerable environments.
 
 // utility to compute the abstime argument to timedwait:
 // millis is the relative timeout time
@@ -4187,101 +4404,101 @@ static struct timespec* compute_abstime(timespec* abstime, jlong millis) {
   return abstime;
 }
 
-  
+
 // Test-and-clear _Event, always leaves _Event set to 0, returns immediately.
-// Conceptually TryPark() should be equivalent to park(0).  
-  
-int os::PlatformEvent::TryPark() { 
-  for (;;) { 
+// Conceptually TryPark() should be equivalent to park(0).
+
+int os::PlatformEvent::TryPark() {
+  for (;;) {
     const int v = _Event ;
-    guarantee ((v == 0) || (v == 1), "invariant") ;  
-    if (Atomic::cmpxchg (0, &_Event, v) == v) return v  ; 
+    guarantee ((v == 0) || (v == 1), "invariant") ;
+    if (Atomic::cmpxchg (0, &_Event, v) == v) return v  ;
   }
 }
-    
+
 void os::PlatformEvent::park() {       // AKA "down()"
   // Invariant: Only the thread associated with the Event/PlatformEvent
-  // may call park().  
+  // may call park().
   // TODO: assert that _Assoc != NULL or _Assoc == Self
-  int v ; 
-  for (;;) { 
-      v = _Event ; 
-      if (Atomic::cmpxchg (v-1, &_Event, v) == v) break ; 
+  int v ;
+  for (;;) {
+      v = _Event ;
+      if (Atomic::cmpxchg (v-1, &_Event, v) == v) break ;
   }
-  guarantee (v >= 0, "invariant") ; 
-  if (v == 0) { 
+  guarantee (v >= 0, "invariant") ;
+  if (v == 0) {
      // Do this the hard way by blocking ...
      int status = pthread_mutex_lock(_mutex);
      assert_status(status == 0, status, "mutex_lock");
-     guarantee (_nParked == 0, "invariant") ; 
-     ++ _nParked ; 
+     guarantee (_nParked == 0, "invariant") ;
+     ++ _nParked ;
      while (_Event < 0) {
         status = pthread_cond_wait(_cond, _mutex);
         // for some reason, under 2.7 lwp_cond_wait() may return ETIME ...
         // Treat this the same as if the wait was interrupted
-        if (status == ETIME) { status = EINTR; } 
+        if (status == ETIME) { status = EINTR; }
         assert_status(status == 0 || status == EINTR, status, "cond_wait");
      }
-     -- _nParked ; 
+     -- _nParked ;
 
     // In theory we could move the ST of 0 into _Event past the unlock(),
-    // but then we'd need a MEMBAR after the ST. 
-    _Event = 0 ; 
+    // but then we'd need a MEMBAR after the ST.
+    _Event = 0 ;
      status = pthread_mutex_unlock(_mutex);
      assert_status(status == 0, status, "mutex_unlock");
   }
-  guarantee (_Event >= 0, "invariant") ; 
+  guarantee (_Event >= 0, "invariant") ;
 }
-    
-int os::PlatformEvent::park(jlong millis) {
-  guarantee (_nParked == 0, "invariant") ; 
 
-  int v ; 
-  for (;;) { 
-      v = _Event ; 
-      if (Atomic::cmpxchg (v-1, &_Event, v) == v) break ; 
+int os::PlatformEvent::park(jlong millis) {
+  guarantee (_nParked == 0, "invariant") ;
+
+  int v ;
+  for (;;) {
+      v = _Event ;
+      if (Atomic::cmpxchg (v-1, &_Event, v) == v) break ;
   }
-  guarantee (v >= 0, "invariant") ; 
-  if (v != 0) return OS_OK ; 
+  guarantee (v >= 0, "invariant") ;
+  if (v != 0) return OS_OK ;
 
   // We do this the hard way, by blocking the thread.
-  // Consider enforcing a minimum timeout value.  
+  // Consider enforcing a minimum timeout value.
   struct timespec abst;
   compute_abstime(&abst, millis);
 
   int ret = OS_TIMEOUT;
   int status = pthread_mutex_lock(_mutex);
   assert_status(status == 0, status, "mutex_lock");
-  guarantee (_nParked == 0, "invariant") ; 
+  guarantee (_nParked == 0, "invariant") ;
   ++_nParked ;
 
   // Object.wait(timo) will return because of
   // (a) notification
   // (b) timeout
   // (c) thread.interrupt
-  // 
-  // Thread.interrupt and object.notify{All} both call Event::set.  	
-  // That is, we treat thread.interrupt as a special case of notification.  
-  // The underlying Solaris implementation, cond_timedwait, admits 
+  //
+  // Thread.interrupt and object.notify{All} both call Event::set.
+  // That is, we treat thread.interrupt as a special case of notification.
+  // The underlying Solaris implementation, cond_timedwait, admits
   // spurious/premature wakeups, but the JLS/JVM spec prevents the
   // JVM from making those visible to Java code.  As such, we must
-  // filter out spurious wakeups.  We assume all ETIME returns are valid. 
+  // filter out spurious wakeups.  We assume all ETIME returns are valid.
   //
-  // TODO: properly differentiate simultaneous notify+interrupt. 
-  // In that case, we should propagate the notify to another waiter. 
+  // TODO: properly differentiate simultaneous notify+interrupt.
+  // In that case, we should propagate the notify to another waiter.
 
-  while (_Event < 0) { 		
+  while (_Event < 0) {
     status = os::Linux::safe_cond_timedwait(_cond, _mutex, &abst);
-    if (status != 0 && WorkAroundNPTLTimedWaitHang) { 
-      pthread_cond_destroy (_cond); 
+    if (status != 0 && WorkAroundNPTLTimedWaitHang) {
+      pthread_cond_destroy (_cond);
       pthread_cond_init (_cond, NULL) ;
     }
-    assert_status(status == 0 || status == EINTR || 
-		  status == ETIME || status == ETIMEDOUT, 
-		  status, "cond_timedwait");
-    if (!FilterSpuriousWakeups) break ; 		// previous semantics
-    if (status == ETIME || status == ETIMEDOUT) break ; 
-    // We consume and ignore EINTR and spurious wakeups.   
+    assert_status(status == 0 || status == EINTR ||
+                  status == ETIME || status == ETIMEDOUT,
+                  status, "cond_timedwait");
+    if (!FilterSpuriousWakeups) break ;                 // previous semantics
+    if (status == ETIME || status == ETIMEDOUT) break ;
+    // We consume and ignore EINTR and spurious wakeups.
   }
   --_nParked ;
   if (_Event >= 0) {
@@ -4290,34 +4507,34 @@ int os::PlatformEvent::park(jlong millis) {
   _Event = 0 ;
   status = pthread_mutex_unlock(_mutex);
   assert_status(status == 0, status, "mutex_unlock");
-  assert (_nParked == 0, "invariant") ;  
+  assert (_nParked == 0, "invariant") ;
   return ret;
 }
 
 void os::PlatformEvent::unpark() {
-  int v, AnyWaiters ; 
-  for (;;) { 
-      v = _Event ; 
-      if (v > 0) { 
+  int v, AnyWaiters ;
+  for (;;) {
+      v = _Event ;
+      if (v > 0) {
          // The LD of _Event could have reordered or be satisfied
          // by a read-aside from this processor's write buffer.
          // To avoid problems execute a barrier and then
          // ratify the value.
-         OrderAccess::fence() ; 
-         if (_Event == v) return ; 
-         continue ; 
+         OrderAccess::fence() ;
+         if (_Event == v) return ;
+         continue ;
       }
-      if (Atomic::cmpxchg (v+1, &_Event, v) == v) break ; 
+      if (Atomic::cmpxchg (v+1, &_Event, v) == v) break ;
   }
   if (v < 0) {
      // Wait for the thread associated with the event to vacate
      int status = pthread_mutex_lock(_mutex);
      assert_status(status == 0, status, "mutex_lock");
-     AnyWaiters = _nParked ; 
-     assert (AnyWaiters == 0 || AnyWaiters == 1, "invariant") ; 
-     if (AnyWaiters != 0 && WorkAroundNPTLTimedWaitHang) { 
-        AnyWaiters = 0 ; 
-        pthread_cond_signal (_cond); 
+     AnyWaiters = _nParked ;
+     assert (AnyWaiters == 0 || AnyWaiters == 1, "invariant") ;
+     if (AnyWaiters != 0 && WorkAroundNPTLTimedWaitHang) {
+        AnyWaiters = 0 ;
+        pthread_cond_signal (_cond);
      }
      status = pthread_mutex_unlock(_mutex);
      assert_status(status == 0, status, "mutex_unlock");
@@ -4327,11 +4544,11 @@ void os::PlatformEvent::unpark() {
      }
   }
 
-  // Note that we signal() _after dropping the lock for "immortal" Events.  
-  // This is safe and avoids a common class of  futile wakeups.  In rare 
-  // circumstances this can cause a thread to return prematurely from 
-  // cond_{timed}wait() but the spurious wakeup is benign and the victim will 
-  // simply re-test the condition and re-park itself.  
+  // Note that we signal() _after dropping the lock for "immortal" Events.
+  // This is safe and avoids a common class of  futile wakeups.  In rare
+  // circumstances this can cause a thread to return prematurely from
+  // cond_{timed}wait() but the spurious wakeup is benign and the victim will
+  // simply re-test the condition and re-park itself.
 }
 
 
@@ -4341,11 +4558,11 @@ void os::PlatformEvent::unpark() {
 /*
  * The solaris and linux implementations of park/unpark are fairly
  * conservative for now, but can be improved. They currently use a
- * mutex/condvar pair, plus a a count. 
+ * mutex/condvar pair, plus a a count.
  * Park decrements count if > 0, else does a condvar wait.  Unpark
- * sets count to 1 and signals condvar.  Only one thread ever waits 
- * on the condvar. Contention seen when trying to park implies that someone 
- * is unparking you, so don't wait. And spurious returns are fine, so there 
+ * sets count to 1 and signals condvar.  Only one thread ever waits
+ * on the condvar. Contention seen when trying to park implies that someone
+ * is unparking you, so don't wait. And spurious returns are fine, so there
  * is no need to track notifications.
  */
 
@@ -4360,8 +4577,8 @@ void os::PlatformEvent::unpark() {
  * The passed in time value is either a relative time in nanoseconds
  * or an absolute time in milliseconds. Either way it has to be unpacked
  * into suitable seconds and nanoseconds components and stored in the
- * given timespec structure. 
- * Given time is a 64-bit value and the time_t used in the timespec is only 
+ * given timespec structure.
+ * Given time is a 64-bit value and the time_t used in the timespec is only
  * a signed-32-bit value (except on 64-bit Linux) we have to watch for
  * overflow if times way in the future are given. Further on Solaris versions
  * prior to 10 there is a restriction (see cond_timedwait) that the specified
@@ -4389,7 +4606,7 @@ static void unpackTime(timespec* absTime, bool isAbsolute, jlong time) {
     else {
       absTime->tv_sec = secs;
     }
-    absTime->tv_nsec = (time % 1000) * NANOSECS_PER_MILLISEC;   
+    absTime->tv_nsec = (time % 1000) * NANOSECS_PER_MILLISEC;
   }
   else {
     jlong secs = time / NANOSECS_PER_SEC;
@@ -4415,9 +4632,9 @@ static void unpackTime(timespec* absTime, bool isAbsolute, jlong time) {
 void Parker::park(bool isAbsolute, jlong time) {
   // Optional fast-path check:
   // Return immediately if a permit is available.
-  if (_counter > 0) { 
-      _counter = 0 ;  
-      return ;  
+  if (_counter > 0) {
+      _counter = 0 ;
+      return ;
   }
 
   Thread* thread = Thread::current();
@@ -4433,7 +4650,7 @@ void Parker::park(bool isAbsolute, jlong time) {
   // Next, demultiplex/decode time arguments
   timespec absTime;
   if (time < 0) { // don't wait at all
-    return; 
+    return;
   }
   if (time > 0) {
     unpackTime(&absTime, isAbsolute, time);
@@ -4441,11 +4658,11 @@ void Parker::park(bool isAbsolute, jlong time) {
 
 
   // Enter safepoint region
-  // Beware of deadlocks such as 6317397. 
+  // Beware of deadlocks such as 6317397.
   // The per-thread Parker:: mutex is a classic leaf-lock.
   // In particular a thread must never block on the Threads_lock while
   // holding the Parker:: mutex.  If safepoints are pending both the
-  // the ThreadBlockInVM() CTOR and DTOR may grab Threads_lock.  
+  // the ThreadBlockInVM() CTOR and DTOR may grab Threads_lock.
   ThreadBlockInVM tbivm(jt);
 
   // Don't wait if cannot get lock since interference arises from
@@ -4454,11 +4671,11 @@ void Parker::park(bool isAbsolute, jlong time) {
     return;
   }
 
-  int status ; 
+  int status ;
   if (_counter > 0)  { // no wait needed
     _counter = 0;
     status = pthread_mutex_unlock(_mutex);
-    assert (status == 0, "invariant") ; 
+    assert (status == 0, "invariant") ;
     return;
   }
 
@@ -4469,31 +4686,31 @@ void Parker::park(bool isAbsolute, jlong time) {
   sigset_t* allowdebug_blocked = os::Linux::allowdebug_blocked_signals();
   pthread_sigmask(SIG_BLOCK, allowdebug_blocked, &oldsigs);
 #endif
-  
+
   OSThreadWaitState osts(thread->osthread(), false /* not Object.wait() */);
   jt->set_suspend_equivalent();
   // cleared by handle_special_suspend_equivalent_condition() or java_suspend_self()
-  
+
   if (time == 0) {
-    status = pthread_cond_wait (_cond, _mutex) ; 
+    status = pthread_cond_wait (_cond, _mutex) ;
   } else {
-    status = os::Linux::safe_cond_timedwait (_cond, _mutex, &absTime) ; 
-    if (status != 0 && WorkAroundNPTLTimedWaitHang) { 
-      pthread_cond_destroy (_cond) ; 
-      pthread_cond_init    (_cond, NULL); 
+    status = os::Linux::safe_cond_timedwait (_cond, _mutex, &absTime) ;
+    if (status != 0 && WorkAroundNPTLTimedWaitHang) {
+      pthread_cond_destroy (_cond) ;
+      pthread_cond_init    (_cond, NULL);
     }
   }
-  assert_status(status == 0 || status == EINTR || 
-                status == ETIME || status == ETIMEDOUT, 
+  assert_status(status == 0 || status == EINTR ||
+                status == ETIME || status == ETIMEDOUT,
                 status, "cond_timedwait");
 
 #ifdef ASSERT
   pthread_sigmask(SIG_SETMASK, &oldsigs, NULL);
 #endif
 
-  _counter = 0 ; 
+  _counter = 0 ;
   status = pthread_mutex_unlock(_mutex) ;
-  assert_status(status == 0, status, "invariant") ; 
+  assert_status(status == 0, status, "invariant") ;
   // If externally suspended while waiting, re-suspend
   if (jt->handle_special_suspend_equivalent_condition()) {
     jt->java_suspend_self();
@@ -4502,26 +4719,26 @@ void Parker::park(bool isAbsolute, jlong time) {
 }
 
 void Parker::unpark() {
-  int s, status ; 
+  int s, status ;
   status = pthread_mutex_lock(_mutex);
-  assert (status == 0, "invariant") ; 
+  assert (status == 0, "invariant") ;
   s = _counter;
   _counter = 1;
-  if (s < 1) { 
-     if (WorkAroundNPTLTimedWaitHang) { 
-        status = pthread_cond_signal (_cond) ; 
-        assert (status == 0, "invariant") ; 
+  if (s < 1) {
+     if (WorkAroundNPTLTimedWaitHang) {
+        status = pthread_cond_signal (_cond) ;
+        assert (status == 0, "invariant") ;
         status = pthread_mutex_unlock(_mutex);
-        assert (status == 0, "invariant") ; 
+        assert (status == 0, "invariant") ;
      } else {
         status = pthread_mutex_unlock(_mutex);
-        assert (status == 0, "invariant") ; 
-        status = pthread_cond_signal (_cond) ; 
-        assert (status == 0, "invariant") ; 
+        assert (status == 0, "invariant") ;
+        status = pthread_cond_signal (_cond) ;
+        assert (status == 0, "invariant") ;
      }
   } else {
     pthread_mutex_unlock(_mutex);
-    assert (status == 0, "invariant") ; 
+    assert (status == 0, "invariant") ;
   }
 }
 
@@ -4542,13 +4759,13 @@ extern char** environ;
 // doesn't block SIGINT et al.
 int os::fork_and_exec(char* cmd) {
   const char * argv[4] = {"sh", "-c", cmd, NULL};
-  
-  // fork() in LinuxThreads/NPTL is not async-safe. It needs to run 
-  // pthread_atfork handlers and reset pthread library. All we need is a 
+
+  // fork() in LinuxThreads/NPTL is not async-safe. It needs to run
+  // pthread_atfork handlers and reset pthread library. All we need is a
   // separate process to execve. Make a direct syscall to fork process.
   // On IA64 there's no fork syscall, we have to use fork() and hope for
   // the best...
-  pid_t pid = NOT_IA64(syscall(__NR_fork);) 
+  pid_t pid = NOT_IA64(syscall(__NR_fork);)
               IA64_ONLY(fork();)
 
   if (pid < 0) {
@@ -4558,12 +4775,12 @@ int os::fork_and_exec(char* cmd) {
   } else if (pid == 0) {
     // child process
 
-    // execve() in LinuxThreads will call pthread_kill_other_threads_np() 
-    // first to kill every thread on the thread list. Because this list is 
-    // not reset by fork() (see notes above), execve() will instead kill 
-    // every thread in the parent process. We know this is the only thread 
+    // execve() in LinuxThreads will call pthread_kill_other_threads_np()
+    // first to kill every thread on the thread list. Because this list is
+    // not reset by fork() (see notes above), execve() will instead kill
+    // every thread in the parent process. We know this is the only thread
     // in the new process, so make a system call directly.
-    // IA64 should use normal execve() from glibc to match the glibc fork() 
+    // IA64 should use normal execve() from glibc to match the glibc fork()
     // above.
     NOT_IA64(syscall(__NR_execve, "/bin/sh", argv, environ);)
     IA64_ONLY(execve("/bin/sh", (char* const*)argv, environ);)
@@ -4574,7 +4791,7 @@ int os::fork_and_exec(char* cmd) {
   } else  {
     // copied from J2SE ..._waitForProcessExit() in UNIXProcess_md.c; we don't
     // care about the actual exit code, for now.
-   
+
     int status;
 
     // Wait for the child process to exit.  This returns immediately if

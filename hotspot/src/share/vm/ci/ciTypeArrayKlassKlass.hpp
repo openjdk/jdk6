@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)ciTypeArrayKlassKlass.hpp	1.12 07/05/05 17:05:18 JVM"
-#endif
 /*
  * Copyright 1999-2001 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // ciTypeArrayKlassKlass
@@ -42,7 +39,7 @@ private:
   typeArrayKlassKlass* get_typeArrayKlassKlass() {
     return (typeArrayKlassKlass*)get_Klass();
   }
-  
+
   const char* type_string() { return "ciTypeArrayKlassKlass"; }
 
 public:

@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)growableArray.cpp	1.37 07/05/05 17:07:10 JVM"
-#endif
 /*
  * Copyright 1997-2005 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 # include "incls/_precompiled.incl"
 # include "incls/_growableArray.cpp.incl"
@@ -35,7 +32,7 @@ void GenericGrowableArray::set_nesting() {
 }
 
 void GenericGrowableArray::check_nesting() {
-  // Check for insidious allocation bug: if a GrowableArray overflows, the 
+  // Check for insidious allocation bug: if a GrowableArray overflows, the
   // grown array must be allocated under the same ResourceMark as the original.
   // Otherwise, the _data array will be deallocated too early.
   if (on_stack() &&
@@ -46,12 +43,13 @@ void GenericGrowableArray::check_nesting() {
 #endif
 
 void* GenericGrowableArray::raw_allocate(int elementSize) {
+  assert(_max >= 0, "integer overflow");
+  size_t byte_size = elementSize * (size_t) _max;
   if (on_stack()) {
-    return (void*)resource_allocate_bytes(elementSize * _max);
+    return (void*)resource_allocate_bytes(byte_size);
   } else if (on_C_heap()) {
-    return (void*)AllocateHeap(elementSize * _max, "GrET in " __FILE__);
+    return (void*)AllocateHeap(byte_size, "GrET in " __FILE__);
   } else {
-    return _arena->Amalloc(elementSize * _max);
+    return _arena->Amalloc(byte_size);
   }
 }
-

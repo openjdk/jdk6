@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)genMarkSweep.cpp	1.40 07/05/17 15:54:55 JVM"
-#endif
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -34,8 +31,9 @@ void GenMarkSweep::invoke_at_safepoint(int level, ReferenceProcessor* rp,
 
   // hook up weak ref data so it can be used during Mark-Sweep
   assert(ref_processor() == NULL, "no stomping");
-  _ref_processor = rp;
   assert(rp != NULL, "should be non-NULL");
+  _ref_processor = rp;
+  rp->setup_policy(clear_all_softrefs);
 
   TraceTime t1("Full GC", PrintGC && !PrintGCDetails, true, gclog_or_tty);
 
@@ -44,8 +42,8 @@ void GenMarkSweep::invoke_at_safepoint(int level, ReferenceProcessor* rp,
   CodeCache::gc_prologue();
   Threads::gc_prologue();
 
-  // Increment the invocation count for the permanent generation, since it is 
-  // implicitly collected whenever we do a full mark sweep collection. 
+  // Increment the invocation count for the permanent generation, since it is
+  // implicitly collected whenever we do a full mark sweep collection.
   GenCollectedHeap* gch = GenCollectedHeap::heap();
   gch->perm_gen()->stat_record()->invocations++;
 
@@ -71,13 +69,12 @@ void GenMarkSweep::invoke_at_safepoint(int level, ReferenceProcessor* rp,
   // Don't add any more derived pointers during phase3
   COMPILER2_PRESENT(assert(DerivedPointerTable::is_active(), "Sanity"));
   COMPILER2_PRESENT(DerivedPointerTable::set_active(false));
-    
+
   mark_sweep_phase3(level);
 
   VALIDATE_MARK_SWEEP_ONLY(
     if (ValidateMarkSweep) {
-      guarantee(_root_refs_stack->length() == 0,
-                "should be empty by now");
+      guarantee(_root_refs_stack->length() == 0, "should be empty by now");
     }
   )
 
@@ -100,7 +97,7 @@ void GenMarkSweep::invoke_at_safepoint(int level, ReferenceProcessor* rp,
 
   // If compaction completely evacuated all generations younger than this
   // one, then we can clear the card table.  Otherwise, we must invalidate
-  // it (consider all cards dirty).  In the future, we might consider doing 
+  // it (consider all cards dirty).  In the future, we might consider doing
   // compaction within generations only, and doing card-table sliding.
   bool all_empty = true;
   for (int i = 0; all_empty && i < level; i++) {
@@ -149,12 +146,12 @@ void GenMarkSweep::allocate_stacks() {
 
   // $$$ To cut a corner, we'll only use the first scratch block, and then
   // revert to malloc.
-  if (scratch != NULL) { 
+  if (scratch != NULL) {
     _preserved_count_max =
-      scratch->num_words * HeapWordSize / sizeof(PreservedMark); 
-  } else { 
-    _preserved_count_max = 0; 
-  } 
+      scratch->num_words * HeapWordSize / sizeof(PreservedMark);
+  } else {
+    _preserved_count_max = 0;
+  }
 
   _preserved_marks = (PreservedMark*)scratch;
   _preserved_count = 0;
@@ -168,9 +165,9 @@ void GenMarkSweep::allocate_stacks() {
 
 #ifdef VALIDATE_MARK_SWEEP
   if (ValidateMarkSweep) {
-    _root_refs_stack    = new (ResourceObj::C_HEAP) GrowableArray<oop*>(100, true);
-    _other_refs_stack   = new (ResourceObj::C_HEAP) GrowableArray<oop*>(100, true);
-    _adjusted_pointers  = new (ResourceObj::C_HEAP) GrowableArray<oop*>(100, true);
+    _root_refs_stack    = new (ResourceObj::C_HEAP) GrowableArray<void*>(100, true);
+    _other_refs_stack   = new (ResourceObj::C_HEAP) GrowableArray<void*>(100, true);
+    _adjusted_pointers  = new (ResourceObj::C_HEAP) GrowableArray<void*>(100, true);
     _live_oops          = new (ResourceObj::C_HEAP) GrowableArray<oop>(100, true);
     _live_oops_moved_to = new (ResourceObj::C_HEAP) GrowableArray<oop>(100, true);
     _live_oops_size     = new (ResourceObj::C_HEAP) GrowableArray<size_t>(100, true);
@@ -194,6 +191,12 @@ void GenMarkSweep::allocate_stacks() {
 
 
 void GenMarkSweep::deallocate_stacks() {
+
+  if (!UseG1GC) {
+    GenCollectedHeap* gch = GenCollectedHeap::heap();
+    gch->release_scratch();
+  }
+
   if (_preserved_oop_stack) {
     delete _preserved_mark_stack;
     _preserved_mark_stack = NULL;
@@ -218,8 +221,8 @@ void GenMarkSweep::deallocate_stacks() {
 #endif
 }
 
-void GenMarkSweep::mark_sweep_phase1(int level, 
-				  bool clear_all_softrefs) {
+void GenMarkSweep::mark_sweep_phase1(int level,
+                                  bool clear_all_softrefs) {
   // Recursively traverse all live objects and mark them
   EventMark m("1 mark object");
   TraceTime tm("phase 1", PrintGC && Verbose, true, gclog_or_tty);
@@ -236,27 +239,16 @@ void GenMarkSweep::mark_sweep_phase1(int level,
   follow_root_closure.set_orig_generation(gch->get_gen(level));
 
   gch->gen_process_strong_roots(level,
-				false, // Younger gens are not roots.
-				true,  // Collecting permanent generation.
-				SharedHeap::SO_SystemClasses,
-				&follow_root_closure, &follow_root_closure);
+                                false, // Younger gens are not roots.
+                                true,  // Collecting permanent generation.
+                                SharedHeap::SO_SystemClasses,
+                                &follow_root_closure, &follow_root_closure);
 
   // Process reference objects found during marking
   {
-    ReferencePolicy *soft_ref_policy;
-    if (clear_all_softrefs) {
-      soft_ref_policy = new AlwaysClearPolicy();
-    } else {
-#ifdef COMPILER2
-      soft_ref_policy = new LRUMaxHeapPolicy();
-#else
-      soft_ref_policy = new LRUCurrentHeapPolicy();
-#endif // COMPILER2
-    }
-    assert(soft_ref_policy != NULL,"No soft reference policy");
+    ref_processor()->setup_policy(clear_all_softrefs);
     ref_processor()->process_discovered_references(
-      soft_ref_policy, &is_alive, &keep_alive,
-      &follow_stack_closure, NULL);
+      &is_alive, &keep_alive, &follow_stack_closure, NULL);
   }
 
   // Follow system dictionary roots and unload classes
@@ -286,7 +278,7 @@ void GenMarkSweep::mark_sweep_phase2() {
   // array. If perm_gen is not traversed last a klassOop may get
   // overwritten. This is fine since it is dead, but if the class has dead
   // instances we have to skip them, and in order to find their size we
-  // need the klassOop! 
+  // need the klassOop!
   //
   // It is not required that we traverse spaces in the same order in
   // phase2, phase3 and phase4, but the ValidateMarkSweep live oops
@@ -294,7 +286,7 @@ void GenMarkSweep::mark_sweep_phase2() {
 
   GenCollectedHeap* gch = GenCollectedHeap::heap();
   Generation* pg = gch->perm_gen();
-  
+
   EventMark m("2 compute new addresses");
   TraceTime tm("phase 2", PrintGC && Verbose, true, gclog_or_tty);
   trace("2");
@@ -337,16 +329,16 @@ void GenMarkSweep::mark_sweep_phase3(int level) {
   adjust_pointer_closure.set_orig_generation(gch->get_gen(level));
 
   gch->gen_process_strong_roots(level,
-				false, // Younger gens are not roots.
-				true,  // Collecting permanent generation.
-				SharedHeap::SO_AllClasses,
-				&adjust_root_pointer_closure,
-				&adjust_root_pointer_closure);
+                                false, // Younger gens are not roots.
+                                true,  // Collecting permanent generation.
+                                SharedHeap::SO_AllClasses,
+                                &adjust_root_pointer_closure,
+                                &adjust_root_pointer_closure);
 
   // Now adjust pointers in remaining weak roots.  (All of which should
   // have been cleared if they pointed to non-surviving objects.)
   gch->gen_process_weak_roots(&adjust_root_pointer_closure,
-			      &adjust_pointer_closure);
+                              &adjust_pointer_closure);
 
   adjust_marks();
   GenAdjustPointersClosure blk;
@@ -383,7 +375,7 @@ void GenMarkSweep::mark_sweep_phase4() {
   VALIDATE_MARK_SWEEP_ONLY(reset_live_oop_tracking(true));
 
   pg->compact();
-  
+
   VALIDATE_MARK_SWEEP_ONLY(reset_live_oop_tracking(false));
 
   GenCompactClosure blk;

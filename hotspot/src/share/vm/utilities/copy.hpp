@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)copy.hpp	1.15 07/05/17 16:07:14 JVM"
-#endif
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Assembly code for platforms that need it.
@@ -151,9 +148,17 @@ class Copy : AllStatic {
 
   // oops,                  conjoint, atomic on each oop
   static void conjoint_oops_atomic(oop* from, oop* to, size_t count) {
-    assert_params_ok(from, to, LogBytesPerOop);
+    assert_params_ok(from, to, LogBytesPerHeapOop);
     assert_non_zero(count);
     pd_conjoint_oops_atomic(from, to, count);
+  }
+
+  // overloaded for UseCompressedOops
+  static void conjoint_oops_atomic(narrowOop* from, narrowOop* to, size_t count) {
+    assert(sizeof(narrowOop) == sizeof(jint), "this cast is wrong");
+    assert_params_ok(from, to, LogBytesPerInt);
+    assert_non_zero(count);
+    pd_conjoint_jints_atomic((jint*)from, (jint*)to, count);
   }
 
   // Copy a span of memory.  If the span is an integral number of aligned
@@ -191,7 +196,7 @@ class Copy : AllStatic {
 
   // oops,                  conjoint array, atomic on each oop
   static void arrayof_conjoint_oops(HeapWord* from, HeapWord* to, size_t count) {
-    assert_params_ok(from, to, LogBytesPerOop);
+    assert_params_ok(from, to, LogBytesPerHeapOop);
     assert_non_zero(count);
     pd_arrayof_conjoint_oops(from, to, count);
   }
@@ -293,7 +298,7 @@ class Copy : AllStatic {
   }
 
   static void assert_params_ok(HeapWord* to, intptr_t log_align) {
-#ifdef ASSERT 
+#ifdef ASSERT
     if (mask_bits((uintptr_t)to, right_n_bits(log_align)) != 0)
       basic_fatal("not word aligned");
 #endif

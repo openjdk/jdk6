@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)compile.cpp	1.633 07/09/28 10:23:11 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -256,7 +253,7 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
   uint next = 0;
   while( next < useful.size() ) {
     Node *n = useful.at(next++);
-    // Use raw traversal of out edges since this code removes out edges 
+    // Use raw traversal of out edges since this code removes out edges
     int max = n->outcnt();
     for (int j = 0; j < max; ++j ) {
       Node* child = n->raw_out(j);
@@ -278,7 +275,7 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
 
 //------------------------------frame_size_in_words-----------------------------
 // frame_slots in units of words
-int Compile::frame_size_in_words() const { 
+int Compile::frame_size_in_words() const {
   // shift is 0 in LP32 and 1 in LP64
   const int shift = (LogBytesPerWord - LogBytesPerInt);
   int words = _frame_slots >> shift;
@@ -295,7 +292,7 @@ class CompileWrapper : public StackObj {
 
   ~CompileWrapper();
 };
-  
+
 CompileWrapper::CompileWrapper(Compile* compile) : _compile(compile) {
   // the Compile* pointer is stored in the current ciEnv:
   ciEnv* env = compile->env();
@@ -316,9 +313,6 @@ CompileWrapper::CompileWrapper(Compile* compile) : _compile(compile) {
   _compile->begin_method();
 }
 CompileWrapper::~CompileWrapper() {
-  if (_compile->failing()) {
-    _compile->print_method("Failed");
-  }
   _compile->end_method();
   if (_compile->scratch_buffer_blob() != NULL)
     BufferBlob::free(_compile->scratch_buffer_blob());
@@ -334,6 +328,12 @@ void Compile::print_compile_messages() {
     // Recompiling without allowing machine instructions to subsume loads
     tty->print_cr("*********************************************************");
     tty->print_cr("** Bailout: Recompile without subsuming loads          **");
+    tty->print_cr("*********************************************************");
+  }
+  if (_do_escape_analysis != DoEscapeAnalysis && PrintOpto) {
+    // Recompiling without escape analysis
+    tty->print_cr("*********************************************************");
+    tty->print_cr("** Bailout: Recompile without escape analysis          **");
     tty->print_cr("*********************************************************");
   }
   if (env()->break_at_compile()) {
@@ -365,7 +365,12 @@ void Compile::init_scratch_buffer_blob() {
   BufferBlob* blob = BufferBlob::create("Compile::scratch_buffer", size);
   // Record the buffer blob for next time.
   set_scratch_buffer_blob(blob);
-  guarantee(scratch_buffer_blob() != NULL, "Need BufferBlob for code generation");
+  // Have we run out of code space?
+  if (scratch_buffer_blob() == NULL) {
+    // Let CompilerBroker disable further compilations.
+    record_failure("Not enough space for scratch buffer in CodeCache");
+    return;
+  }
 
   // Initialize the relocation buffers
   relocInfo* locs_buf = (relocInfo*) blob->instructions_end() - MAX_locs_size;
@@ -404,11 +409,6 @@ uint Compile::scratch_emit_size(const Node* n) {
   return buf.code_size();
 }
 
-void  Compile::record_for_escape_analysis(Node* n) {
-  if (_congraph != NULL)
-    _congraph->record_for_escape_analysis(n);
-}
-
 
 // ============================================================================
 //------------------------------Compile standard-------------------------------
@@ -418,7 +418,7 @@ debug_only( int Compile::_debug_idx = 100000; )
 // the continuation bci for on stack replacement.
 
 
-Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr_bci, bool subsume_loads )
+Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr_bci, bool subsume_loads, bool do_escape_analysis )
                 : Phase(Compiler),
                   _env(ci_env),
                   _log(ci_env->log()),
@@ -433,6 +433,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
                   _for_igvn(NULL),
                   _warm_calls(NULL),
                   _subsume_loads(subsume_loads),
+                  _do_escape_analysis(do_escape_analysis),
                   _failure_reason(NULL),
                   _code_buffer("Compile::Fill_buffer"),
                   _orig_pc_slot(0),
@@ -457,7 +458,16 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
   }
   TraceTime t1("Total compilation time", &_t_totalCompilation, TimeCompiler, TimeCompiler2);
   TraceTime t2(NULL, &_t_methodCompilation, TimeCompiler, false);
-  set_print_assembly(PrintOptoAssembly || _method->should_print_assembly());
+  bool print_opto_assembly = PrintOptoAssembly || _method->has_option("PrintOptoAssembly");
+  if (!print_opto_assembly) {
+    bool print_assembly = (PrintAssembly || _method->should_print_assembly());
+    if (print_assembly && !Disassembler::can_decode()) {
+      tty->print_cr("PrintAssembly request changed to PrintOptoAssembly");
+      print_opto_assembly = true;
+    }
+  }
+  set_print_assembly(print_opto_assembly);
+  set_parsed_irreducible_loop(false);
 #endif
 
   if (ProfileTraps) {
@@ -483,15 +493,12 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
   // Node list that Iterative GVN will start with
   Unique_Node_List for_igvn(comp_arena());
   set_for_igvn(&for_igvn);
-  
+
   // GVN that will be run immediately on new nodes
   uint estimated_size = method()->code_size()*4+64;
   estimated_size = (estimated_size < MINIMUM_NODE_HASH ? MINIMUM_NODE_HASH : estimated_size);
   PhaseGVN gvn(node_arena(), estimated_size);
   set_initial_gvn(&gvn);
-
-  if (DoEscapeAnalysis)
-    _congraph = new ConnectionGraph(this);
 
   { // Scope for timing the parser
     TracePhase t3("parse", &_t_parser, true);
@@ -544,6 +551,8 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
       rethrow_exceptions(kit.transfer_exceptions_into_jvms());
     }
 
+    print_method("Before RemoveUseless", 3);
+
     // Remove clutter produced by parsing.
     if (!failing()) {
       ResourceMark rm;
@@ -577,14 +586,32 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
   NOT_PRODUCT( verify_graph_edges(); )
 
   // Perform escape analysis
-  if (_congraph != NULL) {
-    NOT_PRODUCT( TracePhase t2("escapeAnalysis", &_t_escapeAnalysis, TimeCompiler); )
-    _congraph->compute_escape();
+  if (_do_escape_analysis && ConnectionGraph::has_candidates(this)) {
+    TracePhase t2("escapeAnalysis", &_t_escapeAnalysis, true);
+    // Add ConP#NULL and ConN#NULL nodes before ConnectionGraph construction.
+    PhaseGVN* igvn = initial_gvn();
+    Node* oop_null = igvn->zerocon(T_OBJECT);
+    Node* noop_null = igvn->zerocon(T_NARROWOOP);
+
+    _congraph = new(comp_arena()) ConnectionGraph(this);
+    bool has_non_escaping_obj = _congraph->compute_escape();
+
 #ifndef PRODUCT
     if (PrintEscapeAnalysis) {
       _congraph->dump();
     }
 #endif
+    // Cleanup.
+    if (oop_null->outcnt() == 0)
+      igvn->hash_delete(oop_null);
+    if (noop_null->outcnt() == 0)
+      igvn->hash_delete(noop_null);
+
+    if (!has_non_escaping_obj) {
+      _congraph = NULL;
+    }
+
+    if (failing())  return;
   }
   // Now optimize
   Optimize();
@@ -609,7 +636,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
   }
 #endif
 
-  // Now that we know the size of all the monitors we can add a fixed slot 
+  // Now that we know the size of all the monitors we can add a fixed slot
   // for the original deopt pc.
 
   _orig_pc_slot =  fixed_slots();
@@ -620,7 +647,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
   Code_Gen();
   if (failing())  return;
 
-  // Check if we want to skip execution of all compiled code.  
+  // Check if we want to skip execution of all compiled code.
   {
 #ifndef PRODUCT
     if (OptoNoExecute) {
@@ -641,7 +668,7 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
     env()->register_method(_method, _entry_bci,
                            &_code_offsets,
                            _orig_pc_slot_offset_in_bytes,
-                           code_buffer(), 
+                           code_buffer(),
                            frame_size_in_words(), _oop_map_set,
                            &_handler_table, &_inc_table,
                            compiler,
@@ -678,6 +705,7 @@ Compile::Compile( ciEnv* ci_env,
     _orig_pc_slot(0),
     _orig_pc_slot_offset_in_bytes(0),
     _subsume_loads(true),
+    _do_escape_analysis(false),
     _failure_reason(NULL),
     _code_buffer("Compile::Fill_buffer"),
     _node_bundling_limit(0),
@@ -693,6 +721,7 @@ Compile::Compile( ciEnv* ci_env,
   TraceTime t1(NULL, &_t_totalCompilation, TimeCompiler, false);
   TraceTime t2(NULL, &_t_stubCompilation, TimeCompiler, false);
   set_print_assembly(PrintFrameConverterAssembly);
+  set_parsed_irreducible_loop(false);
 #endif
   CompileWrapper cw(this);
   Init(/*AliasLevel=*/ 0);
@@ -749,7 +778,7 @@ void print_opto_verbose_signature( const TypeFunc *j_sig, const char *stub_name 
 }
 #endif
 
-void Compile::print_codes() { 
+void Compile::print_codes() {
 }
 
 //------------------------------Init-------------------------------------------
@@ -793,6 +822,7 @@ void Compile::Init(int aliaslevel) {
   Copy::zero_to_bytes(_trap_hist, sizeof(_trap_hist));
   set_decompile_count(0);
 
+  set_do_freq_based_layout(BlockLayoutByFrequency || method_has_option("BlockLayoutByFrequency"));
   // Compilation level related initialization
   if (env()->comp_level() == CompLevel_fast_compile) {
     set_num_loop_opts(Tier1LoopOptsCount);
@@ -808,7 +838,7 @@ void Compile::Init(int aliaslevel) {
     set_do_inlining(Inline);
     set_max_inline_size(MaxInlineSize);
     set_freq_inline_size(FreqInlineSize);
-    set_do_scheduling(OptoScheduling);  
+    set_do_scheduling(OptoScheduling);
     set_do_count_invocations(false);
     set_do_method_data_update(false);
   }
@@ -821,11 +851,11 @@ void Compile::Init(int aliaslevel) {
 
   // // -- Initialize types before each compile --
   // // Update cached type information
-  // if( _method && _method->constants() ) 
+  // if( _method && _method->constants() )
   //   Type::update_loaded_types(_method, _method->constants());
 
   // Init alias_type map.
-  if (!DoEscapeAnalysis && aliaslevel == 3)
+  if (!_do_escape_analysis && aliaslevel == 3)
     aliaslevel = 2;  // No unique types without escape analysis
   _AliasLevel = aliaslevel;
   const int grow_ats = 16;
@@ -863,7 +893,7 @@ StartNode* Compile::start() const {
   assert(!failing(), "");
   for (DUIterator_Fast imax, i = root()->fast_outs(imax); i < imax; i++) {
     Node* start = root()->fast_out(i);
-    if( start->is_Start() ) 
+    if( start->is_Start() )
       return start->as_Start();
   }
   ShouldNotReachHere();
@@ -982,9 +1012,14 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
   int offset = tj->offset();
   TypePtr::PTR ptr = tj->ptr();
 
+  // Known instance (scalarizable allocation) alias only with itself.
+  bool is_known_inst = tj->isa_oopptr() != NULL &&
+                       tj->is_oopptr()->is_known_instance();
+
   // Process weird unsafe references.
   if (offset == Type::OffsetBot && (tj->isa_instptr() /*|| tj->isa_klassptr()*/)) {
     assert(InlineUnsafeOps, "indeterminate pointers come only from unsafe ops");
+    assert(!is_known_inst, "scalarizable allocation should not have unsafe references");
     tj = TypeOopPtr::BOTTOM;
     ptr = tj->ptr();
     offset = tj->offset();
@@ -992,17 +1027,23 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
 
   // Array pointers need some flattening
   const TypeAryPtr *ta = tj->isa_aryptr();
-  if( ta && _AliasLevel >= 2 ) {
+  if( ta && is_known_inst ) {
+    if ( offset != Type::OffsetBot &&
+         offset > arrayOopDesc::length_offset_in_bytes() ) {
+      offset = Type::OffsetBot; // Flatten constant access into array body only
+      tj = ta = TypeAryPtr::make(ptr, ta->ary(), ta->klass(), true, offset, ta->instance_id());
+    }
+  } else if( ta && _AliasLevel >= 2 ) {
     // For arrays indexed by constant indices, we flatten the alias
     // space to include all of the array body.  Only the header, klass
     // and array length can be accessed un-aliased.
     if( offset != Type::OffsetBot ) {
       if( ta->const_oop() ) { // methodDataOop or methodOop
         offset = Type::OffsetBot;   // Flatten constant access into array body
-        tj = ta = TypeAryPtr::make(ptr,ta->const_oop(),ta->ary(),ta->klass(),false,Type::OffsetBot, ta->instance_id());
+        tj = ta = TypeAryPtr::make(ptr,ta->const_oop(),ta->ary(),ta->klass(),false,offset);
       } else if( offset == arrayOopDesc::length_offset_in_bytes() ) {
         // range is OK as-is.
-        tj = ta = TypeAryPtr::RANGE; 
+        tj = ta = TypeAryPtr::RANGE;
       } else if( offset == oopDesc::klass_offset_in_bytes() ) {
         tj = TypeInstPtr::KLASS; // all klass loads look alike
         ta = TypeAryPtr::RANGE; // generic ignored junk
@@ -1011,27 +1052,31 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
         tj = TypeInstPtr::MARK;
         ta = TypeAryPtr::RANGE; // generic ignored junk
         ptr = TypePtr::BotPTR;
-      } else {                  // Random constant offset into array body 
+      } else {                  // Random constant offset into array body
         offset = Type::OffsetBot;   // Flatten constant access into array body
-        tj = ta = TypeAryPtr::make(ptr,ta->ary(),ta->klass(),false,Type::OffsetBot, ta->instance_id());
+        tj = ta = TypeAryPtr::make(ptr,ta->ary(),ta->klass(),false,offset);
       }
     }
     // Arrays of fixed size alias with arrays of unknown size.
     if (ta->size() != TypeInt::POS) {
       const TypeAry *tary = TypeAry::make(ta->elem(), TypeInt::POS);
-      tj = ta = TypeAryPtr::make(ptr,ta->const_oop(),tary,ta->klass(),false,offset, ta->instance_id());
+      tj = ta = TypeAryPtr::make(ptr,ta->const_oop(),tary,ta->klass(),false,offset);
     }
     // Arrays of known objects become arrays of unknown objects.
+    if (ta->elem()->isa_narrowoop() && ta->elem() != TypeNarrowOop::BOTTOM) {
+      const TypeAry *tary = TypeAry::make(TypeNarrowOop::BOTTOM, ta->size());
+      tj = ta = TypeAryPtr::make(ptr,ta->const_oop(),tary,NULL,false,offset);
+    }
     if (ta->elem()->isa_oopptr() && ta->elem() != TypeInstPtr::BOTTOM) {
       const TypeAry *tary = TypeAry::make(TypeInstPtr::BOTTOM, ta->size());
-      tj = ta = TypeAryPtr::make(ptr,ta->const_oop(),tary,NULL,false,offset, ta->instance_id());
+      tj = ta = TypeAryPtr::make(ptr,ta->const_oop(),tary,NULL,false,offset);
     }
     // Arrays of bytes and of booleans both use 'bastore' and 'baload' so
     // cannot be distinguished by bytecode alone.
     if (ta->elem() == TypeInt::BOOL) {
       const TypeAry *tary = TypeAry::make(TypeInt::BYTE, ta->size());
       ciKlass* aklass = ciTypeArrayKlass::make(T_BYTE);
-      tj = ta = TypeAryPtr::make(ptr,ta->const_oop(),tary,aklass,false,offset, ta->instance_id());
+      tj = ta = TypeAryPtr::make(ptr,ta->const_oop(),tary,aklass,false,offset);
     }
     // During the 2nd round of IterGVN, NotNull castings are removed.
     // Make sure the Bottom and NotNull variants alias the same.
@@ -1051,19 +1096,24 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
     if( ptr == TypePtr::Constant ) {
       // No constant oop pointers (such as Strings); they alias with
       // unknown strings.
+      assert(!is_known_inst, "not scalarizable allocation");
       tj = to = TypeInstPtr::make(TypePtr::BotPTR,to->klass(),false,0,offset);
+    } else if( is_known_inst ) {
+      tj = to; // Keep NotNull and klass_is_exact for instance type
     } else if( ptr == TypePtr::NotNull || to->klass_is_exact() ) {
       // During the 2nd round of IterGVN, NotNull castings are removed.
       // Make sure the Bottom and NotNull variants alias the same.
       // Also, make sure exact and non-exact variants alias the same.
-      tj = to = TypeInstPtr::make(TypePtr::BotPTR,to->klass(),false,0,offset, to->instance_id());
+      tj = to = TypeInstPtr::make(TypePtr::BotPTR,to->klass(),false,0,offset);
     }
     // Canonicalize the holder of this field
     ciInstanceKlass *k = to->klass()->as_instance_klass();
-    if (offset >= 0 && offset < oopDesc::header_size() * wordSize) {
+    if (offset >= 0 && offset < instanceOopDesc::base_offset_in_bytes()) {
       // First handle header references such as a LoadKlassNode, even if the
       // object's klass is unloaded at compile time (4965979).
-      tj = to = TypeInstPtr::make(TypePtr::BotPTR, env()->Object_klass(), false, NULL, offset, to->instance_id());
+      if (!is_known_inst) { // Do it only for non-instance types
+        tj = to = TypeInstPtr::make(TypePtr::BotPTR, env()->Object_klass(), false, NULL, offset);
+      }
     } else if (offset < 0 || offset >= k->size_helper() * wordSize) {
       to = NULL;
       tj = TypeOopPtr::BOTTOM;
@@ -1071,7 +1121,11 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
     } else {
       ciInstanceKlass *canonical_holder = k->get_canonical_holder(offset);
       if (!k->equals(canonical_holder) || tj->offset() != offset) {
-        tj = to = TypeInstPtr::make(TypePtr::BotPTR, canonical_holder, false, NULL, offset, to->instance_id());
+        if( is_known_inst ) {
+          tj = to = TypeInstPtr::make(to->ptr(), canonical_holder, true, NULL, offset, to->instance_id());
+        } else {
+          tj = to = TypeInstPtr::make(to->ptr(), canonical_holder, false, NULL, offset);
+        }
       }
     }
   }
@@ -1082,7 +1136,7 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
     // If we are referencing a field within a Klass, we need
     // to assume the worst case of an Object.  Both exact and
     // inexact types must flatten to the same alias class.
-    // Since the flattened result for a klass is defined to be 
+    // Since the flattened result for a klass is defined to be
     // precisely java.lang.Object, use a constant ptr.
     if ( offset == Type::OffsetBot || (offset >= 0 && (size_t)offset < sizeof(Klass)) ) {
 
@@ -1123,8 +1177,8 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
 
   // Flatten all to bottom for now
   switch( _AliasLevel ) {
-  case 0: 
-    tj = TypePtr::BOTTOM; 
+  case 0:
+    tj = TypePtr::BOTTOM;
     break;
   case 1:                       // Flatten to: oop, static, field or array
     switch (tj->base()) {
@@ -1142,21 +1196,21 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
     break;
   default:
     Unimplemented();
-  } 
+  }
 
   offset = tj->offset();
   assert( offset != Type::OffsetTop, "Offset has fallen from constant" );
-  
+
   assert( (offset != Type::OffsetBot && tj->base() != Type::AryPtr) ||
           (offset == Type::OffsetBot && tj->base() == Type::AryPtr) ||
           (offset == Type::OffsetBot && tj == TypeOopPtr::BOTTOM) ||
           (offset == Type::OffsetBot && tj == TypePtr::BOTTOM) ||
           (offset == oopDesc::mark_offset_in_bytes() && tj->base() == Type::AryPtr) ||
           (offset == oopDesc::klass_offset_in_bytes() && tj->base() == Type::AryPtr) ||
-          (offset == arrayOopDesc::length_offset_in_bytes() && tj->base() == Type::AryPtr)  , 
+          (offset == arrayOopDesc::length_offset_in_bytes() && tj->base() == Type::AryPtr)  ,
           "For oops, klasses, raw offset must be constant; for arrays the offset is never known" );
   assert( tj->ptr() != TypePtr::TopPTR &&
-          tj->ptr() != TypePtr::AnyNull &&          
+          tj->ptr() != TypePtr::AnyNull &&
           tj->ptr() != TypePtr::Null, "No imprecise addresses" );
 //    assert( tj->ptr() != TypePtr::Constant ||
 //            tj->base() == Type::RawPtr ||
@@ -1171,8 +1225,8 @@ void Compile::AliasType::Init(int i, const TypePtr* at) {
   _field = NULL;
   _is_rewritable = true; // default
   const TypeOopPtr *atoop = (at != NULL) ? at->isa_oopptr() : NULL;
-  if (atoop != NULL && atoop->is_instance()) {
-    const TypeOopPtr *gt = atoop->cast_to_instance(TypeOopPtr::UNKNOWN_INSTANCE);
+  if (atoop != NULL && atoop->is_known_instance()) {
+    const TypeOopPtr *gt = atoop->cast_to_instance_id(TypeOopPtr::InstanceBot);
     _general_index = Compile::current()->get_alias_index(gt);
   } else {
     _general_index = 0;
@@ -1257,7 +1311,9 @@ Compile::AliasType* Compile::find_alias_type(const TypePtr* adr_type, bool no_cr
   assert(flat != TypePtr::BOTTOM,     "cannot alias-analyze an untyped ptr");
   if (flat->isa_oopptr() && !flat->isa_klassptr()) {
     const TypeOopPtr* foop = flat->is_oopptr();
-    const TypePtr* xoop = foop->cast_to_exactness(!foop->klass_is_exact())->is_ptr();
+    // Scalarizable allocations have exact klass always.
+    bool exact = !foop->klass_is_exact() || foop->is_known_instance();
+    const TypePtr* xoop = foop->cast_to_exactness(exact)->is_ptr();
     assert(foop == flatten_alias_type(xoop), "exactness must not affect alias type");
   }
   assert(flat == flatten_alias_type(flat), "exact bit doesn't matter");
@@ -1301,7 +1357,7 @@ Compile::AliasType* Compile::find_alias_type(const TypePtr* adr_type, bool no_cr
 
     // Check for final instance fields.
     const TypeInstPtr* tinst = flat->isa_instptr();
-    if (tinst && tinst->offset() >= oopDesc::header_size() * wordSize) {
+    if (tinst && tinst->offset() >= instanceOopDesc::base_offset_in_bytes()) {
       ciInstanceKlass *k = tinst->klass()->as_instance_klass();
       ciField* field = k->get_field_by_offset(tinst->offset(), false);
       // Set field() and is_rewritable() attributes.
@@ -1461,7 +1517,7 @@ void Compile::Optimize() {
 
   NOT_PRODUCT( verify_graph_edges(); )
 
-  print_method("Start");
+  print_method("After Parsing");
 
  {
   // Iterative Global Value Numbering, including ideal transforms
@@ -1473,13 +1529,8 @@ void Compile::Optimize() {
   }
 
   print_method("Iter GVN 1", 2);
-  
+
   if (failing())  return;
-
-  // get rid of the connection graph since it's information is not
-  // updated by optimizations
-  _congraph = NULL;
-
 
   // Loop transforms on the ideal graph.  Range Check Elimination,
   // peeling, unrolling, etc.
@@ -1513,7 +1564,7 @@ void Compile::Optimize() {
   if (failing())  return;
 
   // Conditional Constant Propagation;
-  PhaseCCP ccp( &igvn ); 
+  PhaseCCP ccp( &igvn );
   assert( true, "Break here to ccp.dump_nodes_and_types(_root,999,1)");
   {
     TracePhase t2("ccp", &_t_ccp, true);
@@ -1531,14 +1582,14 @@ void Compile::Optimize() {
   }
 
   print_method("Iter GVN 2", 2);
-  
+
   if (failing())  return;
 
   // Loop transforms on the ideal graph.  Range Check Elimination,
   // peeling, unrolling, etc.
   if(loop_opts_cnt > 0) {
     debug_only( int cnt = 0; );
-    while(major_progress() && (loop_opts_cnt > 0)) {      
+    while(major_progress() && (loop_opts_cnt > 0)) {
       TracePhase t2("idealLoop", &_t_idealLoop, true);
       assert( cnt++ < 40, "infinite cycle in loop optimization" );
       PhaseIdealLoop ideal_loop( igvn, NULL, true );
@@ -1642,12 +1693,18 @@ void Compile::Code_Gen() {
   }
 
   // Prior to register allocation we kept empty basic blocks in case the
-  // the allocator needed a place to spill.  After register allocation we 
-  // are not adding any new instructions.  If any basic block is empty, we 
+  // the allocator needed a place to spill.  After register allocation we
+  // are not adding any new instructions.  If any basic block is empty, we
   // can now safely remove it.
   {
-    NOT_PRODUCT( TracePhase t2("removeEmpty", &_t_removeEmptyBlocks, TimeCompiler); )
-    cfg.RemoveEmpty();
+    NOT_PRODUCT( TracePhase t2("blockOrdering", &_t_blockOrdering, TimeCompiler); )
+    cfg.remove_empty();
+    if (do_freq_based_layout()) {
+      PhaseBlockLayout layout(cfg);
+    } else {
+      cfg.set_loop_alignment();
+    }
+    cfg.fixup_flow();
   }
 
   // Perform any platform dependent postallocation verifications.
@@ -1668,7 +1725,7 @@ void Compile::Code_Gen() {
     Output();
   }
 
-  print_method("End");
+  print_method("Final Code");
 
   // He's dead, Jim.
   _cfg     = (PhaseCFG*)0xdeadbeef;
@@ -1705,8 +1762,8 @@ void Compile::dump_asm(int *pcs, uint pc_limit) {
       tty->print_cr("        # Empty connector block");
     } else if (b->num_preds() == 2 && b->pred(1)->is_CatchProj() && b->pred(1)->as_CatchProj()->_con == CatchProjNode::fall_through_index) {
       tty->print_cr("        # Block is sole successor of call");
-    } 
-    
+    }
+
     // For all instructions
     Node *delay = NULL;
     for( uint j = 0; j<b->_nodes.size(); j++ ) {
@@ -1721,6 +1778,8 @@ void Compile::dump_asm(int *pcs, uint pc_limit) {
         if (bundle->starts_bundle())
           starts_bundle = '+';
       }
+
+      if (WizardMode) n->dump();
 
       if( !n->is_Region() &&    // Dont print in the Assembly
           !n->is_Phi() &&       // a few noisely useless nodes
@@ -1746,6 +1805,8 @@ void Compile::dump_asm(int *pcs, uint pc_limit) {
       // then back up and print it
       if (valid_bundle_info(n) && node_bundling(n)->use_unconditional_delay()) {
         assert(delay != NULL, "no unconditional delay instruction");
+        if (WizardMode) delay->dump();
+
         if (node_bundling(delay)->starts_bundle())
           starts_bundle = '+';
         if (pcs && n->_idx < pc_limit)
@@ -1782,17 +1843,17 @@ void Compile::dump_asm(int *pcs, uint pc_limit) {
 #endif
 
 //------------------------------Final_Reshape_Counts---------------------------
-// This class defines counters to help identify when a method 
+// This class defines counters to help identify when a method
 // may/must be executed using hardware with only 24-bit precision.
 struct Final_Reshape_Counts : public StackObj {
-  int  _call_count;             // count non-inlined 'common' calls 
+  int  _call_count;             // count non-inlined 'common' calls
   int  _float_count;            // count float ops requiring 24-bit precision
   int  _double_count;           // count double ops requiring more precision
-  int  _java_call_count;        // count non-inlined 'java' calls 
+  int  _java_call_count;        // count non-inlined 'java' calls
   VectorSet _visited;           // Visitation flags
   Node_List _tests;             // Set of IfNodes & PCTableNodes
 
-  Final_Reshape_Counts() : 
+  Final_Reshape_Counts() :
     _call_count(0), _float_count(0), _double_count(0), _java_call_count(0),
     _visited( Thread::current()->resource_area() ) { }
 
@@ -1810,7 +1871,7 @@ struct Final_Reshape_Counts : public StackObj {
 static bool oop_offset_is_sane(const TypeInstPtr* tp) {
   ciInstanceKlass *k = tp->klass()->as_instance_klass();
   // Make sure the offset goes inside the instance layout.
-  return (uint)tp->offset() < (uint)(oopDesc::header_size() + k->nonstatic_field_size())*wordSize;
+  return k->contains_field_offset(tp->offset());
   // Note that OffsetBot and OffsetTop are very negative.
 }
 
@@ -1818,6 +1879,7 @@ static bool oop_offset_is_sane(const TypeInstPtr* tp) {
 // Implement items 1-5 from final_graph_reshaping below.
 static void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &fpu ) {
 
+  if ( n->outcnt() == 0 ) return; // dead node
   uint nop = n->Opcode();
 
   // Check for 2-input instruction with "last use" on right input.
@@ -1832,7 +1894,7 @@ static void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &fpu ) {
     case Op_AddI:  case Op_AddF:  case Op_AddD:  case Op_AddL:
     case Op_MaxI:  case Op_MinI:
     case Op_MulI:  case Op_MulF:  case Op_MulD:  case Op_MulL:
-    case Op_AndL:  case Op_XorL:  case Op_OrL: 
+    case Op_AndL:  case Op_XorL:  case Op_OrL:
     case Op_AndI:  case Op_XorI:  case Op_OrI: {
       // Move "last use" input to left by swapping inputs
       n->swap_edges(1, 2);
@@ -1884,7 +1946,7 @@ static void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &fpu ) {
     break;
   case Op_Opaque1:              // Remove Opaque Nodes before matching
   case Op_Opaque2:              // Remove Opaque Nodes before matching
-    n->replace_by(n->in(1));
+    n->subsume_by(n->in(1));
     break;
   case Op_CallStaticJava:
   case Op_CallJava:
@@ -1897,7 +1959,7 @@ static void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &fpu ) {
     CallNode *call = n->as_Call();
     // Count call sites where the FP mode bit would have to be flipped.
     // Do not count uncommon runtime calls:
-    // uncommon_trap, _complete_monitor_locking, _complete_monitor_unlocking, 
+    // uncommon_trap, _complete_monitor_locking, _complete_monitor_unlocking,
     // _new_Java, _new_typeArray, _new_objArray, _rethrow_Java, ...
     if( !call->is_CallStaticJava() || !call->as_CallStaticJava()->_name ) {
       fpu.inc_call_count();   // Count the call site
@@ -1905,10 +1967,11 @@ static void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &fpu ) {
       Node *n = call->in(TypeFunc::Parms);
       int nop = n->Opcode();
       // Clone shared simple arguments to uncommon calls, item (1).
-      if( n->outcnt() > 1 && 
-          !n->is_Proj() && 
-          nop != Op_CreateEx && 
-          nop != Op_CheckCastPP && 
+      if( n->outcnt() > 1 &&
+          !n->is_Proj() &&
+          nop != Op_CreateEx &&
+          nop != Op_CheckCastPP &&
+          nop != Op_DecodeN &&
           !n->is_Mem() ) {
         Node *x = n->clone();
         call->set_req( TypeFunc::Parms, x );
@@ -1933,20 +1996,25 @@ static void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &fpu ) {
   case Op_StorePConditional:
   case Op_StoreI:
   case Op_StoreL:
+  case Op_StoreIConditional:
   case Op_StoreLConditional:
   case Op_CompareAndSwapI:
   case Op_CompareAndSwapL:
   case Op_CompareAndSwapP:
+  case Op_CompareAndSwapN:
   case Op_StoreP:
+  case Op_StoreN:
   case Op_LoadB:
   case Op_LoadC:
   case Op_LoadI:
   case Op_LoadKlass:
+  case Op_LoadNKlass:
   case Op_LoadL:
   case Op_LoadL_unaligned:
   case Op_LoadPLocked:
   case Op_LoadLLocked:
   case Op_LoadP:
+  case Op_LoadN:
   case Op_LoadRange:
   case Op_LoadS: {
   handle_mem:
@@ -1961,19 +2029,213 @@ static void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &fpu ) {
 #endif
     break;
   }
-  case Op_If:
-  case Op_CountedLoopEnd:
-    fpu._tests.push(n);         // Collect CFG split points
-    break;
 
   case Op_AddP: {               // Assert sane base pointers
-    const Node *addp = n->in(AddPNode::Address);
-    assert( !addp->is_AddP() || 
+    Node *addp = n->in(AddPNode::Address);
+    assert( !addp->is_AddP() ||
             addp->in(AddPNode::Base)->is_top() || // Top OK for allocation
-            addp->in(AddPNode::Base) == n->in(AddPNode::Base), 
+            addp->in(AddPNode::Base) == n->in(AddPNode::Base),
             "Base pointers must match" );
+#ifdef _LP64
+    if (UseCompressedOops &&
+        addp->Opcode() == Op_ConP &&
+        addp == n->in(AddPNode::Base) &&
+        n->in(AddPNode::Offset)->is_Con()) {
+      // Use addressing with narrow klass to load with offset on x86.
+      // On sparc loading 32-bits constant and decoding it have less
+      // instructions (4) then load 64-bits constant (7).
+      // Do this transformation here since IGVN will convert ConN back to ConP.
+      const Type* t = addp->bottom_type();
+      if (t->isa_oopptr()) {
+        Node* nn = NULL;
+
+        // Look for existing ConN node of the same exact type.
+        Compile* C = Compile::current();
+        Node* r  = C->root();
+        uint cnt = r->outcnt();
+        for (uint i = 0; i < cnt; i++) {
+          Node* m = r->raw_out(i);
+          if (m!= NULL && m->Opcode() == Op_ConN &&
+              m->bottom_type()->make_ptr() == t) {
+            nn = m;
+            break;
+          }
+        }
+        if (nn != NULL) {
+          // Decode a narrow oop to match address
+          // [R12 + narrow_oop_reg<<3 + offset]
+          nn = new (C,  2) DecodeNNode(nn, t);
+          n->set_req(AddPNode::Base, nn);
+          n->set_req(AddPNode::Address, nn);
+          if (addp->outcnt() == 0) {
+            addp->disconnect_inputs(NULL);
+          }
+        }
+      }
+    }
+#endif
     break;
   }
+
+#ifdef _LP64
+  case Op_CastPP:
+    if (n->in(1)->is_DecodeN() && UseImplicitNullCheckForNarrowOop) {
+      Compile* C = Compile::current();
+      Node* in1 = n->in(1);
+      const Type* t = n->bottom_type();
+      Node* new_in1 = in1->clone();
+      new_in1->as_DecodeN()->set_type(t);
+
+      if (!Matcher::clone_shift_expressions) {
+        //
+        // x86, ARM and friends can handle 2 adds in addressing mode
+        // and Matcher can fold a DecodeN node into address by using
+        // a narrow oop directly and do implicit NULL check in address:
+        //
+        // [R12 + narrow_oop_reg<<3 + offset]
+        // NullCheck narrow_oop_reg
+        //
+        // On other platforms (Sparc) we have to keep new DecodeN node and
+        // use it to do implicit NULL check in address:
+        //
+        // decode_not_null narrow_oop_reg, base_reg
+        // [base_reg + offset]
+        // NullCheck base_reg
+        //
+        // Pin the new DecodeN node to non-null path on these patforms (Sparc)
+        // to keep the information to which NULL check the new DecodeN node
+        // corresponds to use it as value in implicit_null_check().
+        //
+        new_in1->set_req(0, n->in(0));
+      }
+
+      n->subsume_by(new_in1);
+      if (in1->outcnt() == 0) {
+        in1->disconnect_inputs(NULL);
+      }
+    }
+    break;
+
+  case Op_CmpP:
+    // Do this transformation here to preserve CmpPNode::sub() and
+    // other TypePtr related Ideal optimizations (for example, ptr nullness).
+    if (n->in(1)->is_DecodeN() || n->in(2)->is_DecodeN()) {
+      Node* in1 = n->in(1);
+      Node* in2 = n->in(2);
+      if (!in1->is_DecodeN()) {
+        in2 = in1;
+        in1 = n->in(2);
+      }
+      assert(in1->is_DecodeN(), "sanity");
+
+      Compile* C = Compile::current();
+      Node* new_in2 = NULL;
+      if (in2->is_DecodeN()) {
+        new_in2 = in2->in(1);
+      } else if (in2->Opcode() == Op_ConP) {
+        const Type* t = in2->bottom_type();
+        if (t == TypePtr::NULL_PTR && UseImplicitNullCheckForNarrowOop) {
+          new_in2 = ConNode::make(C, TypeNarrowOop::NULL_PTR);
+          //
+          // This transformation together with CastPP transformation above
+          // will generated code for implicit NULL checks for compressed oops.
+          //
+          // The original code after Optimize()
+          //
+          //    LoadN memory, narrow_oop_reg
+          //    decode narrow_oop_reg, base_reg
+          //    CmpP base_reg, NULL
+          //    CastPP base_reg // NotNull
+          //    Load [base_reg + offset], val_reg
+          //
+          // after these transformations will be
+          //
+          //    LoadN memory, narrow_oop_reg
+          //    CmpN narrow_oop_reg, NULL
+          //    decode_not_null narrow_oop_reg, base_reg
+          //    Load [base_reg + offset], val_reg
+          //
+          // and the uncommon path (== NULL) will use narrow_oop_reg directly
+          // since narrow oops can be used in debug info now (see the code in
+          // final_graph_reshaping_walk()).
+          //
+          // At the end the code will be matched to
+          // on x86:
+          //
+          //    Load_narrow_oop memory, narrow_oop_reg
+          //    Load [R12 + narrow_oop_reg<<3 + offset], val_reg
+          //    NullCheck narrow_oop_reg
+          //
+          // and on sparc:
+          //
+          //    Load_narrow_oop memory, narrow_oop_reg
+          //    decode_not_null narrow_oop_reg, base_reg
+          //    Load [base_reg + offset], val_reg
+          //    NullCheck base_reg
+          //
+        } else if (t->isa_oopptr()) {
+          new_in2 = ConNode::make(C, t->make_narrowoop());
+        }
+      }
+      if (new_in2 != NULL) {
+        Node* cmpN = new (C, 3) CmpNNode(in1->in(1), new_in2);
+        n->subsume_by( cmpN );
+        if (in1->outcnt() == 0) {
+          in1->disconnect_inputs(NULL);
+        }
+        if (in2->outcnt() == 0) {
+          in2->disconnect_inputs(NULL);
+        }
+      }
+    }
+    break;
+
+  case Op_DecodeN:
+    assert(!n->in(1)->is_EncodeP(), "should be optimized out");
+    // DecodeN could be pinned on Sparc where it can't be fold into
+    // an address expression, see the code for Op_CastPP above.
+    assert(n->in(0) == NULL || !Matcher::clone_shift_expressions, "no control except on sparc");
+    break;
+
+  case Op_EncodeP: {
+    Node* in1 = n->in(1);
+    if (in1->is_DecodeN()) {
+      n->subsume_by(in1->in(1));
+    } else if (in1->Opcode() == Op_ConP) {
+      Compile* C = Compile::current();
+      const Type* t = in1->bottom_type();
+      if (t == TypePtr::NULL_PTR) {
+        n->subsume_by(ConNode::make(C, TypeNarrowOop::NULL_PTR));
+      } else if (t->isa_oopptr()) {
+        n->subsume_by(ConNode::make(C, t->make_narrowoop()));
+      }
+    }
+    if (in1->outcnt() == 0) {
+      in1->disconnect_inputs(NULL);
+    }
+    break;
+  }
+
+  case Op_Phi:
+    if (n->as_Phi()->bottom_type()->isa_narrowoop()) {
+      // The EncodeP optimization may create Phi with the same edges
+      // for all paths. It is not handled well by Register Allocator.
+      Node* unique_in = n->in(1);
+      assert(unique_in != NULL, "");
+      uint cnt = n->req();
+      for (uint i = 2; i < cnt; i++) {
+        Node* m = n->in(i);
+        assert(m != NULL, "");
+        if (unique_in != m)
+          unique_in = NULL;
+      }
+      if (unique_in != NULL) {
+        n->subsume_by(unique_in);
+      }
+    }
+    break;
+
+#endif
 
   case Op_ModI:
     if (UseDivMod) {
@@ -1984,13 +2246,13 @@ static void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &fpu ) {
         Compile* C = Compile::current();
         if (Matcher::has_match_rule(Op_DivModI)) {
           DivModINode* divmod = DivModINode::make(C, n);
-          d->replace_by(divmod->div_proj());
-          n->replace_by(divmod->mod_proj());
+          d->subsume_by(divmod->div_proj());
+          n->subsume_by(divmod->mod_proj());
         } else {
           // replace a%b with a-((a/b)*b)
           Node* mult = new (C, 3) MulINode(d, d->in(2));
           Node* sub  = new (C, 3) SubINode(d->in(1), mult);
-          n->replace_by( sub );
+          n->subsume_by( sub );
         }
       }
     }
@@ -2005,13 +2267,13 @@ static void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &fpu ) {
         Compile* C = Compile::current();
         if (Matcher::has_match_rule(Op_DivModL)) {
           DivModLNode* divmod = DivModLNode::make(C, n);
-          d->replace_by(divmod->div_proj());
-          n->replace_by(divmod->mod_proj());
+          d->subsume_by(divmod->div_proj());
+          n->subsume_by(divmod->mod_proj());
         } else {
           // replace a%b with a-((a/b)*b)
           Node* mult = new (C, 3) MulLNode(d, d->in(2));
           Node* sub  = new (C, 3) SubLNode(d->in(1), mult);
-          n->replace_by( sub );
+          n->subsume_by( sub );
         }
       }
     }
@@ -2057,22 +2319,27 @@ static void final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &fpu ) {
       // Replace many operand PackNodes with a binary tree for matching
       PackNode* p = (PackNode*) n;
       Node* btp = p->binaryTreePack(Compile::current(), 1, n->req());
-      n->replace_by(btp);
+      n->subsume_by(btp);
     }
     break;
-  default: 
+  default:
     assert( !n->is_Call(), "" );
     assert( !n->is_Mem(), "" );
-    if( n->is_If() || n->is_PCTable() ) 
-      fpu._tests.push(n);       // Collect CFG split points
     break;
   }
+
+  // Collect CFG split points
+  if (n->is_MultiBranch())
+    fpu._tests.push(n);
 }
 
 //------------------------------final_graph_reshaping_walk---------------------
 // Replacing Opaque nodes with their input in final_graph_reshaping_impl(),
 // requires that the walk visits a node's inputs before visiting the node.
 static void final_graph_reshaping_walk( Node_Stack &nstack, Node *root, Final_Reshape_Counts &fpu ) {
+  ResourceArea *area = Thread::current()->resource_area();
+  Unique_Node_List sfpt(area);
+
   fpu._visited.set(root->_idx); // first, mark node as visited
   uint cnt = root->req();
   Node *n = root;
@@ -2083,8 +2350,10 @@ static void final_graph_reshaping_walk( Node_Stack &nstack, Node *root, Final_Re
       Node* m = n->in(i);
       ++i;
       if (m != NULL && !fpu._visited.test_set(m->_idx)) {
+        if (m->is_SafePoint() && m->as_SafePoint()->jvms() != NULL)
+          sfpt.push(m);
         cnt = m->req();
-        nstack.push(n, i); // put on stack parent and next input's index 
+        nstack.push(n, i); // put on stack parent and next input's index
         n = m;
         i = 0;
       }
@@ -2093,19 +2362,54 @@ static void final_graph_reshaping_walk( Node_Stack &nstack, Node *root, Final_Re
       final_graph_reshaping_impl( n, fpu );
       if (nstack.is_empty())
         break;             // finished
-      n = nstack.node();   // Get node from stack 
+      n = nstack.node();   // Get node from stack
       cnt = n->req();
       i = nstack.index();
       nstack.pop();        // Shift to the next node on stack
     }
   }
+
+  // Go over safepoints nodes to skip DecodeN nodes for debug edges.
+  // It could be done for an uncommon traps or any safepoints/calls
+  // if the DecodeN node is referenced only in a debug info.
+  while (sfpt.size() > 0) {
+    n = sfpt.pop();
+    JVMState *jvms = n->as_SafePoint()->jvms();
+    assert(jvms != NULL, "sanity");
+    int start = jvms->debug_start();
+    int end   = n->req();
+    bool is_uncommon = (n->is_CallStaticJava() &&
+                        n->as_CallStaticJava()->uncommon_trap_request() != 0);
+    for (int j = start; j < end; j++) {
+      Node* in = n->in(j);
+      if (in->is_DecodeN()) {
+        bool safe_to_skip = true;
+        if (!is_uncommon ) {
+          // Is it safe to skip?
+          for (uint i = 0; i < in->outcnt(); i++) {
+            Node* u = in->raw_out(i);
+            if (!u->is_SafePoint() ||
+                 u->is_Call() && u->as_Call()->has_non_debug_use(n)) {
+              safe_to_skip = false;
+            }
+          }
+        }
+        if (safe_to_skip) {
+          n->set_req(j, in->in(1));
+        }
+        if (in->outcnt() == 0) {
+          in->disconnect_inputs(NULL);
+        }
+      }
+    }
+  }
 }
 
 //------------------------------final_graph_reshaping--------------------------
-// Final Graph Reshaping.  
+// Final Graph Reshaping.
 //
 // (1) Clone simple inputs to uncommon calls, so they can be scheduled late
-//     and not commoned up and forced early.  Must come after regular 
+//     and not commoned up and forced early.  Must come after regular
 //     optimizations to avoid GVN undoing the cloning.  Clone constant
 //     inputs to Loop Phis; these will be split by the allocator anyways.
 //     Remove Opaque nodes.
@@ -2120,7 +2424,7 @@ static void final_graph_reshaping_walk( Node_Stack &nstack, Node *root, Final_Re
 //     clearing the mode bit around call sites).  The mode bit is only used
 //     if the relative frequency of single FP ops to calls is low enough.
 //     This is a key transform for SPEC mpeg_audio.
-// (4) Detect infinite loops; blobs of code reachable from above but not 
+// (4) Detect infinite loops; blobs of code reachable from above but not
 //     below.  Several of the Code_Gen algorithms fail on such code shapes,
 //     so we simply bail out.  Happens a lot in ZKM.jar, but also happens
 //     from time to time in other codes (such as -Xcomp finalizer loops, etc).
@@ -2145,46 +2449,45 @@ bool Compile::final_graph_reshaping() {
 
   // Check for unreachable (from below) code (i.e., infinite loops).
   for( uint i = 0; i < fpu._tests.size(); i++ ) {
-    Node *n = fpu._tests[i];
-    assert( n->is_PCTable() || n->is_If(), "either PCTables or IfNodes" );
-    // Get number of CFG targets; 2 for IfNodes or _size for PCTables.
+    MultiBranchNode *n = fpu._tests[i]->as_MultiBranch();
+    // Get number of CFG targets.
     // Note that PCTables include exception targets after calls.
-    uint expected_kids = n->is_PCTable() ? n->as_PCTable()->_size : 2;
-    if (n->outcnt() != expected_kids) {
+    uint required_outcnt = n->required_outcnt();
+    if (n->outcnt() != required_outcnt) {
       // Check for a few special cases.  Rethrow Nodes never take the
       // 'fall-thru' path, so expected kids is 1 less.
       if (n->is_PCTable() && n->in(0) && n->in(0)->in(0)) {
         if (n->in(0)->in(0)->is_Call()) {
           CallNode *call = n->in(0)->in(0)->as_Call();
           if (call->entry_point() == OptoRuntime::rethrow_stub()) {
-            expected_kids--;      // Rethrow always has 1 less kid
+            required_outcnt--;      // Rethrow always has 1 less kid
           } else if (call->req() > TypeFunc::Parms &&
                      call->is_CallDynamicJava()) {
-            // Check for null receiver. In such case, the optimizer has 
-            // detected that the virtual call will always result in a null 
-            // pointer exception. The fall-through projection of this CatchNode 
+            // Check for null receiver. In such case, the optimizer has
+            // detected that the virtual call will always result in a null
+            // pointer exception. The fall-through projection of this CatchNode
             // will not be populated.
             Node *arg0 = call->in(TypeFunc::Parms);
             if (arg0->is_Type() &&
-                arg0->as_Type()->type()->higher_equal(TypePtr::NULL_PTR)) { 
-              expected_kids--;
+                arg0->as_Type()->type()->higher_equal(TypePtr::NULL_PTR)) {
+              required_outcnt--;
             }
           } else if (call->entry_point() == OptoRuntime::new_array_Java() &&
                      call->req() > TypeFunc::Parms+1 &&
                      call->is_CallStaticJava()) {
-            // Check for negative array length. In such case, the optimizer has 
+            // Check for negative array length. In such case, the optimizer has
             // detected that the allocation attempt will always result in an
             // exception. There is no fall-through projection of this CatchNode .
             Node *arg1 = call->in(TypeFunc::Parms+1);
             if (arg1->is_Type() &&
                 arg1->as_Type()->type()->join(TypeInt::POS)->empty()) {
-              expected_kids--;
+              required_outcnt--;
             }
           }
         }
       }
-      // Recheck with a better notion of 'expected_kids'
-      if (n->outcnt() != expected_kids) {
+      // Recheck with a better notion of 'required_outcnt'
+      if (n->outcnt() != required_outcnt) {
         record_method_not_compilable("malformed control flow");
         return true;            // Not all targets reachable!
       }
@@ -2200,8 +2503,8 @@ bool Compile::final_graph_reshaping() {
 
   // If original bytecodes contained a mixture of floats and doubles
   // check if the optimizer has made it homogenous, item (3).
-  if( Use24BitFPMode && Use24BitFP && 
-      fpu.get_float_count() > 32 && 
+  if( Use24BitFPMode && Use24BitFP &&
+      fpu.get_float_count() > 32 &&
       fpu.get_double_count() == 0 &&
       (10 * fpu.get_call_count() < fpu.get_float_count()) ) {
     set_24_bit_selection_and_mode( false,  true );
@@ -2216,8 +2519,8 @@ bool Compile::final_graph_reshaping() {
 //-----------------------------too_many_traps----------------------------------
 // Report if there are too many traps at the current method and bci.
 // Return true if there was a trap, and/or PerMethodTrapLimit is exceeded.
-bool Compile::too_many_traps(ciMethod* method, 
-                             int bci, 
+bool Compile::too_many_traps(ciMethod* method,
+                             int bci,
                              Deoptimization::DeoptReason reason) {
   ciMethodData* md = method->method_data();
   if (md->is_empty()) {
@@ -2264,8 +2567,8 @@ bool Compile::too_many_traps(Deoptimization::DeoptReason reason,
 // Consults PerBytecodeRecompilationCutoff and PerMethodRecompilationCutoff.
 // Is not eager to return true, since this will cause the compiler to use
 // Action_none for a trap point, to avoid too many recompilations.
-bool Compile::too_many_recompiles(ciMethod* method, 
-                                  int bci, 
+bool Compile::too_many_recompiles(ciMethod* method,
+                                  int bci,
                                   Deoptimization::DeoptReason reason) {
   ciMethodData* md = method->method_data();
   if (md->is_empty()) {
@@ -2359,6 +2662,9 @@ void Compile::record_failure(const char* reason) {
   if (_failure_reason == NULL) {
     // Record the first failure reason.
     _failure_reason = reason;
+  }
+  if (!C->failure_reason_is(C2Compiler::retry_no_subsuming_loads())) {
+    C->print_method(_failure_reason);
   }
   _root = NULL;  // flush the graph, too
 }

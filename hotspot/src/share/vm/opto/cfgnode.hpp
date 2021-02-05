@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)cfgnode.hpp	1.117 07/10/23 13:12:52 JVM"
-#endif
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Portions of code courtesy of Clifford Click
@@ -103,24 +100,25 @@ class JProjNode : public ProjNode {
   virtual const Node* is_block_proj() const { return in(0); }
   virtual const RegMask& out_RegMask() const;
   virtual uint  ideal_reg() const { return 0; }
-};  
+};
 
 //------------------------------PhiNode----------------------------------------
 // PhiNodes merge values from different Control paths.  Slot 0 points to the
 // controlling RegionNode.  Other slots map 1-for-1 with incoming control flow
-// paths to the RegionNode.  For speed reasons (to avoid another pass) we 
-// can turn PhiNodes into copys in-place by NULL'ing out their RegionNode 
+// paths to the RegionNode.  For speed reasons (to avoid another pass) we
+// can turn PhiNodes into copys in-place by NULL'ing out their RegionNode
 // input in slot 0.
 class PhiNode : public TypeNode {
   const TypePtr* const _adr_type; // non-null only for Type::MEMORY nodes.
+  const int _inst_id;     // Instance id of the memory slice.
+  const int _inst_index;  // Alias index of the instance memory slice.
+  // Array elements references have the same alias_idx but different offset.
+  const int _inst_offset; // Offset of the instance memory slice.
   // Size is bigger to hold the _adr_type field.
   virtual uint hash() const;    // Check the type
   virtual uint cmp( const Node &n ) const;
   virtual uint size_of() const { return sizeof(*this); }
 
-  // Determine a unique non-trivial input, if any.
-  // Ignore casts if it helps.  Return NULL on failure.
-  Node* unique_input(PhaseTransform *phase);
   // Determine if CMoveNode::is_cmove_id can be used at this join point.
   Node* is_cmove_id(PhaseTransform* phase, int true_path);
 
@@ -130,8 +128,16 @@ public:
          Input                  // Input values are [1..len)
   };
 
-  PhiNode( Node *r, const Type *t, const TypePtr* at = NULL )
-    : TypeNode(t,r->req()), _adr_type(at) {
+  PhiNode( Node *r, const Type *t, const TypePtr* at = NULL,
+           const int iid = TypeOopPtr::InstanceTop,
+           const int iidx = Compile::AliasIdxTop,
+           const int ioffs = Type::OffsetTop )
+    : TypeNode(t,r->req()),
+      _adr_type(at),
+      _inst_id(iid),
+      _inst_index(iidx),
+      _inst_offset(ioffs)
+  {
     init_class_id(Class_Phi);
     init_req(0, r);
     verify_adr_type();
@@ -142,6 +148,7 @@ public:
   static PhiNode* make( Node* r, Node* x, const Type *t, const TypePtr* at = NULL );
   // create a new phi with narrowed memory type
   PhiNode* slice_memory(const TypePtr* adr_type) const;
+  PhiNode* split_out_instance(const TypePtr* at, PhaseIterGVN *igvn) const;
   // like make(r, x), but does not initialize the in edges to x
   static PhiNode* make_blank( Node* r, Node* x );
 
@@ -155,6 +162,12 @@ public:
     return NULL;  // not a copy!
   }
 
+  bool is_tripcount() const;
+
+  // Determine a unique non-trivial input, if any.
+  // Ignore casts if it helps.  Return NULL on failure.
+  Node* unique_input(PhaseTransform *phase);
+
   // Check for a simple dead loop.
   enum LoopSafety { Safe = 0, Unsafe, UnsafeLoop };
   LoopSafety simple_data_loop_check(Node *in) const;
@@ -164,6 +177,18 @@ public:
   virtual int Opcode() const;
   virtual bool pinned() const { return in(0) != 0; }
   virtual const TypePtr *adr_type() const { verify_adr_type(true); return _adr_type; }
+
+  const int inst_id()     const { return _inst_id; }
+  const int inst_index()  const { return _inst_index; }
+  const int inst_offset() const { return _inst_offset; }
+  bool is_same_inst_field(const Type* tp, int id, int index, int offset) {
+    return type()->basic_type() == tp->basic_type() &&
+           inst_id()     == id     &&
+           inst_index()  == index  &&
+           inst_offset() == offset &&
+           type()->higher_equal(tp);
+  }
+
   virtual const Type *Value( PhaseTransform *phase ) const;
   virtual Node *Identity( PhaseTransform *phase );
   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
@@ -210,17 +235,19 @@ public:
   virtual const Node *is_block_proj() const { return in(0); }
   virtual const RegMask &out_RegMask() const;
   virtual uint ideal_reg() const { return 0; }
-}; 
+};
 
 //---------------------------MultiBranchNode-----------------------------------
 // This class defines a MultiBranchNode, a MultiNode which yields multiple
-// control values. These are distinguished from other types of MultiNodes 
+// control values. These are distinguished from other types of MultiNodes
 // which yield multiple values, but control is always and only projection #0.
 class MultiBranchNode : public MultiNode {
 public:
   MultiBranchNode( uint required ) : MultiNode(required) {
     init_class_id(Class_MultiBranch);
   }
+  // returns required number of users to be well formed.
+  virtual int required_outcnt() const = 0;
 };
 
 //------------------------------IfNode-----------------------------------------
@@ -237,18 +264,18 @@ public:
 #define PROB_UNLIKELY_MAG(N)    (1e- ## N ## f)
 #define PROB_LIKELY_MAG(N)      (1.0f-PROB_UNLIKELY_MAG(N))
 
-  // Maximum and minimum branch prediction probabilties 
+  // Maximum and minimum branch prediction probabilties
   // 1 in 1,000,000 (magnitude 6)
   //
   // Although PROB_NEVER == PROB_MIN and PROB_ALWAYS == PROB_MAX
   // they are used to distinguish different situations:
-  // 
+  //
   // The name PROB_MAX (PROB_MIN) is for probabilities which correspond to
   // very likely (unlikely) but with a concrete possibility of a rare
   // contrary case.  These constants would be used for pinning
   // measurements, and as measures for assertions that have high
   // confidence, but some evidence of occasional failure.
-  // 
+  //
   // The name PROB_ALWAYS (PROB_NEVER) is to stand for situations for which
   // there is no evidence at all that the contrary case has ever occurred.
 
@@ -258,7 +285,7 @@ public:
 #define PROB_MIN                PROB_UNLIKELY_MAG(6)
 #define PROB_MAX                PROB_LIKELY_MAG(6)
 
-  // Static branch prediction probabilities 
+  // Static branch prediction probabilities
   // 1 in 10 (magnitude 1)
 #define PROB_STATIC_INFREQUENT  PROB_UNLIKELY_MAG(1)
 #define PROB_STATIC_FREQUENT    PROB_LIKELY_MAG(1)
@@ -281,20 +308,20 @@ public:
   //     threshold for converting to conditional move
   //     likelihood of null check failure if a null HAS been seen before
   //     likelihood of slow path taken in library calls
-  // 
+  //
   // 1 in 10,000 probabilities (magnitude 4):
   //     threshold for making an uncommon trap probability more extreme
   //     threshold for for making a null check implicit
   //     likelihood of needing a gc if eden top moves during an allocation
   //     likelihood of a predicted call failure
-  // 
+  //
   // 1 in 100,000 probabilities (magnitude 5):
   //     threshold for ignoring counts when estimating path frequency
   //     likelihood of FP clipping failure
   //     likelihood of catching an exception from a try block
   //     likelihood of null check failure if a null has NOT been seen before
   //
-  // Magic manifest probabilities such as 0.83, 0.7, ... can be found in 
+  // Magic manifest probabilities such as 0.83, 0.7, ... can be found in
   // gen_subtype_check() and catch_inline_exceptions().
 
   float _prob;                  // Probability of true path being taken.
@@ -310,6 +337,7 @@ public:
   virtual const Type *bottom_type() const { return TypeTuple::IFBOTH; }
   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
   virtual const Type *Value( PhaseTransform *phase ) const;
+  virtual int required_outcnt() const { return 2; }
   virtual const RegMask &out_RegMask() const;
   void dominated_by(Node* prev_dom, PhaseIterGVN* igvn);
   int is_range_check(Node* &range, Node* &index, jint &offset);
@@ -332,7 +360,7 @@ public:
     init_class_id(Class_IfTrue);
   }
   virtual int Opcode() const;
-  virtual Node *Identity( PhaseTransform *phase );  
+  virtual Node *Identity( PhaseTransform *phase );
 };
 
 class IfFalseNode : public CProjNode {
@@ -341,7 +369,7 @@ public:
     init_class_id(Class_IfFalse);
   }
   virtual int Opcode() const;
-  virtual Node *Identity( PhaseTransform *phase );  
+  virtual Node *Identity( PhaseTransform *phase );
 };
 
 
@@ -368,11 +396,12 @@ public:
   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
   virtual const Type *bottom_type() const;
   virtual bool pinned() const { return true; }
+  virtual int required_outcnt() const { return _size; }
 };
 
 //------------------------------JumpNode---------------------------------------
 // Indirect branch.  Uses PCTable above to implement a switch statement.
-// It emits as a table load and local branch.  
+// It emits as a table load and local branch.
 class JumpNode : public PCTableNode {
 public:
   JumpNode( Node* control, Node* switch_val, uint size) : PCTableNode(control, switch_val, size) {
@@ -387,7 +416,7 @@ class JumpProjNode : public JProjNode {
   virtual uint hash() const;
   virtual uint cmp( const Node &n ) const;
   virtual uint size_of() const { return sizeof(*this); }
-  
+
  private:
   const int  _dest_bci;
   const uint _proj_no;
@@ -481,11 +510,12 @@ public:
   virtual int Opcode() const;
   virtual bool pinned() const { return true; };
   virtual const Type *bottom_type() const { return TypeTuple::IFBOTH; }
-
+  virtual const Type *Value( PhaseTransform *phase ) const;
+  virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+  virtual int required_outcnt() const { return 2; }
   virtual void emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const { }
   virtual uint size(PhaseRegAlloc *ra_) const { return 0; }
 #ifndef PRODUCT
   virtual void format( PhaseRegAlloc *, outputStream *st ) const;
 #endif
 };
-

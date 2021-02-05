@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2002 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.debugger;
@@ -37,6 +37,7 @@ package sun.jvm.hotspot.debugger;
     DbxDebugger interfaces. </P> */
 
 public abstract class DebuggerBase implements Debugger {
+
   // May be set lazily, but must be set before calling any of the read
   // routines below
   protected MachineDescription machDesc;
@@ -52,6 +53,11 @@ public abstract class DebuggerBase implements Debugger {
   protected long jlongSize;
   protected long jshortSize;
   protected boolean javaPrimitiveTypesConfigured;
+  // heap data.
+  protected long oopSize;
+  protected long heapOopSize;
+  protected long heapBase;                 // heap base for compressed oops.
+  protected long logMinObjAlignmentInBytes; // Used to decode compressed oops.
   // Should be initialized if desired by calling initCache()
   private PageCache cache;
 
@@ -153,6 +159,12 @@ public abstract class DebuggerBase implements Debugger {
     javaPrimitiveTypesConfigured = true;
   }
 
+  public void putHeapConst(long heapBase, long heapOopSize, long logMinObjAlignmentInBytes) {
+    this.heapBase = heapBase;
+    this.heapOopSize = heapOopSize;
+    this.logMinObjAlignmentInBytes = logMinObjAlignmentInBytes;
+  }
+
   /** May be called by subclasses if desired to initialize the page
       cache but may not be overridden */
   protected final void initCache(long pageSize, long maxNumPages) {
@@ -243,7 +255,7 @@ public abstract class DebuggerBase implements Debugger {
       byte[] data = readBytes(address, jbyteSize);
       return utils.dataToJByte(data, jbyteSize);
     }
-  }  
+  }
 
   // NOTE: assumes value does not span pages (may be bad assumption on
   // Solaris/x86; see unalignedAccessesOkay in DbxDebugger hierarchy)
@@ -257,7 +269,7 @@ public abstract class DebuggerBase implements Debugger {
       byte[] data = readBytes(address, jcharSize);
       return (char) utils.dataToJChar(data, jcharSize);
     }
-  }  
+  }
 
   // NOTE: assumes value does not span pages (may be bad assumption on
   // Solaris/x86; see unalignedAccessesOkay in DbxDebugger hierarchy)
@@ -271,7 +283,7 @@ public abstract class DebuggerBase implements Debugger {
       byte[] data = readBytes(address, jdoubleSize);
       return utils.dataToJDouble(data, jdoubleSize);
     }
-  }  
+  }
 
   // NOTE: assumes value does not span pages (may be bad assumption on
   // Solaris/x86; see unalignedAccessesOkay in DbxDebugger hierarchy)
@@ -285,7 +297,7 @@ public abstract class DebuggerBase implements Debugger {
       byte[] data = readBytes(address, jfloatSize);
       return utils.dataToJFloat(data, jfloatSize);
     }
-  }  
+  }
 
   // NOTE: assumes value does not span pages (may be bad assumption on
   // Solaris/x86; see unalignedAccessesOkay in DbxDebugger hierarchy)
@@ -299,7 +311,7 @@ public abstract class DebuggerBase implements Debugger {
       byte[] data = readBytes(address, jintSize);
       return utils.dataToJInt(data, jintSize);
     }
-  }  
+  }
 
   // NOTE: assumes value does not span pages (may be bad assumption on
   // Solaris/x86; see unalignedAccessesOkay in DbxDebugger hierarchy)
@@ -313,7 +325,7 @@ public abstract class DebuggerBase implements Debugger {
       byte[] data = readBytes(address, jlongSize);
       return utils.dataToJLong(data, jlongSize);
     }
-  }  
+  }
 
   // NOTE: assumes value does not span pages (may be bad assumption on
   // Solaris/x86; see unalignedAccessesOkay in DbxDebugger hierarchy)
@@ -327,7 +339,7 @@ public abstract class DebuggerBase implements Debugger {
       byte[] data = readBytes(address, jshortSize);
       return utils.dataToJShort(data, jshortSize);
     }
-  }  
+  }
 
   // NOTE: assumes value does not span pages (may be bad assumption on
   // Solaris/x86; see unalignedAccessesOkay in DbxDebugger hierarchy)
@@ -419,7 +431,7 @@ public abstract class DebuggerBase implements Debugger {
     utils.checkAlignment(address, jlongSize);
     byte[] data = utils.jlongToData(value);
     writeBytes(address, jlongSize, data);
-  }  
+  }
 
   public void writeJShort(long address, short value)
     throws UnmappedAddressException, UnalignedAddressException {
@@ -427,7 +439,7 @@ public abstract class DebuggerBase implements Debugger {
     utils.checkAlignment(address, jshortSize);
     byte[] data = utils.jshortToData(value);
     writeBytes(address, jshortSize, data);
-  }  
+  }
 
   public void writeCInteger(long address, long numBytes, long value)
     throws UnmappedAddressException, UnalignedAddressException {
@@ -440,6 +452,16 @@ public abstract class DebuggerBase implements Debugger {
   protected long readAddressValue(long address)
     throws UnmappedAddressException, UnalignedAddressException {
     return readCInteger(address, machDesc.getAddressSize(), true);
+  }
+
+  protected long readCompOopAddressValue(long address)
+    throws UnmappedAddressException, UnalignedAddressException {
+    long value = readCInteger(address, getHeapOopSize(), true);
+    if (value != 0) {
+      // See oop.inline.hpp decode_heap_oop
+      value = (long)(heapBase + (long)(value << logMinObjAlignmentInBytes));
+    }
+    return value;
   }
 
   protected void writeAddressValue(long address, long value)
@@ -517,5 +539,16 @@ public abstract class DebuggerBase implements Debugger {
 
   public long getJShortSize() {
     return jshortSize;
+  }
+
+  public long getHeapOopSize() {
+    return heapOopSize;
+  }
+
+  public long getHeapBase() {
+    return heapBase;
+  }
+  public long getLogMinObjAlignmentInBytes() {
+    return logMinObjAlignmentInBytes;
   }
 }

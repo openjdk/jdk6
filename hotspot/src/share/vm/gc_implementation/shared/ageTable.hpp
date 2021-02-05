@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)ageTable.hpp	1.29 07/05/05 17:05:32 JVM"
-#endif
 /*
  * Copyright 1997-2003 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 /* Copyright 1992 Sun Microsystems, Inc. and Stanford University.
@@ -53,12 +50,13 @@ class ageTable VALUE_OBJ_CLASS_SPEC {
   void add(oop p, size_t oop_size) {
     int age = p->age();
     assert(age > 0 && age < table_size, "invalid age of object");
-    sizes[age] += oop_size; 
+    sizes[age] += oop_size;
   }
 
   // Merge another age table with the current one.  Used
   // for parallel young generation gc.
   void merge(ageTable* subTable);
+  void merge_par(ageTable* subTable);
 
   // calculate new tenuring threshold based on age information
   int compute_tenuring_threshold(size_t survivor_capacity);

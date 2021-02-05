@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)c1_FrameMap.cpp	1.38 07/06/18 14:25:23 JVM"
-#endif
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -191,7 +188,7 @@ bool FrameMap::finalize_frame(int nof_slots) {
   _num_spills = nof_slots;
   assert(_framesize == -1, "should only be calculated once");
   _framesize =  round_to(in_bytes(sp_offset_for_monitor_base(0)) +
-                         _num_monitors * sizeof(BasicObjectLock) + 
+                         _num_monitors * sizeof(BasicObjectLock) +
                          sizeof(intptr_t) +                        // offset of deopt orig pc
                          frame_pad_in_bytes,
                          StackAlignmentInBytes) / 4;
@@ -281,7 +278,7 @@ ByteSize FrameMap::sp_offset_for_spill(const int index) const {
 ByteSize FrameMap::sp_offset_for_monitor_base(const int index) const {
   int end_of_spills = round_to(first_available_sp_in_frame + _reserved_argument_area_size, sizeof(double)) +
     _num_spills * spill_slot_size_in_bytes;
-  int offset = round_to(end_of_spills, HeapWordSize) + index * sizeof(BasicObjectLock);
+  int offset = (int) round_to(end_of_spills, HeapWordSize) + index * sizeof(BasicObjectLock);
   return in_ByteSize(offset);
 }
 
