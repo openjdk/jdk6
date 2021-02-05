@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@
 
 package javax.crypto;
 
-import java.lang.ref.*;
 import java.util.*;
 import java.util.jar.*;
 import java.io.*;
@@ -217,26 +216,28 @@ final class JceSecurity {
     private static final Map codeBaseCacheRef = new WeakHashMap();
 
     /*
-     * Retuns the CodeBase for the given class.
+     * Returns the CodeBase for the given class.
      */
     static URL getCodeBase(final Class clazz) {
-        URL url = (URL)codeBaseCacheRef.get(clazz);
-        if (url == null) {
-            url = (URL)AccessController.doPrivileged(new PrivilegedAction() {
-                public Object run() {
-                    ProtectionDomain pd = clazz.getProtectionDomain();
-                    if (pd != null) {
-                        CodeSource cs = pd.getCodeSource();
-                        if (cs != null) {
-                            return cs.getLocation();
+        synchronized (codeBaseCacheRef) {
+            URL url = (URL)codeBaseCacheRef.get(clazz);
+            if (url == null) {
+                url = (URL)AccessController.doPrivileged(new PrivilegedAction() {
+                    public Object run() {
+                        ProtectionDomain pd = clazz.getProtectionDomain();
+                        if (pd != null) {
+                            CodeSource cs = pd.getCodeSource();
+                            if (cs != null) {
+                                return cs.getLocation();
+                            }
                         }
+                        return NULL_URL;
                     }
-                    return NULL_URL;
-                }
-            });
-            codeBaseCacheRef.put(clazz, url);
+                });
+                codeBaseCacheRef.put(clazz, url);
+            }
+            return (url == NULL_URL) ? null : url;
         }
-        return (url == NULL_URL) ? null : url;
     }
 
     private static void setupJurisdictionPolicies() throws Exception {
@@ -255,11 +256,6 @@ final class JceSecurity {
             throw new SecurityException
                                 ("Cannot locate policy or framework files!");
         }
-
-        // Enforce the signer restraint, i.e. signer of JCE framework
-        // jar should also be the signer of the two jurisdiction policy
-        // jar files.
-        JarVerifier.verifyFrameworkSigned(jceCipherURL);
 
         // Read jurisdiction policies.
         CryptoPermissions defaultExport = new CryptoPermissions();

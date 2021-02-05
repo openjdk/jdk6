@@ -47,13 +47,12 @@ import javax.net.ssl.*;
 import javax.security.auth.Subject;
 import javax.security.auth.kerberos.KerberosPrincipal;
 import sun.security.jgss.krb5.Krb5Util;
-import sun.security.jgss.GSSUtil;
+import sun.security.jgss.GSSCaller;
 
 import com.sun.net.ssl.internal.ssl.X509ExtendedTrustManager;
 
 import sun.security.ssl.HandshakeMessage.*;
 import sun.security.ssl.CipherSuite.*;
-import static sun.security.ssl.CipherSuite.*;
 import static sun.security.ssl.CipherSuite.KeyExchange.*;
 
 /**
@@ -280,6 +279,13 @@ final class ClientHandshaker extends Handshaker {
             break;
 
         case HandshakeMessage.ht_finished:
+            // A ChangeCipherSpec record must have been received prior to
+            // reception of the Finished message (RFC 5246, 7.4.9).
+            if (!receivedChangeCipherSpec()) {
+                fatalSE(Alerts.alert_handshake_failure,
+                        "Received Finished message before ChangeCipherSpec");
+            }
+
             this.serverFinished(new Finished(protocolVersion, input));
             break;
 
@@ -371,9 +377,10 @@ final class ClientHandshaker extends Handshaker {
 
         // check if the server selected protocol version is OK for us
         ProtocolVersion mesgVersion = mesg.protocolVersion;
-        if (enabledProtocols.contains(mesgVersion) == false) {
-            throw new SSLHandshakeException
-            ("Server chose unsupported or disabled protocol: " + mesgVersion);
+        if (!isNegotiable(mesgVersion)) {
+            throw new SSLHandshakeException(
+                    "Server chose unsupported or disabled protocol: " +
+                    mesgVersion);
         }
 
         // Set protocolVersion and propagate to SSLSocket and the
@@ -495,7 +502,7 @@ final class ClientHandshaker extends Handshaker {
                             new PrivilegedExceptionAction<Subject>() {
                             public Subject run() throws Exception {
                                 return Krb5Util.getSubject(
-                                    GSSUtil.CALLER_SSL_CLIENT,
+                                    GSSCaller.CALLER_SSL_CLIENT,
                                     getAccSE());
                             }});
                     } catch (PrivilegedActionException e) {
@@ -1024,7 +1031,7 @@ final class ClientHandshaker extends Handshaker {
         SessionId sessionId = SSLSessionImpl.nullSession.getSessionId();
 
         // a list of cipher suites sent by the client
-        CipherSuiteList cipherSuites = enabledCipherSuites;
+        CipherSuiteList cipherSuites = getActiveCipherSuites();
 
         // set the max protocol version this client is supporting.
         maxProtocolVersion = protocolVersion;
@@ -1073,8 +1080,7 @@ final class ClientHandshaker extends Handshaker {
                 session = null;
             }
 
-            if ((session != null) &&
-                        (enabledProtocols.contains(sessionVersion) == false)) {
+            if ((session != null) && !isNegotiable(sessionVersion)) {
                 if (debug != null && Debug.isOn("session")) {
                     System.out.println("%% can't resume, protocol disabled");
                 }
@@ -1104,7 +1110,7 @@ final class ClientHandshaker extends Handshaker {
              */
             if (!enableNewSession) {
                 if (session == null) {
-                    throw new SSLException(
+                    throw new SSLHandshakeException(
                         "Can't reuse existing SSL client session");
                 }
 
@@ -1121,7 +1127,7 @@ final class ClientHandshaker extends Handshaker {
         }
 
         if (session == null && !enableNewSession) {
-            throw new SSLException("No existing session to resume");
+            throw new SSLHandshakeException("No existing session to resume");
         }
 
         // exclude SCSV for secure renegotiation
@@ -1147,7 +1153,7 @@ final class ClientHandshaker extends Handshaker {
         }
 
         if (!negotiable) {
-            throw new SSLException("No negotiable cipher suite");
+            throw new SSLHandshakeException("No negotiable cipher suite");
         }
 
         // create the ClientHello message

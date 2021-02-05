@@ -30,6 +30,7 @@
 #include "oops/klass.hpp"
 #include "oops/methodOop.hpp"
 #include "runtime/handles.hpp"
+#include "utilities/growableArray.hpp"
 #include "utilities/exceptions.hpp"
 
 // The verifier class
@@ -97,9 +98,6 @@ class ClassVerifier : public StackObj {
   size_t _message_buffer_len;
   GrowableArray<Symbol*>* _symbols;  // keep a list of symbols created
 
-  // Used to detect illegal jumps over calls to super() nd this() in ctors.
-  int32_t _furthest_jump;
-
   void verify_method(methodHandle method, TRAPS);
   char* generate_code_data(methodHandle m, u4 code_length, TRAPS);
   void verify_exception_handler_table(u4 code_length, char* code_data, int& min, int& max, TRAPS);
@@ -141,13 +139,24 @@ class ClassVerifier : public StackObj {
 
   void verify_invoke_init(
     RawBytecodeStream* bcs, VerificationType ref_class_type,
-    StackMapFrame* current_frame, u4 code_length, bool* this_uninit,
-    constantPoolHandle cp, TRAPS);
+    StackMapFrame* current_frame, u4 code_length, bool in_try_block,
+    bool* this_uninit, constantPoolHandle cp, StackMapTable* stackmap_table,
+    TRAPS);
+
+  // Used by ends_in_athrow() to push all handlers that contain bci onto
+  // the handler_stack, if the handler is not already on the stack.
+  void push_handlers(typeArrayHandle exhandlers,
+                     GrowableArray<u4>* handler_stack,
+                     u4 bci);
+
+  // Returns true if all paths starting with start_bc_offset end in athrow
+  // bytecode or loop.
+  bool ends_in_athrow(u4 start_bc_offset, TRAPS);
 
   void verify_invoke_instructions(
     RawBytecodeStream* bcs, u4 code_length, StackMapFrame* current_frame,
-    bool* this_uninit, VerificationType return_type,
-    constantPoolHandle cp, TRAPS);
+    bool in_try_block, bool* this_uninit, VerificationType return_type,
+    constantPoolHandle cp, StackMapTable* stackmap_table, TRAPS);
 
   VerificationType get_newarray_type(u2 index, u2 bci, TRAPS);
   void verify_anewarray(
@@ -236,18 +245,6 @@ class ClassVerifier : public StackObj {
 
   static bool _verify_verbose;  // for debugging
 
-  // Keep track of the furthest branch done in a method to make sure that
-  // there are no branches over calls to super() or this() from inside of
-  // a constructor.
-  int32_t furthest_jump() { return _furthest_jump; }
-
-  void set_furthest_jump(int32_t target) {
-    _furthest_jump = target;
-  }
-
-  void update_furthest_jump(int32_t target) {
-    if (target > _furthest_jump) _furthest_jump = target;
-  }
 };
 
 inline int ClassVerifier::change_sig_to_verificationType(
