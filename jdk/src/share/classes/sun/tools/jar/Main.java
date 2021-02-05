@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -127,7 +127,7 @@ class Main {
 
     /**
      * Creates a new empty temporary file in the same directory as the
-     * specified file.  A variant of File.createTempFile.
+     * specified file.  A variant of sun.misc.IOUtils.createTempFile.
      */
     private static File createTempFileInSameDirectoryAs(File file)
         throws IOException {
