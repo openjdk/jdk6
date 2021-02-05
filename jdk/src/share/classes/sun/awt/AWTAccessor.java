@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,6 +35,8 @@ import java.security.AccessControlContext;
 import java.util.Vector;
 
 import java.awt.event.KeyEvent;
+import java.awt.geom.Point2D;
+import java.awt.image.BufferedImage;
 
 /**
  * The AWTAccessor utility class.
@@ -59,11 +61,60 @@ public final class AWTAccessor {
      * An interface of an accessor for java.awt.Window class.
      */
     public interface WindowAccessor {
+        /*
+         * Get opacity level of the given window.
+         */
+        float getOpacity(Window window);
+        /*
+         * Set opacity level to the given window.
+         */
+        void setOpacity(Window window, float opacity);
+        /*
+         * Get a shape assigned to the given window.
+         */
+        Shape getShape(Window window);
+        /*
+         * Set a shape to the given window.
+         */
+        void setShape(Window window, Shape shape);
+        /*
+         * Identify whether the given window is opaque (true)
+         *  or translucent (false).
+         */
+        boolean isOpaque(Window window);
+        /*
+         * Set the opaque preoperty to the given window.
+         */
+        void setOpaque(Window window, boolean isOpaque);
+        /*
+         * Update the image of a non-opaque (translucent) window.
+         */
+        void updateWindow(Window window, BufferedImage backBuffer);
         /**
          * Sets the synchronous status of focus requests on lightweight
          * components in the specified window to the specified value.
          */
         void setLWRequestStatus(Window changed, boolean status);
+
+        /** Get the size of the security warning.
+         */
+        Dimension getSecurityWarningSize(Window w);
+
+        /**
+         * Set the size of the security warning.
+         */
+        void setSecurityWarningSize(Window w, int width, int height);
+
+        /** Set the position of the security warning.
+         */
+        void setSecurityWarningPosition(Window w, Point2D point,
+                float alignmentX, float alignmentY);
+
+        /** Request to recalculate the new position of the security warning for
+         * the given window size/location as reported by the native system.
+         */
+        Point2D calculateSecurityWarningPosition(Window window,
+                double x, double y, double w, double h);
     }
 
     /*
@@ -81,6 +132,32 @@ public final class AWTAccessor {
         void setAppContext(Component comp, AppContext appContext);
 
         /*
+         * Sets whether the native background erase for a component
+         * has been disabled via SunToolkit.disableBackgroundErase().
+         */
+        void setBackgroundEraseDisabled(Component comp, boolean disabled);
+        /*
+         * Indicates whether the native background erase for a
+         * component has been disabled via
+         * SunToolkit.disableBackgroundErase().
+         */
+        boolean getBackgroundEraseDisabled(Component comp);
+        /*
+         *
+         * Gets the bounds of this component in the form of a
+         * <code>Rectangle</code> object. The bounds specify this
+         * component's width, height, and location relative to
+         * its parent.
+         */
+        Rectangle getBounds(Component comp);
+        /*
+         * Sets the shape of a lw component to cut out from hw components.
+         *
+         * See 6797587, 6776743, 6768307, and 6768332 for details
+         */
+        void setMixingCutoutShape(Component comp, Shape shape);
+
+        /*
          * Returns the acc this component was constructed with.
          */
         AccessControlContext getAccessControlContext(Component comp);
@@ -95,6 +172,12 @@ public final class AWTAccessor {
          * Requests that this Component get the input focus, providing the cause
          */
         void requestFocus(Component comp, CausedFocusEvent.Cause cause);
+
+        /**
+         * Returns whether the component is visible without invoking
+         * any client code.
+         */
+        boolean isVisible_NoClientCode(Component comp);
     }
 
     /**
@@ -335,9 +418,18 @@ public final class AWTAccessor {
      * Accessor instances are initialized in the static initializers of
      * corresponding AWT classes by using setters defined below.
      */
-    private static WindowAccessor windowAccessor;
+    /* The java.awt.Component class accessor object.
+     */
     private static ComponentAccessor componentAccessor;
     private static KeyboardFocusManagerAccessor kfmAccessor;
+    /*
+     * The java.awt.Window class accessor object.
+     */
+    private static WindowAccessor windowAccessor;
+
+    /*
+     * The java.awt.AWTEvent class accessor object.
+     */
     private static AWTEventAccessor awtEventAccessor;
     private static MenuComponentAccessor menuComponentAccessor;
     private static EventQueueAccessor eventQueueAccessor;

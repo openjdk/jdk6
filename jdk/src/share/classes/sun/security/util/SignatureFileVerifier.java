@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -154,6 +154,52 @@ public class SignatureFileVerifier {
         return false;
     }
 
+    /**
+     * Yet another utility method used by JarVerifier and JarSigner
+     * to determine what files are signature related, which includes
+     * the MANIFEST, SF files, known signature block files, and other
+     * unknown signature related files (those starting with SIG- with
+     * an optional [A-Z0-9]{1,3} extension right inside META-INF).
+     *
+     * @param s file name
+     * @return true if the input file name is signature related
+     */
+    public static boolean isSigningRelated(String name) {
+        name = name.toUpperCase(Locale.ENGLISH);
+        if (!name.startsWith("META-INF/")) {
+            return false;
+        }
+        name = name.substring(9);
+        if (name.indexOf('/') != -1) {
+            return false;
+        }
+        if (isBlockOrSF(name) || name.equals("MANIFEST.MF")) {
+            return true;
+        } else if (name.startsWith("SIG-")) {
+            // check filename extension
+            // see http://docs.oracle.com/javase/7/docs/technotes/guides/jar/jar.html#Digital_Signatures
+            // for what filename extensions are legal
+            int extIndex = name.lastIndexOf('.');
+            if (extIndex != -1) {
+                String ext = name.substring(extIndex + 1);
+                // validate length first
+                if (ext.length() > 3 || ext.length() < 1) {
+                    return false;
+                }
+                // then check chars, must be in [a-zA-Z0-9] per the jar spec
+                for (int index = 0; index < ext.length(); index++) {
+                    char cc = ext.charAt(index);
+                    // chars are promoted to uppercase so skip lowercase checks
+                    if ((cc < 'A' || cc > 'Z') && (cc < '0' || cc > '9')) {
+                        return false;
+                    }
+                }
+            }
+            return true; // no extension is OK
+        }
+        return false;
+    }
+
     /** get digest from cache */
 
     private MessageDigest getDigest(String algorithm)
@@ -181,7 +227,8 @@ public class SignatureFileVerifier {
      *
      *
      */
-    public void process(Hashtable<String, CodeSigner[]> signers)
+    public void process(Hashtable<String, CodeSigner[]> signers,
+            List manifestDigests)
         throws IOException, SignatureException, NoSuchAlgorithmException,
             JarException, CertificateException
     {
@@ -190,14 +237,15 @@ public class SignatureFileVerifier {
         Object obj = null;
         try {
             obj = Providers.startJarVerification();
-            processImpl(signers);
+            processImpl(signers, manifestDigests);
         } finally {
             Providers.stopJarVerification(obj);
         }
 
     }
 
-    private void processImpl(Hashtable<String, CodeSigner[]> signers)
+    private void processImpl(Hashtable<String, CodeSigner[]> signers,
+            List manifestDigests)
         throws IOException, SignatureException, NoSuchAlgorithmException,
             JarException, CertificateException
     {
@@ -232,7 +280,7 @@ public class SignatureFileVerifier {
                                 sf.getEntries().entrySet().iterator();
 
         // see if we can verify the whole manifest first
-        boolean manifestSigned = verifyManifestHash(sf, md, decoder);
+        boolean manifestSigned = verifyManifestHash(sf, md, decoder, manifestDigests);
 
         // verify manifest main attributes
         if (!manifestSigned && !verifyManifestMainAttrs(sf, md, decoder)) {
@@ -272,7 +320,8 @@ public class SignatureFileVerifier {
      */
     private boolean verifyManifestHash(Manifest sf,
                                        ManifestDigester md,
-                                       BASE64Decoder decoder)
+                                       BASE64Decoder decoder,
+                                       List manifestDigests)
          throws IOException
     {
         Attributes mattr = sf.getMainAttributes();
@@ -287,6 +336,8 @@ public class SignatureFileVerifier {
                 // 16 is length of "-Digest-Manifest"
                 String algorithm = key.substring(0, key.length()-16);
 
+                manifestDigests.add(key);
+                manifestDigests.add(se.getValue());
                 MessageDigest digest = getDigest(algorithm);
                 if (digest != null) {
                     byte[] computedHash = md.manifestDigest(digest);

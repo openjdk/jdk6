@@ -37,11 +37,13 @@
 #include <jni.h>
 #include <jni_util.h>
 #include <jlong.h>
+#include <sizecalc.h>
 
 #include <awt.h>
 #include <jvm.h>
 
 #include <Region.h>
+#include "utility/rect.h"
 
 #if defined(DEBUG) || defined(INTERNAL_BUILD)
 static jmethodID lockIsHeldMID = NULL;
@@ -301,6 +303,20 @@ JNIEXPORT void JNICALL Java_sun_awt_X11_XlibWrapper_XRestackWindows
     AWT_CHECK_HAVE_LOCK();
     XRestackWindows( (Display *) jlong_to_ptr(display), (Window *) jlong_to_ptr(windows), length);
 
+}
+
+/*
+ * Class:     XlibWrapper
+ * Method:    XConfigureWindow
+ * Signature: (JJJJ)V
+ */
+JNIEXPORT void JNICALL Java_sun_awt_X11_XlibWrapper_XConfigureWindow
+(JNIEnv *env, jclass clazz, jlong display, jlong window, jlong value_mask,
+ jlong values)
+{
+    AWT_CHECK_HAVE_LOCK();
+    XConfigureWindow((Display*)jlong_to_ptr(display), (Window)window,
+            (unsigned int)value_mask, (XWindowChanges*)jlong_to_ptr(values));
 }
 
 /*
@@ -1933,19 +1949,83 @@ Java_sun_awt_X11_XlibWrapper_SetRectangularShape
  jint x1, jint y1, jint x2, jint y2,
  jobject region)
 {
-    XRectangle rects[256];
-    XRectangle *pRect = rects;
-    int numrects;
+    AWT_CHECK_HAVE_LOCK();
+
+    // If all the params are zeros, the shape must be simply reset.
+    // Otherwise, the shape may be not rectangular.
+    if (region || x1 || x2 || y1 || y2) {
+        XRectangle rects[256];
+        XRectangle *pRect = rects;
+
+        int numrects = RegionToYXBandedRectangles(env, x1, y1, x2, y2, region,
+                &pRect, 256);
+
+        XShapeCombineRectangles((Display *)jlong_to_ptr(display), (Window)jlong_to_ptr(window),
+                ShapeClip, 0, 0, pRect, numrects, ShapeSet, YXBanded);
+        XShapeCombineRectangles((Display *)jlong_to_ptr(display), (Window)jlong_to_ptr(window),
+                ShapeBounding, 0, 0, pRect, numrects, ShapeSet, YXBanded);
+
+        if (pRect != rects) {
+            free(pRect);
+        }
+    } else {
+        // Reset the shape to a rectangular form.
+        XShapeCombineMask((Display *)jlong_to_ptr(display), (Window)jlong_to_ptr(window),
+                ShapeClip, 0, 0, None, ShapeSet);
+        XShapeCombineMask((Display *)jlong_to_ptr(display), (Window)jlong_to_ptr(window),
+                ShapeBounding, 0, 0, None, ShapeSet);
+    }
+}
+
+/*
+ * Class:     XlibWrapper
+ * Method:    SetBitmapShape
+ */
+JNIEXPORT void JNICALL
+Java_sun_awt_X11_XlibWrapper_SetBitmapShape
+(JNIEnv *env, jclass clazz, jlong display, jlong window,
+ jint width, jint height, jintArray bitmap)
+{
+    jsize len;
+    jint *values;
+    jboolean isCopy = JNI_FALSE;
+    size_t worstBufferSize = (size_t)((width / 2 + 1) * height);
+    RECT_T * pRect;
+
+    if (!IS_SAFE_SIZE_MUL(width / 2 + 1, height)) {
+        return;
+    }
 
     AWT_CHECK_HAVE_LOCK();
 
-    numrects = RegionToYXBandedRectangles(env, x1, y1, x2, y2, region,
-            &pRect, 256);
+    len = (*env)->GetArrayLength(env, bitmap);
+    if (len == 0 || len < width * height) {
+        return;
+    }
+
+    values = (*env)->GetIntArrayElements(env, bitmap, &isCopy);
+    if (JNU_IsNull(env, values)) {
+        return;
+    }
+
+    pRect = (RECT_T *)SAFE_SIZE_ARRAY_ALLOC(malloc, worstBufferSize, sizeof(RECT_T));
+    if (!pRect) {
+        return;
+    }
+
+    /* Note: the values[0] and values[1] are supposed to contain the width
+     * and height (see XIconInfo.getIntData() for details). So, we do +2.
+     */
+    int numrects = BitmapToYXBandedRectangles(32, (int)width, (int)height,
+            (unsigned char *)(values + 2), pRect);
 
     XShapeCombineRectangles((Display *)jlong_to_ptr(display), (Window)jlong_to_ptr(window),
-                ShapeBounding, 0, 0, pRect, numrects, ShapeSet, YXBanded);
+            ShapeClip, 0, 0, pRect, numrects, ShapeSet, YXBanded);
+    XShapeCombineRectangles((Display *)jlong_to_ptr(display), (Window)jlong_to_ptr(window),
+            ShapeBounding, 0, 0, pRect, numrects, ShapeSet, YXBanded);
 
-    if (pRect != rects) {
-        free(pRect);
-    }
+    free(pRect);
+
+    (*env)->ReleaseIntArrayElements(env, bitmap, values, JNI_ABORT);
 }
+
