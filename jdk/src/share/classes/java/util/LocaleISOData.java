@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -250,9 +250,11 @@ class LocaleISOData {
         + "BH" + "BHR"  // Bahrain, Kingdom of
         + "BI" + "BDI"  // Burundi, Republic of
         + "BJ" + "BEN"  // Benin, People's Republic of
+        + "BL" + "BLM"  // Saint Barth\u00e9lemy
         + "BM" + "BMU"  // Bermuda
         + "BN" + "BRN"  // Brunei Darussalam
         + "BO" + "BOL"  // Bolivia, Republic of
+        + "BQ" + "BES"  // Bonaire, Sint Eustatius and Saba
         + "BR" + "BRA"  // Brazil, Federative Republic of
         + "BS" + "BHS"  // Bahamas, Commonwealth of the
         + "BT" + "BTN"  // Bhutan, Kingdom of
@@ -273,9 +275,10 @@ class LocaleISOData {
         + "CN" + "CHN"  // China, People's Republic of
         + "CO" + "COL"  // Colombia, Republic of
         + "CR" + "CRI"  // Costa Rica, Republic of
-        + "CS" + "SCG"  // Serbia and Montenegro
+//      + "CS" + "SCG"  // Serbia and Montenegro
         + "CU" + "CUB"  // Cuba, Republic of
         + "CV" + "CPV"  // Cape Verde, Republic of
+        + "CW" + "CUW"  // Cura\u00e7ao
         + "CX" + "CXR"  // Christmas Island
         + "CY" + "CYP"  // Cyprus, Republic of
         + "CZ" + "CZE"  // Czech Republic
@@ -363,6 +366,7 @@ class LocaleISOData {
         + "MC" + "MCO"  // Monaco, Principality of
         + "MD" + "MDA"  // Moldova, Republic of
         + "ME" + "MNE"  // Montenegro, Republic of
+        + "MF" + "MAF"  // Saint Martin
         + "MG" + "MDG"  // Madagascar, Republic of
         + "MH" + "MHL"  // Marshall Islands
         + "MK" + "MKD"  // Macedonia, the former Yugoslav Republic of
@@ -429,8 +433,10 @@ class LocaleISOData {
         + "SN" + "SEN"  // Senegal, Republic of
         + "SO" + "SOM"  // Somalia, Somali Republic
         + "SR" + "SUR"  // Suriname, Republic of
+        + "SS" + "SSD"  // South Sudan
         + "ST" + "STP"  // Sao Tome and Principe, Democratic Republic of
         + "SV" + "SLV"  // El Salvador, Republic of
+        + "SX" + "SXM"  // Sint Maarten (Dutch part)
         + "SY" + "SYR"  // Syrian Arab Republic
         + "SZ" + "SWZ"  // Swaziland, Kingdom of
         + "TC" + "TCA"  // Turks and Caicos Islands

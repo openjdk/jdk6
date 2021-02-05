@@ -43,7 +43,7 @@ import javax.security.auth.kerberos.KerberosKey;
 import javax.security.auth.kerberos.KerberosPrincipal;
 import javax.security.auth.kerberos.ServicePermission;
 import sun.security.jgss.krb5.Krb5Util;
-import sun.security.jgss.GSSUtil;
+import sun.security.jgss.GSSCaller;
 
 import com.sun.net.ssl.internal.ssl.X509ExtendedTrustManager;
 
@@ -242,6 +242,13 @@ final class ServerHandshaker extends Handshaker {
                 break;
 
             case HandshakeMessage.ht_finished:
+                // A ChangeCipherSpec record must have been received prior to
+                // reception of the Finished message (RFC 5246, 7.4.9).
+                if (!receivedChangeCipherSpec()) {
+                    fatalSE(Alerts.alert_handshake_failure,
+                        "Received Finished message before ChangeCipherSpec");
+                }
+
                 this.clientFinished(new Finished(protocolVersion, input));
                 break;
 
@@ -416,20 +423,14 @@ final class ServerHandshaker extends Handshaker {
 
         clientRequestedVersion = mesg.protocolVersion;
 
-        // check if clientVersion is recent enough for us
-        if (clientRequestedVersion.v < enabledProtocols.min.v) {
+        // select a proper protocol version.
+        ProtocolVersion selectedVersion =
+               selectProtocolVersion(clientRequestedVersion);
+        if (selectedVersion == null ||
+                selectedVersion.v == ProtocolVersion.SSL20Hello.v) {
             fatalSE(Alerts.alert_handshake_failure,
                 "Client requested protocol " + clientRequestedVersion +
-                 " not enabled or not supported");
-        }
-
-        // now we know we have an acceptable version
-        // use the lower of our max and the client requested version
-        ProtocolVersion selectedVersion;
-        if (clientRequestedVersion.v <= enabledProtocols.max.v) {
-            selectedVersion = clientRequestedVersion;
-        } else {
-            selectedVersion = enabledProtocols.max;
+                " not enabled or not supported");
         }
         setVersion(selectedVersion);
 
@@ -502,7 +503,7 @@ final class ServerHandshaker extends Handshaker {
                                 new PrivilegedExceptionAction<Subject>() {
                                 public Subject run() throws Exception {
                                     return Krb5Util.getSubject(
-                                        GSSUtil.CALLER_SSL_SERVER,
+                                        GSSCaller.CALLER_SSL_SERVER,
                                         getAccSE());
                             }});
                         } catch (PrivilegedActionException e) {
@@ -821,8 +822,7 @@ final class ServerHandshaker extends Handshaker {
      * method should only be called if you really want to use the
      * CipherSuite.
      *
-     * This method is called from chooseCipherSuite() in this class
-     * and SSLServerSocketImpl.checkEnabledSuites() (as a sanity check).
+     * This method is called from chooseCipherSuite() in this class.
      */
     boolean trySetCipherSuite(CipherSuite suite) {
         /*
@@ -836,6 +836,11 @@ final class ServerHandshaker extends Handshaker {
         }
 
         if (suite.isNegotiable() == false) {
+            return false;
+        }
+
+        // TLSv1.1 must not negotiate the exportable weak cipher suites.
+        if (protocolVersion.v >= suite.obsoleted) {
             return false;
         }
 
@@ -1069,9 +1074,10 @@ final class ServerHandshaker extends Handshaker {
                 new PrivilegedExceptionAction<KerberosKey[]>() {
                 public KerberosKey[] run() throws Exception {
                     // get kerberos key for the default principal
-                    return Krb5Util.getKeys(
-                        GSSUtil.CALLER_SSL_SERVER, null, acc);
-                        }});
+                    KerberosKey[] keys = Krb5Util.getKeys(
+                        GSSCaller.CALLER_SSL_SERVER, null, acc);
+		    return keys != null ? keys : new KerberosKey[0];
+		}});
 
             // check permission to access and use the secret key of the
             // Kerberized "host" service
@@ -1099,7 +1105,7 @@ final class ServerHandshaker extends Handshaker {
                    return false;
                 }
             }
-            return (kerberosKeys != null);
+            return (kerberosKeys != null && kerberosKeys.length > 0);
         } catch (PrivilegedActionException e) {
             // Likely exception here is LoginExceptin
             if (debug != null && Debug.isOn("handshake")) {

@@ -230,7 +230,7 @@ jint  IPv6_supported()
     int fd;
     void *ipv6_fn;
     SOCKADDR sa;
-    int sa_len = sizeof(sa);
+    socklen_t sa_len = sizeof(sa);
 
     fd = JVM_Socket(AF_INET6, SOCK_STREAM, 0) ;
     if (fd < 0) {
@@ -448,7 +448,6 @@ static void initLoopbackRoutes() {
     char dest_str[40];
     struct in6_addr dest_addr;
     char device[16];
-    jboolean match = JNI_FALSE;
 
     if (loRoutes != 0) {
         free (loRoutes);
@@ -526,7 +525,7 @@ static void initLoopbackRoutes() {
     {
         /* now find the scope_id for "lo" */
 
-        char addr6[40], devname[20];
+        char devname[21];
         char addr6p[8][5];
         int plen, scope, dad_status, if_idx;
 
@@ -569,7 +568,7 @@ static int nifs = 0;            /* number of entries used in array */
 static void initLocalIfs () {
     FILE *f;
     unsigned char staddr [16];
-    char ifname [32];
+    char ifname [33];
     struct localinterface *lif=0;
     int index, x1, x2, x3;
     unsigned int u0,u1,u2,u3,u4,u5,u6,u7,u8,u9,ua,ub,uc,ud,ue,uf;
@@ -578,7 +577,7 @@ static void initLocalIfs () {
         return ;
     }
     while (fscanf (f, "%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x "
-                "%d %x %x %x %s",&u0,&u1,&u2,&u3,&u4,&u5,&u6,&u7,
+                "%d %x %x %x %32s",&u0,&u1,&u2,&u3,&u4,&u5,&u6,&u7,
                 &u8,&u9,&ua,&ub,&uc,&ud,&ue,&uf,
                 &index, &x1, &x2, &x3, ifname) == 21) {
         staddr[0] = (unsigned char)u0;
@@ -1038,7 +1037,7 @@ int getDefaultIPv6Interface(struct in6_addr *target_addr) {
      * index.
      */
     if (match) {
-        char addr6[40], devname[20];
+        char devname[21];
         char addr6p[8][5];
         int plen, scope, dad_status, if_idx;
 
@@ -1105,7 +1104,7 @@ NET_GetSockOpt(int fd, int level, int opt, void *result,
     }
 #endif
 
-    rv = getsockopt(fd, level, opt, result, len);
+    rv = getsockopt(fd, level, opt, result, (socklen_t)len);
     if (rv < 0) {
         return rv;
     }

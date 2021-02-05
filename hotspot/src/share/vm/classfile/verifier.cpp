@@ -379,8 +379,6 @@ void ClassVerifier::verify_method(methodHandle m, TRAPS) {
                                 // flow from current instruction to the next
                                 // instruction in sequence
 
-  set_furthest_jump(0);
-
   Bytecodes::Code opcode;
   while (!bcs.is_last_bytecode()) {
     // Check for recursive re-verification before each bytecode.
@@ -1230,14 +1228,14 @@ void ClassVerifier::verify_method(methodHandle m, TRAPS) {
         case Bytecodes::_invokespecial :
         case Bytecodes::_invokestatic :
           verify_invoke_instructions(
-            &bcs, code_length, &current_frame,
-            &this_uninit, return_type, cp, CHECK_VERIFY(this));
+            &bcs, code_length, &current_frame, (bci >= ex_min && bci < ex_max),
+            &this_uninit, return_type, cp, &stackmap_table, CHECK_VERIFY(this));
           no_control_flow = false; break;
         case Bytecodes::_invokeinterface :
         case Bytecodes::_invokedynamic :
           verify_invoke_instructions(
-            &bcs, code_length, &current_frame,
-            &this_uninit, return_type, cp, CHECK_VERIFY(this));
+            &bcs, code_length, &current_frame, (bci >= ex_min && bci < ex_max),
+            &this_uninit, return_type, cp, &stackmap_table, CHECK_VERIFY(this));
           no_control_flow = false; break;
         case Bytecodes::_new :
         {
@@ -1455,7 +1453,7 @@ u2 ClassVerifier::verify_stackmap_table(u2 stackmap_index, u2 bci,
       // If matched, current_frame will be updated by this method.
       bool match = stackmap_table->match_stackmap(
         current_frame, this_offset, stackmap_index,
-        !no_control_flow, true, CHECK_VERIFY_(this, 0));
+        !no_control_flow, true, false, CHECK_VERIFY_(this, 0));
       if (!match) {
         // report type error
         verify_error(bci, "Instruction type does not match stack map");
@@ -1499,7 +1497,7 @@ void ClassVerifier::verify_exception_handler_targets(u2 bci, bool this_uninit, S
           new_frame->push_stack(throwable, CHECK_VERIFY(this));
         }
         bool match = stackmap_table->match_stackmap(
-          new_frame, handler_pc, true, false, CHECK_VERIFY(this));
+          new_frame, handler_pc, true, false, true, CHECK_VERIFY(this));
         if (!match) {
           verify_error(bci,
             "Stack map does not match the one at exception handler %d",
@@ -1879,10 +1877,190 @@ void ClassVerifier::verify_field_instructions(RawBytecodeStream* bcs,
   }
 }
 
+// Look at the method's handlers.  If the bci is in the handler's try block
+// then check if the handler_pc is already on the stack.  If not, push it.
+void ClassVerifier::push_handlers(typeArrayHandle exhandlers,
+                                  GrowableArray<u4>* handler_stack,
+                                  u4 bci) {
+  int exlength = exhandlers->length();
+  for(int x = 0; x < exlength; x++) {
+    u2 start_pc = exhandlers->int_at(x++);
+    u2 end_pc = exhandlers->int_at(x++);
+    u2 handler_pc = exhandlers->int_at(x++);
+
+    if (bci >= start_pc && bci < end_pc) {
+      handler_stack->append_if_missing(handler_pc);
+    }
+  }
+}
+
+// Return TRUE if all code paths starting with start_bc_offset end in
+// bytecode athrow or loop.
+bool ClassVerifier::ends_in_athrow(u4 start_bc_offset, TRAPS) {
+  ResourceMark rm;
+  // Create bytecode stream.
+  RawBytecodeStream bcs(method());
+  u4 code_length = method()->code_size();
+  bcs.set_start(start_bc_offset);
+  u4 target;
+  // Create stack for storing bytecode start offsets for if* and *switch.
+  GrowableArray<u4>* bci_stack = new GrowableArray<u4>(30);
+  // Create stack for handlers for try blocks containing this handler.
+  GrowableArray<u4>* handler_stack = new GrowableArray<u4>(30);
+  // Create list of visited branch opcodes (goto* and if*).
+  GrowableArray<u4>* visited_branches = new GrowableArray<u4>(30);
+  typeArrayHandle exhandlers(THREAD, _method->exception_table());
+
+  while (true) {
+    if (bcs.is_last_bytecode()) {
+      // if no more starting offsets to parse or if at the end of the
+      // method then return false.
+      if ((bci_stack->is_empty()) || ((u4)bcs.end_bci() == code_length))
+        return false;
+      // Pop a bytecode starting offset and scan from there.
+      bcs.set_start(bci_stack->pop());
+    }
+    Bytecodes::Code opcode = bcs.raw_next();
+    u4 bci = bcs.bci();
+
+    // If the bytecode is in a TRY block, push its handlers so they
+    // will get parsed.
+    push_handlers(exhandlers, handler_stack, bci);
+
+    switch (opcode) {
+      case Bytecodes::_if_icmpeq:
+      case Bytecodes::_if_icmpne:
+      case Bytecodes::_if_icmplt:
+      case Bytecodes::_if_icmpge:
+      case Bytecodes::_if_icmpgt:
+      case Bytecodes::_if_icmple:
+      case Bytecodes::_ifeq:
+      case Bytecodes::_ifne:
+      case Bytecodes::_iflt:
+      case Bytecodes::_ifge:
+      case Bytecodes::_ifgt:
+      case Bytecodes::_ifle:
+      case Bytecodes::_if_acmpeq:
+      case Bytecodes::_if_acmpne:
+      case Bytecodes::_ifnull:
+      case Bytecodes::_ifnonnull:
+        target = bcs.dest();
+        if (visited_branches->contains(bci)) {
+          if (bci_stack->is_empty()) return true;
+          // Pop a bytecode starting offset and scan from there.
+          bcs.set_start(bci_stack->pop());
+        } else {
+          if (target > bci) { // forward branch
+            if (target >= code_length) return false;
+            // Push the branch target onto the stack.
+            bci_stack->push(target);
+            // then, scan bytecodes starting with next.
+            bcs.set_start(bcs.next_bci());
+          } else { // backward branch
+            // Push bytecode offset following backward branch onto the stack.
+            bci_stack->push(bcs.next_bci());
+            // Check bytecodes starting with branch target.
+            bcs.set_start(target);
+          }
+          // Record target so we don't branch here again.
+          visited_branches->append(bci);
+        }
+        break;
+
+      case Bytecodes::_goto:
+      case Bytecodes::_goto_w:
+        target = (opcode == Bytecodes::_goto ? bcs.dest() : bcs.dest_w());
+        if (visited_branches->contains(bci)) {
+          if (bci_stack->is_empty()) return true;
+          // Been here before, pop new starting offset from stack.
+          bcs.set_start(bci_stack->pop());
+        } else {
+          if (target >= code_length) return false;
+          // Continue scanning from the target onward.
+          bcs.set_start(target);
+          // Record target so we don't branch here again.
+          visited_branches->append(bci);
+        }
+        break;
+
+      // Check that all switch alternatives end in 'athrow' bytecodes. Since it
+      // is  difficult to determine where each switch alternative ends, parse
+      // each switch alternative until either hit a 'return', 'athrow', or reach
+      // the end of the method's bytecodes.  This is gross but should be okay
+      // because:
+      // 1. tableswitch and lookupswitch byte codes in handlers for ctor explicit
+      //    constructor invocations should be rare.
+      // 2. if each switch alternative ends in an athrow then the parsing should be
+      //    short.  If there is no athrow then it is bogus code, anyway.
+      case Bytecodes::_lookupswitch:
+      case Bytecodes::_tableswitch:
+        {
+          address aligned_bcp = (address) round_to((intptr_t)(bcs.bcp() + 1), jintSize);
+          u4 default_offset = Bytes::get_Java_u4(aligned_bcp) + bci;
+          int keys, delta;
+          if (opcode == Bytecodes::_tableswitch) {
+            jint low = (jint)Bytes::get_Java_u4(aligned_bcp + jintSize);
+            jint high = (jint)Bytes::get_Java_u4(aligned_bcp + 2*jintSize);
+            // This is invalid, but let the regular bytecode verifier
+            // report this because the user will get a better error message.
+            if (low > high) return true;
+            keys = high - low + 1;
+            delta = 1;
+          } else {
+            keys = (int)Bytes::get_Java_u4(aligned_bcp + jintSize);
+            delta = 2;
+          }
+          // Invalid, let the regular bytecode verifier deal with it.
+          if (keys < 0) return true;
+
+          // Push the offset of the next bytecode onto the stack.
+          bci_stack->push(bcs.next_bci());
+
+          // Push the switch alternatives onto the stack.
+          for (int i = 0; i < keys; i++) {
+            u4 target = bci + (jint)Bytes::get_Java_u4(aligned_bcp+(3+i*delta)*jintSize);
+            if (target > code_length) return false;
+            bci_stack->push(target);
+          }
+
+          // Start bytecode parsing for the switch at the default alternative.
+          if (default_offset > code_length) return false;
+          bcs.set_start(default_offset);
+          break;
+        }
+
+      case Bytecodes::_return:
+        return false;
+
+      case Bytecodes::_athrow:
+        {
+          if (bci_stack->is_empty()) {
+            if (handler_stack->is_empty()) {
+              return true;
+            } else {
+              // Parse the catch handlers for try blocks containing athrow.
+              bcs.set_start(handler_stack->pop());
+            }
+          } else {
+            // Pop a bytecode offset and starting scanning from there.
+            bcs.set_start(bci_stack->pop());
+          }
+        }
+        break;
+
+      default:
+        ;
+    } // end switch
+  } // end while loop
+
+  return false;
+}
+
 void ClassVerifier::verify_invoke_init(
     RawBytecodeStream* bcs, VerificationType ref_class_type,
-    StackMapFrame* current_frame, u4 code_length, bool *this_uninit,
-    constantPoolHandle cp, TRAPS) {
+    StackMapFrame* current_frame, u4 code_length, bool in_try_block,
+    bool *this_uninit, constantPoolHandle cp, StackMapTable* stackmap_table,
+    TRAPS) {
   u2 bci = bcs->bci();
   VerificationType type = current_frame->pop_stack(
     VerificationType::reference_check(), CHECK_VERIFY(this));
@@ -1895,33 +2073,43 @@ void ClassVerifier::verify_invoke_init(
       return;
     }
 
-    // Make sure that this call is not jumped over.
-    if (bci < furthest_jump()) {
-      verify_error(bci, "Bad <init> method call from inside of a branch");
-      return;
-    }
+    // If this invokespecial call is done from inside of a TRY block then make
+    // sure that all catch clause paths end in a throw.  Otherwise, this can
+    // result in returning an incomplete object.
+    if (in_try_block) {
+      typeArrayHandle exhandlers (THREAD, _method->exception_table());
+      int exlength = exhandlers->length();
+      for(int i = 0; i < exlength; i++) {
+        /*
+         * Skip reading catch_type_index.
+         * Looks like this if you need all of them:
+         * u2 start_pc = exhandlers->int_at(i++);
+         * u2 end_pc = exhandlers->int_at(i++);
+         * u2 handler_pc = exhandlers->int_at(i++);
+         * int catch_type_index = exhandlers->int_at(i++);
+         */
+        // Reacquire the table in case a GC happened
+        typeArrayHandle exhandlers (THREAD, _method->exception_table());
+        u2 start_pc = exhandlers->int_at(i++);
+        u2 end_pc = exhandlers->int_at(i++);
+        u2 handler_pc = exhandlers->int_at(i++);
 
-    // Make sure that this call is not done from within a TRY block because
-    // that can result in returning an incomplete object.  Simply checking
-    // (bci >= start_pc) also ensures that this call is not done after a TRY
-    // block.  That is also illegal because this call must be the first Java
-    // statement in the constructor.
-    typeArrayHandle exhandlers (THREAD, _method->exception_table());
-    for(int i = 0; i < exhandlers->length(); i += 4) {
-      /*
-       * Skip reading end_pc, handler_pc and catch_type_index.
-       * Looks like this if you need all of them:
-       * u2 start_pc = exhandlers->int_at(i++);
-       * u2 end_pc = exhandlers->int_at(i++);
-       * u2 handler_pc = exhandlers->int_at(i++);
-       * int catch_type_index = exhandlers->int_at(i++);
-       */
-      u2 start_pc = exhandlers->int_at(i);
-      if (bci >= start_pc) {
-        verify_error(bci, "Bad <init> method call from after the start of a try block");
-        return;
+        if (bci >= start_pc && bci < end_pc) {
+          bool athrow_check = ends_in_athrow(handler_pc, CHECK_VERIFY(this));
+          if (!athrow_check) {
+            verify_error(
+              "Bad <init> method call from after the start of a try block");
+            return;
+          }
+        }
       }
-    }
+
+      // Check the exception handler target stackmaps with the locals from the
+      // incoming stackmap (before initialize_object() changes them to outgoing
+      // state).
+      verify_exception_handler_targets(bci, true, current_frame,
+                                       stackmap_table, CHECK_VERIFY(this));
+    } // in_try_block
 
     current_frame->initialize_object(type, current_type());
     *this_uninit = true;
@@ -1968,6 +2156,13 @@ void ClassVerifier::verify_invoke_init(
         }
       }
     }
+    // Check the exception handler target stackmaps with the locals from the
+    // incoming stackmap (before initialize_object() changes them to outgoing
+    // state).
+    if (in_try_block) {
+      verify_exception_handler_targets(bci, *this_uninit, current_frame,
+                                       stackmap_table, CHECK_VERIFY(this));
+    }
     current_frame->initialize_object(type, new_class_type);
   } else {
     verify_error(bci, "Bad operand type when invoking <init>");
@@ -1977,8 +2172,8 @@ void ClassVerifier::verify_invoke_init(
 
 void ClassVerifier::verify_invoke_instructions(
     RawBytecodeStream* bcs, u4 code_length, StackMapFrame* current_frame,
-    bool *this_uninit, VerificationType return_type,
-    constantPoolHandle cp, TRAPS) {
+    bool in_try_block, bool *this_uninit, VerificationType return_type,
+    constantPoolHandle cp, StackMapTable* stackmap_table, TRAPS) {
   // Make sure the constant pool item is the right type
   u2 index = bcs->get_index_u2();
   Bytecodes::Code opcode = bcs->raw_code();
@@ -2109,7 +2304,8 @@ void ClassVerifier::verify_invoke_instructions(
       opcode != Bytecodes::_invokedynamic) {
     if (method_name == vmSymbols::object_initializer_name()) {  // <init> method
       verify_invoke_init(bcs, ref_class_type, current_frame,
-        code_length, this_uninit, cp, CHECK_VERIFY(this));
+        code_length, in_try_block, this_uninit, cp, stackmap_table,
+        CHECK_VERIFY(this));
     } else {   // other methods
       // Ensures that target class is assignable to method class.
       if (opcode == Bytecodes::_invokespecial) {
