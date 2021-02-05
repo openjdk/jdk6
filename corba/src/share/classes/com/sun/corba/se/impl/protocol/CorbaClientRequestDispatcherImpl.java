@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -112,6 +112,7 @@ import com.sun.corba.se.impl.protocol.giopmsgheaders.ProfileAddr;
 import com.sun.corba.se.impl.protocol.giopmsgheaders.ReferenceAddr;
 import com.sun.corba.se.impl.transport.CorbaContactInfoListIteratorImpl;
 import com.sun.corba.se.impl.util.JDKBridge;
+import sun.corba.EncapsInputStreamFactory;
 
 /**
  * ClientDelegate is the RMI client-side subcontract or representation
@@ -185,6 +186,7 @@ public class CorbaClientRequestDispatcherImpl
                             if(getContactInfoListIterator(orb).hasNext()) {
                                 contactInfo = (ContactInfo)
                                    getContactInfoListIterator(orb).next();
+                                unregisterWaiter(orb);
                                 return beginRequest(self, opName,
                                                     isOneWay, contactInfo);
                             } else {
@@ -292,10 +294,22 @@ public class CorbaClientRequestDispatcherImpl
             // ContactInfoList outside of subcontract.
             // Want to move that update to here.
             if (getContactInfoListIterator(orb).hasNext()) {
-                contactInfo = (ContactInfo)
-                    getContactInfoListIterator(orb).next();
+                contactInfo = (ContactInfo)getContactInfoListIterator(orb).next();
+                if (orb.subcontractDebugFlag) {
+                    dprint( "RemarshalException: hasNext true\ncontact info " + contactInfo );
+                }
+
+                // Fix for 6763340: Complete the first attempt before starting another.
+                orb.getPIHandler().makeCompletedClientRequest(
+                    ReplyMessage.LOCATION_FORWARD, null ) ;
+                unregisterWaiter(orb);
+                orb.getPIHandler().cleanupClientPIRequest() ;
+
                 return beginRequest(self, opName, isOneWay, contactInfo);
             } else {
+                if (orb.subcontractDebugFlag) {
+                    dprint( "RemarshalException: hasNext false" );
+                }
                 ORBUtilSystemException wrapper =
                     ORBUtilSystemException.get(orb,
                                                CORBALogDomains.RPC_PROTOCOL);
@@ -805,8 +819,8 @@ public class CorbaClientRequestDispatcherImpl
         }
         byte[] data = ((UnknownServiceContext)sc).getData();
         EncapsInputStream in =
-            new EncapsInputStream((ORB)messageMediator.getBroker(),
-                                  data, data.length);
+                EncapsInputStreamFactory.newEncapsInputStream((ORB)messageMediator.getBroker(),
+                                      data, data.length);
         in.consumeEndian();
 
         String msg =
