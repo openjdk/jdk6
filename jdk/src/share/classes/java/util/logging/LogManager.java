@@ -33,10 +33,8 @@ import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
-import java.net.URL;
 import sun.misc.JavaAWTAccess;
 import sun.misc.SharedSecrets;
-import sun.security.action.GetPropertyAction;
 
 /**
  * There is a single global LogManager object that is used to
@@ -151,7 +149,6 @@ public class LogManager {
     // The global LogManager object
     private static LogManager manager;
 
-    private final static Handler[] emptyHandlers = { };
     private Properties props = new Properties();
     private PropertyChangeSupport changes
                          = new PropertyChangeSupport(LogManager.class);
@@ -380,11 +377,11 @@ public class LogManager {
     // add a new Logger or return the one that has been added previously
     // as a LogManager subclass may override the addLogger, getLogger,
     // readConfiguration, and other methods.
-    Logger demandLogger(String name, String resourceBundleName) {
+    Logger demandLogger(String name, String resourceBundleName, Class<?> caller) {
         Logger result = getLogger(name);
         if (result == null) {
             // only allocate the new logger once
-            Logger newLogger = new Logger(name, resourceBundleName);
+            Logger newLogger = new Logger(name, resourceBundleName, caller);
             do {
                 if (addLogger(newLogger)) {
                     // We successfully added the new Logger that we
@@ -468,7 +465,7 @@ public class LogManager {
         Logger demandLogger(String name, String resourceBundleName) {
             // a LogManager subclass may have its own implementation to add and
             // get a Logger.  So delegate to the LogManager to do the work.
-            return manager.demandLogger(name, resourceBundleName);
+            return manager.demandLogger(name, resourceBundleName, null);
         }
 
         synchronized Logger findLogger(String name) {
@@ -486,7 +483,7 @@ public class LogManager {
         }
 
         synchronized void ensureRootLogger(Logger logger) {
-            if (logger == manager.rootLogger)
+            if (logger.getName().isEmpty())
                 return;
 
             // during initialization, rootLogger is null when
@@ -506,14 +503,11 @@ public class LogManager {
                 throw new NullPointerException();
             }
 
-            // cleanup some Loggers that have been GC'ed
-            manager.drainLoggerRefQueueBounded();
-
             LoggerWeakRef ref = namedLoggers.get(name);
             if (ref != null) {
                 if (ref.get() == null) {
-                    // It's possible that the Logger was GC'ed after the
-                    // drainLoggerRefQueueBounded() call above so allow
+                    // It's possible that the Logger was GC'ed after a
+                    // drainLoggerRefQueueBounded() call so allow
                     // a new one to be registered.
                     removeLogger(name);
                 } else {
@@ -561,6 +555,8 @@ public class LogManager {
             return true;
         }
 
+        // note: all calls to removeLogger are synchronized on LogManager's
+        // intrinsic lock
         void removeLogger(String name) {
             namedLoggers.remove(name);
         }
@@ -845,6 +841,7 @@ public class LogManager {
         if (name == null) {
             throw new NullPointerException();
         }
+        drainLoggerRefQueueBounded();
         LoggerContext cx = getUserContext();
         if (cx.addLocalLogger(logger)) {
             // Do we have a per logger handler too?
