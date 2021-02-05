@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,16 +27,11 @@ package javax.swing.plaf.basic;
 
 import java.awt.*;
 import java.awt.datatransfer.*;
-import java.awt.dnd.*;
 import java.awt.event.*;
 import java.util.Enumeration;
-import java.util.EventObject;
-import java.util.Hashtable;
-import java.util.TooManyListenersException;
 import javax.swing.*;
 import javax.swing.event.*;
 import javax.swing.plaf.*;
-import javax.swing.text.*;
 import javax.swing.table.*;
 import javax.swing.plaf.basic.DragRecognitionSupport.BeforeDrag;
 import sun.swing.SwingUtilities2;
@@ -56,8 +51,7 @@ import sun.swing.UIAction;
  */
 public class BasicTableUI extends TableUI
 {
-    private static final StringBuilder BASELINE_COMPONENT_KEY =
-        new StringBuilder("Table.baselineComponent");
+    private static final Object BASELINE_COMPONENT_KEY = new Object(); // Table.baselineComponent
 
 //
 // Instance Variables
@@ -1414,17 +1408,20 @@ public class BasicTableUI extends TableUI
 
         Color sbg = table.getSelectionBackground();
         if (sbg == null || sbg instanceof UIResource) {
-            table.setSelectionBackground(UIManager.getColor("Table.selectionBackground"));
+            sbg = UIManager.getColor("Table.selectionBackground");
+            table.setSelectionBackground(sbg != null ? sbg : UIManager.getColor("textHighlight"));
         }
 
         Color sfg = table.getSelectionForeground();
         if (sfg == null || sfg instanceof UIResource) {
-            table.setSelectionForeground(UIManager.getColor("Table.selectionForeground"));
+            sfg = UIManager.getColor("Table.selectionForeground");
+            table.setSelectionForeground(sfg != null ? sfg : UIManager.getColor("textHighlightText"));
         }
 
         Color gridColor = table.getGridColor();
         if (gridColor == null || gridColor instanceof UIResource) {
-            table.setGridColor(UIManager.getColor("Table.gridColor"));
+            gridColor = UIManager.getColor("Table.gridColor");
+            table.setGridColor(gridColor != null ? gridColor : Color.GRAY);
         }
 
         // install the scrollpane border
