@@ -23,6 +23,12 @@
  * questions.
  */
 
+/*
+ * This file has been modified by Azul Systems, Inc. in 2014. These
+ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+ * available on the same license terms set forth above. 
+ */
+
 package sun.awt.shell;
 
 import java.awt.Image;
@@ -36,6 +42,8 @@ import java.util.concurrent.*;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import javax.swing.SwingConstants;
+
+import sun.misc.ThreadGroupUtils;
 
 // NOTE: This class supersedes Win32ShellFolder, which was removed from
 //       distribution after version 1.4.2.
@@ -576,11 +584,18 @@ final class Win32ShellFolder2 extends ShellFolder {
     }
     // Needs to be accessible to Win32ShellFolderManager2
     static String getFileSystemPath(final int csidl) throws IOException {
-        return new ComTask<String>() {
+        String path = new ComTask<String>() {
             public String call() throws Exception {
                 return getFileSystemPath0(csidl);
             }
         }.execute();
+        if (path != null) {
+            SecurityManager security = System.getSecurityManager();
+            if (security != null) {
+                security.checkRead(path);
+            }
+        }
+        return path;
     }
     /* NOTE: this method uses COM and must be called on the 'COM thread'. See ComTask for the details */
     private static native String getFileSystemPath0(int csidl) throws IOException;

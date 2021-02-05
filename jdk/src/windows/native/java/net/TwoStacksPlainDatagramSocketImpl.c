@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,12 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
+ */
+
+/*
+ * This file has been modified by Azul Systems, Inc. in 2014. These
+ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+ * available on the same license terms set forth above. 
  */
 
 #include <windows.h>
@@ -652,7 +658,6 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_send(JNIEnv *env, jobject this,
     SOCKETADDRESS rmtaddr;
     SOCKETADDRESS *addrp = &rmtaddr;
     int addrlen;
-    int x; /* DELETE ME */
 
 
     if (IS_NULL(packet)) {
@@ -884,7 +889,7 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_peek(JNIEnv *env, jobject this,
                  */
                 if (timeout) {
                     jlong newTime = JVM_CurrentTimeMillis(env, 0);
-                    timeout -= (newTime - prevTime);
+                    timeout -= (jint)(newTime - prevTime);
                     if (timeout <= 0) {
                         JNU_ThrowByName(env, JNU_JAVANETPKG "SocketTimeoutException",
                                 "Receive timed out");
@@ -929,9 +934,8 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_peekData(JNIEnv *env, jobject thi
 
     int fd, fd1, fduse, nsockets=0, errorCode;
     int port;
-    jbyteArray data;
 
-    int checkBoth = 0, datalen;
+    int checkBoth = 0;
     int n;
     SOCKETADDRESS remote_addr;
     jint remote_addrsize=sizeof(remote_addr);
@@ -1101,7 +1105,7 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_peekData(JNIEnv *env, jobject thi
                  */
                 if (timeout) {
                     jlong newTime = JVM_CurrentTimeMillis(env, 0);
-                    timeout -= (newTime - prevTime);
+                    timeout -= (jint)(newTime - prevTime);
                     if (timeout <= 0) {
                         JNU_ThrowByName(env, JNU_JAVANETPKG "SocketTimeoutException",
                                 "Receive timed out");
@@ -1203,9 +1207,7 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_receive0(JNIEnv *env, jobject thi
      * must be called prior to receive() so that fduse can be set.
      */
     int fd, fd1, fduse, errorCode;
-    jbyteArray data;
 
-    int datalen;
     int n, nsockets=0;
     SOCKETADDRESS remote_addr;
     jint remote_addrsize=sizeof(remote_addr);
@@ -1376,7 +1378,7 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_receive0(JNIEnv *env, jobject thi
                 if (timeout) {
                     int ret;
                     jlong newTime = JVM_CurrentTimeMillis(env, 0);
-                    timeout -= (newTime - prevTime);
+                    timeout -= (jint)(newTime - prevTime);
                     prevTime = newTime;
 
                     if (timeout <= 0) {
@@ -1582,7 +1584,7 @@ static int getInetAddrFromIf (JNIEnv *env, int family, jobject nif, jobject *iad
     jobject addr;
     int i;
 
-    if (ni_addrsID == NULL) {
+    if (ni_addrsID == NULL ) {
         jclass c = (*env)->FindClass(env, "java/net/NetworkInterface");
         CHECK_NULL_RETURN (c, -1);
         ni_addrsID = (*env)->GetFieldID(env, c, "addrs",

@@ -24,6 +24,12 @@
 #
 
 #
+# This file has been modified by Azul Systems, Inc. in 2014. These
+# modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+# available on the same license terms set forth above. 
+#
+
+#
 # Shared sanity settings file. Fills in the variable ALL_SETTINGS.
 #
 
@@ -99,6 +105,7 @@ ifeq ($(PLATFORM),windows)
   ALL_SETTINGS+=$(call addAltSetting,MSVCRT_DLL_PATH)
   ifeq ($(ARCH_DATA_MODEL), 32)
     ALL_SETTINGS+=$(call addAltSetting,MSVCR71_DLL_PATH)
+    ALL_SETTINGS+=$(call addAltSetting,MSVCR100_DLL_PATH)
   endif
   ALL_SETTINGS+=$(call addAltSetting,MSDEVTOOLS_PATH)
 else

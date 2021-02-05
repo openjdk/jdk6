@@ -220,6 +220,7 @@ public class XMLNSDocumentScannerImpl
         fCurrentElement = fElementQName;
 
         String rawname = fElementQName.rawname;
+        checkDepth(rawname);
         if (fBindNamespaces) {
             fNamespaceContext.pushContext();
             if (fScannerState == SCANNER_STATE_ROOT_ELEMENT) {
@@ -256,7 +257,7 @@ public class XMLNSDocumentScannerImpl
                         fAttributes.getLength() > fElementAttributeLimit){
                     fErrorReporter.reportError(XMLMessageFormatter.XML_DOMAIN,
                                                  "ElementAttributeLimit",
-                                                 new Object[]{rawname, new Integer(fAttributes.getLength()) },
+                                                 new Object[]{rawname, fElementAttributeLimit },
                                                  XMLErrorReporter.SEVERITY_FATAL_ERROR );
                 }
 
