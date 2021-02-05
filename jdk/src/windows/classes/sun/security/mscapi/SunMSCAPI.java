@@ -28,7 +28,6 @@ package sun.security.mscapi;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.security.Provider;
-import java.security.ProviderException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -48,8 +47,8 @@ public final class SunMSCAPI extends Provider {
     private static final String INFO = "Sun's Microsoft Crypto API provider";
 
     static {
-        AccessController.doPrivileged(new PrivilegedAction() {
-            public Object run() {
+        AccessController.doPrivileged(new PrivilegedAction<Void>() {
+            public Void run() {
                 System.loadLibrary("sunmscapi");
                 return null;
             }
@@ -62,8 +61,9 @@ public final class SunMSCAPI extends Provider {
         // if there is no security manager installed, put directly into
         // the provider. Otherwise, create a temporary map and use a
         // doPrivileged() call at the end to transfer the contents
-        final Map map = (System.getSecurityManager() == null)
-                        ? (Map)this : new HashMap();
+        final Map<Object, Object> map =
+                (System.getSecurityManager() == null)
+                ? this : new HashMap<Object, Object>();
 
         /*
          * Secure random
