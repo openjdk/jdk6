@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2002-2009 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,6 +29,7 @@ import java.util.jar.JarFile;
 import java.io.Console;
 import java.io.File;
 import java.io.FileDescriptor;
+import java.security.ProtectionDomain;
 
 /** A repository of "shared secrets", which are a mechanism for
     calling implementation-private methods in another package without
@@ -47,6 +48,7 @@ public class SharedSecrets {
     private static JavaIODeleteOnExitAccess javaIODeleteOnExitAccess;
     private static JavaNetAccess javaNetAccess;
     private static JavaIOFileDescriptorAccess javaIOFileDescriptorAccess;
+    private static JavaSecurityProtectionDomainAccess javaSecurityProtectionDomainAccess;
 
     public static JavaUtilJarAccess javaUtilJarAccess() {
         if (javaUtilJarAccess == null) {
@@ -110,4 +112,16 @@ public class SharedSecrets {
         return javaIOFileDescriptorAccess;
     }
 
+    public static void setJavaSecurityProtectionDomainAccess
+        (JavaSecurityProtectionDomainAccess jspda) {
+            javaSecurityProtectionDomainAccess = jspda;
+    }
+
+    public static JavaSecurityProtectionDomainAccess
+        getJavaSecurityProtectionDomainAccess() {
+        if (javaSecurityProtectionDomainAccess == null)
+            unsafe.ensureClassInitialized(ProtectionDomain.class);
+
+        return javaSecurityProtectionDomainAccess;
+    }
 }
