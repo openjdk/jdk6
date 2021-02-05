@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)heapInspection.hpp	1.17 07/07/02 11:47:11 JVM"
-#endif
 /*
- * Copyright 2002-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2002-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #ifndef SERVICES_KERNEL
@@ -33,7 +30,7 @@
 // KlassInfoTable is a bucket hash table that
 // maps klassOops to extra information:
 //    instance count and instance word size.
-// 
+//
 // A KlassInfoBucket is the head of a link list
 // of KlassInfoEntry's
 //
@@ -101,8 +98,9 @@ class KlassInfoTable: public StackObj {
   };
   KlassInfoTable(int size, HeapWord* ref);
   ~KlassInfoTable();
-  void record_instance(const oop obj);
+  bool record_instance(const oop obj);
   void iterate(KlassInfoClosure* cic);
+  bool allocation_failed() { return _buckets == NULL; }
 };
 
 class KlassInfoHisto : public StackObj {

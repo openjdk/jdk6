@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)c1_LIR.hpp	1.134 07/06/18 14:25:24 JVM"
-#endif
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class BlockBegin;
@@ -104,7 +101,7 @@ class LIR_Const: public LIR_OprPtr {
     _value.set_type(T_INT);     _value.set_jint((jint)p);
 #endif
   }
-                                       
+
   virtual BasicType type()       const { return _value.get_type(); }
   virtual LIR_Const* as_constant()     { return this; }
 
@@ -138,6 +135,13 @@ class LIR_Const: public LIR_OprPtr {
       return as_jint_hi();
     }
   }
+  jlong      as_jlong_bits() const    {
+    if (type() == T_DOUBLE) {
+      return jlong_cast(_value.get_jdouble());
+    } else {
+      return as_jlong();
+    }
+  }
 
   virtual void print_value_on(outputStream* out) const PRODUCT_RETURN;
 
@@ -147,18 +151,18 @@ class LIR_Const: public LIR_OprPtr {
     jfloat ok = 0.0f;
     return jint_cast(f) == jint_cast(ok);
   }
-  
+
   bool is_one_float() {
     jfloat f = as_jfloat();
     return !g_isnan(f) && g_isfinite(f) && f == 1.0;
   }
-  
+
   bool is_zero_double() {
     jdouble d = as_jdouble();
     jdouble ok = 0.0;
     return jlong_cast(d) == jlong_cast(ok);
   }
-  
+
   bool is_one_double() {
     jdouble d = as_jdouble();
     return !g_isnan(d) && g_isfinite(d) && d == 1.0;
@@ -170,7 +174,7 @@ class LIR_Const: public LIR_OprPtr {
 //
 // The class LIR_OprDesc represents a LIR instruction operand;
 // it can be a register (ALU/FPU), stack location or a constant;
-// Constants and addresses are represented as resource area allocated 
+// Constants and addresses are represented as resource area allocated
 // structures (see above).
 // Registers and stack locations are inlined into the this pointer
 // (see value function).
@@ -183,7 +187,7 @@ class LIR_OprDesc: public CompilationResourceObj {
   // [max...........|7 6 5 4|3 2 1 0]
   //                             ^
   //                    is_pointer bit
-  // 
+  //
   // lowest bit cleared, means it is a structure pointer
   // we need  4 bits to represent types
 
@@ -272,12 +276,12 @@ class LIR_OprDesc: public CompilationResourceObj {
 
   enum OprType {
       unknown_type  = 0 << type_shift    // means: not set (catch uninitialized types)
-    , int_type      = 1 << type_shift    
-    , long_type     = 2 << type_shift    
-    , object_type   = 3 << type_shift    
-    , pointer_type  = 4 << type_shift    
-    , float_type    = 5 << type_shift    
-    , double_type   = 6 << type_shift    
+    , int_type      = 1 << type_shift
+    , long_type     = 2 << type_shift
+    , object_type   = 3 << type_shift
+    , pointer_type  = 4 << type_shift
+    , float_type    = 5 << type_shift
+    , double_type   = 6 << type_shift
   };
   friend OprType as_OprType(BasicType t);
   friend BasicType as_BasicType(OprType t);
@@ -302,9 +306,10 @@ class LIR_OprDesc: public CompilationResourceObj {
       case T_ARRAY:
         return single_size;
         break;
-        
+
       default:
         ShouldNotReachHere();
+        return single_size;
       }
   }
 
@@ -350,11 +355,11 @@ class LIR_OprDesc: public CompilationResourceObj {
   bool is_oop() const;
 
   // semantic for fpu- and xmm-registers:
-  // * is_float and is_double return true for xmm_registers 
+  // * is_float and is_double return true for xmm_registers
   //   (so is_single_fpu and is_single_xmm are true)
   // * So you must always check for is_???_xmm prior to is_???_fpu to
   //   distinguish between fpu- and xmm-registers
-  
+
   bool is_stack() const        { validate_type(); return check_value_mask(kind_mask,                stack_value);                 }
   bool is_single_stack() const { validate_type(); return check_value_mask(kind_mask | size_mask,    stack_value  | single_size);  }
   bool is_double_stack() const { validate_type(); return check_value_mask(kind_mask | size_mask,    stack_value  | double_size);  }
@@ -420,12 +425,12 @@ class LIR_OprDesc: public CompilationResourceObj {
     return as_register();
   }
 
-#ifdef IA32
+#ifdef X86
   XMMRegister as_xmm_float_reg() const;
   XMMRegister as_xmm_double_reg() const;
   // for compatibility with RInfo
   int fpu () const                                  { return lo_reg_half(); }
-#endif
+#endif // X86
 
 #ifdef SPARC
   FloatRegister as_float_reg   () const;
@@ -492,28 +497,28 @@ class LIR_Address: public LIR_OprPtr {
   BasicType _type;
 
  public:
-  LIR_Address(LIR_Opr base, LIR_Opr index, BasicType type): 
+  LIR_Address(LIR_Opr base, LIR_Opr index, BasicType type):
        _base(base)
      , _index(index)
      , _scale(times_1)
      , _type(type)
      , _disp(0) { verify(); }
 
-  LIR_Address(LIR_Opr base, int disp, BasicType type): 
+  LIR_Address(LIR_Opr base, int disp, BasicType type):
        _base(base)
      , _index(LIR_OprDesc::illegalOpr())
      , _scale(times_1)
      , _type(type)
      , _disp(disp) { verify(); }
 
-#ifdef IA32
-  LIR_Address(LIR_Opr base, LIR_Opr index, Scale scale, int disp, BasicType type): 
+#ifdef X86
+  LIR_Address(LIR_Opr base, LIR_Opr index, Scale scale, int disp, BasicType type):
        _base(base)
      , _index(index)
      , _scale(scale)
      , _type(type)
      , _disp(disp) { verify(); }
-#endif
+#endif // X86
 
   LIR_Opr base()  const                          { return _base;  }
   LIR_Opr index() const                          { return _index; }
@@ -538,31 +543,93 @@ class LIR_OprFact: public AllStatic {
 
   static LIR_Opr illegalOpr;
 
-  static LIR_Opr single_cpu(int reg)            { return (LIR_Opr)((reg  << LIR_OprDesc::reg1_shift) |                                     LIR_OprDesc::int_type    | LIR_OprDesc::cpu_register | LIR_OprDesc::single_size); }
-  static LIR_Opr single_cpu_oop(int reg)        { return (LIR_Opr)((reg  << LIR_OprDesc::reg1_shift) |                                     LIR_OprDesc::object_type | LIR_OprDesc::cpu_register | LIR_OprDesc::single_size); }
-  static LIR_Opr double_cpu(int reg1, int reg2) { return (LIR_Opr)((reg1 << LIR_OprDesc::reg1_shift) | (reg2 << LIR_OprDesc::reg2_shift) | LIR_OprDesc::long_type   | LIR_OprDesc::cpu_register | LIR_OprDesc::double_size); }
-  
-  static LIR_Opr single_fpu(int reg)            { return (LIR_Opr)((reg  << LIR_OprDesc::reg1_shift) |                                     LIR_OprDesc::float_type  | LIR_OprDesc::fpu_register | LIR_OprDesc::single_size); }
+  static LIR_Opr single_cpu(int reg)            { return (LIR_Opr)(intptr_t)((reg  << LIR_OprDesc::reg1_shift) |                                     LIR_OprDesc::int_type    | LIR_OprDesc::cpu_register | LIR_OprDesc::single_size); }
+  static LIR_Opr single_cpu_oop(int reg)        { return (LIR_Opr)(intptr_t)((reg  << LIR_OprDesc::reg1_shift) |                                     LIR_OprDesc::object_type | LIR_OprDesc::cpu_register | LIR_OprDesc::single_size); }
+  static LIR_Opr double_cpu(int reg1, int reg2) {
+    LP64_ONLY(assert(reg1 == reg2, "must be identical"));
+    return (LIR_Opr)(intptr_t)((reg1 << LIR_OprDesc::reg1_shift) |
+                               (reg2 << LIR_OprDesc::reg2_shift) |
+                               LIR_OprDesc::long_type            |
+                               LIR_OprDesc::cpu_register         |
+                               LIR_OprDesc::double_size);
+  }
+
+  static LIR_Opr single_fpu(int reg)            { return (LIR_Opr)(intptr_t)((reg  << LIR_OprDesc::reg1_shift) |
+                                                                             LIR_OprDesc::float_type           |
+                                                                             LIR_OprDesc::fpu_register         |
+                                                                             LIR_OprDesc::single_size); }
 
 #ifdef SPARC
-  static LIR_Opr double_fpu(int reg1, int reg2) { return (LIR_Opr)((reg1 << LIR_OprDesc::reg1_shift) | (reg2 << LIR_OprDesc::reg2_shift) | LIR_OprDesc::double_type | LIR_OprDesc::fpu_register | LIR_OprDesc::double_size); }
+  static LIR_Opr double_fpu(int reg1, int reg2) { return (LIR_Opr)(intptr_t)((reg1 << LIR_OprDesc::reg1_shift) |
+                                                                             (reg2 << LIR_OprDesc::reg2_shift) |
+                                                                             LIR_OprDesc::double_type          |
+                                                                             LIR_OprDesc::fpu_register         |
+                                                                             LIR_OprDesc::double_size); }
 #endif
-#ifdef IA32
-  static LIR_Opr double_fpu(int reg)            { return (LIR_Opr)((reg  << LIR_OprDesc::reg1_shift) | (reg  << LIR_OprDesc::reg2_shift) | LIR_OprDesc::double_type | LIR_OprDesc::fpu_register | LIR_OprDesc::double_size); }
-  static LIR_Opr single_xmm(int reg)            { return (LIR_Opr)((reg  << LIR_OprDesc::reg1_shift) |                                     LIR_OprDesc::float_type  | LIR_OprDesc::fpu_register | LIR_OprDesc::single_size | LIR_OprDesc::is_xmm_mask); }
-  static LIR_Opr double_xmm(int reg)            { return (LIR_Opr)((reg  << LIR_OprDesc::reg1_shift) | (reg  << LIR_OprDesc::reg2_shift) | LIR_OprDesc::double_type | LIR_OprDesc::fpu_register | LIR_OprDesc::double_size | LIR_OprDesc::is_xmm_mask); }
-#endif
+#ifdef X86
+  static LIR_Opr double_fpu(int reg)            { return (LIR_Opr)(intptr_t)((reg  << LIR_OprDesc::reg1_shift) |
+                                                                             (reg  << LIR_OprDesc::reg2_shift) |
+                                                                             LIR_OprDesc::double_type          |
+                                                                             LIR_OprDesc::fpu_register         |
+                                                                             LIR_OprDesc::double_size); }
 
-  
+  static LIR_Opr single_xmm(int reg)            { return (LIR_Opr)(intptr_t)((reg  << LIR_OprDesc::reg1_shift) |
+                                                                             LIR_OprDesc::float_type           |
+                                                                             LIR_OprDesc::fpu_register         |
+                                                                             LIR_OprDesc::single_size          |
+                                                                             LIR_OprDesc::is_xmm_mask); }
+  static LIR_Opr double_xmm(int reg)            { return (LIR_Opr)(intptr_t)((reg  << LIR_OprDesc::reg1_shift) |
+                                                                             (reg  << LIR_OprDesc::reg2_shift) |
+                                                                             LIR_OprDesc::double_type          |
+                                                                             LIR_OprDesc::fpu_register         |
+                                                                             LIR_OprDesc::double_size          |
+                                                                             LIR_OprDesc::is_xmm_mask); }
+#endif // X86
+
+
   static LIR_Opr virtual_register(int index, BasicType type) {
     LIR_Opr res;
     switch (type) {
       case T_OBJECT: // fall through
-      case T_ARRAY:  res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::object_type | LIR_OprDesc::cpu_register | LIR_OprDesc::single_size | LIR_OprDesc::virtual_mask); break;
-      case T_INT:    res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::int_type    | LIR_OprDesc::cpu_register | LIR_OprDesc::single_size | LIR_OprDesc::virtual_mask); break;
-      case T_LONG:   res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::long_type   | LIR_OprDesc::cpu_register | LIR_OprDesc::double_size | LIR_OprDesc::virtual_mask); break;
-      case T_FLOAT:  res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::float_type  | LIR_OprDesc::fpu_register | LIR_OprDesc::single_size | LIR_OprDesc::virtual_mask); break;
-      case T_DOUBLE: res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::double_type | LIR_OprDesc::fpu_register | LIR_OprDesc::double_size | LIR_OprDesc::virtual_mask); break;
+      case T_ARRAY:
+        res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift)  |
+                                            LIR_OprDesc::object_type  |
+                                            LIR_OprDesc::cpu_register |
+                                            LIR_OprDesc::single_size  |
+                                            LIR_OprDesc::virtual_mask);
+        break;
+
+      case T_INT:
+        res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) |
+                                  LIR_OprDesc::int_type              |
+                                  LIR_OprDesc::cpu_register          |
+                                  LIR_OprDesc::single_size           |
+                                  LIR_OprDesc::virtual_mask);
+        break;
+
+      case T_LONG:
+        res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) |
+                                  LIR_OprDesc::long_type             |
+                                  LIR_OprDesc::cpu_register          |
+                                  LIR_OprDesc::double_size           |
+                                  LIR_OprDesc::virtual_mask);
+        break;
+
+      case T_FLOAT:
+        res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) |
+                                  LIR_OprDesc::float_type           |
+                                  LIR_OprDesc::fpu_register         |
+                                  LIR_OprDesc::single_size          |
+                                  LIR_OprDesc::virtual_mask);
+        break;
+
+      case
+        T_DOUBLE: res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) |
+                                            LIR_OprDesc::double_type           |
+                                            LIR_OprDesc::fpu_register          |
+                                            LIR_OprDesc::double_size           |
+                                            LIR_OprDesc::virtual_mask);
+        break;
 
       default:       ShouldNotReachHere(); res = illegalOpr;
     }
@@ -575,12 +642,12 @@ class LIR_OprFact: public AllStatic {
 
     // old-style calculation; check if old and new method are equal
     LIR_OprDesc::OprType t = as_OprType(type);
-    LIR_Opr old_res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | t |
-                               ((type == T_FLOAT || type == T_DOUBLE) ? LIR_OprDesc::fpu_register : LIR_OprDesc::cpu_register) |
+    LIR_Opr old_res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) | t |
+                                          ((type == T_FLOAT || type == T_DOUBLE) ?  LIR_OprDesc::fpu_register : LIR_OprDesc::cpu_register) |
                                LIR_OprDesc::size_for(type) | LIR_OprDesc::virtual_mask);
     assert(res == old_res, "old and new method not equal");
 #endif
-  
+
     return res;
   }
 
@@ -591,11 +658,39 @@ class LIR_OprFact: public AllStatic {
     LIR_Opr res;
     switch (type) {
       case T_OBJECT: // fall through
-      case T_ARRAY:  res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::object_type | LIR_OprDesc::stack_value | LIR_OprDesc::single_size); break;
-      case T_INT:    res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::int_type    | LIR_OprDesc::stack_value | LIR_OprDesc::single_size); break;
-      case T_LONG:   res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::long_type   | LIR_OprDesc::stack_value | LIR_OprDesc::double_size); break;
-      case T_FLOAT:  res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::float_type  | LIR_OprDesc::stack_value | LIR_OprDesc::single_size); break;
-      case T_DOUBLE: res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::double_type | LIR_OprDesc::stack_value | LIR_OprDesc::double_size); break;
+      case T_ARRAY:
+        res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) |
+                                  LIR_OprDesc::object_type           |
+                                  LIR_OprDesc::stack_value           |
+                                  LIR_OprDesc::single_size);
+        break;
+
+      case T_INT:
+        res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) |
+                                  LIR_OprDesc::int_type              |
+                                  LIR_OprDesc::stack_value           |
+                                  LIR_OprDesc::single_size);
+        break;
+
+      case T_LONG:
+        res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) |
+                                  LIR_OprDesc::long_type             |
+                                  LIR_OprDesc::stack_value           |
+                                  LIR_OprDesc::double_size);
+        break;
+
+      case T_FLOAT:
+        res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) |
+                                  LIR_OprDesc::float_type            |
+                                  LIR_OprDesc::stack_value           |
+                                  LIR_OprDesc::single_size);
+        break;
+      case T_DOUBLE:
+        res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) |
+                                  LIR_OprDesc::double_type           |
+                                  LIR_OprDesc::stack_value           |
+                                  LIR_OprDesc::double_size);
+        break;
 
       default:       ShouldNotReachHere(); res = illegalOpr;
     }
@@ -604,7 +699,10 @@ class LIR_OprFact: public AllStatic {
     assert(index >= 0, "index must be positive");
     assert(index <= (max_jint >> LIR_OprDesc::data_shift), "index is too big");
 
-    LIR_Opr old_res = (LIR_Opr)((index << LIR_OprDesc::data_shift) | LIR_OprDesc::stack_value | as_OprType(type) | LIR_OprDesc::size_for(type));
+    LIR_Opr old_res = (LIR_Opr)(intptr_t)((index << LIR_OprDesc::data_shift) |
+                                          LIR_OprDesc::stack_value           |
+                                          as_OprType(type)                   |
+                                          LIR_OprDesc::size_for(type));
     assert(res == old_res, "old and new method not equal");
 #endif
 
@@ -630,7 +728,7 @@ class LIR_OprFact: public AllStatic {
 //                   LIR Instructions
 //-------------------------------------------------------------------------------
 //
-// Note: 
+// Note:
 //  - every instruction has a result operand
 //  - every instruction has an CodeEmitInfo operand (can be revisited later)
 //  - every instruction has a LIR_OpCode operand
@@ -783,7 +881,7 @@ enum LIR_Condition {
 };
 
 
-enum LIR_PatchCode { 
+enum LIR_PatchCode {
   lir_patch_none,
   lir_patch_low,
   lir_patch_high,
@@ -826,7 +924,7 @@ class LIR_Op: public CompilationResourceObj {
   static bool is_in_range(LIR_Code test, LIR_Code start, LIR_Code end)  { return start < test && test < end; }
 
  public:
-  LIR_Op() 
+  LIR_Op()
     : _result(LIR_OprFact::illegalOpr)
     , _code(lir_none)
     , _flags(0)
@@ -841,7 +939,7 @@ class LIR_Op: public CompilationResourceObj {
 
   LIR_Op(LIR_Code code, LIR_Opr result, CodeEmitInfo* info)
     : _result(result)
-    , _code(code) 
+    , _code(code)
     , _flags(0)
     , _info(info)
 #ifdef ASSERT
@@ -1060,7 +1158,7 @@ class LIR_Op1: public LIR_Op {
   LIR_Opr         _opr;   // input operand
   BasicType       _type;  // Operand types
   LIR_PatchCode   _patch; // only required with patchin (NEEDS_CLEANUP: do we want a special instruction for patching?)
-  
+
   static void print_patch_code(outputStream* out, LIR_PatchCode code);
 
   void set_kind(LIR_MoveKind kind) {
@@ -1104,7 +1202,7 @@ class LIR_Op1: public LIR_Op {
   virtual const char * name() const PRODUCT_RETURN0;
 
   void set_in_opr(LIR_Opr opr) { _opr = opr; }
-  
+
   virtual void print_instr(outputStream* out) const PRODUCT_RETURN;
   virtual void verify() const;
 };
@@ -1142,7 +1240,7 @@ class LIR_OpBranch: public LIR_Op {
   BlockBegin*   _block;  // if this is a branch to a block, this is the block
   BlockBegin*   _ublock; // if this is a float-branch, this is the unorderd block
   CodeStub*     _stub;   // if this is a branch to a stub, this is the stub
-  
+
  public:
   LIR_OpBranch(LIR_Condition cond, Label* lbl)
     : LIR_Op(lir_branch, LIR_OprFact::illegalOpr, (CodeEmitInfo*) NULL)
@@ -1377,7 +1475,7 @@ class LIR_Op2: public LIR_Op {
   BasicType type()  const                        { return _type; }
   LIR_Opr tmp_opr() const                        { return _tmp; }
   LIR_Condition condition() const  {
-    assert(code() == lir_cmp || code() == lir_cmove, "only valid for cmp and cmove"); return _condition; 
+    assert(code() == lir_cmp || code() == lir_cmove, "only valid for cmp and cmove"); return _condition;
   }
 
   void set_fpu_stack_size(int size)              { _fpu_stack_size = size; }
@@ -1448,7 +1546,7 @@ class LIR_Op3: public LIR_Op {
   LIR_Opr in_opr1() const                        { return _opr1; }
   LIR_Opr in_opr2() const                        { return _opr2; }
   LIR_Opr in_opr3() const                        { return _opr3; }
-  
+
   virtual void emit_code(LIR_Assembler* masm);
   virtual LIR_Op3* as_Op3() { return this; }
   virtual void print_instr(outputStream* out) const PRODUCT_RETURN;
@@ -1475,7 +1573,7 @@ class LIR_OpLock: public LIR_Op {
   LIR_Opr _scratch;
   CodeStub* _stub;
  public:
-  LIR_OpLock(LIR_Code code, LIR_Opr hdr, LIR_Opr obj, LIR_Opr lock, LIR_Opr scratch, CodeStub* stub, CodeEmitInfo* info) 
+  LIR_OpLock(LIR_Code code, LIR_Opr hdr, LIR_Opr obj, LIR_Opr lock, LIR_Opr scratch, CodeStub* stub, CodeEmitInfo* info)
     : LIR_Op(code, LIR_OprFact::illegalOpr, info)
     , _hdr(hdr)
     , _obj(obj)
@@ -1586,7 +1684,7 @@ class LIR_InsertionBuffer;
 
 //--------------------------------LIR_List---------------------------------------------------
 // Maintains a list of LIR instructions (one instance of LIR_List per basic block)
-// The LIR instructions are appended by the LIR_List class itself; 
+// The LIR instructions are appended by the LIR_List class itself;
 //
 // Notes:
 // - all offsets are(should be) in bytes
@@ -1631,7 +1729,7 @@ class LIR_List: public CompilationResourceObj {
 #ifdef ASSERT
   void set_file_and_line(const char * file, int line);
 #endif
-  
+
   //---------- accessors ---------------
   LIR_OpList* instructions_list()                { return &_operations; }
   int         length() const                     { return _operations.length(); }
@@ -1650,7 +1748,7 @@ class LIR_List: public CompilationResourceObj {
   void print_instructions() PRODUCT_RETURN;
 
 
-  //---------- instructions ------------- 
+  //---------- instructions -------------
   void call_opt_virtual(ciMethod* method, LIR_Opr receiver, LIR_Opr result,
                         address dest, LIR_OprList* arguments,
                         CodeEmitInfo* info) {
@@ -1668,7 +1766,7 @@ class LIR_List: public CompilationResourceObj {
                     intptr_t vtable_offset, LIR_OprList* arguments, CodeEmitInfo* info) {
     append(new LIR_OpJavaCall(lir_virtual_call, method, receiver, result, vtable_offset, arguments, info));
   }
-  
+
   void get_thread(LIR_Opr result)                { append(new LIR_Op0(lir_get_thread, result)); }
   void word_align()                              { append(new LIR_Op0(lir_word_align)); }
   void membar()                                  { append(new LIR_Op0(lir_membar)); }
@@ -1702,9 +1800,9 @@ class LIR_List: public CompilationResourceObj {
   void oop2reg_patch(jobject o, LIR_Opr reg, CodeEmitInfo* info);
 
   void return_op(LIR_Opr result)                 { append(new LIR_Op1(lir_return, result)); }
- 
+
   void safepoint(LIR_Opr tmp, CodeEmitInfo* info)  { append(new LIR_Op1(lir_safepoint, tmp, info)); }
- 
+
   void convert(Bytecodes::Code code, LIR_Opr left, LIR_Opr dst, ConversionStub* stub = NULL/*, bool is_32bit = false*/) { append(new LIR_OpConvert(code, left, dst, stub)); }
 
   void logical_and (LIR_Opr left, LIR_Opr right, LIR_Opr dst) { append(new LIR_Op2(lir_logic_and,  left, right, dst)); }
@@ -1747,7 +1845,7 @@ class LIR_List: public CompilationResourceObj {
   void sin (LIR_Opr from, LIR_Opr to, LIR_Opr tmp1, LIR_Opr tmp2) { append(new LIR_Op2(lir_sin , from, tmp1, to, tmp2)); }
   void cos (LIR_Opr from, LIR_Opr to, LIR_Opr tmp1, LIR_Opr tmp2) { append(new LIR_Op2(lir_cos , from, tmp1, to, tmp2)); }
   void tan (LIR_Opr from, LIR_Opr to, LIR_Opr tmp1, LIR_Opr tmp2) { append(new LIR_Op2(lir_tan , from, tmp1, to, tmp2)); }
- 
+
   void add (LIR_Opr left, LIR_Opr right, LIR_Opr res)      { append(new LIR_Op2(lir_add, left, right, res)); }
   void sub (LIR_Opr left, LIR_Opr right, LIR_Opr res, CodeEmitInfo* info = NULL) { append(new LIR_Op2(lir_sub, left, right, res, info)); }
   void mul (LIR_Opr left, LIR_Opr right, LIR_Opr res) { append(new LIR_Op2(lir_mul, left, right, res)); }
@@ -1850,11 +1948,11 @@ class LIR_InsertionBuffer : public CompilationResourceObj {
   // list of insertion points. index and count are stored alternately:
   // _index_and_count[i * 2]:     the index into lir list where "count" ops should be inserted
   // _index_and_count[i * 2 + 1]: the number of ops to be inserted at index
-  intStack    _index_and_count; 
+  intStack    _index_and_count;
 
   // the LIR_Ops to be inserted
   LIR_OpList  _ops;
-  
+
   void append_new(int index, int count)  { _index_and_count.append(index); _index_and_count.append(count); }
   void set_index_at(int i, int value)    { _index_and_count.at_put((i << 1),     value); }
   void set_count_at(int i, int value)    { _index_and_count.at_put((i << 1) + 1, value); }
@@ -1992,15 +2090,15 @@ class LIR_OpVisitState: public StackObj {
     assert(index >= 0 && index < _oprs_len[mode], "index out of bound");
     return *_oprs_new[mode][index];
   }
-                                           
+
   void set_opr_at(OprMode mode, int index, LIR_Opr opr) const {
     assert(mode >= 0 && mode < numModes, "bad mode");
     assert(index >= 0 && index < _oprs_len[mode], "index out of bound");
     *_oprs_new[mode][index] = opr;
   }
 
-  int info_count() const { 
-    return _info_len; 
+  int info_count() const {
+    return _info_len;
   }
 
   CodeEmitInfo* info_at(int index) const {
@@ -2035,4 +2133,3 @@ class LIR_OpVisitState: public StackObj {
 
 
 inline LIR_Opr LIR_OprDesc::illegalOpr()   { return LIR_OprFact::illegalOpr; };
-

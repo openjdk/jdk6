@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)os.cpp	1.185 07/10/04 10:49:22 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -36,10 +33,7 @@ volatile int32_t* os::_mem_serialize_page = NULL;
 uintptr_t         os::_serialize_page_mask = 0;
 long              os::_rand_seed          = 1;
 int               os::_processor_count    = 0;
-volatile jlong    os::_global_time        = 0;
-volatile int      os::_global_time_lock   = 0;
-bool              os::_use_global_time    = false;
-size_t		  os::_page_sizes[os::page_sizes_max];
+size_t            os::_page_sizes[os::page_sizes_max];
 
 #ifndef PRODUCT
 int os::num_mallocs = 0;            // # of calls to malloc/realloc
@@ -47,83 +41,15 @@ size_t os::alloc_bytes = 0;         // # of bytes allocated
 int os::num_frees = 0;              // # of calls to free
 #endif
 
-// Atomic read of a jlong is assured by a seqlock; see update_global_time()
-jlong os::read_global_time() {
-#ifdef _LP64
-  return _global_time;
-#else
-  volatile int lock;
-  volatile jlong current_time;
-  int ctr = 0;
-
-  for (;;) {
-    lock = _global_time_lock;
-
-    // spin while locked
-    while ((lock & 0x1) != 0) {
-      ++ctr;
-      if ((ctr & 0xFFF) == 0) {
-        // Guarantee writer progress.  Can't use yield; yield is advisory
-        // and has almost no effect on some platforms.  Don't need a state
-        // transition - the park call will return promptly.
-        assert(Thread::current() != NULL, "TLS not initialized");
-        assert(Thread::current()->_ParkEvent != NULL, "sync not initialized");
-        Thread::current()->_ParkEvent->park(1);
-      }
-      lock = _global_time_lock;
-    }
-
-    OrderAccess::loadload();
-    current_time = _global_time;
-    OrderAccess::loadload();
-
-    // ratify seqlock value
-    if (lock == _global_time_lock) {
-      return current_time;
-    }
-  }
-#endif
-}
-
-//
-// NOTE - Assumes only one writer thread!
-//
-// We use a seqlock to guarantee that jlong _global_time is updated
-// atomically on 32-bit platforms.  A locked value is indicated by
-// the lock variable LSB == 1.  Readers will initially read the lock
-// value, spinning until the LSB == 0.  They then speculatively read
-// the global time value, then re-read the lock value to ensure that
-// it hasn't changed.  If the lock value has changed, the entire read
-// sequence is retried.
-//
-// Writers simply set the LSB = 1 (i.e. increment the variable),
-// update the global time, then release the lock and bump the version
-// number (i.e. increment the variable again.)  In this case we don't
-// even need a CAS since we ensure there's only one writer.
-//
-void os::update_global_time() {
-#ifdef _LP64
-  _global_time = timeofday();
-#else
-  assert((_global_time_lock & 0x1) == 0, "multiple writers?");
-  jlong current_time = timeofday();
-  _global_time_lock++; // lock
-  OrderAccess::storestore();
-  _global_time = current_time;
-  OrderAccess::storestore();
-  _global_time_lock++; // unlock
-#endif
-}
-
 // Fill in buffer with current local time as an ISO-8601 string.
 // E.g., yyyy-mm-ddThh:mm:ss-zzzz.
 // Returns buffer, or NULL if it failed.
-// This would mostly be a call to 
+// This would mostly be a call to
 //     strftime(...., "%Y-%m-%d" "T" "%H:%M:%S" "%z", ....)
 // except that on Windows the %z behaves badly, so we do it ourselves.
-// Also, people wanted milliseconds on there, 
+// Also, people wanted milliseconds on there,
 // and strftime doesn't do milliseconds.
-char* os::iso8601_time(char* buffer, size_t buffer_length) {  
+char* os::iso8601_time(char* buffer, size_t buffer_length) {
   // Output will be of the form "YYYY-MM-DDThh:mm:ss.mmm+zzzz\0"
   //                                      1         2
   //                             12345678901234567890123456789
@@ -141,23 +67,22 @@ char* os::iso8601_time(char* buffer, size_t buffer_length) {
     return NULL;
   }
   // Get the current time
-  jlong milliseconds_since_19700101 = timeofday();
+  jlong milliseconds_since_19700101 = javaTimeMillis();
   const int milliseconds_per_microsecond = 1000;
   const time_t seconds_since_19700101 =
     milliseconds_since_19700101 / milliseconds_per_microsecond;
   const int milliseconds_after_second =
     milliseconds_since_19700101 % milliseconds_per_microsecond;
   // Convert the time value to a tm and timezone variable
-  const struct tm *time_struct_temp = localtime(&seconds_since_19700101);
-  if (time_struct_temp == NULL) {
-    assert(false, "Failed localtime");
+  struct tm time_struct;
+  if (localtime_pd(&seconds_since_19700101, &time_struct) == NULL) {
+    assert(false, "Failed localtime_pd");
     return NULL;
   }
-  // Save the results of localtime
-  const struct tm time_struct = *time_struct_temp;
+
   const time_t zone = timezone;
-  
-  // If daylight savings time is in effect, 
+
+  // If daylight savings time is in effect,
   // we are 1 hour East of our time zone
   const time_t seconds_per_minute = 60;
   const time_t minutes_per_hour = 60;
@@ -167,10 +92,10 @@ char* os::iso8601_time(char* buffer, size_t buffer_length) {
     UTC_to_local = UTC_to_local - seconds_per_hour;
   }
   // Compute the time zone offset.
-  //    localtime(3C) sets timezone to the difference (in seconds)
+  //    localtime_pd sets timezone to the difference (in seconds)
   //    between UTC and and local time.
-  //    ISO 8601 says we need the difference between local time and UTC, 
-  //    we change the sign of the localtime(3C) result.
+  //    ISO 8601 says we need the difference between local time and UTC,
+  //    we change the sign of the localtime_pd result.
   const time_t local_to_UTC = -(UTC_to_local);
   // Then we have to figure out if if we are ahead (+) or behind (-) UTC.
   char sign_local_to_UTC = '+';
@@ -183,7 +108,7 @@ char* os::iso8601_time(char* buffer, size_t buffer_length) {
   const time_t zone_hours = (abs_local_to_UTC / seconds_per_hour);
   const time_t zone_min =
     ((abs_local_to_UTC % seconds_per_hour) / seconds_per_minute);
-  
+
   // Print an ISO 8601 date and time stamp into the buffer
   const int year = 1900 + time_struct.tm_year;
   const int month = 1 + time_struct.tm_mon;
@@ -211,7 +136,7 @@ OSReturn os::set_priority(Thread* thread, ThreadPriority p) {
          Thread::current() == thread  ||
          Threads_lock->owned_by_self()
          || thread->is_Compiler_thread()
-	)) {
+        )) {
     assert(false, "possibility of dangling Thread pointer");
   }
 #endif
@@ -250,7 +175,7 @@ OSReturn os::get_priority(const Thread* const thread, ThreadPriority& priority) 
 
 
 static void signal_thread_entry(JavaThread* thread, TRAPS) {
-  os::set_priority(thread, NearMaxPriority);  
+  os::set_priority(thread, NearMaxPriority);
   while (true) {
     int sig;
     {
@@ -268,12 +193,12 @@ static void signal_thread_entry(JavaThread* thread, TRAPS) {
       case SIGBREAK: {
         // Check if the signal is a trigger to start the Attach Listener - in that
         // case don't print stack traces.
-	if (!DisableAttachMechanism && AttachListener::is_init_trigger()) {
-	  continue;
-  	}
+        if (!DisableAttachMechanism && AttachListener::is_init_trigger()) {
+          continue;
+        }
         // Print stack traces
-	// Any SIGBREAK operations added here should make sure to flush
-	// the output stream (e.g. tty->flush()) after output.  See 4803766.
+        // Any SIGBREAK operations added here should make sure to flush
+        // the output stream (e.g. tty->flush()) after output.  See 4803766.
         // Each module also prints an extra carriage return after its output.
         VM_PrintThreads op;
         VMThread::execute(&op);
@@ -291,7 +216,7 @@ static void signal_thread_entry(JavaThread* thread, TRAPS) {
         }
         break;
       }
-      default: {       
+      default: {
         // Dispatch the signal to java
         HandleMark hm(THREAD);
         klassOop k = SystemDictionary::resolve_or_null(vmSymbolHandles::sun_misc_Signal(), THREAD);
@@ -302,31 +227,31 @@ static void signal_thread_entry(JavaThread* thread, TRAPS) {
           args.push_int(sig);
           JavaCalls::call_static(
             &result,
-            klass, 
-            vmSymbolHandles::dispatch_name(), 
+            klass,
+            vmSymbolHandles::dispatch_name(),
             vmSymbolHandles::int_void_signature(),
             &args,
             THREAD
           );
         }
-	if (HAS_PENDING_EXCEPTION) {
-	  // tty is initialized early so we don't expect it to be null, but
-	  // if it is we can't risk doing an initialization that might
-	  // trigger additional out-of-memory conditions
-	  if (tty != NULL) {
-	    char klass_name[256];
-	    char tmp_sig_name[16];
-	    const char* sig_name = "UNKNOWN";
-	    instanceKlass::cast(PENDING_EXCEPTION->klass())->
-	      name()->as_klass_external_name(klass_name, 256);
-	    if (os::exception_name(sig, tmp_sig_name, 16) != NULL)
-	      sig_name = tmp_sig_name;
-	    warning("Exception %s occurred dispatching signal %s to handler"
-		    "- the VM may need to be forcibly terminated",  
-		    klass_name, sig_name );
-	  }
-	  CLEAR_PENDING_EXCEPTION;
-	}
+        if (HAS_PENDING_EXCEPTION) {
+          // tty is initialized early so we don't expect it to be null, but
+          // if it is we can't risk doing an initialization that might
+          // trigger additional out-of-memory conditions
+          if (tty != NULL) {
+            char klass_name[256];
+            char tmp_sig_name[16];
+            const char* sig_name = "UNKNOWN";
+            instanceKlass::cast(PENDING_EXCEPTION->klass())->
+              name()->as_klass_external_name(klass_name, 256);
+            if (os::exception_name(sig, tmp_sig_name, 16) != NULL)
+              sig_name = tmp_sig_name;
+            warning("Exception %s occurred dispatching signal %s to handler"
+                    "- the VM may need to be forcibly terminated",
+                    klass_name, sig_name );
+          }
+          CLEAR_PENDING_EXCEPTION;
+        }
       }
     }
   }
@@ -342,33 +267,33 @@ void os::signal_init() {
     instanceHandle thread_oop = klass->allocate_instance_handle(CHECK);
 
     const char thread_name[] = "Signal Dispatcher";
-    Handle string = java_lang_String::create_from_str(thread_name, CHECK);    
+    Handle string = java_lang_String::create_from_str(thread_name, CHECK);
 
     // Initialize thread_oop to put it into the system threadGroup
     Handle thread_group (THREAD, Universe::system_thread_group());
     JavaValue result(T_VOID);
-    JavaCalls::call_special(&result, thread_oop, 
-                           klass, 
-                           vmSymbolHandles::object_initializer_name(), 
-                           vmSymbolHandles::threadgroup_string_void_signature(), 
-                           thread_group, 
-                           string, 
-                           CHECK);  
-    
+    JavaCalls::call_special(&result, thread_oop,
+                           klass,
+                           vmSymbolHandles::object_initializer_name(),
+                           vmSymbolHandles::threadgroup_string_void_signature(),
+                           thread_group,
+                           string,
+                           CHECK);
+
     KlassHandle group(THREAD, SystemDictionary::threadGroup_klass());
     JavaCalls::call_special(&result,
                             thread_group,
                             group,
                             vmSymbolHandles::add_method_name(),
                             vmSymbolHandles::thread_void_signature(),
-			    thread_oop,		// ARG 1
+                            thread_oop,         // ARG 1
                             CHECK);
 
     os::signal_init_pd();
 
     { MutexLocker mu(Threads_lock);
       JavaThread* signal_thread = new JavaThread(&signal_thread_entry);
-                                                                                                                              
+
       // At this point it may be possible that no osthread was created for the
       // JavaThread due to lack of memory. We would have to throw an exception
       // in that case. However, since this must work and we do not allow
@@ -381,7 +306,7 @@ void os::signal_init() {
       java_lang_Thread::set_thread(thread_oop(), signal_thread);
       java_lang_Thread::set_priority(thread_oop(), NearMaxPriority);
       java_lang_Thread::set_daemon(thread_oop());
-         
+
       signal_thread->set_threadObj(thread_oop());
       Threads::add(signal_thread);
       Thread::start(signal_thread);
@@ -410,29 +335,38 @@ void* os::native_java_library() {
     char buffer[JVM_MAXPATHLEN];
     char ebuf[1024];
 
-    // Try to load verify dll first. In 1.3 java dll depends on it and is not always
-    // able to find it when the loading executable is outside the JDK. 
+    // Try to load verify dll first. In 1.3 java dll depends on it and is not
+    // always able to find it when the loading executable is outside the JDK.
     // In order to keep working with 1.2 we ignore any loading errors.
-    hpi::dll_build_name(buffer, sizeof(buffer), Arguments::get_dll_dir(), "verify");
-    hpi::dll_load(buffer, ebuf, sizeof(ebuf));
+    dll_build_name(buffer, sizeof(buffer), Arguments::get_dll_dir(), "verify");
+    dll_load(buffer, ebuf, sizeof(ebuf));
 
     // Load java dll
-    hpi::dll_build_name(buffer, sizeof(buffer), Arguments::get_dll_dir(), "java");
-    _native_java_library = hpi::dll_load(buffer, ebuf, sizeof(ebuf));
+    dll_build_name(buffer, sizeof(buffer), Arguments::get_dll_dir(), "java");
+    _native_java_library = dll_load(buffer, ebuf, sizeof(ebuf));
     if (_native_java_library == NULL) {
       vm_exit_during_initialization("Unable to load native library", ebuf);
     }
-    // The JNI_OnLoad handling is normally done by method load in java.lang.ClassLoader$NativeLibrary,
-    // but the VM loads the base library explicitly so we have to check for JNI_OnLoad as well
-    const char *onLoadSymbols[] = JNI_ONLOAD_SYMBOLS;
-    JNI_OnLoad_t JNI_OnLoad = CAST_TO_FN_PTR(JNI_OnLoad_t, hpi::dll_lookup(_native_java_library, onLoadSymbols[0]));
-    if (JNI_OnLoad != NULL) {
-      JavaThread* thread = JavaThread::current();
-      ThreadToNativeFromVM ttn(thread);
-      HandleMark hm(thread);
-      jint ver = (*JNI_OnLoad)(&main_vm, NULL);
-      if (!Threads::is_supported_jni_version_including_1_1(ver)) {
-        vm_exit_during_initialization("Unsupported JNI version");
+  }
+  static jboolean onLoaded = JNI_FALSE;
+  if (onLoaded) {
+    // We may have to wait to fire OnLoad until TLS is initialized.
+    if (ThreadLocalStorage::is_initialized()) {
+      // The JNI_OnLoad handling is normally done by method load in
+      // java.lang.ClassLoader$NativeLibrary, but the VM loads the base library
+      // explicitly so we have to check for JNI_OnLoad as well
+      const char *onLoadSymbols[] = JNI_ONLOAD_SYMBOLS;
+      JNI_OnLoad_t JNI_OnLoad = CAST_TO_FN_PTR(
+          JNI_OnLoad_t, dll_lookup(_native_java_library, onLoadSymbols[0]));
+      if (JNI_OnLoad != NULL) {
+        JavaThread* thread = JavaThread::current();
+        ThreadToNativeFromVM ttn(thread);
+        HandleMark hm(thread);
+        jint ver = (*JNI_OnLoad)(&main_vm, NULL);
+        onLoaded = JNI_TRUE;
+        if (!Threads::is_supported_jni_version_including_1_1(ver)) {
+          vm_exit_during_initialization("Unsupported JNI version");
+        }
       }
     }
   }
@@ -459,13 +393,13 @@ char *os::strdup(const char *str) {
 // MallocCushion: size of extra cushion allocated around objects with +UseMallocOnly
 // NB: cannot be debug variable, because these aren't set from the command line until
 // *after* the first few allocs already happened
-#define MallocCushion            16 
+#define MallocCushion            16
 #else
 #define space_before             0
 #define space_after              0
 #define size_addr_from_base(p)   should not use w/o ASSERT
 #define size_addr_from_obj(p)    should not use w/o ASSERT
-#define MallocCushion            0 
+#define MallocCushion            0
 #endif
 #define paranoid                 0  /* only set to 1 if you suspect checking code has bug */
 
@@ -478,7 +412,7 @@ inline size_t get_size(void* obj) {
 }
 
 u_char* find_cushion_backwards(u_char* start) {
-  u_char* p = start; 
+  u_char* p = start;
   while (p[ 0] != badResourceValue || p[-1] != badResourceValue ||
          p[-2] != badResourceValue || p[-3] != badResourceValue) p--;
   // ok, we have four consecutive marker bytes; find start
@@ -488,7 +422,7 @@ u_char* find_cushion_backwards(u_char* start) {
 }
 
 u_char* find_cushion_forwards(u_char* start) {
-  u_char* p = start; 
+  u_char* p = start;
   while (p[0] != badResourceValue || p[1] != badResourceValue ||
          p[2] != badResourceValue || p[3] != badResourceValue) p++;
   // ok, we have four consecutive marker bytes; find end of cushion
@@ -514,7 +448,7 @@ void print_neighbor_blocks(void* ptr) {
     // search one more backwards
     start_of_prev_block = find_cushion_backwards(start_of_prev_block);
     size = *size_addr_from_base(start_of_prev_block);
-    obj = start_of_prev_block + space_before;  
+    obj = start_of_prev_block + space_before;
   }
 
   if (start_of_prev_block + space_before + size + space_after == start_of_this_block) {
@@ -528,9 +462,9 @@ void print_neighbor_blocks(void* ptr) {
   start_of_next_block = find_cushion_forwards(start_of_next_block);
   u_char* next_obj = start_of_next_block + space_before;
   ptrdiff_t next_size = *size_addr_from_base(start_of_next_block);
-  if (start_of_next_block[0] == badResourceValue && 
-      start_of_next_block[1] == badResourceValue && 
-      start_of_next_block[2] == badResourceValue && 
+  if (start_of_next_block[0] == badResourceValue &&
+      start_of_next_block[1] == badResourceValue &&
+      start_of_next_block[2] == badResourceValue &&
       start_of_next_block[3] == badResourceValue) {
     tty->print_cr("### next object: %p (%ld bytes)", next_obj, next_size);
   } else {
@@ -546,7 +480,7 @@ void report_heap_error(void* memblock, void* bad, const char* where) {
   fatal("memory stomping error");
 }
 
-void verify_block(void* memblock) {  
+void verify_block(void* memblock) {
   size_t size = get_size(memblock);
   if (MallocCushion) {
     u_char* ptr = (u_char*)memblock - space_before;
@@ -651,14 +585,14 @@ void  os::free(void *memblock) {
     u_char* ptr = (u_char*)memblock - space_before;
     for (u_char* p = ptr; p < ptr + MallocCushion; p++) {
       guarantee(*p == badResourceValue,
-		"Thing freed should be malloc result.");
+                "Thing freed should be malloc result.");
       *p = (u_char)freeBlockPad;
     }
     size_t size = get_size(memblock);
     u_char* end = ptr + space_before + size;
     for (u_char* q = end; q < end + MallocCushion; q++) {
       guarantee(*q == badResourceValue,
-		"Thing freed should be malloc result.");
+                "Thing freed should be malloc result.");
       *q = (u_char)freeBlockPad;
     }
   }
@@ -677,8 +611,8 @@ long os::random() {
    * see
    * (1) "Random Number Generators: Good Ones Are Hard to Find",
    *      S.K. Park and K.W. Miller, Communications of the ACM 31:10 (Oct 1988),
-   * (2) "Two Fast Implementations of the 'Minimal Standard' Random 
-   *     Number Generator", David G. Carta, Comm. ACM 33, 1 (Jan 1990), pp. 87-88. 
+   * (2) "Two Fast Implementations of the 'Minimal Standard' Random
+   *     Number Generator", David G. Carta, Comm. ACM 33, 1 (Jan 1990), pp. 87-88.
   */
   const long a = 16807;
   const unsigned long m = 2147483647;
@@ -807,8 +741,8 @@ bool os::is_first_C_frame(frame* fr) {
 #ifdef IA64
   // In order to walk native frames on Itanium, we need to access the unwind
   // table, which is inside ELF. We don't want to parse ELF after fatal error,
-  // so return true for IA64. If we need to support C stack walking on IA64, 
-  // this function needs to be moved to CPU specific files, as fp() on IA64 
+  // so return true for IA64. If we need to support C stack walking on IA64,
+  // this function needs to be moved to CPU specific files, as fp() on IA64
   // is register stack, which grows towards higher memory address.
   return true;
 #endif
@@ -836,7 +770,7 @@ bool os::is_first_C_frame(frame* fr) {
 
   // stack grows downwards; if old_fp is below current fp or if the stack
   // frame is too large, either the stack is corrupted or fp is not saved
-  // on stack (i.e. on x86, ebp may be used as general register). The stack 
+  // on stack (i.e. on x86, ebp may be used as general register). The stack
   // is not walkable beyond current frame.
   if (old_fp < ufp) return true;
   if (old_fp - ufp > 64 * K) return true;
@@ -853,13 +787,13 @@ extern "C" void test_random() {
 
   tty->print_cr("seed %ld for %ld repeats...", seed, reps);
   os::init_random(seed);
-  long num; 
+  long num;
   for (int k = 0; k < reps; k++) {
     num = os::random();
     double u = (double)num / m;
     assert(u >= 0.0 && u <= 1.0, "bad random number!");
 
-    // calculate mean and variance of the random sequence 
+    // calculate mean and variance of the random sequence
     mean += u;
     variance += (u*u);
   }
@@ -886,40 +820,40 @@ char* os::format_boot_path(const char* format_string,
                            char fileSep,
                            char pathSep) {
     assert((fileSep == '/' && pathSep == ':') ||
-	   (fileSep == '\\' && pathSep == ';'), "unexpected seperator chars");
-  
+           (fileSep == '\\' && pathSep == ';'), "unexpected seperator chars");
+
     // Scan the format string to determine the length of the actual
     // boot classpath, and handle platform dependencies as well.
     int formatted_path_len = 0;
     const char* p;
     for (p = format_string; *p != 0; ++p) {
-	if (*p == '%') formatted_path_len += home_len - 1;
-	++formatted_path_len;
+        if (*p == '%') formatted_path_len += home_len - 1;
+        ++formatted_path_len;
     }
 
     char* formatted_path = NEW_C_HEAP_ARRAY(char, formatted_path_len + 1);
     if (formatted_path == NULL) {
-	return NULL;
+        return NULL;
     }
 
     // Create boot classpath from format, substituting separator chars and
     // java home directory.
     char* q = formatted_path;
     for (p = format_string; *p != 0; ++p) {
-	switch (*p) {
-	case '%':
-	    strcpy(q, home);
-	    q += home_len;
-	    break;
-	case '/':
-	    *q++ = fileSep;
-	    break;
-	case ':':
-	    *q++ = pathSep;
-	    break;
-	default:
-	    *q++ = *p;
-	}
+        switch (*p) {
+        case '%':
+            strcpy(q, home);
+            q += home_len;
+            break;
+        case '/':
+            *q++ = fileSep;
+            break;
+        case ':':
+            *q++ = pathSep;
+            break;
+        default:
+            *q++ = *p;
+        }
     }
     *q = '\0';
 
@@ -929,7 +863,6 @@ char* os::format_boot_path(const char* format_string,
 
 
 bool os::set_boot_path(char fileSep, char pathSep) {
-
     const char* home = Arguments::get_java_home();
     int home_len = (int)strlen(home);
 
@@ -945,13 +878,13 @@ bool os::set_boot_path(char fileSep, char pathSep) {
     // aligned with install/install/make/common/Pack.gmk. Note: boot class
     // path class JARs, are stripped for StackMapTable to reduce download size.
     static const char classpath_format[] =
-	"%/lib/resources.jar:"
-	"%/lib/rt.jar:"
-	"%/lib/sunrsasign.jar:"
-	"%/lib/jsse.jar:"
-	"%/lib/jce.jar:"
+        "%/lib/resources.jar:"
+        "%/lib/rt.jar:"
+        "%/lib/sunrsasign.jar:"
+        "%/lib/jsse.jar:"
+        "%/lib/jce.jar:"
         "%/lib/charsets.jar:"
-	"%/classes";
+        "%/classes";
     char* sysclasspath = format_boot_path(classpath_format, home, home_len, fileSep, pathSep);
     if (sysclasspath == NULL) return false;
     Arguments::set_sysclasspath(sysclasspath);
@@ -959,10 +892,63 @@ bool os::set_boot_path(char fileSep, char pathSep) {
     return true;
 }
 
+/*
+ * Splits a path, based on its separator, the number of
+ * elements is returned back in n.
+ * It is the callers responsibility to:
+ *   a> check the value of n, and n may be 0.
+ *   b> ignore any empty path elements
+ *   c> free up the data.
+ */
+char** os::split_path(const char* path, int* n) {
+  *n = 0;
+  if (path == NULL || strlen(path) == 0) {
+    return NULL;
+  }
+  const char psepchar = *os::path_separator();
+  char* inpath = (char*)NEW_C_HEAP_ARRAY(char, strlen(path) + 1);
+  if (inpath == NULL) {
+    return NULL;
+  }
+  strncpy(inpath, path, strlen(path));
+  int count = 1;
+  char* p = strchr(inpath, psepchar);
+  // Get a count of elements to allocate memory
+  while (p != NULL) {
+    count++;
+    p++;
+    p = strchr(p, psepchar);
+  }
+  char** opath = (char**) NEW_C_HEAP_ARRAY(char*, count);
+  if (opath == NULL) {
+    return NULL;
+  }
 
-void os::set_memory_serialize_page(address page) { 
+  // do the actual splitting
+  p = inpath;
+  for (int i = 0 ; i < count ; i++) {
+    size_t len = strcspn(p, os::path_separator());
+    if (len > JVM_MAXPATHLEN) {
+      return NULL;
+    }
+    // allocate the string and add terminator storage
+    char* s  = (char*)NEW_C_HEAP_ARRAY(char, len + 1);
+    if (s == NULL) {
+      return NULL;
+    }
+    strncpy(s, p, len);
+    s[len] = '\0';
+    opath[i] = s;
+    p += len + 1;
+  }
+  FREE_C_HEAP_ARRAY(char, inpath);
+  *n = count;
+  return opath;
+}
+
+void os::set_memory_serialize_page(address page) {
   int count = log2_intptr(sizeof(class JavaThread)) - log2_intptr(64);
-  _mem_serialize_page = (volatile int32_t *)page; 
+  _mem_serialize_page = (volatile int32_t *)page;
   // We initialize the serialization page shift count here
   // We assume a cache line size of 64 bytes
   assert(SerializePageShiftCount == count,
@@ -970,37 +956,38 @@ void os::set_memory_serialize_page(address page) {
   set_serialize_page_mask((uintptr_t)(vm_page_size() - sizeof(int32_t)));
 }
 
+static volatile intptr_t SerializePageLock = 0;
+
 // This method is called from signal handler when SIGSEGV occurs while the current
-// thread tries to store to the "read-only" memory serialize page during state 
+// thread tries to store to the "read-only" memory serialize page during state
 // transition.
 void os::block_on_serialize_page_trap() {
   if (TraceSafepoint) {
     tty->print_cr("Block until the serialize page permission restored");
   }
-  // When VMThread is holding the SerializePage_lock during modifying the 
+  // When VMThread is holding the SerializePageLock during modifying the
   // access permission of the memory serialize page, the following call
   // will block until the permission of that page is restored to rw.
   // Generally, it is unsafe to manipulate locks in signal handlers, but in
   // this case, it's OK as the signal is synchronous and we know precisely when
-  // it can occur. SerializePage_lock is a transiently-held leaf lock, so 
-  // lock_without_safepoint_check should be safe.
-  SerializePage_lock->lock_without_safepoint_check();
-  SerializePage_lock->unlock();
+  // it can occur.
+  Thread::muxAcquire(&SerializePageLock, "set_memory_serialize_page");
+  Thread::muxRelease(&SerializePageLock);
 }
 
 // Serialize all thread state variables
 void os::serialize_thread_states() {
-  // On some platforms such as Solaris & Linux, the time duration of the page 
-  // permission restoration is observed to be much longer than expected  due to 
-  // scheduler starvation problem etc. To avoid the long synchronization 
-  // time and expensive page trap spinning, 'SerializePage_lock' is used to block 
-  // the mutator thread if such case is encountered. Since this method is always 
-  // called by VMThread during safepoint, lock_without_safepoint_check is used 
-  // instead. See bug 6546278.
-  SerializePage_lock->lock_without_safepoint_check();
-  os::protect_memory( (char *)os::get_memory_serialize_page(), os::vm_page_size() );
-  os::unguard_memory( (char *)os::get_memory_serialize_page(), os::vm_page_size() );
-  SerializePage_lock->unlock();
+  // On some platforms such as Solaris & Linux, the time duration of the page
+  // permission restoration is observed to be much longer than expected  due to
+  // scheduler starvation problem etc. To avoid the long synchronization
+  // time and expensive page trap spinning, 'SerializePageLock' is used to block
+  // the mutator thread if such case is encountered. See bug 6546278 for details.
+  Thread::muxAcquire(&SerializePageLock, "serialize_thread_states");
+  os::protect_memory((char *)os::get_memory_serialize_page(),
+                     os::vm_page_size(), MEM_PROT_READ);
+  os::protect_memory((char *)os::get_memory_serialize_page(),
+                     os::vm_page_size(), MEM_PROT_RW);
+  Thread::muxRelease(&SerializePageLock);
 }
 
 // Returns true if the current stack pointer is above the stack shadow
@@ -1016,7 +1003,7 @@ bool os::stack_shadow_pages_available(Thread *thread, methodHandle method) {
   // respectively.
   const int framesize_in_bytes =
     Interpreter::size_top_interpreter_activation(method()) * wordSize;
-  int reserved_area = ((StackShadowPages + StackRedPages + StackYellowPages) 
+  int reserved_area = ((StackShadowPages + StackRedPages + StackYellowPages)
                       * vm_page_size()) + framesize_in_bytes;
   // The very lower end of the stack
   address stack_limit = thread->stack_base() - thread->stack_size();
@@ -1024,7 +1011,7 @@ bool os::stack_shadow_pages_available(Thread *thread, methodHandle method) {
 }
 
 size_t os::page_size_for_region(size_t region_min_size, size_t region_max_size,
-				uint min_pages)
+                                uint min_pages)
 {
   assert(min_pages > 0, "sanity");
   if (UseLargePages) {
@@ -1034,13 +1021,13 @@ size_t os::page_size_for_region(size_t region_min_size, size_t region_max_size,
       const size_t sz = _page_sizes[i];
       const size_t mask = sz - 1;
       if ((region_min_size & mask) == 0 && (region_max_size & mask) == 0) {
-	// The largest page size with no fragmentation.
-	return sz;
+        // The largest page size with no fragmentation.
+        return sz;
       }
 
       if (sz <= max_page_size) {
-	// The largest page size that satisfies the min_pages requirement.
-	return sz;
+        // The largest page size that satisfies the min_pages requirement.
+        return sz;
       }
     }
   }
@@ -1050,30 +1037,30 @@ size_t os::page_size_for_region(size_t region_min_size, size_t region_max_size,
 
 #ifndef PRODUCT
 void os::trace_page_sizes(const char* str, const size_t region_min_size,
-			  const size_t region_max_size, const size_t page_size,
-			  const char* base, const size_t size)
+                          const size_t region_max_size, const size_t page_size,
+                          const char* base, const size_t size)
 {
   if (TracePageSizes) {
     tty->print_cr("%s:  min=" SIZE_FORMAT " max=" SIZE_FORMAT
-		  " pg_sz=" SIZE_FORMAT " base=" PTR_FORMAT
-		  " size=" SIZE_FORMAT,
-		  str, region_min_size, region_max_size,
-		  page_size, base, size);
+                  " pg_sz=" SIZE_FORMAT " base=" PTR_FORMAT
+                  " size=" SIZE_FORMAT,
+                  str, region_min_size, region_max_size,
+                  page_size, base, size);
   }
 }
-#endif	// #ifndef PRODUCT
+#endif  // #ifndef PRODUCT
 
 // This is the working definition of a server class machine:
-// >= 2 physical CPU's and >=2GB of memory, with some fuzz 
+// >= 2 physical CPU's and >=2GB of memory, with some fuzz
 // because the graphics memory (?) sometimes masks physical memory.
-// If you want to change the definition of a server class machine 
-// on some OS or platform, e.g., >=4GB on Windohs platforms, 
-// then you'll have to parameterize this method based on that state, 
-// as was done for logical processors here, or replicate and 
-// specialize this method for each platform.  (Or fix os to have 
+// If you want to change the definition of a server class machine
+// on some OS or platform, e.g., >=4GB on Windohs platforms,
+// then you'll have to parameterize this method based on that state,
+// as was done for logical processors here, or replicate and
+// specialize this method for each platform.  (Or fix os to have
 // some inheritance structure and use subclassing.  Sigh.)
-// If you want some platform to always or never behave as a server 
-// class machine, change the setting of AlwaysActAsServerClassMachine 
+// If you want some platform to always or never behave as a server
+// class machine, change the setting of AlwaysActAsServerClassMachine
 // and NeverActAsServerClassMachine in globals*.hpp.
 bool os::is_server_class_machine() {
   // First check for the early returns
@@ -1088,12 +1075,12 @@ bool os::is_server_class_machine() {
   const unsigned int    server_processors = 2;
   const julong server_memory     = 2UL * G;
   // We seem not to get our full complement of memory.
-  //     We allow some part (1/8?) of the memory to be "missing", 
+  //     We allow some part (1/8?) of the memory to be "missing",
   //     based on the sizes of DIMMs, and maybe graphics cards.
   const julong missing_memory   = 256UL * M;
 
   /* Is this a server class machine? */
-  if ((os::active_processor_count() >= (int)server_processors) && 
+  if ((os::active_processor_count() >= (int)server_processors) &&
       (os::physical_memory() >= (server_memory - missing_memory))) {
     const unsigned int logical_processors =
       VM_Version::logical_processors_per_package();

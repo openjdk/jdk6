@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)task.hpp	1.23 07/05/05 17:06:59 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // A PeriodicTask has the sole purpose of executing its task
@@ -40,8 +37,8 @@ class PeriodicTask: public CHeapObj {
   // is appropriate;  it must be between min_interval and max_interval,
   // and have a granularity of interval_gran (all in millis).
   enum { max_tasks     = 10,       // Max number of periodic tasks in system
-         interval_gran = 10,       
-         min_interval  = 10, 
+         interval_gran = 10,
+         min_interval  = 10,
          max_interval  = 10000 };
 
   static int num_tasks()   { return _num_tasks; }
@@ -115,14 +112,4 @@ class PeriodicTask: public CHeapObj {
 
   // The task to perform at each period
   virtual void task() = 0;
-};
-
-class TimeMillisUpdateTask : public PeriodicTask {
- private:
-  static TimeMillisUpdateTask* _task;
- public:
-  TimeMillisUpdateTask(int interval) : PeriodicTask(interval) {}
-  void task();
-  static void engage();
-  static void disengage();
 };

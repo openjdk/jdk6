@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)c2_globals.hpp	1.96 07/10/23 13:12:52 JVM"
-#endif
 /*
- * Copyright 2000-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 //
@@ -145,8 +142,8 @@
           "of rounds of unroll,optimize,..")                                \
                                                                             \
   develop(intx, UnrollLimitForProfileCheck, 1,                              \
-	  "Don't use profile_trip_cnt() to restrict unrolling until "       \
-	  "unrolling would push the number of unrolled iterations above "   \
+          "Don't use profile_trip_cnt() to restrict unrolling until "       \
+          "unrolling would push the number of unrolled iterations above "   \
           "UnrollLimitForProfileCheck. A higher value allows more "         \
           "unrolling. Zero acts as a very large value." )                   \
                                                                             \
@@ -259,10 +256,10 @@
   develop(intx, PrintIdealGraphPort, 4444,                                  \
           "Ideal graph printer to network port")                            \
                                                                             \
-  develop(ccstr, PrintIdealGraphAddress, "127.0.0.1",                       \
+  notproduct(ccstr, PrintIdealGraphAddress, "127.0.0.1",                    \
           "IP address to connect to visualizer")                            \
                                                                             \
-  develop(ccstr, PrintIdealGraphFile, NULL,                                 \
+  notproduct(ccstr, PrintIdealGraphFile, NULL,                              \
           "File to dump ideal graph to.  If set overrides the "             \
           "use of the network")                                             \
                                                                             \
@@ -385,8 +382,32 @@
   product(bool, EliminateAllocations, true,                                 \
           "Use escape analysis to eliminate allocations")                   \
                                                                             \
-  product(intx, MaxLabelRootDepth, 1100, 				    \
+  notproduct(bool, PrintEliminateAllocations, false,                        \
+          "Print out when allocations are eliminated")                      \
+                                                                            \
+  product(intx, EliminateAllocationArraySizeLimit, 64,                      \
+          "Array size (number of elements) limit for scalar replacement")   \
+                                                                            \
+  product(bool, UseOptoBiasInlining, true,                                 \
+          "Generate biased locking code in C2 ideal graph")                 \
+                                                                            \
+  product(intx, ValueSearchLimit, 1000,                                     \
+          "Recursion limit in PhaseMacroExpand::value_from_mem_phi")        \
+                                                                            \
+  product(intx, MaxLabelRootDepth, 1100,                                    \
           "Maximum times call Label_Root to prevent stack overflow")        \
+                                                                            \
+  diagnostic(intx, DominatorSearchLimit, 1000,                              \
+          "Iterations limit in Node::dominates")                            \
+                                                                            \
+  product(bool, BlockLayoutByFrequency, true,                               \
+          "Use edge frequencies to drive block ordering")                   \
+                                                                            \
+  product(intx, BlockLayoutMinDiamondPercentage, 20,                        \
+          "Miniumum %% of a successor (predecessor) for which block layout "\
+          "a will allow a fork (join) in a single chain")                   \
+                                                                            \
+  product(bool, BlockLayoutRotateLoops, false,                              \
+          "Allow back branches to be fall throughs in the block layour")    \
 
 C2_FLAGS(DECLARE_DEVELOPER_FLAG, DECLARE_PD_DEVELOPER_FLAG, DECLARE_PRODUCT_FLAG, DECLARE_PD_PRODUCT_FLAG, DECLARE_DIAGNOSTIC_FLAG, DECLARE_NOTPRODUCT_FLAG)
-

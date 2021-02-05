@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.oops;
@@ -97,7 +97,7 @@ public class ObjectHistogramElement {
             buf.append(bottom.getName().asString().replace('/', '.'));
           } else {
             throw new RuntimeException("should not reach here");
-          } 
+          }
           for (int i=0; i < dim; i++) {
             buf.append("[]");
           }
@@ -110,12 +110,12 @@ public class ObjectHistogramElement {
   public static void titleOn(PrintStream tty) {
     tty.println("Object Histogram:");
     tty.println();
-    tty.println("Size" + "\t" + "Count" + "\t" + "Class description");
-    tty.println("-------------------------------------------------------");
+    tty.println("num " + "\t" + "  #instances" + "\t" + "#bytes" + "\t" + "Class description");
+    tty.println("--------------------------------------------------------------------------");
   }
 
   public void printOn(PrintStream tty) {
-    tty.print(size + "\t" + count + "\t");
+    tty.print(count + "\t" + size + "\t");
     tty.print(getDescription());
     tty.println();
   }

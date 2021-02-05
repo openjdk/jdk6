@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)dependencies.cpp	1.18 08/02/29 12:46:18 JVM"
-#endif
 /*
- * Copyright 2005-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -110,7 +107,7 @@ void Dependencies::assert_has_no_finalizable_subclasses(ciKlass* ctxk) {
 
 // Helper function.  If we are adding a new dep. under ctxk2,
 // try to find an old dep. under a broader* ctxk1.  If there is
-// 
+//
 bool Dependencies::maybe_merge_ctxk(GrowableArray<ciObject*>* deps,
                                     int ctxk_i, ciKlass* ctxk2) {
   ciKlass* ctxk1 = deps->at(ctxk_i)->as_klass();
@@ -283,7 +280,7 @@ void Dependencies::encode_content_bytes() {
 
   // cast is safe, no deps can overflow INT_MAX
   CompressedWriteStream bytes((int)estimate_size_in_bytes());
-  
+
   for (int deptv = (int)FIRST_TYPE; deptv < (int)TYPE_LIMIT; deptv++) {
     DepType dept = (DepType)deptv;
     GrowableArray<ciObject*>* deps = _deps[dept];
@@ -538,7 +535,7 @@ void Dependencies::DepStream::print_dependency(klassOop witness, bool verbose) {
     }
   }
 }
-  
+
 
 /// Dependency stream support (decodes dependencies from an nmethod):
 
@@ -1433,7 +1430,7 @@ klassOop Dependencies::DepStream::check_dependency_impl(DepChange* changes) {
     witness = check_has_no_finalizable_subclasses(context_type(),
                                                   changes);
     break;
-	  default:
+          default:
     witness = NULL;
     ShouldNotReachHere();
     break;
@@ -1502,9 +1499,12 @@ bool DepChange::ContextStream::next() {
     // fall through:
     _change_type = Change_new_sub;
   case Change_new_sub:
-    _klass = instanceKlass::cast(_klass)->super();
-    if (_klass != NULL) {
-      return true;
+    // 6598190: brackets workaround Sun Studio C++ compiler bug 6629277
+    {
+      _klass = instanceKlass::cast(_klass)->super();
+      if (_klass != NULL) {
+        return true;
+      }
     }
     // else set up _ti_limit and fall through:
     _ti_limit = (_ti_base == NULL) ? 0 : _ti_base->length();

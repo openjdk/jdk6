@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)c1_MacroAssembler_sparc.cpp	1.65 07/06/18 14:25:23 JVM"
-#endif
 /*
- * Copyright 1999-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -134,7 +131,7 @@ void C1_MacroAssembler::unlock_object(Register Rmark, Register Roop, Register Rb
   assert_different_registers(Rmark, Roop, Rbox);
 
   Label done;
-                         
+
   Address mark_addr(Roop, 0, oopDesc::mark_offset_in_bytes());
   assert(mark_addr.disp() == 0, "cas must take a zero displacement");
 
@@ -153,7 +150,7 @@ void C1_MacroAssembler::unlock_object(Register Rmark, Register Roop, Register Rb
     ld_ptr(Rbox, BasicObjectLock::obj_offset_in_bytes(), Roop);
     verify_oop(Roop);
   }
-                         
+
   // Check if it is still a light weight lock, this is is true if we see
   // the stack address of the basicLock in the markOop of the object
   casx_under_lock(mark_addr.base(), Rbox, Rmark, (address)StubRoutines::Sparc::atomic_memory_operation_lock_addr());
@@ -239,7 +236,7 @@ void C1_MacroAssembler::initialize_object(
   Register t1,                         // temp register
   Register t2                          // temp register
   ) {
-  const int hdr_size_in_bytes = oopDesc::header_size_in_bytes();
+  const int hdr_size_in_bytes = instanceOopDesc::base_offset_in_bytes();
 
   initialize_header(obj, klass, noreg, t1, t2);
 

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)psScavenge.hpp	1.46 07/05/05 17:05:30 JVM"
-#endif
 /*
- * Copyright 2002-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2002-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class GCTaskManager;
@@ -50,7 +47,7 @@ class PSScavenge: AllStatic {
   static HeapWord* _to_space_top_before_gc;
 
   // Number of consecutive attempts to scavenge that were skipped
-  static int		    _consecutive_skipped_scavenges;
+  static int                _consecutive_skipped_scavenges;
 
 
  protected:
@@ -62,7 +59,7 @@ class PSScavenge: AllStatic {
   static int                 _tenuring_threshold;   // tenuring threshold for next scavenge
   static elapsedTimer        _accumulated_time;     // total time spent on scavenge
   static HeapWord*           _young_generation_boundary; // The lowest address possible for the young_gen.
-                                                         // This is used to decide if an oop should be scavenged, 
+                                                         // This is used to decide if an oop should be scavenged,
                                                          // cards should be marked, etc.
   static GrowableArray<markOop>* _preserved_mark_stack; // List of marks to be restored after failed promotion
   static GrowableArray<oop>*     _preserved_oop_stack;  // List of oops that need their mark restored.
@@ -84,7 +81,7 @@ class PSScavenge: AllStatic {
   static elapsedTimer*    accumulated_time()    { return &_accumulated_time; }
   static bool             promotion_failed()
     { return _preserved_mark_stack != NULL; }
-  static int		  consecutive_skipped_scavenges() 
+  static int              consecutive_skipped_scavenges()
     { return _consecutive_skipped_scavenges; }
 
   // Performance Counters
@@ -92,14 +89,14 @@ class PSScavenge: AllStatic {
 
   // Used by scavenge_contents && psMarkSweep
   static ReferenceProcessor* const reference_processor() {
-    assert(_ref_processor != NULL, "Sanity"); 
+    assert(_ref_processor != NULL, "Sanity");
     return _ref_processor;
   }
   // Used to add tasks
   static GCTaskManager* const gc_task_manager();
   // The promotion managers tell us if they encountered overflow
   static void set_survivor_overflow(bool state) {
-    _survivor_overflow = state; 
+    _survivor_overflow = state;
   }
   // Adaptive size policy support.  When the young generation/old generation
   // boundary moves, _young_generation_boundary must be reset
@@ -119,19 +116,19 @@ class PSScavenge: AllStatic {
   // If an attempt to promote fails, this method is invoked
   static void oop_promotion_failed(oop obj, markOop obj_mark);
 
-  static inline bool should_scavenge(oop p);
+  template <class T> static inline bool should_scavenge(T* p);
 
   // These call should_scavenge() above and, if it returns true, also check that
   // the object was not newly copied into to_space.  The version with the bool
   // argument is a convenience wrapper that fetches the to_space pointer from
   // the heap and calls the other version (if the arg is true).
-  static inline bool should_scavenge(oop p, MutableSpace* to_space);
-  static inline bool should_scavenge(oop p, bool check_to_space);
+  template <class T> static inline bool should_scavenge(T* p, MutableSpace* to_space);
+  template <class T> static inline bool should_scavenge(T* p, bool check_to_space);
 
-  inline static void copy_and_push_safe_barrier(PSPromotionManager* pm, oop* p);
+  template <class T> inline static void copy_and_push_safe_barrier(PSPromotionManager* pm, T* p);
 
   // Is an object in the young generation
-  // This assumes that the HeapWord argument is in the heap, 
+  // This assumes that the HeapWord argument is in the heap,
   // so it only checks one side of the complete predicate.
   inline static bool is_obj_in_young(HeapWord* o) {
     const bool result = (o >= _young_generation_boundary);

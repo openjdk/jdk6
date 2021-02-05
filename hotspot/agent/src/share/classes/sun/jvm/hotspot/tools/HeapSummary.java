@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.tools;
@@ -76,7 +76,7 @@ public class HeapSummary extends Tool {
             Generation gen = genHeap.getGen(n);
             if (gen instanceof sun.jvm.hotspot.memory.DefNewGeneration) {
                System.out.println("New Generation (Eden + 1 Survivor Space):");
-	       printGen(gen);
+               printGen(gen);
 
                ContiguousSpace eden = ((DefNewGeneration)gen).eden();
                System.out.println("Eden Space:");
@@ -110,7 +110,7 @@ public class HeapSummary extends Tool {
          printValMB("used     = ", oldGen.used());
          printValMB("free     = ", oldFree);
          System.out.println(alignment + (double)oldGen.used() * 100.0 / oldGen.capacity() + "% used");
- 
+
          PSPermGen permGen = psh.permGen();
          long permFree = permGen.capacity() - permGen.used();
          System.out.println("PS Perm Generation");
@@ -136,7 +136,7 @@ public class HeapSummary extends Tool {
        if (l == 1L) {
           System.out.println("using thread-local object allocation.");
        }
- 
+
        l = getFlagValue("UseConcMarkSweepGC", flagMap);
        if (l == 1L) {
           System.out.println("Concurrent Mark-Sweep GC");
@@ -174,7 +174,7 @@ public class HeapSummary extends Tool {
       printValMB("free     = ", free);
       System.out.println(alignment + (double)space.used() * 100.0 / space.capacity() + "% used");
    }
- 
+
    private static String alignment = "   ";
 
    private void printGen(Generation gen) {
@@ -193,8 +193,12 @@ public class HeapSummary extends Tool {
 
    private static final double FACTOR = 1024*1024;
    private void printValMB(String title, long value) {
-      double mb = value / FACTOR;
-      System.out.println(alignment + title + value + " (" + mb + "MB)");
+      if (value < 0) {
+        System.out.println(alignment + title +   (value >>> 20)  + " MB");
+      } else {
+        double mb = value/FACTOR;
+        System.out.println(alignment + title + value + " (" + mb + "MB)");
+      }
    }
 
    private void printValue(String title, long value) {

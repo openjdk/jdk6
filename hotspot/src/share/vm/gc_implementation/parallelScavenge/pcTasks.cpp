@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)pcTasks.cpp	1.22 07/06/22 16:49:49 JVM"
-#endif
 /*
- * Copyright 2005-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2005-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -37,9 +34,9 @@ void ThreadRootsMarkingTask::do_it(GCTaskManager* manager, uint which) {
 
   ResourceMark rm;
 
-  NOT_PRODUCT(TraceTime tm("ThreadRootsMarkingTask", 
+  NOT_PRODUCT(TraceTime tm("ThreadRootsMarkingTask",
     PrintGCDetails && TraceParallelOldGCTasks, true, gclog_or_tty));
-  ParCompactionManager* cm = 
+  ParCompactionManager* cm =
     ParCompactionManager::gc_thread_compaction_manager(which);
   PSParallelCompact::MarkAndPushClosure mark_and_push_closure(cm);
 
@@ -57,15 +54,15 @@ void ThreadRootsMarkingTask::do_it(GCTaskManager* manager, uint which) {
 void MarkFromRootsTask::do_it(GCTaskManager* manager, uint which) {
   assert(Universe::heap()->is_gc_active(), "called outside gc");
 
-  NOT_PRODUCT(TraceTime tm("MarkFromRootsTask", 
+  NOT_PRODUCT(TraceTime tm("MarkFromRootsTask",
     PrintGCDetails && TraceParallelOldGCTasks, true, gclog_or_tty));
-  ParCompactionManager* cm = 
+  ParCompactionManager* cm =
     ParCompactionManager::gc_thread_compaction_manager(which);
   // cm->allocate_stacks();
-  assert(cm->stacks_have_been_allocated(), 
+  assert(cm->stacks_have_been_allocated(),
     "Stack space has not been allocated");
   PSParallelCompact::MarkAndPushClosure mark_and_push_closure(cm);
-  
+
   switch (_root_type) {
     case universe:
       Universe::oops_do(&mark_and_push_closure);
@@ -128,16 +125,16 @@ void RefProcTaskProxy::do_it(GCTaskManager* manager, uint which)
 {
   assert(Universe::heap()->is_gc_active(), "called outside gc");
 
-  NOT_PRODUCT(TraceTime tm("RefProcTask", 
+  NOT_PRODUCT(TraceTime tm("RefProcTask",
     PrintGCDetails && TraceParallelOldGCTasks, true, gclog_or_tty));
-  ParCompactionManager* cm = 
+  ParCompactionManager* cm =
     ParCompactionManager::gc_thread_compaction_manager(which);
   // cm->allocate_stacks();
-  assert(cm->stacks_have_been_allocated(), 
+  assert(cm->stacks_have_been_allocated(),
     "Stack space has not been allocated");
   PSParallelCompact::MarkAndPushClosure mark_and_push_closure(cm);
   PSParallelCompact::FollowStackClosure follow_stack_closure(cm);
-  _rp_task.work(_work_id, *PSParallelCompact::is_alive_closure(), 
+  _rp_task.work(_work_id, *PSParallelCompact::is_alive_closure(),
                 mark_and_push_closure, follow_stack_closure);
 }
 
@@ -149,7 +146,7 @@ void RefProcTaskExecutor::execute(ProcessTask& task)
 {
   ParallelScavengeHeap* heap = PSParallelCompact::gc_heap();
   uint parallel_gc_threads = heap->gc_task_manager()->workers();
-  TaskQueueSetSuper* qset = ParCompactionManager::chunk_array();
+  RegionTaskQueueSet* qset = ParCompactionManager::region_array();
   ParallelTaskTerminator terminator(parallel_gc_threads, qset);
   GCTaskQueue* q = GCTaskQueue::create();
   for(uint i=0; i<parallel_gc_threads; i++) {
@@ -186,10 +183,10 @@ StealMarkingTask::StealMarkingTask(ParallelTaskTerminator* t) :
 void StealMarkingTask::do_it(GCTaskManager* manager, uint which) {
   assert(Universe::heap()->is_gc_active(), "called outside gc");
 
-  NOT_PRODUCT(TraceTime tm("StealMarkingTask", 
+  NOT_PRODUCT(TraceTime tm("StealMarkingTask",
     PrintGCDetails && TraceParallelOldGCTasks, true, gclog_or_tty));
 
-  ParCompactionManager* cm = 
+  ParCompactionManager* cm =
     ParCompactionManager::gc_thread_compaction_manager(which);
   PSParallelCompact::MarkAndPushClosure mark_and_push_closure(cm);
 
@@ -208,41 +205,41 @@ void StealMarkingTask::do_it(GCTaskManager* manager, uint which) {
 }
 
 //
-// StealChunkCompactionTask
+// StealRegionCompactionTask
 //
 
 
-StealChunkCompactionTask::StealChunkCompactionTask(ParallelTaskTerminator* t) :
-  _terminator(t) {};
+StealRegionCompactionTask::StealRegionCompactionTask(ParallelTaskTerminator* t):
+  _terminator(t) {}
 
-void StealChunkCompactionTask::do_it(GCTaskManager* manager, uint which) {
+void StealRegionCompactionTask::do_it(GCTaskManager* manager, uint which) {
   assert(Universe::heap()->is_gc_active(), "called outside gc");
 
-  NOT_PRODUCT(TraceTime tm("StealChunkCompactionTask", 
+  NOT_PRODUCT(TraceTime tm("StealRegionCompactionTask",
     PrintGCDetails && TraceParallelOldGCTasks, true, gclog_or_tty));
 
-  ParCompactionManager* cm = 
+  ParCompactionManager* cm =
     ParCompactionManager::gc_thread_compaction_manager(which);
 
-  // Has to drain stacks first because there may be chunks on
+  // Has to drain stacks first because there may be regions on
   // preloaded onto the stack and this thread may never have
   // done a draining task.  Are the draining tasks needed?
 
-  cm->drain_chunk_stacks();
+  cm->drain_region_stacks();
 
-  size_t chunk_index = 0;
+  size_t region_index = 0;
   int random_seed = 17;
 
   // If we're the termination task, try 10 rounds of stealing before
   // setting the termination flag
 
   while(true) {
-    if (ParCompactionManager::steal(which, &random_seed, chunk_index)) {
-      PSParallelCompact::fill_and_update_chunk(cm, chunk_index);
-      cm->drain_chunk_stacks();
+    if (ParCompactionManager::steal(which, &random_seed, region_index)) {
+      PSParallelCompact::fill_and_update_region(cm, region_index);
+      cm->drain_region_stacks();
     } else {
       if (terminator()->offer_termination()) {
-	break;
+        break;
       }
       // Go around again.
     }
@@ -251,37 +248,35 @@ void StealChunkCompactionTask::do_it(GCTaskManager* manager, uint which) {
 }
 
 UpdateDensePrefixTask::UpdateDensePrefixTask(
-				   PSParallelCompact::SpaceId space_id,
-                                   size_t chunk_index_start,
-                                   size_t chunk_index_end) :
-  _space_id(space_id), _chunk_index_start(chunk_index_start),
-  _chunk_index_end(chunk_index_end)
-{}
+                                   PSParallelCompact::SpaceId space_id,
+                                   size_t region_index_start,
+                                   size_t region_index_end) :
+  _space_id(space_id), _region_index_start(region_index_start),
+  _region_index_end(region_index_end) {}
 
 void UpdateDensePrefixTask::do_it(GCTaskManager* manager, uint which) {
 
-  NOT_PRODUCT(TraceTime tm("UpdateDensePrefixTask", 
-    PrintGCDetails && TraceParallelOldGCTasks, true, gclog_or_tty));
-
-  ParCompactionManager* cm = 
-    ParCompactionManager::gc_thread_compaction_manager(which);
-
-  PSParallelCompact::update_and_deadwood_in_dense_prefix(cm,
-                                                         _space_id,
-                                                         _chunk_index_start,
-                                                         _chunk_index_end);
-}
-
-void DrainStacksCompactionTask::do_it(GCTaskManager* manager, uint which) {
-  assert(Universe::heap()->is_gc_active(), "called outside gc");
-
-  NOT_PRODUCT(TraceTime tm("DrainStacksCompactionTask", 
+  NOT_PRODUCT(TraceTime tm("UpdateDensePrefixTask",
     PrintGCDetails && TraceParallelOldGCTasks, true, gclog_or_tty));
 
   ParCompactionManager* cm =
     ParCompactionManager::gc_thread_compaction_manager(which);
 
-  // Process any chunks already in the compaction managers stacks.
-  cm->drain_chunk_stacks();
+  PSParallelCompact::update_and_deadwood_in_dense_prefix(cm,
+                                                         _space_id,
+                                                         _region_index_start,
+                                                         _region_index_end);
 }
 
+void DrainStacksCompactionTask::do_it(GCTaskManager* manager, uint which) {
+  assert(Universe::heap()->is_gc_active(), "called outside gc");
+
+  NOT_PRODUCT(TraceTime tm("DrainStacksCompactionTask",
+    PrintGCDetails && TraceParallelOldGCTasks, true, gclog_or_tty));
+
+  ParCompactionManager* cm =
+    ParCompactionManager::gc_thread_compaction_manager(which);
+
+  // Process any regions already in the compaction managers stacks.
+  cm->drain_region_stacks();
+}

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)javaCalls.cpp	1.220 07/05/05 17:06:51 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -36,24 +33,19 @@ JavaCallWrapper::JavaCallWrapper(methodHandle callee_method, Handle receiver, Ja
   bool clear_pending_exception = true;
 
   guarantee(thread->is_Java_thread(), "crucial check - the VM thread cannot and must not escape to Java code");
-  assert(!thread->owns_locks(), "must release all locks when leaving VM"); 
+  assert(!thread->owns_locks(), "must release all locks when leaving VM");
   guarantee(!thread->is_Compiler_thread(), "cannot make java calls from the compiler");
   _result   = result;
 
-  // Make sure that that the value of the  higest_lock is at least the same as the current stackpointer,
-  // since, the Java code is highly likely to use locks.
-  // Use '(address)this' to guarantee that highest_lock address is conservative and inside our thread
-  thread->update_highest_lock((address)this);
-
   // Allocate handle block for Java code. This must be done before we change thread_state to _thread_in_Java_or_stub,
-  // since it can potentially block. 
+  // since it can potentially block.
   JNIHandleBlock* new_handles = JNIHandleBlock::allocate_block(thread);
 
   // After this, we are official in JavaCode. This needs to be done before we change any of the thread local
   // info, since we cannot find oops before the new information is set up completely.
   ThreadStateTransition::transition(thread, _thread_in_vm, _thread_in_Java);
-  
-  // Make sure that we handle asynchronous stops and suspends _before_ we clear all thread state 
+
+  // Make sure that we handle asynchronous stops and suspends _before_ we clear all thread state
   // in JavaCallWrapper::JavaCallWrapper(). This way, we can decide if we need to do any pd actions
   // to prepare for stop/suspend (flush register windows on sparcs, cache sp, or other state).
   if (thread->has_special_runtime_exit_condition()) {
@@ -74,9 +66,9 @@ JavaCallWrapper::JavaCallWrapper(methodHandle callee_method, Handle receiver, Ja
   THREAD->allow_unhandled_oop(&_receiver);
 #endif // CHECK_UNHANDLED_OOPS
 
-  _thread       = (JavaThread *)thread;  
+  _thread       = (JavaThread *)thread;
   _handles      = _thread->active_handles();    // save previous handle block & Java frame linkage
-  
+
   // For the profiler, the last_Java_frame information in thread must always be in
   // legal state. We have no last Java frame if last_Java_sp == NULL so
   // the valid transition is to clear _last_Java_sp and then reset the rest of
@@ -92,7 +84,7 @@ JavaCallWrapper::JavaCallWrapper(methodHandle callee_method, Handle receiver, Ja
 
   // clear any pending exception in thread (native calls start with no exception pending)
   if(clear_pending_exception) {
-    _thread->clear_pending_exception();             
+    _thread->clear_pending_exception();
   }
 
   if (_anchor.last_Java_sp() == NULL) {
@@ -105,12 +97,12 @@ JavaCallWrapper::~JavaCallWrapper() {
   assert(_thread == JavaThread::current(), "must still be the same thread");
 
   // restore previous handle block & Java frame linkage
-  JNIHandleBlock *_old_handles = _thread->active_handles();   
+  JNIHandleBlock *_old_handles = _thread->active_handles();
   _thread->set_active_handles(_handles);
 
   _thread->frame_anchor()->zap();
 
-  debug_only(_thread->dec_java_call_counter());  
+  debug_only(_thread->dec_java_call_counter());
 
   if (_anchor.last_Java_sp() == NULL) {
     _thread->set_base_of_stack_pointer(NULL);
@@ -137,7 +129,7 @@ JavaCallWrapper::~JavaCallWrapper() {
 void JavaCallWrapper::oops_do(OopClosure* f) {
   f->do_oop((oop*)&_callee_method);
   f->do_oop((oop*)&_receiver);
-  handles()->oops_do(f);  
+  handles()->oops_do(f);
 }
 
 
@@ -177,14 +169,14 @@ void JavaCalls::call_default_constructor(JavaThread* thread, methodHandle method
     // safe to skip constructor call
   } else {
     static JavaValue result(T_VOID);
-    JavaCallArguments args(receiver);  
+    JavaCallArguments args(receiver);
     call(&result, method, &args, CHECK);
   }
 }
 
 // ============ Virtual calls ============
 
-void JavaCalls::call_virtual(JavaValue* result, KlassHandle spec_klass, symbolHandle name, symbolHandle signature, JavaCallArguments* args, TRAPS) {  
+void JavaCalls::call_virtual(JavaValue* result, KlassHandle spec_klass, symbolHandle name, symbolHandle signature, JavaCallArguments* args, TRAPS) {
   CallInfo callinfo;
   Handle receiver = args->receiver();
   KlassHandle recvrKlass(THREAD, receiver.is_null() ? (klassOop)NULL : receiver->klass());
@@ -192,7 +184,7 @@ void JavaCalls::call_virtual(JavaValue* result, KlassHandle spec_klass, symbolHa
           callinfo, receiver, recvrKlass, spec_klass, name, signature,
           KlassHandle(), false, true, CHECK);
   methodHandle method = callinfo.selected_method();
-  assert(method.not_null(), "should have thrown exception"); 
+  assert(method.not_null(), "should have thrown exception");
 
   // Invoke the method
   JavaCalls::call(result, method, args, CHECK);
@@ -228,7 +220,7 @@ void JavaCalls::call_special(JavaValue* result, KlassHandle klass, symbolHandle 
   LinkResolver::resolve_special_call(callinfo, klass, name, signature, KlassHandle(), false, CHECK);
   methodHandle method = callinfo.selected_method();
   assert(method.not_null(), "should have thrown exception");
-    
+
   // Invoke the method
   JavaCalls::call(result, method, args, CHECK);
 }
@@ -242,7 +234,7 @@ void JavaCalls::call_special(JavaValue* result, Handle receiver, KlassHandle kla
 
 void JavaCalls::call_special(JavaValue* result, Handle receiver, KlassHandle klass, symbolHandle name, symbolHandle signature, Handle arg1, TRAPS) {
   JavaCallArguments args(receiver); // One oop argument
-  args.push_oop(arg1);  
+  args.push_oop(arg1);
   call_special(result, klass, name, signature, &args, CHECK);
 }
 
@@ -262,7 +254,7 @@ void JavaCalls::call_static(JavaValue* result, KlassHandle klass, symbolHandle n
   LinkResolver::resolve_static_call(callinfo, klass, name, signature, KlassHandle(), false, true, CHECK);
   methodHandle method = callinfo.selected_method();
   assert(method.not_null(), "should have thrown exception");
-    
+
   // Invoke the method
   JavaCalls::call(result, method, args, CHECK);
 }
@@ -295,7 +287,7 @@ void JavaCalls::call_static(JavaValue* result, KlassHandle klass, symbolHandle n
 void JavaCalls::call(JavaValue* result, methodHandle method, JavaCallArguments* args, TRAPS) {
   // Check if we need to wrap a potential OS exception handler around thread
   // This is used for e.g. Win32 structured exception handlers
-  assert(THREAD->is_Java_thread(), "only JavaThreads can make JavaCalls");  
+  assert(THREAD->is_Java_thread(), "only JavaThreads can make JavaCalls");
   // Need to wrap each and everytime, since there might be native code down the
   // stack that has installed its own exception handlers
   os::os_exception_wrapper(call_helper, result, &method, args, THREAD);
@@ -304,30 +296,34 @@ void JavaCalls::call(JavaValue* result, methodHandle method, JavaCallArguments* 
 void JavaCalls::call_helper(JavaValue* result, methodHandle* m, JavaCallArguments* args, TRAPS) {
   methodHandle method = *m;
   JavaThread* thread = (JavaThread*)THREAD;
-  assert(thread->is_Java_thread(), "must be called by a java thread"); 
-  assert(method.not_null(), "must have a method to call");  
+  assert(thread->is_Java_thread(), "must be called by a java thread");
+  assert(method.not_null(), "must have a method to call");
   assert(!SafepointSynchronize::is_at_safepoint(), "call to Java code during VM operation");
   assert(!thread->handle_area()->no_handle_mark_active(), "cannot call out to Java here");
-  
+
 
   CHECK_UNHANDLED_OOPS_ONLY(thread->clear_unhandled_oops();)
 
-  // Make sure that the arguments have the right type
-  debug_only(args->verify(method, result->get_type(), thread));
+  // Verify the arguments
+
+  if (CheckJNICalls)  {
+    args->verify(method, result->get_type(), thread);
+  }
+  else debug_only(args->verify(method, result->get_type(), thread));
 
   // Ignore call if method is empty
   if (method->is_empty_method()) {
     assert(result->get_type() == T_VOID, "an empty method must return a void value");
     return;
   }
-    
+
 
 #ifdef ASSERT
-  { klassOop holder = method->method_holder();    
+  { klassOop holder = method->method_holder();
     // A klass might not be initialized since JavaCall's might be used during the executing of
     // the <clinit>. For example, a Thread.start might start executing on an object that is
     // not fully initialized! (bad Java programming style)
-    assert(instanceKlass::cast(holder)->is_linked(), "rewritting must have taken place");                  
+    assert(instanceKlass::cast(holder)->is_linked(), "rewritting must have taken place");
   }
 #endif
 
@@ -336,20 +332,20 @@ void JavaCalls::call_helper(JavaValue* result, methodHandle* m, JavaCallArgument
   if (CompilationPolicy::mustBeCompiled(method)) {
     CompileBroker::compile_method(method, InvocationEntryBci,
                                   methodHandle(), 0, "mustBeCompiled", CHECK);
-  }  
-  
+  }
+
   // Since the call stub sets up like the interpreter we call the from_interpreted_entry
   // so we can go compiled via a i2c. Otherwise initial entry method will always
   // run interpreted.
-  address entry_point = method->from_interpreted_entry();      
+  address entry_point = method->from_interpreted_entry();
   if (JvmtiExport::can_post_interpreter_events() && thread->is_interp_only_mode()) {
-    entry_point = method->interpreter_entry();      
+    entry_point = method->interpreter_entry();
   }
 
   // Figure out if the result value is an oop or not (Note: This is a different value
-  // than result_type. result_type will be T_INT of oops. (it is about size)    
-  BasicType result_type = runtime_type_from(result);  
-  bool oop_result_flag = (result->get_type() == T_OBJECT || result->get_type() == T_ARRAY);  
+  // than result_type. result_type will be T_INT of oops. (it is about size)
+  BasicType result_type = runtime_type_from(result);
+  bool oop_result_flag = (result->get_type() == T_OBJECT || result->get_type() == T_ARRAY);
 
   // NOTE: if we move the computation of the result_val_address inside
   // the call to call_stub, the optimizer produces wrong code.
@@ -376,11 +372,11 @@ void JavaCalls::call_helper(JavaValue* result, methodHandle* m, JavaCallArgument
   }
 
   // do call
-  { JavaCallWrapper link(method, receiver, result, CHECK);  
+  { JavaCallWrapper link(method, receiver, result, CHECK);
     { HandleMark hm(thread);  // HandleMark used by HandleMarkCleaner
 
       StubRoutines::call_stub()(
-        (address)&link,        
+        (address)&link,
         // (intptr_t*)&(result->_value), // see NOTE above (compiler problem)
         result_val_address,          // see NOTE above (compiler problem)
         result_type,
@@ -389,8 +385,8 @@ void JavaCalls::call_helper(JavaValue* result, methodHandle* m, JavaCallArgument
         args->parameters(),
         args->size_of_parameters(),
         CHECK
-      );    
-  
+      );
+
       result = link.result();  // circumvent MS C++ 5.0 compiler bug (result is clobbered across call)
       // Preserve oop return value across possible gc points
       if (oop_result_flag) {
@@ -403,7 +399,7 @@ void JavaCalls::call_helper(JavaValue* result, methodHandle* m, JavaCallArgument
   // The following assert was not realistic.  Thread.stop can set that bit at any moment.
   //assert(!thread->has_special_runtime_exit_condition(), "no async. exceptions should be installed");
 
-  // Restore possible oop return 
+  // Restore possible oop return
   if (oop_result_flag) {
     result->set_jobject((jobject)thread->vm_result());
     thread->set_vm_result(NULL);
@@ -434,36 +430,38 @@ intptr_t* JavaCallArguments::parameters() {
   return TaggedStackInterpreter ? _parameters : _value;
 }
 
-//--------------------------------------------------------------------------------------
-// Non-Product code
-#ifndef PRODUCT
 
 class SignatureChekker : public SignatureIterator {
  private:
    bool *_is_oop;
    int   _pos;
    BasicType _return_type;
+   intptr_t*   _value;
+   Thread* _thread;
 
  public:
   bool _is_return;
 
-  SignatureChekker(symbolHandle signature, BasicType return_type, bool is_static, bool* is_oop) : SignatureIterator(signature) {
+  SignatureChekker(symbolHandle signature, BasicType return_type, bool is_static, bool* is_oop, intptr_t* value, Thread* thread) : SignatureIterator(signature) {
     _is_oop = is_oop;
     _is_return = false;
     _return_type = return_type;
-    _pos = 0;    
-    if (!is_static) {      
+    _pos = 0;
+    _value = value;
+    _thread = thread;
+
+    if (!is_static) {
       check_value(true); // Receiver must be an oop
     }
   }
 
-  void check_value(bool type) {    
+  void check_value(bool type) {
     guarantee(_is_oop[_pos++] == type, "signature does not match pushed arguments");
   }
 
   void check_doing_return(bool state) { _is_return = state; }
 
-  void check_return_type(BasicType t) {    
+  void check_return_type(BasicType t) {
     guarantee(_is_return && t == _return_type, "return type does not match");
   }
 
@@ -471,7 +469,7 @@ class SignatureChekker : public SignatureIterator {
     if (_is_return) {
       check_return_type(t);
       return;
-    }      
+    }
     check_value(false);
   }
 
@@ -482,8 +480,8 @@ class SignatureChekker : public SignatureIterator {
       check_return_type(t);
       return;
     }
-    
-    check_value(false); 
+
+    check_value(false);
     check_value(false);
   }
 
@@ -491,7 +489,25 @@ class SignatureChekker : public SignatureIterator {
     if (_is_return) {
       check_return_type(t);
       return;
-    }    
+    }
+
+    // verify handle and the oop pointed to by handle
+    int p = _pos;
+    bool bad = false;
+    // If argument is oop
+    if (_is_oop[p]) {
+      intptr_t v = _value[p];
+      if (v != 0 ) {
+        size_t t = (size_t)v;
+        bad = (t < (size_t)os::vm_page_size() ) || !Handle::raw_resolve((oop *)v)->is_oop_or_null(true);
+        if (CheckJNICalls && bad) {
+          ReportJNIFatalError((JavaThread*)_thread, "Bad JNI oop argument");
+        }
+      }
+      // for the regular debug case.
+      assert(!bad, "Bad JNI oop argument");
+    }
+
     check_value(true);
   }
 
@@ -508,6 +524,7 @@ class SignatureChekker : public SignatureIterator {
   void do_array(int begin, int end)    { check_obj(T_OBJECT);        }
 };
 
+
 void JavaCallArguments::verify(methodHandle method, BasicType return_type,
   Thread *thread) {
   guarantee(method->size_of_parameters() == size_of_parameters(), "wrong no. of arguments pushed");
@@ -518,10 +535,8 @@ void JavaCallArguments::verify(methodHandle method, BasicType return_type,
   // Check that oop information is correct
   symbolHandle signature (thread,  method->signature());
 
-  SignatureChekker sc(signature, return_type, method->is_static(),_is_oop);
+  SignatureChekker sc(signature, return_type, method->is_static(),_is_oop, _value, thread);
   sc.iterate_parameters();
   sc.check_doing_return(true);
   sc.iterate_returntype();
 }
-
-#endif // PRODUCT

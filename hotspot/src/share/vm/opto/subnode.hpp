@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)subnode.hpp	1.86 07/09/28 10:23:02 JVM"
-#endif
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Portions of code courtesy of Clifford Click
@@ -30,7 +27,7 @@
 //------------------------------SUBNode----------------------------------------
 // Class SUBTRACTION functionality.  This covers all the usual 'subtract'
 // behaviors.  Subtract-integer, -float, -double, binary xor, compare-integer,
-// -float, and -double are all inherited from this class.  The compare 
+// -float, and -double are all inherited from this class.  The compare
 // functions behave like subtract functions, except that all negative answers
 // are compressed into -1, and all positive answers compressed to 1.
 class SubNode : public Node {
@@ -40,7 +37,7 @@ public:
   }
 
   // Handle algebraic identities here.  If we have an identity, return the Node
-  // we are equivalent to.  We look for "add of zero" as an identity.  
+  // we are equivalent to.  We look for "add of zero" as an identity.
   virtual Node *Identity( PhaseTransform *phase );
 
   // Compute a new Type for this node.  Basically we just do the pre-check,
@@ -161,6 +158,16 @@ public:
 class CmpPNode : public CmpNode {
 public:
   CmpPNode( Node *in1, Node *in2 ) : CmpNode(in1,in2) {}
+  virtual int Opcode() const;
+  virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
+  virtual const Type *sub( const Type *, const Type * ) const;
+};
+
+//------------------------------CmpNNode--------------------------------------
+// Compare 2 narrow oop values, returning condition codes (-1, 0 or 1).
+class CmpNNode : public CmpNode {
+public:
+  CmpNNode( Node *in1, Node *in2 ) : CmpNode(in1,in2) {}
   virtual int Opcode() const;
   virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
   virtual const Type *sub( const Type *, const Type * ) const;

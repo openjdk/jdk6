@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)collectorCounters.hpp	1.10 07/05/05 17:05:33 JVM"
-#endif
 /*
  * Copyright 2002-2004 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // CollectorCounters is a holder class for performance counters
@@ -50,7 +47,7 @@ class CollectorCounters: public CHeapObj {
     ~CollectorCounters() {
       if (_name_space != NULL) FREE_C_HEAP_ARRAY(char, _name_space);
     }
-  
+
     inline PerfCounter* invocation_counter() const  { return _invocations; }
 
     inline PerfCounter* time_counter() const        { return _time; }
@@ -81,4 +78,3 @@ class TraceCollectorStats: public PerfTraceTimedEvent {
       if (UsePerfData) _c->last_exit_counter()->set_value(os::elapsed_counter());
     }
 };
-

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)cpCacheKlass.hpp	1.33 07/05/29 09:44:19 JVM"
-#endif
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +19,11 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
-class constantPoolCacheKlass: public arrayKlass {
+class constantPoolCacheKlass: public Klass {
+  juint    _alloc_size;        // allocation profiling support
  public:
   // Dispatched klass operations
   bool oop_is_constantPoolCache() const          { return true; }
@@ -34,18 +32,18 @@ class constantPoolCacheKlass: public arrayKlass {
 
   // Allocation
   DEFINE_ALLOCATE_PERMANENT(constantPoolCacheKlass);
-  constantPoolCacheOop allocate(int length, TRAPS); 
+  constantPoolCacheOop allocate(int length, TRAPS);
   static klassOop create_klass(TRAPS);
 
   // Casting from klassOop
   static constantPoolCacheKlass* cast(klassOop k) {
     assert(k->klass_part()->oop_is_constantPoolCache(), "cast to constantPoolCacheKlass");
-    return (constantPoolCacheKlass*)k->klass_part(); 
+    return (constantPoolCacheKlass*)k->klass_part();
   }
 
   // Sizing
-  static int header_size()                       { return oopDesc::header_size() + sizeof(constantPoolCacheKlass)/HeapWordSize; }
-  int object_size() const                        { return arrayKlass::object_size(header_size()); }
+  static int header_size()       { return oopDesc::header_size() + sizeof(constantPoolCacheKlass)/HeapWordSize; }
+  int object_size() const        { return align_object_size(header_size()); }
 
   // Garbage collection
   void oop_follow_contents(oop obj);
@@ -58,6 +56,10 @@ class constantPoolCacheKlass: public arrayKlass {
   int oop_oop_iterate(oop obj, OopClosure* blk);
   int oop_oop_iterate_m(oop obj, OopClosure* blk, MemRegion mr);
 
+  // Allocation profiling support
+  juint alloc_size() const              { return _alloc_size; }
+  void set_alloc_size(juint n)          { _alloc_size = n; }
+
 #ifndef PRODUCT
  public:
   // Printing
@@ -69,4 +71,3 @@ class constantPoolCacheKlass: public arrayKlass {
   const char* internal_name() const;
   void oop_verify_on(oop obj, outputStream* st);
 };
-

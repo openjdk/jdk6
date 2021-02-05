@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)scopeDesc.hpp	1.37 07/05/24 14:38:34 JVM"
-#endif
 /*
  * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // SimpleScopeDesc is used when all you need to extract from
@@ -44,7 +41,7 @@ class SimpleScopeDesc : public StackObj {
     _method           = methodOop(buffer.read_oop());
     _bci              = buffer.read_bci();
   }
-  
+
   methodOop method() { return _method; }
   int bci() { return _bci; }
 };
@@ -65,9 +62,9 @@ class ScopeDesc : public ResourceObj {
   // JVM state
   methodHandle method() const { return _method; }
   int          bci()    const { return _bci;    }
-  
+
   GrowableArray<ScopeValue*>*   locals();
-  GrowableArray<ScopeValue*>*   expressions();  
+  GrowableArray<ScopeValue*>*   expressions();
   GrowableArray<MonitorValue*>* monitors();
   GrowableArray<ScopeValue*>*   objects();
 
@@ -124,6 +121,3 @@ class ScopeDesc : public ResourceObj {
   void print_value_on(outputStream* st) const;
 #endif
 };
-
-
-
