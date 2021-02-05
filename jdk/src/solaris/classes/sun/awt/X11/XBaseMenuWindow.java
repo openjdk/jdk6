@@ -426,7 +426,7 @@ abstract public class XBaseMenuWindow extends XWindow {
         try {
             synchronized(getMenuTreeLock()) {
                 if (showingSubmenu != submenuToShow) {
-                    if (log.isLoggable(Level.FINER)) {
+                    if (log.isLoggable(Level.FINEST)) {
                         log.finest("Changing showing submenu");
                     }
                     if (showingSubmenu != null) {
@@ -1122,7 +1122,9 @@ abstract public class XBaseMenuWindow extends XWindow {
      * that grabs input focus
      */
     void doHandleJavaKeyEvent(KeyEvent event) {
-        if (log.isLoggable(Level.FINER)) log.finer(event.toString());
+        if (log.isLoggable(Level.FINER)) {
+	    log.finer(event.toString());
+	}
         if (event.getID() != KeyEvent.KEY_PRESSED) {
             return;
         }

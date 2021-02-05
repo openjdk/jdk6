@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -87,7 +87,7 @@ public class MsgAppletViewer_zh_CN extends ListResourceBundle {
             {"appletviewer.main.err.prop.cantsave", "\u65E0\u6CD5\u4FDD\u5B58\u7528\u6237\u5C5E\u6027\u6587\u4EF6: {0}"},
             {"appletviewer.main.warn.nosecmgr", "\u8B66\u544A: \u7981\u7528\u5B89\u5168\u3002"},
             {"appletviewer.main.debug.cantfinddebug", "\u627E\u4E0D\u5230\u8C03\u8BD5\u5668!"},
-            {"appletviewer.main.debug.cantfindmain", "\u5728\u8C03\u8BD5\u5668\u4E2D\u627E\u4E0D\u5230\u4E3B\u8981\u65B9\u6CD5!"},
+            {"appletviewer.main.debug.cantfindmain", "\u5728\u8C03\u8BD5\u5668\u4E2D\u627E\u4E0D\u5230 main \u65B9\u6CD5!"},
             {"appletviewer.main.debug.exceptionindebug", "\u8C03\u8BD5\u5668\u4E2D\u5B58\u5728\u5F02\u5E38\u9519\u8BEF!"},
             {"appletviewer.main.debug.cantaccess", "\u65E0\u6CD5\u8BBF\u95EE\u8C03\u8BD5\u5668!"},
             {"appletviewer.main.nosecmgr", "\u8B66\u544A: \u672A\u5B89\u88C5 SecurityManager!"},
@@ -103,7 +103,6 @@ public class MsgAppletViewer_zh_CN extends ListResourceBundle {
             {"appletclassloader.fileexception", "\u52A0\u8F7D\u65F6\u51FA\u73B0{0}\u5F02\u5E38\u9519\u8BEF: {1}"},
             {"appletclassloader.filedeath", "\u52A0\u8F7D\u65F6\u5DF2\u7EC8\u6B62{0}: {1}"},
             {"appletclassloader.fileerror", "\u52A0\u8F7D\u65F6\u51FA\u73B0{0}\u9519\u8BEF: {1}"},
-            {"appletclassloader.findclass.verbose.findclass", "{0}\u627E\u5230\u7C7B{1}"},
             {"appletclassloader.findclass.verbose.openstream", "\u6253\u5F00\u5230{0}\u7684\u6D41\u4EE5\u83B7\u53D6{1}"},
             {"appletclassloader.getresource.verbose.forname", "\u540D\u79F0\u7684 AppletClassLoader.getResource: {0}"},
             {"appletclassloader.getresource.verbose.found", "\u5DF2\u627E\u5230\u4F5C\u4E3A\u7CFB\u7EDF\u8D44\u6E90\u7684\u8D44\u6E90{0}"},
@@ -138,7 +137,7 @@ public class MsgAppletViewer_zh_CN extends ListResourceBundle {
             {"appletpanel.fileexception", "\u52A0\u8F7D\u65F6\u51FA\u73B0{0}\u5F02\u5E38\u9519\u8BEF: {1}"},
             {"appletpanel.filedeath", "\u52A0\u8F7D\u65F6\u5DF2\u7EC8\u6B62{0}: {1}"},
             {"appletpanel.fileerror", "\u52A0\u8F7D\u65F6\u51FA\u73B0{0}\u9519\u8BEF: {1}"},
-            {"appletpanel.badattribute.exception", "HTML \u8BED\u6CD5\u5206\u6790: \u5BBD\u5EA6/\u9AD8\u5EA6\u5C5E\u6027\u7684\u503C\u4E0D\u6B63\u786E"},
+            {"appletpanel.badattribute.exception", "HTML \u89E3\u6790: \u5BBD\u5EA6/\u9AD8\u5EA6\u5C5E\u6027\u7684\u503C\u4E0D\u6B63\u786E"},
             {"appletillegalargumentexception.objectinputstream", "AppletObjectInputStream \u9700\u8981\u975E\u7A7A\u52A0\u8F7D\u5668"},
             {"appletprops.title", "AppletViewer \u5C5E\u6027"},
             {"appletprops.label.http.server", "Http \u4EE3\u7406\u670D\u52A1\u5668:"},
@@ -155,7 +154,7 @@ public class MsgAppletViewer_zh_CN extends ListResourceBundle {
             {"appletprops.choice.unsignedapplet.yes", "\u662F"},
             {"appletprops.button.apply", "\u5E94\u7528"},
             {"appletprops.button.cancel", "\u53D6\u6D88"},
-            {"appletprops.button.reset", "\u91CD\u8BBE"},
+            {"appletprops.button.reset", "\u91CD\u7F6E"},
             {"appletprops.apply.exception", "\u65E0\u6CD5\u4FDD\u5B58\u5C5E\u6027: {0}"},
             /* 4066432 */
             {"appletprops.title.invalidproxy", "\u6761\u76EE\u65E0\u6548"},

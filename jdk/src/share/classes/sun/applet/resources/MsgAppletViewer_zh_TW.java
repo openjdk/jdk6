@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -73,7 +73,7 @@ public class MsgAppletViewer_zh_TW extends ListResourceBundle {
             {"appletviewer.parse.warning.embed.requiresheight", "\u8B66\u544A: <embed> \u6A19\u8A18\u9700\u8981\u9AD8\u5EA6\u5C6C\u6027\u3002"},
             {"appletviewer.parse.warning.embed.requireswidth", "\u8B66\u544A: <embed> \u6A19\u8A18\u9700\u8981\u5BEC\u5EA6\u5C6C\u6027\u3002"},
             {"appletviewer.parse.warning.appnotLongersupported", "\u8B66\u544A: \u4E0D\u518D\u652F\u63F4 <app> \u6A19\u8A18\uFF0C\u8ACB\u6539\u7528 <applet>:"},
-            {"appletviewer.usage", "\u7528\u6CD5: appletviewer <\u9078\u9805> url(s)\n\n\u5176\u4E2D\u7684 <\u9078\u9805> \u5305\u62EC:\n  -debug                  \u5728 Java \u9664\u932F\u7A0B\u5F0F\u4E2D\u555F\u52D5 Applet \u6AA2\u8996\u5668\n  -encoding <\u7DE8\u78BC>    \u6307\u5B9A HTML \u6A94\u6848\u4F7F\u7528\u7684\u5B57\u5143\u7DE8\u78BC\n  -J<\u57F7\u884C\u968E\u6BB5\u65D7\u6A19>        \u5C07\u5F15\u6578\u50B3\u9001\u81F3 java \u89E3\u8B6F\u5668\n\n -J \u9078\u9805\u4E0D\u662F\u6A19\u6E96\u9078\u9805\uFF0C\u82E5\u6709\u8B8A\u66F4\u4E0D\u53E6\u884C\u901A\u77E5\u3002"},
+            {"appletviewer.usage", "\u7528\u6CD5: appletviewer <options> url(s)\n\n\u5176\u4E2D\u7684 <options> \u5305\u62EC:\n  -debug                  \u5728 Java \u9664\u932F\u7A0B\u5F0F\u4E2D\u555F\u52D5 Applet \u6AA2\u8996\u5668\n  -encoding <encoding>    \u6307\u5B9A HTML \u6A94\u6848\u4F7F\u7528\u7684\u5B57\u5143\u7DE8\u78BC\n  -J<runtime flag>        \u5C07\u5F15\u6578\u50B3\u9001\u81F3 java \u89E3\u8B6F\u5668\n\n -J \u9078\u9805\u4E0D\u662F\u6A19\u6E96\u9078\u9805\uFF0C\u82E5\u6709\u8B8A\u66F4\u4E0D\u53E6\u884C\u901A\u77E5\u3002"},
             {"appletviewer.main.err.unsupportedopt", "\u4E0D\u652F\u63F4\u7684\u9078\u9805: {0}"},
             {"appletviewer.main.err.unrecognizedarg", "\u7121\u6CD5\u8FA8\u8B58\u7684\u5F15\u6578: {0}"},
             {"appletviewer.main.err.dupoption", "\u91CD\u8907\u4F7F\u7528\u9078\u9805: {0}"},
@@ -103,7 +103,6 @@ public class MsgAppletViewer_zh_TW extends ListResourceBundle {
             {"appletclassloader.fileexception", "\u8F09\u5165\u6642\u767C\u751F {0} \u7570\u5E38\u72C0\u6CC1: {1}"},
             {"appletclassloader.filedeath", "\u8F09\u5165\u6642\u522A\u9664 {0}: {1}"},
             {"appletclassloader.fileerror", "\u8F09\u5165\u6642\u767C\u751F {0} \u932F\u8AA4: {1}"},
-            {"appletclassloader.findclass.verbose.findclass", "{0} \u5C0B\u627E\u985E\u5225 {1}"},
             {"appletclassloader.findclass.verbose.openstream", "\u958B\u555F {0} \u7684\u4E32\u6D41\u4EE5\u53D6\u5F97 {1}"},
             {"appletclassloader.getresource.verbose.forname", "AppletClassLoader.getResource \u7684\u540D\u7A31: {0}"},
             {"appletclassloader.getresource.verbose.found", "\u627E\u5230\u8CC7\u6E90: {0} \u4F5C\u70BA\u7CFB\u7D71\u8CC7\u6E90"},

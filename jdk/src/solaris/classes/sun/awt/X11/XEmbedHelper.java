@@ -82,11 +82,15 @@ public class XEmbedHelper {
     XEmbedHelper() {
         if (XEmbed == null) {
             XEmbed = XAtom.get("_XEMBED");
-            if (xembedLog.isLoggable(Level.FINER)) xembedLog.finer("Created atom " + XEmbed.toString());
+            if (xembedLog.isLoggable(Level.FINER)) {
+		xembedLog.finer("Created atom " + XEmbed.toString());
+	    }
         }
         if (XEmbedInfo == null) {
             XEmbedInfo = XAtom.get("_XEMBED_INFO");
-            if (xembedLog.isLoggable(Level.FINER)) xembedLog.finer("Created atom " + XEmbedInfo.toString());
+            if (xembedLog.isLoggable(Level.FINER)) {
+		xembedLog.finer("Created atom " + XEmbedInfo.toString());
+	    }
         }
     }
 
@@ -106,7 +110,9 @@ public class XEmbedHelper {
         msg.set_data(4, data2);
         XToolkit.awtLock();
         try {
-            if (xembedLog.isLoggable(Level.FINE)) xembedLog.fine("Sending " + XEmbedMessageToString(msg));
+            if (xembedLog.isLoggable(Level.FINE)) {
+		xembedLog.fine("Sending " + XEmbedMessageToString(msg));
+	    }
             XlibWrapper.XSendEvent(XToolkit.getDisplay(), window, false, XlibWrapper.NoEventMask, msg.pData);
         }
         finally {
@@ -218,7 +224,12 @@ public class XEmbedHelper {
 
         XToolkit.awtLock();
         try {
-            keycode = XWindow.getAWTKeyCodeForKeySym((int)keysym);
+            XKeysym.Keysym2JavaKeycode kc = XKeysym.getJavaKeycode( keysym );
+            if(kc == null) {
+                keycode = java.awt.event.KeyEvent.VK_UNDEFINED;
+            }else{
+                keycode = kc.getJavaKeycode();
+            }
         } finally {
             XToolkit.awtUnlock();
         }

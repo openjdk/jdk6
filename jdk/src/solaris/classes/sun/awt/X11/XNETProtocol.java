@@ -46,7 +46,9 @@ class XNETProtocol extends XProtocol implements XStateProtocol, XLayerProtocol {
     }
 
     public void setState(XWindowPeer window, int state) {
-        if (log.isLoggable(Level.FINE)) log.fine("Setting state of " + window + " to " + state);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("Setting state of " + window + " to " + state);
+	}
         if (window.isShowing()) {
             requestState(window, state);
         } else {
@@ -107,7 +109,9 @@ class XNETProtocol extends XProtocol implements XStateProtocol, XLayerProtocol {
               default:
                   return;
             }
-            if (log.isLoggable(Level.FINE)) log.fine("Requesting state on " + window + " for " + state);
+            if (log.isLoggable(Level.FINE)) {
+		log.fine("Requesting state on " + window + " for " + state);
+	    }
             req.set_type((int)XlibWrapper.ClientMessage);
             req.set_window(window.getWindow());
             req.set_message_type(XA_NET_WM_STATE.getAtom());
@@ -189,7 +193,10 @@ class XNETProtocol extends XProtocol implements XStateProtocol, XLayerProtocol {
             req.set_data(1, state.getAtom());
             // Fix for 6735584: req.data[2] must be set to 0 when only one property is changed
             req.set_data(2, 0);
-            log.log(Level.FINE, "Setting _NET_STATE atom {0} on {1} for {2}", new Object[] {state, window, Boolean.valueOf(isAdd)});
+            if (log.isLoggable(Level.FINE)) {
+		log.log(Level.FINE, "Setting _NET_STATE atom {0} on {1} for {2}",
+			new Object[] {state, window, Boolean.valueOf(isAdd)});
+	    }
             XToolkit.awtLock();
             try {
                 XlibWrapper.XSendEvent(XToolkit.getDisplay(),
@@ -214,9 +221,11 @@ class XNETProtocol extends XProtocol implements XStateProtocol, XLayerProtocol {
      * @param reset Indicates operation, 'set' if false, 'reset' if true
      */
     private void setStateHelper(XWindowPeer window, XAtom state, boolean set) {
-        log.log(Level.FINER, "Window visibility is: withdrawn={0}, visible={1}, mapped={2} showing={3}",
-                new Object[] {Boolean.valueOf(window.isWithdrawn()), Boolean.valueOf(window.isVisible()),
-                              Boolean.valueOf(window.isMapped()), Boolean.valueOf(window.isShowing())});
+        if (log.isLoggable(Level.FINER)) {
+	    log.log(Level.FINER, "Window visibility is: withdrawn={0}, visible={1}, mapped={2} showing={3}",
+		    new Object[] {Boolean.valueOf(window.isWithdrawn()), Boolean.valueOf(window.isVisible()),
+				  Boolean.valueOf(window.isMapped()), Boolean.valueOf(window.isShowing())});
+	}
         if (window.isShowing()) {
             requestState(window, state, set);
         } else {
@@ -287,7 +296,9 @@ class XNETProtocol extends XProtocol implements XStateProtocol, XLayerProtocol {
         }
         NetWindow = checkAnchor(XA_NET_SUPPORTING_WM_CHECK, XAtom.XA_WINDOW);
         supportChecked = true;
-        if (log.isLoggable(Level.FINE)) log.fine("### " + this + " is active: " + (NetWindow != 0));
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("### " + this + " is active: " + (NetWindow != 0));
+	}
     }
 
     boolean active() {
@@ -323,7 +334,9 @@ class XNETProtocol extends XProtocol implements XStateProtocol, XLayerProtocol {
         if (net_wm_name_string == null) {
             return false;
         }
-        if (log.isLoggable(Level.FINE)) log.fine("### WM_NAME = " + net_wm_name_string);
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("### WM_NAME = " + net_wm_name_string);
+	}
         return net_wm_name_string.startsWith(name);
     }
 

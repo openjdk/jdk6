@@ -23,9 +23,8 @@
 
 package jdk.testlibrary;
 
+import java.io.File;
 import java.io.FileNotFoundException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 public final class JDKToolFinder {
 
@@ -94,13 +93,13 @@ public final class JDKToolFinder {
                     + "When running test separately, set this property using '-D" + property + "=/path/to/jdk'.");
         }
 
-        Path toolName = Paths.get("bin", tool + (Platform.isWindows() ? ".exe" : ""));
+        File toolName = new File("bin", tool + (Platform.isWindows() ? ".exe" : ""));
 
-        Path jdkTool = Paths.get(jdkPath, toolName.toString());
-        if (!jdkTool.toFile().exists()) {
-            throw new FileNotFoundException("Could not find file " + jdkTool.toAbsolutePath());
+        File jdkTool = new File(jdkPath, toolName.toString());
+        if (!jdkTool.exists()) {
+            throw new FileNotFoundException("Could not find file " + jdkTool.getAbsolutePath());
         }
 
-        return jdkTool.toAbsolutePath().toString();
+        return jdkTool.getAbsolutePath();
     }
 }

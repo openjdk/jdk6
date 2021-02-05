@@ -26,9 +26,6 @@
 package sun.tools.jconsole.inspector;
 
 import javax.swing.*;
-import javax.swing.event.*;
-import javax.swing.table.*;
-import javax.swing.tree.*;
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
 import java.awt.FlowLayout;
@@ -38,13 +35,12 @@ import java.awt.event.*;
 import java.awt.Insets;
 import java.awt.Dimension;
 import java.util.*;
-import java.io.*;
 
 import javax.management.*;
 
-import sun.tools.jconsole.Resources;
 import sun.tools.jconsole.MBeansTab;
 import sun.tools.jconsole.JConsole;
+import sun.tools.jconsole.Messages;
 
 public abstract class XOperations extends JPanel implements ActionListener {
 
@@ -169,8 +165,8 @@ public abstract class XOperations extends JPanel implements ActionListener {
                     else
                         EventQueue.invokeLater(new ThreadDialog(
                             button,
-                            Resources.getText("Method successfully invoked"),
-                            Resources.getText("Info"),
+			    Messages.METHOD_SUCCESSFULLY_INVOKED,
+			    Messages.INFO,
                             JOptionPane.INFORMATION_MESSAGE));
                 } catch (Throwable ex) {
                     if (JConsole.isDebug()) {
@@ -180,9 +176,9 @@ public abstract class XOperations extends JPanel implements ActionListener {
                     String message = ex.toString();
                     EventQueue.invokeLater(new ThreadDialog(
                         button,
-                        Resources.getText("Problem invoking") + " " +
+			Messages.PROBLEM_INVOKING + " " +
                         button.getText() + " : " + message,
-                        Resources.getText("Error"),
+			Messages.ERROR,
                         JOptionPane.ERROR_MESSAGE));
                 }
             }

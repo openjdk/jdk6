@@ -56,6 +56,12 @@ case "$OS" in
     FS="/"
     TMP=/tmp
     ;;
+  CYGWIN* )
+    NULL=/dev/null
+    PS=";"
+    FS="/"
+    TMP=/tmp
+    ;;
   Windows_95 | Windows_98 | Windows_NT )
     NULL=NUL
     PS=";"
@@ -74,7 +80,7 @@ cd ${TESTCLASSES}
 ${TESTJAVA}${FS}bin${FS}jar -cvf Ext_AllPolicy.jar Ext_AllPolicy.class
 
 rm Ext_AllPolicy.class
-${TESTJAVA}${FS}bin${FS}java \
+${TESTJAVA}${FS}bin${FS}java ${TESTVMOPTS} \
 	-Djava.security.manager -Djava.ext.dirs="${TESTCLASSES}" Ext_AllPolicy
 
 exit $?

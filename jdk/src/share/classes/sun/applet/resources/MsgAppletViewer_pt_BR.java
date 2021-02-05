@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2005, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -87,13 +87,13 @@ public class MsgAppletViewer_pt_BR extends ListResourceBundle {
             {"appletviewer.main.err.prop.cantsave", "N\u00E3o \u00E9 poss\u00EDvel salvar o arquivo de propriedades do usu\u00E1rio: {0}"},
             {"appletviewer.main.warn.nosecmgr", "Advert\u00EAncia: desativando a seguran\u00E7a."},
             {"appletviewer.main.debug.cantfinddebug", "N\u00E3o \u00E9 poss\u00EDvel localizar o depurador!"},
-            {"appletviewer.main.debug.cantfindmain", "N\u00E3o \u00E9 poss\u00EDvel localizar o m\u00E9todo principal no depurador!"},
+            {"appletviewer.main.debug.cantfindmain", "N\u00E3o \u00E9 poss\u00EDvel localizar o m\u00E9todo main no depurador!"},
             {"appletviewer.main.debug.exceptionindebug", "Exce\u00E7\u00E3o no depurador!"},
             {"appletviewer.main.debug.cantaccess", "N\u00E3o \u00E9 poss\u00EDvel acessar o depurador!"},
             {"appletviewer.main.nosecmgr", "Advert\u00EAncia: SecurityManager n\u00E3o instalado!"},
             {"appletviewer.main.warning", "Advert\u00EAncia: Nenhum applet iniciado. Certifique-se de que a entrada contenha uma tag <applet>."},
             {"appletviewer.main.warn.prop.overwrite", "Advert\u00EAncia: Substituindo a propriedade do sistema temporariamente a pedido do usu\u00E1rio: chave: {0} valor antigo: {1} valor novo: {2}"},
-            {"appletviewer.main.warn.cantreadprops", "Advert\u00EAncia: N\u00E3o \u00E9 poss\u00EDvel ler o arquivo de propriedades AppletViewer: {0} Usando defaults."},
+            {"appletviewer.main.warn.cantreadprops", "Advert\u00EAncia: N\u00E3o \u00E9 poss\u00EDvel ler o arquivo de propriedades AppletViewer: {0} Usando padr\u00F5es."},
             {"appletioexception.loadclass.throw.interrupted", "carregamento de classe interrompido: {0}"},
             {"appletioexception.loadclass.throw.notloaded", "classe n\u00E3o carregada: {0}"},
             {"appletclassloader.loadcode.verbose", "Fluxo de abertura para: {0} para obter {1}"},
@@ -103,7 +103,6 @@ public class MsgAppletViewer_pt_BR extends ListResourceBundle {
             {"appletclassloader.fileexception", "exce\u00E7\u00E3o de {0} ao carregar: {1}"},
             {"appletclassloader.filedeath", "{0} eliminado ao carregar: {1}"},
             {"appletclassloader.fileerror", "erro de {0} ao carregar: {1}"},
-            {"appletclassloader.findclass.verbose.findclass", "{0} localizar classe {1}"},
             {"appletclassloader.findclass.verbose.openstream", "Fluxo de abertura para: {0} para obter {1}"},
             {"appletclassloader.getresource.verbose.forname", "AppletClassLoader.getResource do nome: {0}"},
             {"appletclassloader.getresource.verbose.found", "Recurso encontrado: {0} como um recurso do sistema"},
@@ -138,7 +137,7 @@ public class MsgAppletViewer_pt_BR extends ListResourceBundle {
             {"appletpanel.fileexception", "exce\u00E7\u00E3o de {0} ao carregar: {1}"},
             {"appletpanel.filedeath", "{0} eliminado ao carregar: {1}"},
             {"appletpanel.fileerror", "erro de {0} ao carregar: {1}"},
-            {"appletpanel.badattribute.exception", "Parse de HTML: valor incorreto do atributo de largura/altura"},
+            {"appletpanel.badattribute.exception", "Parsing de HTML: valor incorreto do atributo de largura/altura"},
             {"appletillegalargumentexception.objectinputstream", "AppletObjectInputStream requer um carregador n\u00E3o nulo"},
             {"appletprops.title", "Propriedades do AppletViewer"},
             {"appletprops.label.http.server", "Servidor proxy Http:"},

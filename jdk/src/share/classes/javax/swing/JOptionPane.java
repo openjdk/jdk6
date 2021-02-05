@@ -963,7 +963,7 @@ public class JOptionPane extends JComponent implements Accessible
         }
         if (window instanceof SwingUtilities.SharedOwnerFrame) {
             WindowListener ownerShutdownListener =
-                (WindowListener)SwingUtilities.getSharedOwnerFrameShutdownListener();
+                    SwingUtilities.getSharedOwnerFrameShutdownListener();
             dialog.addWindowListener(ownerShutdownListener);
         }
         initDialog(dialog, style, parentComponent);
@@ -987,11 +987,33 @@ public class JOptionPane extends JComponent implements Accessible
         }
         dialog.pack();
         dialog.setLocationRelativeTo(parentComponent);
+
+        final PropertyChangeListener listener = new PropertyChangeListener() {
+            public void propertyChange(PropertyChangeEvent event) {
+                // Let the defaultCloseOperation handle the closing
+                // if the user closed the window without selecting a button
+                // (newValue = null in that case).  Otherwise, close the dialog.
+                if (dialog.isVisible() && event.getSource() == JOptionPane.this &&
+                        (event.getPropertyName().equals(VALUE_PROPERTY) ||
+                                event.getPropertyName().equals(INPUT_VALUE_PROPERTY)) &&
+                        event.getNewValue() != null &&
+                        event.getNewValue() != JOptionPane.UNINITIALIZED_VALUE) {
+                    dialog.setVisible(false);
+                }
+            }
+        };
+
         WindowAdapter adapter = new WindowAdapter() {
             private boolean gotFocus = false;
             public void windowClosing(WindowEvent we) {
                 setValue(null);
             }
+
+            public void windowClosed(WindowEvent e) {
+                removePropertyChangeListener(listener);
+                dialog.getContentPane().removeAll();
+            }
+
             public void windowGainedFocus(WindowEvent we) {
                 // Once window gets focus, set initial focus
                 if (!gotFocus) {
@@ -1008,20 +1030,8 @@ public class JOptionPane extends JComponent implements Accessible
                 setValue(JOptionPane.UNINITIALIZED_VALUE);
             }
         });
-        addPropertyChangeListener(new PropertyChangeListener() {
-            public void propertyChange(PropertyChangeEvent event) {
-                // Let the defaultCloseOperation handle the closing
-                // if the user closed the window without selecting a button
-                // (newValue = null in that case).  Otherwise, close the dialog.
-                if (dialog.isVisible() && event.getSource() == JOptionPane.this &&
-                  (event.getPropertyName().equals(VALUE_PROPERTY) ||
-                   event.getPropertyName().equals(INPUT_VALUE_PROPERTY)) &&
-                  event.getNewValue() != null &&
-                  event.getNewValue() != JOptionPane.UNINITIALIZED_VALUE) {
-                    dialog.setVisible(false);
-                }
-            }
-        });
+
+        addPropertyChangeListener(listener);
     }
 
 
@@ -1300,11 +1310,10 @@ public class JOptionPane extends JComponent implements Accessible
 
         // Use reflection to get Container.startLWModal.
         try {
-            Object obj;
-            obj = AccessController.doPrivileged(new ModalPrivilegedAction(
+            Method method = AccessController.doPrivileged(new ModalPrivilegedAction(
                     Container.class, "startLWModal"));
-            if (obj != null) {
-                ((Method)obj).invoke(dialog, (Object[])null);
+            if (method != null) {
+                method.invoke(dialog, (Object[])null);
             }
         } catch (IllegalAccessException ex) {
         } catch (IllegalArgumentException ex) {
@@ -1446,11 +1455,10 @@ public class JOptionPane extends JComponent implements Accessible
 
         // Use reflection to get Container.startLWModal.
         try {
-            Object obj;
-            obj = AccessController.doPrivileged(new ModalPrivilegedAction(
+            Method method = AccessController.doPrivileged(new ModalPrivilegedAction(
                     Container.class, "startLWModal"));
-            if (obj != null) {
-                ((Method)obj).invoke(dialog, (Object[])null);
+            if (method != null) {
+                method.invoke(dialog, (Object[])null);
             }
         } catch (IllegalAccessException ex) {
         } catch (IllegalArgumentException ex) {
@@ -1531,12 +1539,11 @@ public class JOptionPane extends JComponent implements Accessible
                         event.getPropertyName().equals(VALUE_PROPERTY)) {
                 // Use reflection to get Container.stopLWModal().
                 try {
-                    Object obj;
-                    obj = AccessController.doPrivileged(
+                    Method method = AccessController.doPrivileged(
                         new ModalPrivilegedAction(
                             Container.class, "stopLWModal"));
-                    if (obj != null) {
-                        ((Method)obj).invoke(iFrame, (Object[])null);
+                    if (method != null) {
+                        method.invoke(iFrame, (Object[])null);
                     }
                 } catch (IllegalAccessException ex) {
                 } catch (IllegalArgumentException ex) {
@@ -1852,7 +1859,7 @@ public class JOptionPane extends JComponent implements Accessible
      * description: The UI object that implements the optionpane's LookAndFeel
      */
     public void setUI(OptionPaneUI ui) {
-        if ((OptionPaneUI)this.ui != ui) {
+        if (this.ui != ui) {
             super.setUI(ui);
             invalidate();
         }
@@ -2327,7 +2334,7 @@ public class JOptionPane extends JComponent implements Accessible
 
     // Serialization support.
     private void writeObject(ObjectOutputStream s) throws IOException {
-        Vector      values = new Vector();
+        Vector<Object> values = new Vector<Object>();
 
         s.defaultWriteObject();
         // Save the icon, if its Serializable.
@@ -2342,7 +2349,7 @@ public class JOptionPane extends JComponent implements Accessible
         }
         // Save the treeModel, if its Serializable.
         if(options != null) {
-            Vector           serOptions = new Vector();
+            Vector<Object> serOptions = new Vector<Object>();
 
             for(int counter = 0, maxCounter = options.length;
                 counter < maxCounter; counter++)
@@ -2510,16 +2517,16 @@ public class JOptionPane extends JComponent implements Accessible
     /**
      * Retrieves a method from the provided class and makes it accessible.
      */
-    private static class ModalPrivilegedAction implements PrivilegedAction {
-        private Class clazz;
+    private static class ModalPrivilegedAction implements PrivilegedAction<Method> {
+        private Class<?> clazz;
         private String methodName;
 
-        public ModalPrivilegedAction(Class clazz, String methodName) {
+        public ModalPrivilegedAction(Class<?> clazz, String methodName) {
             this.clazz = clazz;
             this.methodName = methodName;
         }
 
-        public Object run() {
+        public Method run() {
             Method method = null;
             try {
                 method = clazz.getDeclaredMethod(methodName, (Class[])null);

@@ -26,26 +26,39 @@
 package sun.net.www.protocol.http;
 
 import java.lang.reflect.Constructor;
-import java.net.URL;
-import java.net.URLConnection;
-import java.net.ProtocolException;
+import java.io.FileNotFoundException;
+import java.io.FilterInputStream;
+import java.io.FilterOutputStream;
+import java.io.InputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.net.CacheResponse;
+import java.net.CacheRequest;
+import java.net.CookieHandler;
 import java.net.HttpRetryException;
 import java.net.PasswordAuthentication;
 import java.net.Authenticator;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.net.SocketTimeoutException;
+import java.net.InetSocketAddress;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
 import java.net.Proxy;
 import java.net.ProxySelector;
-import java.net.URI;
-import java.net.InetSocketAddress;
-import java.net.CookieHandler;
 import java.net.ResponseCache;
-import java.net.CacheResponse;
 import java.net.SecureCacheResponse;
-import java.net.CacheRequest;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLConnection;
 import java.net.Authenticator.RequestorType;
-import java.io.*;
+import java.nio.ByteBuffer;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Map;
 import java.util.List;
@@ -55,6 +68,7 @@ import java.util.Iterator;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.Set;
+import java.util.TimeZone;
 import sun.net.*;
 import sun.net.www.*;
 import sun.net.www.http.HttpClient;
@@ -62,10 +76,6 @@ import sun.net.www.http.PosterOutputStream;
 import sun.net.www.http.ChunkedInputStream;
 import sun.net.www.http.ChunkedOutputStream;
 import sun.net.www.http.HttpCapture;
-import java.text.SimpleDateFormat;
-import java.util.TimeZone;
-import java.net.MalformedURLException;
-import java.nio.ByteBuffer;
 import static sun.net.www.protocol.http.AuthScheme.BASIC;
 import static sun.net.www.protocol.http.AuthScheme.DIGEST;
 import static sun.net.www.protocol.http.AuthScheme.NTLM;
@@ -92,6 +102,14 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
      */
     static final boolean validateProxy;
     static final boolean validateServer;
+
+    /** A, possibly empty, set of authentication schemes that are disabled
+     *  when proxying plain HTTP ( not HTTPS ). */
+    static final Set<String> disabledProxyingSchemes;
+
+    /** A, possibly empty, set of authentication schemes that are disabled
+     *  when setting up a tunnel for HTTPS ( HTTP CONNECT ). */
+    static final Set<String> disabledTunnelingSchemes;
 
     private StreamingOutputStream strOutputStream;
     private final static String RETRY_MSG1 =
@@ -192,6 +210,26 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
         "Via"
     };
 
+    private static String getNetProperty(final String name) {
+        return AccessController.doPrivileged(new PrivilegedAction<String>() {
+                @Override
+                public String run() {
+                    return NetProperties.get(name);
+                }
+            });
+    }
+
+    private static Set<String> schemesListToSet(String list) {
+        if (list == null || list.isEmpty())
+            return Collections.<String>emptySet();
+
+        Set<String> s = new HashSet<String>();
+        String[] parts = list.split("\\s*,\\s*");
+        for (String part : parts)
+            s.add(part.toLowerCase(Locale.ROOT));
+        return s;
+    }
+
     static {
         maxRedirects = java.security.AccessController.doPrivileged(
             new sun.security.action.GetIntegerAction(
@@ -206,6 +244,14 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
             agent = agent + " Java/"+version;
         }
         userAgent = agent;
+
+        // A set of net properties to control the use of authentication schemes
+        // when proxing/tunneling.
+        String p = getNetProperty("jdk.http.auth.tunneling.disabledSchemes");
+        disabledTunnelingSchemes = schemesListToSet(p);
+        p = getNetProperty("jdk.http.auth.proxying.disabledSchemes");
+        disabledProxyingSchemes = schemesListToSet(p);
+
         validateProxy = java.security.AccessController.doPrivileged(
                 new sun.security.action.GetBooleanAction(
                     "http.auth.digest.validateProxy")).booleanValue();
@@ -230,9 +276,9 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
             bufSize4ES = 4096; // use the default
         }
 
-        allowRestrictedHeaders = ((Boolean)java.security.AccessController.doPrivileged( 
+        allowRestrictedHeaders = java.security.AccessController.doPrivileged(
                 new sun.security.action.GetBooleanAction( 
-                    "sun.net.http.allowRestrictedHeaders"))).booleanValue(); 
+                    "sun.net.http.allowRestrictedHeaders")).booleanValue();
         if (!allowRestrictedHeaders) { 
             restrictedHeaderSet = new HashSet<String>(restrictedHeaders.length); 
             for (int i=0; i < restrictedHeaders.length; i++) { 
@@ -290,6 +336,7 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
      * REMIND:  backwards compatibility with JDK 1.1.  Should be
      * eliminated for JDK 2.0.
      */
+    @Deprecated
     private static HttpAuthenticator defaultAuth;
 
     /* all the headers we send
@@ -713,6 +760,7 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
     /**
      * @deprecated.  Use java.net.Authenticator.setDefault() instead.
      */
+    @Deprecated
     public static void setDefaultAuthenticator(HttpAuthenticator a) {
         defaultAuth = a;
     }
@@ -1270,9 +1318,12 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
                     // altered in similar ways.
 
                     AuthenticationHeader authhdr = new AuthenticationHeader (
-                        "Proxy-Authenticate", responses,
-                            new HttpCallerInfo(url, http.getProxyHostUsed(),
-                                http.getProxyPortUsed())
+                            "Proxy-Authenticate",
+                            responses,
+                            new HttpCallerInfo(url,
+                                               http.getProxyHostUsed(),
+					       http.getProxyPortUsed()),
+                            disabledProxyingSchemes
                     );
 
                     if (!doingNTLMp2ndStage) {
@@ -1469,9 +1520,9 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
                                 // HttpsURLConnection instance saved in
                                 // DelegateHttpsURLConnection
                                 uconn = (URLConnection)this.getClass().getField("httpsURLConnection").get(this);
-                                } catch (IllegalAccessException iae) {
+                                } catch (IllegalAccessException e) {
                                     // ignored; use 'this'
-                                } catch (NoSuchFieldException nsfe) {
+                                } catch (NoSuchFieldException e) {
                                     // ignored; use 'this'
                                 }
                             }
@@ -1635,9 +1686,12 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
                 respCode = Integer.parseInt(st.nextToken().trim());
                 if (respCode == HTTP_PROXY_AUTH) {
                     AuthenticationHeader authhdr = new AuthenticationHeader (
-                        "Proxy-Authenticate", responses,
-                            new HttpCallerInfo(url, http.getProxyHostUsed(),
-                                http.getProxyPortUsed())
+                            "Proxy-Authenticate",
+                            responses,
+                            new HttpCallerInfo(url,
+                                               http.getProxyHostUsed(),
+					       http.getProxyPortUsed()),
+                            disabledTunnelingSchemes
                     );
                     if (!doingNTLMp2ndStage) {
                         proxyAuthentication =
@@ -1753,6 +1807,7 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
      * Gets the authentication for an HTTP proxy, and applies it to
      * the connection.
      */
+    @SuppressWarnings("fallthrough")
     private AuthenticationInfo getHttpProxyAuthentication (AuthenticationHeader authhdr) {
         /* get authorization from authenticator */
         AuthenticationInfo ret = null;
@@ -1822,13 +1877,13 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
                     }
                     break;
                 case NTLM:
-                    if (NTLMAuthenticationProxy.proxy.supported) {
+                    if (NTLMAuthenticationProxy.supported) {
                         /* tryTransparentNTLMProxy will always be true the first
                          * time around, but verify that the platform supports it
                          * otherwise don't try. */
                         if (tryTransparentNTLMProxy) {
                             tryTransparentNTLMProxy =
-                                    NTLMAuthenticationProxy.proxy.supportsTransparentAuth;
+                                    NTLMAuthenticationProxy.supportsTransparentAuth;
                             /* If the platform supports transparent authentication
                              * then normally it's ok to do transparent auth to a proxy
                                          * because we generally trust proxies (chosen by the user)
@@ -1868,7 +1923,10 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
                     ret = new NegotiateAuthentication(new HttpCallerInfo(authhdr.getHttpCallerInfo(), "Kerberos"));
                     break;
                 case UNKNOWN:
-                    HttpCapture.finest("Unknown/Unsupported authentication scheme: " + scheme);
+		    if (HttpCapture.isLoggable("FINEST")) {
+			HttpCapture.finest("Unknown/Unsupported authentication scheme: " + scheme);
+		    }
+                /*fall through*/
                 default:
                     throw new AssertionError("should not reach here");
                 }
@@ -1906,6 +1964,7 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
      * @param authHdr the AuthenticationHeader which tells what auth scheme is
      * prefered.
      */
+    @SuppressWarnings("fallthrough")
     private AuthenticationInfo getServerAuthentication (AuthenticationHeader authhdr) {
         /* get authorization from authenticator */
         AuthenticationInfo ret = null;
@@ -1975,7 +2034,7 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
                     }
                     break;
                 case NTLM:
-                    if (NTLMAuthenticationProxy.proxy.supported) {
+                    if (NTLMAuthenticationProxy.supported) {
                         URL url1;
                         try {
                             url1 = new URL (url, "/"); /* truncate the path */
@@ -1988,7 +2047,7 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
                          * otherwise don't try. */
                         if (tryTransparentNTLMServer) {
                             tryTransparentNTLMServer =
-                                    NTLMAuthenticationProxy.proxy.supportsTransparentAuth;
+                                    NTLMAuthenticationProxy.supportsTransparentAuth;
                         }
                         a = null;
                         if (tryTransparentNTLMServer) {
@@ -2015,7 +2074,10 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
                     }
                     break;
                 case UNKNOWN:
-                    HttpCapture.finest("Unknown/Unsupported authentication scheme: " + scheme);
+		    if (HttpCapture.isLoggable("FINEST")) {
+			HttpCapture.finest("Unknown/Unsupported authentication scheme: " + scheme);
+		    }
+                /*fall through*/
                 default:
                     throw new AssertionError("should not reach here");
                 }
@@ -2530,14 +2592,14 @@ public class HttpURLConnection extends java.net.HttpURLConnection {
          * The cookies in the requests message headers may have
          * been modified. Use the saved user cookies instead.
          */
-        Map userCookiesMap = null;
+        Map<String, List<String>> userCookiesMap = null;
         if (userCookies != null || userCookies2 != null) {
-            userCookiesMap = new HashMap();
+            userCookiesMap = new HashMap<String, List<String>>();
             if (userCookies != null) {
-                userCookiesMap.put("Cookie", userCookies);
+                userCookiesMap.put("Cookie", Arrays.asList(userCookies));
             }
             if (userCookies2 != null) {
-                userCookiesMap.put("Cookie2", userCookies2);
+                userCookiesMap.put("Cookie2", Arrays.asList(userCookies2));
             }
         }
         return requests.filterAndAddHeaders(EXCLUDE_HEADERS2, userCookiesMap);

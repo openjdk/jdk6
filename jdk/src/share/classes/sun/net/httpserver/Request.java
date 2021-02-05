@@ -25,13 +25,11 @@
 
 package sun.net.httpserver;
 
-import java.util.*;
+import java.net.SocketTimeoutException;
 import java.nio.*;
-import java.net.*;
 import java.io.*;
 import java.nio.channels.*;
 import com.sun.net.httpserver.*;
-import com.sun.net.httpserver.spi.*;
 
 /**
  */
@@ -47,7 +45,6 @@ class Request {
     private OutputStream os;
 
     Request (InputStream rawInputStream, OutputStream rawout) throws IOException {
-        this.chan = chan;
         is = rawInputStream;
         os = rawout;
         do {
@@ -121,7 +118,7 @@ class Request {
     }
 
     Headers hdrs = null;
-
+    @SuppressWarnings("fallthrough")
     Headers headers () throws IOException {
         if (hdrs != null) {
             return hdrs;
@@ -139,6 +136,7 @@ class Request {
     parseloop:{
                 while ((c = is.read()) >= 0) {
                     switch (c) {
+                      /*fallthrough*/
                       case ':':
                         if (inKey && len > 0)
                             keyend = len;

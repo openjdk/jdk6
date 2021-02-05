@@ -541,7 +541,7 @@ public class JPopupMenu extends JComponent implements Accessible,MenuElement {
 
         int nitems = getComponentCount();
         // PENDING(ges): Why not use an array?
-        Vector tempItems = new Vector();
+        Vector<Component> tempItems = new Vector<Component>();
 
         /* Remove the item at index, nitems-index times
            storing them in a temporary vector in the
@@ -557,8 +557,8 @@ public class JPopupMenu extends JComponent implements Accessible,MenuElement {
         /* Add the removed items back to the menu, they are
            already in the correct order in the temp vector.
            */
-        for (int i = 0; i < tempItems.size()  ; i++) {
-            add((Component)tempItems.elementAt(i));
+        for (Component tempItem : tempItems) {
+            add(tempItem);
         }
     }
 
@@ -589,8 +589,7 @@ public class JPopupMenu extends JComponent implements Accessible,MenuElement {
      * @since 1.4
      */
     public PopupMenuListener[] getPopupMenuListeners() {
-        return (PopupMenuListener[])listenerList.getListeners(
-                PopupMenuListener.class);
+        return listenerList.getListeners(PopupMenuListener.class);
     }
 
     /**
@@ -622,8 +621,7 @@ public class JPopupMenu extends JComponent implements Accessible,MenuElement {
      * @since 1.5
      */
     public MenuKeyListener[] getMenuKeyListeners() {
-        return (MenuKeyListener[])listenerList.getListeners(
-                MenuKeyListener.class);
+        return listenerList.getListeners(MenuKeyListener.class);
     }
 
     /**
@@ -738,7 +736,7 @@ public class JPopupMenu extends JComponent implements Accessible,MenuElement {
             // set selection path before popping up!
             if (isPopupMenu()) {
                 MenuElement me[] = new MenuElement[1];
-                me[0] = (MenuElement) this;
+                me[0] = this;
                 MenuSelectionManager.defaultManager().setSelectedPath(me);
             }
         }
@@ -805,10 +803,7 @@ public class JPopupMenu extends JComponent implements Accessible,MenuElement {
      * being displayed).
      */
     public boolean isVisible() {
-        if(popup != null)
-            return true;
-        else
-            return false;
+        return popup != null;
     }
 
     /**
@@ -1268,7 +1263,7 @@ public class JPopupMenu extends JComponent implements Accessible,MenuElement {
 // Serialization support.
 ////////////
     private void writeObject(ObjectOutputStream s) throws IOException {
-        Vector      values = new Vector();
+        Vector<Object> values = new Vector<Object>();
 
         s.defaultWriteObject();
         // Save the invoker, if its Serializable.
@@ -1451,7 +1446,7 @@ public class JPopupMenu extends JComponent implements Accessible,MenuElement {
      */
     public MenuElement[] getSubElements() {
         MenuElement result[];
-        Vector tmp = new Vector();
+        Vector<MenuElement> tmp = new Vector<MenuElement>();
         int c = getComponentCount();
         int i;
         Component m;
@@ -1459,12 +1454,12 @@ public class JPopupMenu extends JComponent implements Accessible,MenuElement {
         for(i=0 ; i < c ; i++) {
             m = getComponent(i);
             if(m instanceof MenuElement)
-                tmp.addElement(m);
+                tmp.addElement((MenuElement) m);
         }
 
         result = new MenuElement[tmp.size()];
         for(i=0,c=tmp.size() ; i < c ; i++)
-            result[i] = (MenuElement) tmp.elementAt(i);
+            result[i] = tmp.elementAt(i);
         return result;
     }
 

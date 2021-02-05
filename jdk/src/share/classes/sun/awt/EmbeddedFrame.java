@@ -584,8 +584,9 @@ public abstract class EmbeddedFrame extends Frame
         }
         public void setOpaque(boolean isOpaque) {
         }
-        public void updateWindow(BufferedImage backBuffer) {
+        public void updateWindow() {
         }
+
         public void repositionSecurityWarning() {
         }
      }

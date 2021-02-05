@@ -74,6 +74,20 @@ case "$OS" in
     CP="cp"
     CHMOD="chmod"
     ;;
+  CYGWIN* )
+    FS="/"
+    PS=";"
+    CP="cp"
+    CHMOD="chmod"
+    #
+    # javac does not like /cygdrive produced by `pwd`
+    #
+    TESTSRC=`cygpath -d ${TESTSRC}`
+    ;;
+  * )
+    echo "Unrecognized system!"
+    exit 1;
+    ;;
 esac
 
 # compile test
@@ -85,7 +99,7 @@ ${TESTJAVA}${FS}bin${FS}javac \
 
 # run test
 
-${TESTJAVA}${FS}bin${FS}java \
+${TESTJAVA}${FS}bin${FS}java ${TESTVMOPTS} \
 	-classpath ${TESTCLASSES} \
 	-DCUSTOM_P11_CONFIG=${TESTSRC}${FS}ConfigQuotedString-nss.txt \
 	-Dtest.src=${TESTSRC} \
