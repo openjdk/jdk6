@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -3365,6 +3365,13 @@ void Assembler::shrdl(Register dst, Register src) {
 
 #else // LP64
 
+void Assembler::set_byte_if_not_zero(Register dst) {
+  int enc = prefix_and_encode(dst->encoding(), true);
+  emit_byte(0x0F);
+  emit_byte(0x95);
+  emit_byte(0xE0 | enc);
+}
+
 // 64bit only pieces of the assembler
 // This should only be used by 64bit instructions that can use rip-relative
 // it cannot be used by instructions that want an immediate value.
@@ -6485,24 +6492,19 @@ int MacroAssembler::load_unsigned_short(Register dst, Address src) {
 }
 
 void MacroAssembler::load_sized_value(Register dst, Address src,
-                                      int size_in_bytes, bool is_signed) {
-  switch (size_in_bytes ^ (is_signed ? -1 : 0)) {
+                                      size_t size_in_bytes, bool is_signed) {
+  switch (size_in_bytes) {
 #ifndef _LP64
   // For case 8, caller is responsible for manually loading
   // the second word into another register.
-  case ~8:  // fall through:
-  case  8:  movl(                dst, src ); break;
+  case  8: movl(dst, src); break;
 #else
-  case ~8:  // fall through:
-  case  8:  movq(                dst, src ); break;
+  case  8: movq(dst, src); break;
 #endif
-  case ~4:  // fall through:
-  case  4:  movl(                dst, src ); break;
-  case ~2:  load_signed_short(   dst, src ); break;
-  case  2:  load_unsigned_short( dst, src ); break;
-  case ~1:  load_signed_byte(    dst, src ); break;
-  case  1:  load_unsigned_byte(  dst, src ); break;
-  default:  ShouldNotReachHere();
+  case  4: movl(dst, src); break;
+  case  2: is_signed ? load_signed_short(dst, src) : load_unsigned_short(dst, src); break;
+  case  1: is_signed ? load_signed_byte( dst, src) : load_unsigned_byte( dst, src); break;
+  default: ShouldNotReachHere();
   }
 }
 
@@ -7149,7 +7151,7 @@ void MacroAssembler::tlab_refill(Label& retry,
   subptr(t1, typeArrayOopDesc::header_size(T_INT));
   addptr(t1, (int32_t)ThreadLocalAllocBuffer::alignment_reserve());
   shlptr(t1, log2_intptr(HeapWordSize/sizeof(jint)));
-  movptr(Address(top, arrayOopDesc::length_offset_in_bytes()), t1);
+  movl(Address(top, arrayOopDesc::length_offset_in_bytes()), t1);
   // set klass to intArrayKlass
   // dubious reloc why not an oop reloc?
   movptr(t1, ExternalAddress((address) Universe::intArrayKlassObj_addr()));
@@ -7566,21 +7568,27 @@ void MacroAssembler::check_klass_subtype_slow_path(Register sub_klass,
 
   // Scan RCX words at [RDI] for an occurrence of RAX.
   // Set NZ/Z based on last compare.
+  // Z flag value will not be set by 'repne' if RCX == 0 since 'repne' does
+  // not change flags (only scas instruction which is repeated sets flags).
+  // Set Z = 0 (not equal) before 'repne' to indicate that class was not found.
 #ifdef _LP64
   // This part is tricky, as values in supers array could be 32 or 64 bit wide
   // and we store values in objArrays always encoded, thus we need to encode
   // the value of rax before repne.  Note that rax is dead after the repne.
   if (UseCompressedOops) {
-    encode_heap_oop_not_null(rax);
+    encode_heap_oop_not_null(rax); // Changes flags.
     // The superclass is never null; it would be a basic system error if a null
     // pointer were to sneak in here.  Note that we have already loaded the
     // Klass::super_check_offset from the super_klass in the fast path,
     // so if there is a null in that register, we are already in the afterlife.
+    testl(rax,rax); // Set Z = 0
     repne_scanl();
   } else
 #endif // _LP64
+  {
+    testptr(rax,rax); // Set Z = 0
     repne_scan();
-
+  }
   // Unspill the temp. registers:
   if (pushed_rdi)  pop(rdi);
   if (pushed_rcx)  pop(rcx);
@@ -7641,6 +7649,9 @@ void MacroAssembler::verify_oop(Register reg, const char* s) {
   // Pass register number to verify_oop_subroutine
   char* b = new char[strlen(s) + 50];
   sprintf(b, "verify_oop: %s: %s", reg->name(), s);
+#ifdef _LP64
+  push(rscratch1);                    // save r10, trashed by movptr()
+#endif
   push(rax);                          // save rax,
   push(reg);                          // pass register argument
   ExternalAddress buffer((address) b);
@@ -7651,6 +7662,7 @@ void MacroAssembler::verify_oop(Register reg, const char* s) {
   // call indirectly to solve generation ordering problem
   movptr(rax, ExternalAddress(StubRoutines::verify_oop_subroutine_entry_address()));
   call(rax);
+  // Caller pops the arguments (oop, message) and restores rax, r10
 }
 
 
@@ -7699,6 +7711,7 @@ void MacroAssembler::check_method_handle_type(Register mtype_reg, Register mh_re
 // method handle's MethodType.  This macro hides the distinction.
 void MacroAssembler::load_method_handle_vmslots(Register vmslots_reg, Register mh_reg,
                                                 Register temp_reg) {
+  assert_different_registers(vmslots_reg, mh_reg, temp_reg);
   if (UseCompressedOops)  unimplemented();  // field accesses must decode
   // load mh.type.form.vmslots
   if (java_dyn_MethodHandle::vmslots_offset_in_bytes() != 0) {
@@ -7737,7 +7750,7 @@ void MacroAssembler::jump_to_method_handle_entry(Register mh_reg, Register temp_
 Address MacroAssembler::argument_address(RegisterOrConstant arg_slot,
                                          int extra_slot_offset) {
   // cf. TemplateTable::prepare_invoke(), if (load_receiver).
-  int stackElementSize = Interpreter::stackElementSize();
+  int stackElementSize = Interpreter::stackElementSize;
   int offset = Interpreter::expr_offset_in_bytes(extra_slot_offset+0);
 #ifdef ASSERT
   int offset1 = Interpreter::expr_offset_in_bytes(extra_slot_offset+1);
@@ -7764,6 +7777,9 @@ void MacroAssembler::verify_oop_addr(Address addr, const char* s) {
   char* b = new char[strlen(s) + 50];
   sprintf(b, "verify_oop_addr: %s", s);
 
+#ifdef _LP64
+  push(rscratch1);                    // save r10, trashed by movptr()
+#endif
   push(rax);                          // save rax,
   // addr may contain rsp so we will have to adjust it based on the push
   // we just did
@@ -7786,7 +7802,7 @@ void MacroAssembler::verify_oop_addr(Address addr, const char* s) {
   // call indirectly to solve generation ordering problem
   movptr(rax, ExternalAddress(StubRoutines::verify_oop_subroutine_entry_address()));
   call(rax);
-  // Caller pops the arguments and restores rax, from the stack
+  // Caller pops the arguments (addr, message) and restores rax, r10.
 }
 
 void MacroAssembler::verify_tlab() {
@@ -7968,7 +7984,7 @@ class FPU_State {
       case 2: return "special";
       case 3: return "empty";
     }
-    ShouldNotReachHere()
+    ShouldNotReachHere();
     return NULL;
   }
 
@@ -8182,9 +8198,14 @@ void MacroAssembler::load_prototype_header(Register dst, Register src) {
     assert (Universe::heap() != NULL, "java heap should be initialized");
     movl(dst, Address(src, oopDesc::klass_offset_in_bytes()));
     if (Universe::narrow_oop_shift() != 0) {
-      assert(Address::times_8 == LogMinObjAlignmentInBytes &&
-             Address::times_8 == Universe::narrow_oop_shift(), "decode alg wrong");
-      movq(dst, Address(r12_heapbase, dst, Address::times_8, Klass::prototype_header_offset_in_bytes() + klassOopDesc::klass_part_offset_in_bytes()));
+      assert(LogMinObjAlignmentInBytes == Universe::narrow_oop_shift(), "decode alg wrong");
+      if (LogMinObjAlignmentInBytes == Address::times_8) {
+        movq(dst, Address(r12_heapbase, dst, Address::times_8, Klass::prototype_header_offset_in_bytes() + klassOopDesc::klass_part_offset_in_bytes()));
+      } else {
+        // OK to use shift since we don't need to preserve flags.
+        shlq(dst, LogMinObjAlignmentInBytes);
+        movq(dst, Address(r12_heapbase, dst, Address::times_1, Klass::prototype_header_offset_in_bytes() + klassOopDesc::klass_part_offset_in_bytes()));
+      }
     } else {
       movq(dst, Address(dst, Klass::prototype_header_offset_in_bytes() + klassOopDesc::klass_part_offset_in_bytes()));
     }
@@ -8242,30 +8263,35 @@ void MacroAssembler::store_heap_oop_null(Address dst) {
   }
 }
 
-// Algorithm must match oop.inline.hpp encode_heap_oop.
-void MacroAssembler::encode_heap_oop(Register r) {
+#ifdef ASSERT
+void MacroAssembler::verify_heapbase(const char* msg) {
   assert (UseCompressedOops, "should be compressed");
   assert (Universe::heap() != NULL, "java heap should be initialized");
+  if (CheckCompressedOops) {
+    Label ok;
+    push(rscratch1); // cmpptr trashes rscratch1
+    cmpptr(r12_heapbase, ExternalAddress((address)Universe::narrow_oop_base_addr()));
+    jcc(Assembler::equal, ok);
+    stop(msg);
+    bind(ok);
+    pop(rscratch1);
+  }
+}
+#endif
+
+// Algorithm must match oop.inline.hpp encode_heap_oop.
+void MacroAssembler::encode_heap_oop(Register r) {
+#ifdef ASSERT
+  verify_heapbase("MacroAssembler::encode_heap_oop: heap base corrupted?");
+#endif
+  verify_oop(r, "broken oop in encode_heap_oop");
   if (Universe::narrow_oop_base() == NULL) {
-    verify_oop(r, "broken oop in encode_heap_oop");
     if (Universe::narrow_oop_shift() != 0) {
       assert (LogMinObjAlignmentInBytes == Universe::narrow_oop_shift(), "decode alg wrong");
       shrq(r, LogMinObjAlignmentInBytes);
     }
     return;
   }
-#ifdef ASSERT
-  if (CheckCompressedOops) {
-    Label ok;
-    push(rscratch1); // cmpptr trashes rscratch1
-    cmpptr(r12_heapbase, ExternalAddress((address)Universe::narrow_oop_base_addr()));
-    jcc(Assembler::equal, ok);
-    stop("MacroAssembler::encode_heap_oop: heap base corrupted?");
-    bind(ok);
-    pop(rscratch1);
-  }
-#endif
-  verify_oop(r, "broken oop in encode_heap_oop");
   testq(r, r);
   cmovq(Assembler::equal, r, r12_heapbase);
   subq(r, r12_heapbase);
@@ -8273,9 +8299,8 @@ void MacroAssembler::encode_heap_oop(Register r) {
 }
 
 void MacroAssembler::encode_heap_oop_not_null(Register r) {
-  assert (UseCompressedOops, "should be compressed");
-  assert (Universe::heap() != NULL, "java heap should be initialized");
 #ifdef ASSERT
+  verify_heapbase("MacroAssembler::encode_heap_oop_not_null: heap base corrupted?");
   if (CheckCompressedOops) {
     Label ok;
     testq(r, r);
@@ -8295,9 +8320,8 @@ void MacroAssembler::encode_heap_oop_not_null(Register r) {
 }
 
 void MacroAssembler::encode_heap_oop_not_null(Register dst, Register src) {
-  assert (UseCompressedOops, "should be compressed");
-  assert (Universe::heap() != NULL, "java heap should be initialized");
 #ifdef ASSERT
+  verify_heapbase("MacroAssembler::encode_heap_oop_not_null2: heap base corrupted?");
   if (CheckCompressedOops) {
     Label ok;
     testq(src, src);
@@ -8320,72 +8344,67 @@ void MacroAssembler::encode_heap_oop_not_null(Register dst, Register src) {
 }
 
 void  MacroAssembler::decode_heap_oop(Register r) {
-  assert (UseCompressedOops, "should be compressed");
-  assert (Universe::heap() != NULL, "java heap should be initialized");
+#ifdef ASSERT
+  verify_heapbase("MacroAssembler::decode_heap_oop: heap base corrupted?");
+#endif
   if (Universe::narrow_oop_base() == NULL) {
     if (Universe::narrow_oop_shift() != 0) {
       assert (LogMinObjAlignmentInBytes == Universe::narrow_oop_shift(), "decode alg wrong");
       shlq(r, LogMinObjAlignmentInBytes);
     }
-    verify_oop(r, "broken oop in decode_heap_oop");
-    return;
+  } else {
+    Label done;
+    shlq(r, LogMinObjAlignmentInBytes);
+    jccb(Assembler::equal, done);
+    addq(r, r12_heapbase);
+    bind(done);
   }
-#ifdef ASSERT
-  if (CheckCompressedOops) {
-    Label ok;
-    push(rscratch1);
-    cmpptr(r12_heapbase,
-           ExternalAddress((address)Universe::narrow_oop_base_addr()));
-    jcc(Assembler::equal, ok);
-    stop("MacroAssembler::decode_heap_oop: heap base corrupted?");
-    bind(ok);
-    pop(rscratch1);
-  }
-#endif
-
-  Label done;
-  shlq(r, LogMinObjAlignmentInBytes);
-  jccb(Assembler::equal, done);
-  addq(r, r12_heapbase);
-#if 0
-   // alternate decoding probably a wash.
-   testq(r, r);
-   jccb(Assembler::equal, done);
-   leaq(r, Address(r12_heapbase, r, Address::times_8, 0));
-#endif
-  bind(done);
   verify_oop(r, "broken oop in decode_heap_oop");
 }
 
 void  MacroAssembler::decode_heap_oop_not_null(Register r) {
+  // Note: it will change flags
   assert (UseCompressedOops, "should only be used for compressed headers");
   assert (Universe::heap() != NULL, "java heap should be initialized");
   // Cannot assert, unverified entry point counts instructions (see .ad file)
   // vtableStubs also counts instructions in pd_code_size_limit.
   // Also do not verify_oop as this is called by verify_oop.
   if (Universe::narrow_oop_shift() != 0) {
-    assert (Address::times_8 == LogMinObjAlignmentInBytes &&
-            Address::times_8 == Universe::narrow_oop_shift(), "decode alg wrong");
-    // Don't use Shift since it modifies flags.
-    leaq(r, Address(r12_heapbase, r, Address::times_8, 0));
+    assert(LogMinObjAlignmentInBytes == Universe::narrow_oop_shift(), "decode alg wrong");
+    shlq(r, LogMinObjAlignmentInBytes);
+    if (Universe::narrow_oop_base() != NULL) {
+      addq(r, r12_heapbase);
+    }
   } else {
     assert (Universe::narrow_oop_base() == NULL, "sanity");
   }
 }
 
 void  MacroAssembler::decode_heap_oop_not_null(Register dst, Register src) {
+  // Note: it will change flags
   assert (UseCompressedOops, "should only be used for compressed headers");
   assert (Universe::heap() != NULL, "java heap should be initialized");
   // Cannot assert, unverified entry point counts instructions (see .ad file)
   // vtableStubs also counts instructions in pd_code_size_limit.
   // Also do not verify_oop as this is called by verify_oop.
   if (Universe::narrow_oop_shift() != 0) {
-    assert (Address::times_8 == LogMinObjAlignmentInBytes &&
-            Address::times_8 == Universe::narrow_oop_shift(), "decode alg wrong");
-    leaq(dst, Address(r12_heapbase, src, Address::times_8, 0));
-  } else if (dst != src) {
+    assert(LogMinObjAlignmentInBytes == Universe::narrow_oop_shift(), "decode alg wrong");
+    if (LogMinObjAlignmentInBytes == Address::times_8) {
+      leaq(dst, Address(r12_heapbase, src, Address::times_8, 0));
+    } else {
+      if (dst != src) {
+        movq(dst, src);
+      }
+      shlq(dst, LogMinObjAlignmentInBytes);
+      if (Universe::narrow_oop_base() != NULL) {
+        addq(dst, r12_heapbase);
+      }
+    }
+  } else {
     assert (Universe::narrow_oop_base() == NULL, "sanity");
-    movq(dst, src);
+    if (dst != src) {
+      movq(dst, src);
+    }
   }
 }
 
@@ -8747,6 +8766,186 @@ void MacroAssembler::char_arrays_equals(bool is_array_equ, Register ary1, Regist
   // That's it
   bind(DONE);
 }
+
+#ifdef PRODUCT
+#define BLOCK_COMMENT(str) /* nothing */
+#else
+#define BLOCK_COMMENT(str) block_comment(str)
+#endif
+
+#define BIND(label) bind(label); BLOCK_COMMENT(#label ":")
+void MacroAssembler::generate_fill(BasicType t, bool aligned,
+                                   Register to, Register value, Register count,
+                                   Register rtmp, XMMRegister xtmp) {
+  assert_different_registers(to, value, count, rtmp);
+  Label L_exit, L_skip_align1, L_skip_align2, L_fill_byte;
+  Label L_fill_2_bytes, L_fill_4_bytes;
+
+  int shift = -1;
+  switch (t) {
+    case T_BYTE:
+      shift = 2;
+      break;
+    case T_SHORT:
+      shift = 1;
+      break;
+    case T_INT:
+      shift = 0;
+      break;
+    default: ShouldNotReachHere();
+  }
+
+  if (t == T_BYTE) {
+    andl(value, 0xff);
+    movl(rtmp, value);
+    shll(rtmp, 8);
+    orl(value, rtmp);
+  }
+  if (t == T_SHORT) {
+    andl(value, 0xffff);
+  }
+  if (t == T_BYTE || t == T_SHORT) {
+    movl(rtmp, value);
+    shll(rtmp, 16);
+    orl(value, rtmp);
+  }
+
+  cmpl(count, 2<<shift); // Short arrays (< 8 bytes) fill by element
+  jcc(Assembler::below, L_fill_4_bytes); // use unsigned cmp
+  if (!UseUnalignedLoadStores && !aligned && (t == T_BYTE || t == T_SHORT)) {
+    // align source address at 4 bytes address boundary
+    if (t == T_BYTE) {
+      // One byte misalignment happens only for byte arrays
+      testptr(to, 1);
+      jccb(Assembler::zero, L_skip_align1);
+      movb(Address(to, 0), value);
+      increment(to);
+      decrement(count);
+      BIND(L_skip_align1);
+    }
+    // Two bytes misalignment happens only for byte and short (char) arrays
+    testptr(to, 2);
+    jccb(Assembler::zero, L_skip_align2);
+    movw(Address(to, 0), value);
+    addptr(to, 2);
+    subl(count, 1<<(shift-1));
+    BIND(L_skip_align2);
+  }
+  if (UseSSE < 2) {
+    Label L_fill_32_bytes_loop, L_check_fill_8_bytes, L_fill_8_bytes_loop, L_fill_8_bytes;
+    // Fill 32-byte chunks
+    subl(count, 8 << shift);
+    jcc(Assembler::less, L_check_fill_8_bytes);
+    align(16);
+
+    BIND(L_fill_32_bytes_loop);
+
+    for (int i = 0; i < 32; i += 4) {
+      movl(Address(to, i), value);
+    }
+
+    addptr(to, 32);
+    subl(count, 8 << shift);
+    jcc(Assembler::greaterEqual, L_fill_32_bytes_loop);
+    BIND(L_check_fill_8_bytes);
+    addl(count, 8 << shift);
+    jccb(Assembler::zero, L_exit);
+    jmpb(L_fill_8_bytes);
+
+    //
+    // length is too short, just fill qwords
+    //
+    BIND(L_fill_8_bytes_loop);
+    movl(Address(to, 0), value);
+    movl(Address(to, 4), value);
+    addptr(to, 8);
+    BIND(L_fill_8_bytes);
+    subl(count, 1 << (shift + 1));
+    jcc(Assembler::greaterEqual, L_fill_8_bytes_loop);
+    // fall through to fill 4 bytes
+  } else {
+    Label L_fill_32_bytes;
+    if (!UseUnalignedLoadStores) {
+      // align to 8 bytes, we know we are 4 byte aligned to start
+      testptr(to, 4);
+      jccb(Assembler::zero, L_fill_32_bytes);
+      movl(Address(to, 0), value);
+      addptr(to, 4);
+      subl(count, 1<<shift);
+    }
+    BIND(L_fill_32_bytes);
+    {
+      assert( UseSSE >= 2, "supported cpu only" );
+      Label L_fill_32_bytes_loop, L_check_fill_8_bytes, L_fill_8_bytes_loop, L_fill_8_bytes;
+      // Fill 32-byte chunks
+      movdl(xtmp, value);
+      pshufd(xtmp, xtmp, 0);
+
+      subl(count, 8 << shift);
+      jcc(Assembler::less, L_check_fill_8_bytes);
+      align(16);
+
+      BIND(L_fill_32_bytes_loop);
+
+      if (UseUnalignedLoadStores) {
+        movdqu(Address(to, 0), xtmp);
+        movdqu(Address(to, 16), xtmp);
+      } else {
+        movq(Address(to, 0), xtmp);
+        movq(Address(to, 8), xtmp);
+        movq(Address(to, 16), xtmp);
+        movq(Address(to, 24), xtmp);
+      }
+
+      addptr(to, 32);
+      subl(count, 8 << shift);
+      jcc(Assembler::greaterEqual, L_fill_32_bytes_loop);
+      BIND(L_check_fill_8_bytes);
+      addl(count, 8 << shift);
+      jccb(Assembler::zero, L_exit);
+      jmpb(L_fill_8_bytes);
+
+      //
+      // length is too short, just fill qwords
+      //
+      BIND(L_fill_8_bytes_loop);
+      movq(Address(to, 0), xtmp);
+      addptr(to, 8);
+      BIND(L_fill_8_bytes);
+      subl(count, 1 << (shift + 1));
+      jcc(Assembler::greaterEqual, L_fill_8_bytes_loop);
+    }
+  }
+  // fill trailing 4 bytes
+  BIND(L_fill_4_bytes);
+  testl(count, 1<<shift);
+  jccb(Assembler::zero, L_fill_2_bytes);
+  movl(Address(to, 0), value);
+  if (t == T_BYTE || t == T_SHORT) {
+    addptr(to, 4);
+    BIND(L_fill_2_bytes);
+    // fill trailing 2 bytes
+    testl(count, 1<<(shift-1));
+    jccb(Assembler::zero, L_fill_byte);
+    movw(Address(to, 0), value);
+    if (t == T_BYTE) {
+      addptr(to, 2);
+      BIND(L_fill_byte);
+      // fill trailing byte
+      testl(count, 1);
+      jccb(Assembler::zero, L_exit);
+      movb(Address(to, 0), value);
+    } else {
+      BIND(L_fill_byte);
+    }
+  } else {
+    BIND(L_fill_2_bytes);
+  }
+  BIND(L_exit);
+}
+#undef BIND
+#undef BLOCK_COMMENT
+
 
 Assembler::Condition MacroAssembler::negate_condition(Assembler::Condition cond) {
   switch (cond) {

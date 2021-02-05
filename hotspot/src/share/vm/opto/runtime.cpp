@@ -645,6 +645,24 @@ const TypeFunc* OptoRuntime::generic_arraycopy_Type() {
 }
 
 
+const TypeFunc* OptoRuntime::array_fill_Type() {
+  // create input type (domain): pointer, int, size_t
+  const Type** fields = TypeTuple::fields(3 LP64_ONLY( + 1));
+  int argp = TypeFunc::Parms;
+  fields[argp++] = TypePtr::NOTNULL;
+  fields[argp++] = TypeInt::INT;
+  fields[argp++] = TypeX_X;               // size in whatevers (size_t)
+  LP64_ONLY(fields[argp++] = Type::HALF); // other half of long length
+  const TypeTuple *domain = TypeTuple::make(argp, fields);
+
+  // create result type
+  fields = TypeTuple::fields(1);
+  fields[TypeFunc::Parms+0] = NULL; // void
+  const TypeTuple *range = TypeTuple::make(TypeFunc::Parms, fields);
+
+  return TypeFunc::make(domain, range);
+}
+
 //------------- Interpreter state access for on stack replacement
 const TypeFunc* OptoRuntime::osr_end_Type() {
   // create input type (domain)
@@ -864,8 +882,8 @@ JRT_ENTRY_NO_ASYNC(address, OptoRuntime::handle_exception_C_helper(JavaThread* t
     thread->set_exception_handler_pc(handler_address);
     thread->set_exception_stack_size(0);
 
-    // Check if the exception PC is a MethodHandle call.
-    thread->set_is_method_handle_exception(nm->is_method_handle_return(pc));
+    // Check if the exception PC is a MethodHandle call site.
+    thread->set_is_method_handle_return(nm->is_method_handle_return(pc));
   }
 
   // Restore correct return pc.  Was saved above.
@@ -952,7 +970,7 @@ address OptoRuntime::rethrow_C(oopDesc* exception, JavaThread* thread, address r
 
   thread->set_vm_result(exception);
   // Frame not compiled (handles deoptimization blob)
-  return SharedRuntime::raw_exception_handler_for_return_address(ret_pc);
+  return SharedRuntime::raw_exception_handler_for_return_address(thread, ret_pc);
 }
 
 

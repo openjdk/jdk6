@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1924,26 +1924,6 @@ processOneEvent(XtInputMask iMask) {
             else {
               /* There must be a timer, alternate input, or signal event. */
               XtAppProcessEvent(awt_appContext, iMask & ~XtIMXEvent);
-            }
-
-            /*
-            ** Bug #4361799: Forte4J sometimes crashes on Solaris:
-            ** There is an underlying bug in Selection.c in Xt lib.
-            ** The routine HandleSelectionEvents, can call EndProtectedSection()
-            ** more than  StartProtectedSection(), and then EndProtectedSection
-            ** will restore the default XError handler.  As a result awt's
-            ** XError handler gets removed and we later crash on an XError.
-            **
-            ** This happens when we call XtAppProcessEvent with event type 1e
-            ** (SelectionRequest) when running two copies of Forte
-            **
-            ** XSetErrorHandler can safely be called repeatedly, so we are
-            ** fixing this with the sledgehammer, and resetting our XError
-            ** handler every time through the loop:
-            */
-            {
-                extern int32_t xerror_handler();
-                XSetErrorHandler(xerror_handler);
             }
 
 } /* processOneEvent() */
