@@ -81,9 +81,7 @@ include $(BUILDDIR)/common/Library.gmk
 #
 # Full package names of implementations requiring stubs
 #
-REMOTE_impls = \
-	sun.rmi.registry.RegistryImpl \
-	sun.rmi.transport.DGCImpl
+REMOTE_impls = 
 
 ifeq ($(PLATFORM), windows)
 build: stubs

@@ -30,7 +30,6 @@ import javax.xml.transform.sax.SAXSource;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.transform.stax.StAXSource;
 
-
 import com.sun.org.apache.xml.internal.dtm.DTM;
 import com.sun.org.apache.xml.internal.dtm.ref.DTMDefaultBase;
 import com.sun.org.apache.xml.internal.dtm.DTMException;
@@ -53,13 +52,6 @@ import org.xml.sax.XMLReader;
  */
 public class XSLTCDTMManager extends DTMManagerDefault
 {
-
-    /** The default class name to use as the manager. */
-    private static final String DEFAULT_CLASS_NAME =
-        "com.sun.org.apache.xalan.internal.xsltc.dom.XSLTCDTMManager";
-
-    private static final String DEFAULT_PROP_NAME =
-        "com.sun.org.apache.xalan.internal.xsltc.dom.XSLTCDTMManager";
 
     /** Set this to true if you want a dump of the DTM after creation */
     private static final boolean DUMPTREE = false;
@@ -87,28 +79,12 @@ public class XSLTCDTMManager extends DTMManagerDefault
     }
 
     /**
-     * Look up the class that provides the XSLTC DTM Manager service.
-     * The following lookup procedure is used to find the service provider.
-     * <ol>
-     * <li>The value of the
-     * <code>com.sun.org.apache.xalan.internal.xsltc.dom.XSLTCDTMManager</code> property, is
-     * checked.</li>
-     * <li>The <code>xalan.propeties</code> file is checked for a property
-     * of the same name.</li>
-     * <li>The
-     * <code>META-INF/services/com.sun.org.apache.xalan.internal.xsltc.dom.XSLTCDTMManager</code>
-     * file is checked.
-     * </ol>
-     * The default is <code>com.sun.org.apache.xalan.internal.xsltc.dom.XSLTCDTMManager</code>.
+     * Creates a new instance of the XSLTC DTM Manager service.
+     * Creates a new instance of the default class
+     * <code>com.sun.org.apache.xalan.internal.xsltc.dom.XSLTCDTMManager</code>.
      */
-    public static Class getDTMManagerClass() {
-        Class mgrClass = ObjectFactory.lookUpFactoryClass(DEFAULT_PROP_NAME,
-                                                          null,
-                                                          DEFAULT_CLASS_NAME);
-        // If no class found, default to this one.  (This should never happen -
-        // the ObjectFactory has already been told that the current class is
-        // the default).
-        return (mgrClass != null) ? mgrClass : XSLTCDTMManager.class;
+    public static XSLTCDTMManager createNewDTMManagerInstance() {
+        return newInstance();
     }
 
     /**
@@ -132,6 +108,7 @@ public class XSLTCDTMManager extends DTMManagerDefault
      *
      * @return a non-null DTM reference.
      */
+    @Override
     public DTM getDTM(Source source, boolean unique,
                       DTMWSFilter whiteSpaceFilter, boolean incremental,
                       boolean doIndexing)

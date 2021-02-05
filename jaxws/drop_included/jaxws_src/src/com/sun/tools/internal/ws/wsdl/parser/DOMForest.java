@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,6 +36,7 @@ import com.sun.tools.internal.ws.wsdl.document.schema.SchemaConstants;
 import com.sun.tools.internal.xjc.reader.internalizer.LocatorTable;
 import com.sun.xml.internal.bind.marshaller.DataWriter;
 import com.sun.xml.internal.ws.util.JAXWSUtils;
+import com.sun.xml.internal.ws.util.xml.XmlUtil;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -117,13 +118,11 @@ public class DOMForest {
         this.options = options;
         this.errorReceiver = errReceiver;
         this.logic = logic;
-        try {
-            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            dbf.setNamespaceAware(true);
-            this.documentBuilder = dbf.newDocumentBuilder();
 
-            this.parserFactory = SAXParserFactory.newInstance();
-            this.parserFactory.setNamespaceAware(true);
+        DocumentBuilderFactory dbf = XmlUtil.newDocumentBuilderFactory();
+        this.parserFactory = XmlUtil.newSAXParserFactory();
+        try {
+            this.documentBuilder = dbf.newDocumentBuilder();
         } catch (ParserConfigurationException e) {
             throw new AssertionError(e);
         }
