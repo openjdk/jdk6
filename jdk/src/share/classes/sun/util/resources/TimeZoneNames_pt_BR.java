@@ -137,6 +137,8 @@ public final class TimeZoneNames_pt_BR extends TimeZoneNamesBundle {
                                            "Fuso hor\u00e1rio de ver\u00e3o de Lord Howe", "LHDT"};
         String MHT[] = new String[] {"Fuso hor\u00e1rio das Ilhas Marshall", "MHT",
                                      "Fuso hor\u00e1rio de ver\u00e3o das Ilhas Marshall", "MHST"};
+	String MMT[] = new String[] {"Fuso hor\u00e1rio de Mianmar", "MMT",
+                                     "Fuso hor\u00e1rio de ver\u00e3o de Mianmar", "MMST"};
         String MSK[] = new String[] {"Fuso hor\u00e1rio padr\u00e3o de Moscou", "MSK",
                                      "Hor\u00e1rio de luz natural de Moscou", "MSD"};
         String MST[] = new String[] {"Fuso hor\u00e1rio padr\u00e3o das montanhas", "MST",
@@ -566,8 +568,7 @@ public final class TimeZoneNames_pt_BR extends TimeZoneNamesBundle {
             {"Asia/Qatar", ARAST},
             {"Asia/Qyzylorda", new String[] {"Fuso hor\u00e1rio de Kizil-Orda", "QYZT",
                                              "Fuso hor\u00e1rio de ver\u00e3o de Kizil-Orda", "QYZST"}},
-            {"Asia/Rangoon", new String[] {"Fuso hor\u00e1rio de Mianmar", "MMT",
-                                           "Fuso hor\u00e1rio de ver\u00e3o de Mianmar", "MMST"}},
+            {"Asia/Rangoon", MMT},
             {"Asia/Riyadh", ARAST},
             {"Asia/Saigon", ICT},
             {"Asia/Sakhalin", new String[] {"Fuso hor\u00e1rio de Sakhalina", "SAKT",
@@ -594,6 +595,7 @@ public final class TimeZoneNames_pt_BR extends TimeZoneNamesBundle {
             {"Asia/Vientiane", ICT},
             {"Asia/Vladivostok", VLAT},
             {"Asia/Yakutsk", YAKT},
+            {"Asia/Yangon", MMT},
             {"Asia/Yekaterinburg", new String[] {"Fuso hor\u00e1rio de Yekaterinburgo", "YEKT",
                                                  "Fuso hor\u00e1rio de ver\u00e3o de Yekaterinburgo", "YEKST"}},
             {"Asia/Yerevan", ARMT},

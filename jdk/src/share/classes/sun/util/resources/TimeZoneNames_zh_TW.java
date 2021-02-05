@@ -139,6 +139,8 @@ public final class TimeZoneNames_zh_TW extends TimeZoneNamesBundle {
                                            "\u8c6a\u52f3\u7235\u5cf6\u590f\u4ee4\u6642\u9593", "LHDT"};
         String MHT[] = new String[] {"\u99ac\u7d39\u723e\u7fa4\u5cf6\u6642\u9593", "MHT",
                                      "\u99ac\u7d39\u723e\u7fa4\u5cf6\u590f\u4ee4\u6642\u9593", "MHST"};
+	String MMT[] = new String[] {"\u7dec\u7538\u6642\u9593", "MMT",
+                                     "\u7dec\u7538\u590f\u4ee4\u6642\u9593", "MMST"};
         String MSK[] = new String[] {"\u83ab\u65af\u79d1\u6a19\u6e96\u6642\u9593", "MSK",
                                      "\u83ab\u65af\u79d1\u65e5\u5149\u7bc0\u7d04\u6642\u9593", "MSD"};
         String MST[] = new String[] {"\u5c71\u5340\u6a19\u6e96\u6642\u9593", "MST",
@@ -566,8 +568,7 @@ public final class TimeZoneNames_zh_TW extends TimeZoneNamesBundle {
             {"Asia/Qatar", ARAST},
             {"Asia/Qyzylorda", new String[] {"Qyzylorda \u6642\u9593", "QYZT",
                                              "Qyzylorda \u590f\u4ee4\u6642\u9593", "QYZST"}},
-            {"Asia/Rangoon", new String[] {"\u7dec\u7538\u6642\u9593", "MMT",
-                                           "\u7dec\u7538\u590f\u4ee4\u6642\u9593", "MMST"}},
+            {"Asia/Rangoon", MMT},
             {"Asia/Riyadh", ARAST},
             {"Asia/Saigon", ICT},
             {"Asia/Sakhalin", new String[] {"\u5eab\u9801\u5cf6\u6642\u9593", "SAKT",
@@ -595,6 +596,7 @@ public final class TimeZoneNames_zh_TW extends TimeZoneNamesBundle {
             {"Asia/Vientiane", ICT},
             {"Asia/Vladivostok", VLAT},
             {"Asia/Yakutsk", YAKT},
+	    {"Asia/Yangon", MMT},
             {"Asia/Yekaterinburg", new String[] {"Yekaterinburg \u6642\u9593", "YEKT",
                                                  "Yekaterinburg \u590f\u4ee4\u6642\u9593", "YEKST"}},
             {"Asia/Yerevan", ARMT},

@@ -141,6 +141,8 @@ public final class TimeZoneNames_de extends TimeZoneNamesBundle {
                                      "Marshallinseln Sommerzeit", "MHST"};
         String MSK[] = new String[] {"Moskauer Normalzeit", "MSK",
                                      "Moskauer Sommerzeit", "MSD"};
+	String MMT[] = new String[] {"Myanmar Zeit", "MMT",
+                                     "Myanmar Sommerzeit", "MMST"};
         String MST[] = new String[] {"Rocky Mountains Normalzeit", "MST",
                                      "Rocky Mountains Sommerzeit", "MDT"};
         String MYT[] = new String[] {"Malaysische Zeit", "MYT",
@@ -566,8 +568,7 @@ public final class TimeZoneNames_de extends TimeZoneNamesBundle {
             {"Asia/Qatar", ARAST},
             {"Asia/Qyzylorda", new String[] {"Qyzylorda Zeit", "QYZT",
                                              "Qyzylorda Sommerzeit", "QYZST"}},
-            {"Asia/Rangoon", new String[] {"Myanmar Zeit", "MMT",
-                                           "Myanmar Sommerzeit", "MMST"}},
+            {"Asia/Rangoon", MMT},
             {"Asia/Riyadh", ARAST},
             {"Asia/Saigon", ICT},
             {"Asia/Sakhalin", new String[] {"Sakhalin Zeit", "SAKT",
@@ -594,6 +595,7 @@ public final class TimeZoneNames_de extends TimeZoneNamesBundle {
             {"Asia/Vientiane", ICT},
             {"Asia/Vladivostok", VLAT},
             {"Asia/Yakutsk", YAKT},
+            {"Asia/Yangon", MMT},
             {"Asia/Yekaterinburg", new String[] {"Jekaterinburger Zeit", "YEKT",
                                                  "Jekaterinburger Sommerzeit", "YEKST"}},
             {"Asia/Yerevan", ARMT},

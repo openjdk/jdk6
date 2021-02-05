@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016 Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,6 @@ package sun.security.util;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.security.Security;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -44,8 +43,7 @@ public abstract class AbstractAlgorithmConstraints
     }
 
     // Get algorithm constraints from the specified security property.
-    private static void loadAlgorithmsMap(Map<String, String[]> algorithmsMap,
-            final String propertyName) {
+    static String[] getAlgorithms(final String propertyName) {
         String property = AccessController.doPrivileged(
             new PrivilegedAction<String>() {
                 public String run() {
@@ -69,18 +67,7 @@ public abstract class AbstractAlgorithmConstraints
         if (algorithmsInProperty == null) {
             algorithmsInProperty = new String[0];
         }
-        algorithmsMap.put(propertyName, algorithmsInProperty);
-    }
-
-    static String[] getAlgorithms(Map<String, String[]> algorithmsMap,
-            String propertyName) {
-        synchronized (algorithmsMap) {
-            if (!algorithmsMap.containsKey(propertyName)) {
-                loadAlgorithmsMap(algorithmsMap, propertyName);
-            }
-
-            return algorithmsMap.get(propertyName);
-        }
+        return algorithmsInProperty;
     }
 
     static boolean checkAlgorithm(String[] algorithms, String algorithm,
