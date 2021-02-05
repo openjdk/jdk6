@@ -177,6 +177,9 @@ safe_ExceptionOccurred(JNIEnv *env) throw (std::bad_alloc) {
         } else {
             // rethrow exception
             env->Throw(xcp);
+            // temp solution to reveal all concurrency issues in jtreg and JCK
+            // we will switch it back to silent mode before the release
+            env->ExceptionDescribe();
             return xcp;
         }
     }
