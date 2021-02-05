@@ -1,0 +1,11 @@
+// Platform file for win32 NT platform $Revision: 1.2 $
+
+os_family = win32
+
+arch = amd64
+
+os_arch = win32_amd64
+
+compiler = visCPP
+
+gnu_dis_arch = amd64

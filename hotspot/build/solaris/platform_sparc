@@ -1,0 +1,13 @@
+os_family = solaris
+
+arch = sparc
+
+os_arch = solaris_sparc
+
+lib_arch = sparc
+
+compiler = sparcWorks
+
+gnu_dis_arch = sparc
+
+sysdefs = -DSOLARIS -DSPARC_WORKS -DSPARC
