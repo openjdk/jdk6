@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -56,8 +56,7 @@ import javax.swing.plaf.basic.DragRecognitionSupport.BeforeDrag;
  */
 public class BasicListUI extends ListUI
 {
-    private static final StringBuilder BASELINE_COMPONENT_KEY =
-        new StringBuilder("List.baselineComponent");
+    private static final Object BASELINE_COMPONENT_KEY = new Object(); // List.baselineComponent
 
     protected JList list = null;
     protected CellRendererPane rendererPane;
@@ -480,6 +479,12 @@ public class BasicListUI extends ListUI
         if (renderer == null) {
             ListCellRenderer lcr = (ListCellRenderer)UIManager.get(
                     "List.cellRenderer");
+
+            // fix for 6711072 some LAFs like Nimbus do not provide this
+            // UIManager key and we should not through a NPE here because of it
+            if (lcr == null) {
+                lcr = new DefaultListCellRenderer();
+            }
             renderer = lcr.getListCellRendererComponent(
                     list, "a", -1, false, false);
             lafDefaults.put(BASELINE_COMPONENT_KEY, renderer);
