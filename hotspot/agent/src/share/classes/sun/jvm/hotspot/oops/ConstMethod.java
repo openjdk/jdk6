@@ -47,15 +47,12 @@ public class ConstMethod extends Oop {
   private static int HAS_LINENUMBER_TABLE;
   private static int HAS_CHECKED_EXCEPTIONS;
   private static int HAS_LOCALVARIABLE_TABLE;
+  private static int HAS_EXCEPTION_TABLE;
 
   private static synchronized void initialize(TypeDataBase db) throws WrongTypeException {
     Type type                  = db.lookupType("constMethodOopDesc");
     // Backpointer to non-const methodOop
     method                     = new OopField(type.getOopField("_method"), 0);
-    // The exception handler table. 4-tuples of ints [start_pc, end_pc,
-    // handler_pc, catch_type index] For methods with no exceptions the
-    // table is pointing to Universe::the_empty_int_array
-    exceptionTable             = new OopField(type.getOopField("_exception_table"), 0);
     constMethodSize            = new CIntField(type.getCIntegerField("_constMethod_size"), 0);
     flags                      = new ByteField(type.getJByteField("_flags"), 0);
 
@@ -63,6 +60,7 @@ public class ConstMethod extends Oop {
     HAS_LINENUMBER_TABLE      = db.lookupIntConstant("constMethodOopDesc::_has_linenumber_table").intValue();
     HAS_CHECKED_EXCEPTIONS     = db.lookupIntConstant("constMethodOopDesc::_has_checked_exceptions").intValue();
     HAS_LOCALVARIABLE_TABLE   = db.lookupIntConstant("constMethodOopDesc::_has_localvariable_table").intValue();
+    HAS_EXCEPTION_TABLE       = db.lookupIntConstant("constMethodOopDesc::_has_exception_table").intValue();
 
     // Size of Java bytecodes allocated immediately after constMethodOop.
     codeSize                   = new CIntField(type.getCIntegerField("_code_size"), 0);
@@ -78,6 +76,9 @@ public class ConstMethod extends Oop {
 
     type                       = db.lookupType("LocalVariableTableElement");
     localVariableTableElementSize = type.getSize();
+
+    type                       = db.lookupType("ExceptionTableElement");
+    exceptionTableElementSize = type.getSize();
   }
 
   ConstMethod(OopHandle handle, ObjectHeap heap) {
@@ -86,7 +87,6 @@ public class ConstMethod extends Oop {
 
   // Fields
   private static OopField  method;
-  private static OopField  exceptionTable;
   private static CIntField constMethodSize;
   private static ByteField flags;
   private static CIntField codeSize;
@@ -99,14 +99,11 @@ public class ConstMethod extends Oop {
 
   private static long checkedExceptionElementSize;
   private static long localVariableTableElementSize;
+  private static long exceptionTableElementSize;
 
   // Accessors for declared fields
   public Method getMethod() {
     return (Method) method.getValue(this);
-  }
-
-  public TypeArray getExceptionTable() {
-    return (TypeArray) exceptionTable.getValue(this);
   }
 
   public long getConstMethodSize() {
@@ -224,7 +221,6 @@ public class ConstMethod extends Oop {
     super.iterateFields(visitor, doVMFields);
     if (doVMFields) {
       visitor.doOop(method, true);
-      visitor.doOop(exceptionTable, true);
       visitor.doCInt(constMethodSize, true);
       visitor.doByte(flags, true);
       visitor.doCInt(codeSize, true);
@@ -311,6 +307,23 @@ public class ConstMethod extends Oop {
     for (int i = 0; i < ret.length; i++) {
       ret[i] = new LocalVariableTableElement(getHandle(), offset);
       offset += localVariableTableElementSize;
+    }
+    return ret;
+  }
+
+  public boolean hasExceptionTable() {
+    return (getFlags() & HAS_EXCEPTION_TABLE) != 0;
+  }
+
+  public ExceptionTableElement[] getExceptionTable() {
+    if (Assert.ASSERTS_ENABLED) {
+      Assert.that(hasExceptionTable(), "should only be called if table is present");
+    }
+    ExceptionTableElement[] ret = new ExceptionTableElement[getExceptionTableLength()];
+    long offset = offsetOfExceptionTable();
+    for (int i = 0; i < ret.length; i++) {
+      ret[i] = new ExceptionTableElement(getHandle(), offset);
+      offset += exceptionTableElementSize;
     }
     return ret;
   }
@@ -404,7 +417,10 @@ public class ConstMethod extends Oop {
     if (Assert.ASSERTS_ENABLED) {
       Assert.that(hasLocalVariableTable(), "should only be called if table is present");
     }
-    if (hasCheckedExceptions()) {
+
+    if (hasExceptionTable()) {
+      return offsetOfExceptionTable() - 2;
+    } else if (hasCheckedExceptions()) {
       return offsetOfCheckedExceptions() - 2;
     } else {
       return offsetOfLastU2Element();
@@ -418,6 +434,35 @@ public class ConstMethod extends Oop {
       Assert.that(length > 0, "should only be called if table is present");
     }
     offset -= length * localVariableTableElementSize;
+    return offset;
+  }
+
+  private int getExceptionTableLength() {
+    if (hasExceptionTable()) {
+      return (int) getHandle().getCIntegerAt(offsetOfExceptionTableLength(), 2, true);
+    } else {
+      return 0;
+    }
+  }
+
+  private long offsetOfExceptionTableLength() {
+    if (Assert.ASSERTS_ENABLED) {
+      Assert.that(hasExceptionTable(), "should only be called if table is present");
+    }
+    if (hasCheckedExceptions()) {
+      return offsetOfCheckedExceptions() - 2;
+    } else {
+      return offsetOfLastU2Element();
+    }
+  }
+
+  private long offsetOfExceptionTable() {
+    long offset = offsetOfExceptionTableLength();
+    long length = getExceptionTableLength();
+    if (Assert.ASSERTS_ENABLED) {
+      Assert.that(length > 0, "should only be called if table is present");
+    }
+    offset -= length * exceptionTableElementSize;
     return offset;
   }
 

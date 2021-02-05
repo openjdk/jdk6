@@ -35,6 +35,10 @@ case "$OS" in
     PS=":"
     FS="/"
     ;;
+  CYGWIN* )
+    PS=";"
+    FS="/"
+    ;;
   Windows* )
     PS=";"
     FS="\\"
@@ -47,5 +51,5 @@ esac
 
 cp ${TESTSRC}${FS}foo2.jar .
 ${TESTJAVA}${FS}bin${FS}javac -d . ${TESTSRC}${FS}B5105410.java
-${TESTJAVA}${FS}bin${FS}java B5105410
+${TESTJAVA}${FS}bin${FS}java ${TESTVMOPTS} B5105410
 

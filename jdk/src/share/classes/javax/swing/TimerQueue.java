@@ -96,7 +96,7 @@ class TimerQueue implements Runnable
                 final ThreadGroup threadGroup =
                     AppContext.getAppContext().getThreadGroup();
                 java.security.AccessController.doPrivileged(
-                    new java.security.PrivilegedAction() {
+                    new java.security.PrivilegedAction<Object>() {
                     public Object run() {
                         Thread timerThread = new Thread(threadGroup, TimerQueue.this,
                                                         "TimerQueue");
@@ -232,7 +232,7 @@ class TimerQueue implements Runnable
     /**
      * Returns nanosecond time offset by origin
      */
-    private final static long now() {
+    private static long now() {
         return System.nanoTime() - NANO_ORIGIN;
     }
 

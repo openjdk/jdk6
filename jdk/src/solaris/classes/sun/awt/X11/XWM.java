@@ -139,7 +139,9 @@ class XWM implements MWMConstants, XUtilConstants {
     XWM(int WMID) {
         this.WMID = WMID;
         initializeProtocols();
-        if (log.isLoggable(Level.FINE)) log.fine("Window manager: " + toString());
+        if (log.isLoggable(Level.FINE)) {
+	    log.fine("Window manager: " + toString());
+	}
     }
     int getID() {
         return WMID;
@@ -243,7 +245,7 @@ class XWM implements MWMConstants, XUtilConstants {
              * having a window manager running. I.e. it does not reparent
              * top level shells.
              */
-            if (insLog.isLoggable(Level.FINE)) {
+            if (insLog.isLoggable(Level.FINER)) {
                 insLog.finer("eXcursion means NO_WM");
             }
             return true;
@@ -261,7 +263,7 @@ class XWM implements MWMConstants, XUtilConstants {
             long selection_owner =
                 XlibWrapper.XGetSelectionOwner(XToolkit.getDisplay(),
                                                XAtom.get(selection_name).getAtom());
-            if (insLog.isLoggable(Level.FINE)) {
+            if (insLog.isLoggable(Level.FINER)) {
                 insLog.finer("selection owner of " + selection_name
                              + " is " + selection_owner);
             }
@@ -290,7 +292,7 @@ class XWM implements MWMConstants, XUtilConstants {
                                                     XToolkit.getDefaultRootWindow(),
                                                     XlibWrapper.CWEventMask,
                                                     substruct.pData);
-                if (insLog.isLoggable(Level.FINE)) {
+                if (insLog.isLoggable(Level.FINER)) {
                     insLog.finer("It looks like there is no WM thus NO_WM");
                 }
             }
@@ -334,18 +336,26 @@ class XWM implements MWMConstants, XUtilConstants {
             byte[] bytes = XlibWrapper.getStringBytes(getter.getData());
             String id = new String(bytes);
 
-            log.finer("ENLIGHTENMENT_COMMS is " + id);
+            if (log.isLoggable(Level.FINER)) {
+                log.finer("ENLIGHTENMENT_COMMS is " + id);
+            }
 
             // Parse WINID
             Pattern winIdPat = Pattern.compile("WINID\\s+(\\p{XDigit}{0,8})");
             try {
                 Matcher match = winIdPat.matcher(id);
                 if (match.matches()) {
-                    log.finest("Match group count: " + match.groupCount());
+                    if (log.isLoggable(Level.FINEST)) {
+                        log.finest("Match group count: " + match.groupCount());
+                    }
                     String longId = match.group(1);
-                    log.finest("Match group 1 " + longId);
+                    if (log.isLoggable(Level.FINEST)) {
+                        log.finest("Match group 1 " + longId);
+                    }
                     long winid = Long.parseLong(longId, 16);
-                    log.finer("Enlightenment communication window " + winid);
+                    if (log.isLoggable(Level.FINER)) {
+                        log.finer("Enlightenment communication window " + winid);
+                    }
                     return winid;
                 } else {
                     log.finer("ENLIGHTENMENT_COMMS has wrong format");
@@ -649,7 +659,9 @@ class XWM implements MWMConstants, XUtilConstants {
         try {
             int status = getter.execute();
             boolean res = (status == XlibWrapper.Success && getter.getActualType() != 0);
-            log.finer("Status getting XA_ICEWM_WINOPTHINT: " + !res);
+            if (log.isLoggable(Level.FINER)) {
+		log.finer("Status getting XA_ICEWM_WINOPTHINT: " + !res);
+	    }
             return !res || isNetWMName("IceWM");
         } finally {
             getter.dispose();
@@ -807,7 +819,9 @@ class XWM implements MWMConstants, XUtilConstants {
             }
 
             hints.set_flags(hints.get_flags() & ~mask);
-            if (insLog.isLoggable(Level.FINER)) insLog.finer("Setting hints, flags " + XlibWrapper.hintsToString(hints.get_flags()));
+            if (insLog.isLoggable(Level.FINER)) {
+		insLog.finer("Setting hints, flags " + XlibWrapper.hintsToString(hints.get_flags()));
+	    }
             XlibWrapper.XSetWMNormalHints(XToolkit.getDisplay(),
                                           window.getWindow(),
                                           hints.pData);
@@ -864,7 +878,9 @@ class XWM implements MWMConstants, XUtilConstants {
 
         XAtomList decorDel = new XAtomList();
         decorations = normalizeMotifDecor(decorations);
-        if (insLog.isLoggable(Level.FINER)) insLog.finer("Setting OL_DECOR to " + Integer.toBinaryString(decorations));
+        if (insLog.isLoggable(Level.FINER)) {
+	    insLog.finer("Setting OL_DECOR to " + Integer.toBinaryString(decorations));
+	}
         if ((decorations & MWM_DECOR_TITLE) == 0) {
             decorDel.add(XA_OL_DECOR_HEADER);
         }
@@ -881,7 +897,9 @@ class XWM implements MWMConstants, XUtilConstants {
             insLog.finer("Deleting OL_DECOR");
             XA_OL_DECOR_DEL.DeleteProperty(window);
         } else {
-            if (insLog.isLoggable(Level.FINER)) insLog.finer("Setting OL_DECOR to " + decorDel);
+            if (insLog.isLoggable(Level.FINER)) {
+		insLog.finer("Setting OL_DECOR to " + decorDel);
+	    }
             XA_OL_DECOR_DEL.setAtomListProperty(window, decorDel);
         }
     }
@@ -907,7 +925,9 @@ class XWM implements MWMConstants, XUtilConstants {
         hints.set_functions(functions);
         hints.set_decorations(decorations);
 
-        if (stateLog.isLoggable(Level.FINER)) stateLog.finer("Setting MWM_HINTS to " + hints);
+        if (stateLog.isLoggable(Level.FINER)) {
+	    stateLog.finer("Setting MWM_HINTS to " + hints);
+	}
         window.setMWMHints(hints);
     }
 
@@ -969,7 +989,9 @@ class XWM implements MWMConstants, XUtilConstants {
      * Make specified shell resizable.
      */
     static void setShellResizable(XDecoratedPeer window) {
-        if (insLog.isLoggable(Level.FINE)) insLog.fine("Setting shell resizable " + window);
+        if (insLog.isLoggable(Level.FINE)) {
+	    insLog.fine("Setting shell resizable " + window);
+	}
         XToolkit.awtLock();
         try {
             Rectangle shellBounds = window.getShellBounds();
@@ -999,8 +1021,10 @@ class XWM implements MWMConstants, XUtilConstants {
     static void setShellNotResizable(XDecoratedPeer window, WindowDimensions newDimensions, Rectangle shellBounds,
                                      boolean justChangeSize)
     {
-        if (insLog.isLoggable(Level.FINE)) insLog.fine("Setting non-resizable shell " + window + ", dimensions " + newDimensions +
-                                                       ", shellBounds " + shellBounds +", just change size: " + justChangeSize);
+        if (insLog.isLoggable(Level.FINE)) {
+	    insLog.fine("Setting non-resizable shell " + window + ", dimensions " + newDimensions +
+			", shellBounds " + shellBounds +", just change size: " + justChangeSize);
+	}
         XToolkit.awtLock();
         try {
             /* Fix min/max size hints at the specified values */
@@ -1136,7 +1160,9 @@ class XWM implements MWMConstants, XUtilConstants {
             stateLog.finer("WithdrawnState");
             return null;
         } else {
-            stateLog.finer("Window WM_STATE is " + wm_state);
+            if (stateLog.isLoggable(Level.FINER)) {
+                stateLog.finer("Window WM_STATE is " + wm_state);
+            }
         }
         boolean is_state_change = false;
         if (e.get_atom() == XA_WM_STATE.getAtom()) {
@@ -1303,7 +1329,9 @@ class XWM implements MWMConstants, XUtilConstants {
                   res = defaultInsets;
             }
         }
-        if (insLog.isLoggable(Level.FINEST)) insLog.finest("WM guessed insets: " + res);
+        if (insLog.isLoggable(Level.FINEST)) {
+	    insLog.finest("WM guessed insets: " + res);
+	}
         return res;
     }
     /*

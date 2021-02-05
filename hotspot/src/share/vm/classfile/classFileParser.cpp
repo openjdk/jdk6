@@ -1246,42 +1246,38 @@ static void copy_u2_with_conversion(u2* dest, u2* src, int length) {
 }
 
 
-typeArrayHandle ClassFileParser::parse_exception_table(u4 code_length,
-                                                       u4 exception_table_length,
-                                                       constantPoolHandle cp,
-                                                       TRAPS) {
+u2* ClassFileParser::parse_exception_table(u4 code_length,
+                                           u4 exception_table_length,
+                                           constantPoolHandle cp,
+                                           TRAPS) {
   ClassFileStream* cfs = stream();
-  typeArrayHandle nullHandle;
 
-  // 4-tuples of ints [start_pc, end_pc, handler_pc, catch_type index]
-  typeArrayOop eh = oopFactory::new_permanent_intArray(exception_table_length*4, CHECK_(nullHandle));
-  typeArrayHandle exception_handlers = typeArrayHandle(THREAD, eh);
-
-  int index = 0;
-  cfs->guarantee_more(8 * exception_table_length, CHECK_(nullHandle)); // start_pc, end_pc, handler_pc, catch_type_index
-  for (unsigned int i = 0; i < exception_table_length; i++) {
-    u2 start_pc = cfs->get_u2_fast();
-    u2 end_pc = cfs->get_u2_fast();
-    u2 handler_pc = cfs->get_u2_fast();
-    u2 catch_type_index = cfs->get_u2_fast();
-    // Will check legal target after parsing code array in verifier.
-    if (_need_verify) {
+  u2* exception_table_start = cfs->get_u2_buffer();
+  assert(exception_table_start != NULL, "null exception table");
+  cfs->guarantee_more(8 * exception_table_length, CHECK_NULL); // start_pc, end_pc, handler_pc, catch_type_index
+  // Will check legal target after parsing code array in verifier.
+  if (_need_verify) {
+    for (unsigned int i = 0; i < exception_table_length; i++) {
+      u2 start_pc = cfs->get_u2_fast();
+      u2 end_pc = cfs->get_u2_fast();
+      u2 handler_pc = cfs->get_u2_fast();
+      u2 catch_type_index = cfs->get_u2_fast();
       guarantee_property((start_pc < end_pc) && (end_pc <= code_length),
-                         "Illegal exception table range in class file %s", CHECK_(nullHandle));
+                         "Illegal exception table range in class file %s",
+                         CHECK_NULL);
       guarantee_property(handler_pc < code_length,
-                         "Illegal exception table handler in class file %s", CHECK_(nullHandle));
+                         "Illegal exception table handler in class file %s",
+                         CHECK_NULL);
       if (catch_type_index != 0) {
         guarantee_property(valid_cp_range(catch_type_index, cp->length()) &&
                            is_klass_reference(cp, catch_type_index),
-                           "Catch type in exception table has bad constant type in class file %s", CHECK_(nullHandle));
+                           "Catch type in exception table has bad constant type in class file %s", CHECK_NULL);
       }
     }
-    exception_handlers->int_at_put(index++, start_pc);
-    exception_handlers->int_at_put(index++, end_pc);
-    exception_handlers->int_at_put(index++, handler_pc);
-    exception_handlers->int_at_put(index++, catch_type_index);
+  } else {
+    cfs->skip_u2_fast(exception_table_length * 4);
   }
-  return exception_handlers;
+  return exception_table_start;
 }
 
 void ClassFileParser::parse_linenumber_table(
@@ -1674,6 +1670,7 @@ methodHandle ClassFileParser::parse_method(constantPoolHandle cp, bool is_interf
   u4 code_length = 0;
   u1* code_start = 0;
   u2 exception_table_length = 0;
+  u2* exception_table_start = NULL;
   typeArrayHandle exception_handlers(THREAD, Universe::the_empty_int_array());
   u2 checked_exceptions_length = 0;
   u2* checked_exceptions_start = NULL;
@@ -1760,7 +1757,7 @@ methodHandle ClassFileParser::parse_method(constantPoolHandle cp, bool is_interf
       cfs->guarantee_more(2, CHECK_(nullHandle));  // exception_table_length
       exception_table_length = cfs->get_u2_fast();
       if (exception_table_length > 0) {
-        exception_handlers =
+        exception_table_start =
               parse_exception_table(code_length, exception_table_length, cp, CHECK_(nullHandle));
       }
 
@@ -1963,9 +1960,13 @@ methodHandle ClassFileParser::parse_method(constantPoolHandle cp, bool is_interf
   }
 
   // All sizing information for a methodOop is finally available, now create it
-  methodOop m_oop  = oopFactory::new_method(code_length, access_flags, linenumber_table_length,
-                                            total_lvt_length, checked_exceptions_length,
-                                            oopDesc::IsSafeConc, CHECK_(nullHandle));
+  methodOop m_oop  = oopFactory::new_method(code_length, access_flags,
+                                            linenumber_table_length,
+                                            total_lvt_length,
+                                            exception_table_length,
+                                            checked_exceptions_length,
+                                            oopDesc::IsSafeConc,
+                                            CHECK_(nullHandle));
   methodHandle m (THREAD, m_oop);
 
   ClassLoadingService::add_class_method_size(m_oop->size()*HeapWordSize);
@@ -1994,16 +1995,15 @@ methodHandle ClassFileParser::parse_method(constantPoolHandle cp, bool is_interf
   // Fill in code attribute information
   m->set_max_stack(max_stack);
   m->set_max_locals(max_locals);
-  m->constMethod()->set_stackmap_data(stackmap_data());
 
   /**
-   * The exception_table field is the flag used to indicate
+   * The stackmap_data field is the flag used to indicate
    * that the methodOop and it's associated constMethodOop are partially
    * initialized and thus are exempt from pre/post GC verification.  Once
    * the field is set, the oops are considered fully initialized so make
    * sure that the oops can pass verification when this field is set.
    */
-  m->set_exception_table(exception_handlers());
+  m->constMethod()->set_stackmap_data(stackmap_data());
 
   // Copy byte codes
   m->set_code(code_start);
@@ -2012,6 +2012,14 @@ methodHandle ClassFileParser::parse_method(constantPoolHandle cp, bool is_interf
   if (linenumber_table != NULL) {
     memcpy(m->compressed_linenumber_table(),
            linenumber_table->buffer(), linenumber_table_length);
+  }
+
+  // Copy exception table
+  if (exception_table_length > 0) {
+    int size =
+      exception_table_length * sizeof(ExceptionTableElement) / sizeof(u2);
+    copy_u2_with_conversion((u2*) m->exception_table_start(),
+                             exception_table_start, size);
   }
 
   // Copy checked exceptions
@@ -2914,6 +2922,11 @@ instanceKlassHandle ClassFileParser::parseClassFile(Symbol* name,
     objArrayHandle methods_parameter_annotations(THREAD, methods_parameter_annotations_oop);
     objArrayHandle methods_default_annotations(THREAD, methods_default_annotations_oop);
 
+    if (_class_name == vmSymbols::java_lang_Object()) {
+      check_property(local_interfaces == Universe::the_empty_system_obj_array(),
+                     "java.lang.Object cannot implement an interface in class file %s",
+                     CHECK_(nullHandle));
+    }
     // We check super class after class file is parsed and format is checked
     if (super_class_index > 0 && super_klass.is_null()) {
       Symbol*  sk  = cp->klass_name_at(super_class_index);

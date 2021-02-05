@@ -20,9 +20,8 @@
 .\" Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
 .\" or visit www.oracle.com if you need additional information or have any
 .\" questions.
-.\" 
-.\"
-.TH jarsigner 1 "2006 年 9 月 4 日" "Java SE 6" "ユーザーコマンド"
+.\" ` 
+.TH jarsigner 1 "05 Jul 2012"
 .SH "名前"
 jarsigner \- JAR 署名および検証ツール
 .LP
@@ -353,7 +352,7 @@ JKS という名前の独自のキーストアタイプ (形式) を利用するもので、キーストアを
 せん。ここで、「プロバイダ」とは、Java Security API によってアクセス可能なサービス
 のサブセットに対し、その固定実装を提供するパッケージまたはパッケージの集合の
 ことです。したがって、キーストアの実装を提供するには、「Java 暗号化アーキテク
-チャ用プロバイダの実装方法」(http://java.sun.com/javase/6/docs/technotes/guides/security/HowToImplAProvider.html) のページで説明しているように、クライアントがプロバイダを実装し、
+チャ用プロバイダの実装方法」(http://docs.oracle.com/javase/6/docs/technotes/guides/security/crypto/HowToImplAProvider.html) のページで説明しているように、クライアントがプロバイダを実装し、
 .I KeystoreSpi 
 サブクラスの実装を提供する必要があります。
 .LP
@@ -455,7 +454,7 @@ JKS という名前の独自のキーストアタイプ (形式) を利用するもので、キーストアを
 .B keystore.type=pkcs12
 .LP
 PKCS#11 プロバイダパッケージを使用する場合、その詳細については、「Java PKCS#11 Reference Guide」(
-http://java.sun.com/javase/6/docs/technotes/guides/security/p11guide.html#keytooljarsigner)
+http://docs.oracle.com/javase/6/docs/technotes/guides/security/p11guide.html#KeyToolJarSigner)
 にある
 「\f2KeyTool and JarSigner\fP」節を参照してください。
 .LP
@@ -884,7 +883,7 @@ SF ファイルと .DSA ファイルの生成に使うベースファイル名を指定します。
 JAR ファイルの署名に使用する署名アルゴリズムの名前を指定します。 
 .LP
 標準署名アルゴリズム名の一覧については、「Java Cryptography Architecture」( 
-http://java.sun.com/javase/6/docs/technotes/guides/security/crypto/CryptoSpec.html#appa)
+http://docs.oracle.com/javase/6/docs/technotes/guides/security/crypto/CryptoSpec.html#AppA)
 にある
 「
 .I Appendix A
@@ -898,7 +897,7 @@ http://java.sun.com/javase/6/docs/technotes/guides/security/crypto/CryptoSpec.ht
 .RS 3
 JAR ファイルのエントリをダイジェストする際に使用するメッセージダイジェストアルゴリズムの名前を指定します。 
 .LP
-標準メッセージダイジェストアルゴリズム名の一覧については、「Java Cryptography Architecture」(http://java.sun.com/javase/6/docs/technotes/guides/security/crypto/CryptoSpec.html#appa)の
+標準メッセージダイジェストアルゴリズム名の一覧については、「Java Cryptography Architecture」(http://docs.oracle.com/javase/6/docs/technotes/guides/security/crypto/CryptoSpec.html#AppA)の
 「
 .I Appendix A
 」を参照してください。このオプションを指定しなかった場合、SHA\-1 が使用されます。指定されたアルゴリズムの実装を提供するプロバイダが静的にインストールされているか、あるいはユーザがそのようなプロバイダを 
@@ -1039,7 +1038,7 @@ jarsigner \-keystore NONE \-storetype PKCS11 \\
 .LP
 Sun PKCS#11 プロバイダの場合、\f2providerName\fP は \f2SunPKCS11\-\fP\f2TokenName\fP の形式になります。ここで、\f2TokenName\fP は、プロバイダインスタンスの設定時に使用した名前のサフィックスです。詳細については、
 .fi
-http://java.sun.com/javase/6/docs/technotes/guides/security/p11guide.html#KeyToolJarSigner#ATTRS
+http://docs.oracle.com/javase/6/docs/technotes/guides/security/p11guide.html#ATTRS
 の
 .na
 「\f2configuration attributes table\fP」を参照してください。たとえば、次のコマンドは、名前サフィックス \f2SmartCard\fP を持つ PKCS#11 キーストアプロバイダインスタンスの内容を一覧表示します。 

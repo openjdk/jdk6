@@ -64,6 +64,7 @@ public class ProxyTunnelServer extends Thread {
           ss = (ServerSocket) ServerSocketFactory.getDefault().
           createServerSocket(0);
         }
+        setDaemon(true);
     }
 
     public void needUserAuth(boolean auth) {
@@ -210,6 +211,7 @@ public class ProxyTunnelServer extends Thread {
             this.sockOut = sockOut;
             input = sockIn.getInputStream();
             output = sockOut.getOutputStream();
+            setDaemon(true);
         }
 
         public void run() {

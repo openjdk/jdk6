@@ -56,7 +56,9 @@ class XProtocol {
                 firstCheck = false;
                 if (log.isLoggable(Level.FINE)) {
                     log.log(Level.FINE, "{0}:{1} supports {2}",
-                            new Object[] {String.valueOf(this), String.valueOf(listName), String.valueOf(protocols)});
+                            new Object[] {String.valueOf(this),
+					  String.valueOf(listName),
+					  String.valueOf(protocols)});
                 }
             }
         }

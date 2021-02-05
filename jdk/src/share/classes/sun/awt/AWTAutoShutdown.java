@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import sun.misc.ThreadGroupUtils;
@@ -374,11 +375,13 @@ public final class AWTAutoShutdown implements Runnable {
     }
 
     final void dumpPeers(final Logger aLog) {
-        synchronized (activationLock) {
-            synchronized (mainLock) {
-                aLog.fine("Mapped peers:");
-                for (Object key : peerMap.keySet()) {
-                    aLog.fine(key + "->" + peerMap.get(key));
+        if (aLog.isLoggable(Level.FINE)) {
+            synchronized (activationLock) {
+                synchronized (mainLock) {
+                    aLog.fine("Mapped peers:");
+                    for (Object key : peerMap.keySet()) {
+                        aLog.fine(key + "->" + peerMap.get(key));
+                    }
                 }
             }
         }

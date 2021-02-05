@@ -48,10 +48,7 @@ public class XPlottingViewer extends PlotterPanel implements ActionListener {
         new HashMap<String, XPlottingViewer>();
      private static HashMap<String, Timer> timerCache =
          new HashMap<String, Timer>();
-    private JPanel bordered;
-    private Number value;
     private MBeansTab tab;
-    private XMBean mbean;
     private String attributeName;
     private String key;
     private JTable table;
@@ -65,7 +62,6 @@ public class XPlottingViewer extends PlotterPanel implements ActionListener {
 
         this.tab = tab;
         this.key = key;
-        this.mbean = mbean;
         this.table = table;
         this.attributeName = attributeName;
         Plotter plotter = createPlotter(mbean, attributeName, key, table);
@@ -73,9 +69,9 @@ public class XPlottingViewer extends PlotterPanel implements ActionListener {
     }
 
     static void dispose(MBeansTab tab) {
-        Iterator it = plotterCache.keySet().iterator();
+        Iterator<String> it = plotterCache.keySet().iterator();
         while(it.hasNext()) {
-            String key = (String) it.next();
+            String key = it.next();
             if(key.startsWith(String.valueOf(tab.hashCode()))) {
                 it.remove();
             }
@@ -187,7 +183,7 @@ public class XPlottingViewer extends PlotterPanel implements ActionListener {
         //setLayout(new GridLayout(2,0));
         GridBagLayout gbl = new GridBagLayout();
         setLayout(gbl);
-        plotButton = new JButton(Resources.getText("Discard chart"));
+        plotButton = new JButton(Messages.DISCARD_CHART);
         plotButton.addActionListener(this);
         plotButton.setEnabled(true);
 

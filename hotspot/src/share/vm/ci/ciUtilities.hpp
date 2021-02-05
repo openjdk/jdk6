@@ -93,7 +93,7 @@
     CLEAR_PENDING_EXCEPTION;                     \
     return (result);                             \
   }                                              \
-  (0
+  (void)(0
 
 #define KILL_COMPILE_ON_ANY                      \
   THREAD);                                       \
@@ -101,7 +101,7 @@
     fatal("unhandled ci exception");             \
     CLEAR_PENDING_EXCEPTION;                     \
   }                                              \
-(0
+(void)(0
 
 
 inline const char* bool_to_str(bool b) {

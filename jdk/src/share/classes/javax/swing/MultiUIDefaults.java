@@ -60,8 +60,7 @@ class MultiUIDefaults extends UIDefaults
             return value;
         }
 
-        for(int i = 0; i < tables.length; i++) {
-            UIDefaults table = tables[i];
+        for (UIDefaults table : tables) {
             value = (table != null) ? table.get(key) : null;
             if (value != null) {
                 return value;
@@ -79,8 +78,7 @@ class MultiUIDefaults extends UIDefaults
             return value;
         }
 
-        for(int i = 0; i < tables.length; i++) {
-            UIDefaults table = tables[i];
+        for (UIDefaults table : tables) {
             value = (table != null) ? table.get(key,l) : null;
             if (value != null) {
                 return value;
@@ -101,7 +99,7 @@ class MultiUIDefaults extends UIDefaults
     }
 
     @Override
-    public Enumeration keys()
+    public Enumeration<Object> keys()
     {
         return new MultiUIDefaultsEnumerator(
                 MultiUIDefaultsEnumerator.Type.KEYS, entrySet());
@@ -109,7 +107,7 @@ class MultiUIDefaults extends UIDefaults
 
 
     @Override
-    public Enumeration elements()
+    public Enumeration<Object> elements()
     {
         return new MultiUIDefaultsEnumerator(
                 MultiUIDefaultsEnumerator.Type.ELEMENTS, entrySet());
@@ -136,7 +134,7 @@ class MultiUIDefaults extends UIDefaults
         }
     }
 
-    private static class MultiUIDefaultsEnumerator implements Enumeration
+    private static class MultiUIDefaultsEnumerator implements Enumeration<Object>
     {
         public static enum Type { KEYS, ELEMENTS };
         private Iterator<Entry<Object, Object>> iterator;
@@ -183,8 +181,7 @@ class MultiUIDefaults extends UIDefaults
     @Override
     public void clear() {
         super.clear();
-        for(int i = 0; i < tables.length; i++) {
-            UIDefaults table = tables[i];
+        for (UIDefaults table : tables) {
             if (table != null) {
                 table.clear();
             }

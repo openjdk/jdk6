@@ -25,6 +25,7 @@
 #ifndef SHARE_VM_GC_IMPLEMENTATION_PARALLELSCAVENGE_PSPROMOTIONMANAGER_HPP
 #define SHARE_VM_GC_IMPLEMENTATION_PARALLELSCAVENGE_PSPROMOTIONMANAGER_HPP
 
+#include "gc_implementation/parallelScavenge/psOldGen.hpp"
 #include "gc_implementation/parallelScavenge/psPromotionLAB.hpp"
 #include "memory/allocation.hpp"
 #include "utilities/taskqueue.hpp"

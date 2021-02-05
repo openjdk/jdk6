@@ -544,6 +544,18 @@ public class AlgorithmId implements Serializable, DerEncoder {
                 || name.equalsIgnoreCase("ECDSA")) {
             return AlgorithmId.sha1WithECDSA_oid;
         }
+        if (name.equalsIgnoreCase("SHA224withECDSA")) {
+            return AlgorithmId.sha224WithECDSA_oid;
+        }
+        if (name.equalsIgnoreCase("SHA256withECDSA")) {
+            return AlgorithmId.sha256WithECDSA_oid;
+        }
+        if (name.equalsIgnoreCase("SHA384withECDSA")) {
+            return AlgorithmId.sha384WithECDSA_oid;
+        }
+        if (name.equalsIgnoreCase("SHA512withECDSA")) {
+            return AlgorithmId.sha512WithECDSA_oid;
+        }
 
         // See if any of the installed providers supply a mapping from
         // the given algorithm name to an OID string
@@ -915,5 +927,71 @@ public class AlgorithmId implements Serializable, DerEncoder {
         nameTable.put(pbeWithSHA1AndRC2_oid, "PBEWithSHA1AndRC2");
         nameTable.put(pbeWithSHA1AndDESede_oid, "PBEWithSHA1AndDESede");
         nameTable.put(pbeWithSHA1AndRC2_40_oid, "PBEWithSHA1AndRC2_40");
+    }
+
+    /**
+     * Creates a signature algorithm name from a digest algorithm
+     * name and a encryption algorithm name.
+     */
+    public static String makeSigAlg(String digAlg, String encAlg) {
+        digAlg = digAlg.replace("-", "").toUpperCase(Locale.ENGLISH);
+        if (digAlg.equalsIgnoreCase("SHA")) digAlg = "SHA1";
+
+        encAlg = encAlg.toUpperCase(Locale.ENGLISH);
+        if (encAlg.equals("EC")) encAlg = "ECDSA";
+
+        return digAlg + "with" + encAlg;
+    }
+
+    /**
+     * Extracts the encryption algorithm name from a signature
+     * algorithm name.
+      */
+    public static String getEncAlgFromSigAlg(String signatureAlgorithm) {
+        signatureAlgorithm = signatureAlgorithm.toUpperCase(Locale.ENGLISH);
+        int with = signatureAlgorithm.indexOf("WITH");
+        String keyAlgorithm = null;
+        if (with > 0) {
+            int and = signatureAlgorithm.indexOf("AND", with + 4);
+            if (and > 0) {
+                keyAlgorithm = signatureAlgorithm.substring(with + 4, and);
+            } else {
+                keyAlgorithm = signatureAlgorithm.substring(with + 4);
+            }
+            if (keyAlgorithm.equalsIgnoreCase("ECDSA")) {
+                keyAlgorithm = "EC";
+            }
+        }
+        return keyAlgorithm;
+    }
+
+    /**
+     * Extracts the digest algorithm name from a signature
+     * algorithm name.
+      */
+    public static String getDigAlgFromSigAlg(String signatureAlgorithm) {
+        signatureAlgorithm = signatureAlgorithm.toUpperCase(Locale.ENGLISH);
+        int with = signatureAlgorithm.indexOf("WITH");
+        if (with > 0) {
+            return signatureAlgorithm.substring(0, with);
+        }
+        return null;
+    }
+
+    // Copied from com.sun.crypto.provider.OAEPParameters.convertToStandardName()
+    public static String getStandardDigestName(String internalName) {
+        if (internalName.equals("SHA")) {
+            return "SHA-1";
+        } else if (internalName.equals("SHA224")) {
+            return "SHA-224";
+        } else if (internalName.equals("SHA256")) {
+            return "SHA-256";
+        } else if (internalName.equals("SHA384")) {
+            return "SHA-384";
+        } else if (internalName.equals("SHA512")) {
+            return "SHA-512";
+        } else {
+            return internalName;
+        }
     }
 }

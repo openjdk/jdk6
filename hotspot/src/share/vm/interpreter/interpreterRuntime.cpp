@@ -375,7 +375,6 @@ IRT_ENTRY(address, InterpreterRuntime::exception_handler_for_exception(JavaThrea
   Handle             h_exception(thread, exception);
   methodHandle       h_method   (thread, method(thread));
   constantPoolHandle h_constants(thread, h_method->constants());
-  typeArrayHandle    h_extable  (thread, h_method->exception_table());
   bool               should_repeat;
   int                handler_bci;
   int                current_bci = bci(thread);

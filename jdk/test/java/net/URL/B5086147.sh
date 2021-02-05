@@ -28,6 +28,10 @@ case "$OS" in
   SunOS | Linux | Darwin | AIX )
     exit 0
     ;;
+  CYGWIN* )
+    PS=";"
+    FS="/"
+    ;;
   Windows* )
     PS=";"
     FS="\\"
@@ -42,7 +46,7 @@ ${TESTJAVA}${FS}bin${FS}javac -d . ${TESTSRC}${FS}B5086147.java
 failures=0
 
 echo ''
-${TESTJAVA}${FS}bin${FS}java B5086147
+${TESTJAVA}${FS}bin${FS}java ${TESTVMOPTS} B5086147
 if [ $? != 0 ]; then failures=`expr $failures + 1`; fi
 
 if [ "$failures" != "0" ]; then

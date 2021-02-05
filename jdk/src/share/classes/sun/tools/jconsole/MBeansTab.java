@@ -49,7 +49,7 @@ public class MBeansTab extends Tab implements
     private XDataViewer viewer;
 
     public static String getTabName() {
-        return Resources.getText("MBeans");
+        return Messages.MBEANS;
     }
 
     public MBeansTab(final VMPanel vmPanel) {

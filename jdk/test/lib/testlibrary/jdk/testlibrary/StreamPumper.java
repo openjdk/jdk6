@@ -73,11 +73,11 @@ public final class StreamPumper implements Runnable {
     }
 
     private final InputStream in;
-    private final Set<OutputStream> outStreams = new HashSet<>();
-    private final Set<LinePump> linePumps = new HashSet<>();
+    private final Set<OutputStream> outStreams = new HashSet<OutputStream>();
+    private final Set<LinePump> linePumps = new HashSet<LinePump>();
 
     private final AtomicBoolean processing = new AtomicBoolean(false);
-    private final FutureTask<Void> processingTask = new FutureTask(this, null);
+    private final FutureTask<Void> processingTask = new FutureTask<Void>(this, null);
 
     public StreamPumper(InputStream in) {
         this.in = in;
@@ -103,7 +103,9 @@ public final class StreamPumper implements Runnable {
      */
     @Override
     public void run() {
-        try (BufferedInputStream is = new BufferedInputStream(in)) {
+        BufferedInputStream is = null;
+        try {
+            is = new BufferedInputStream(in);
             ByteArrayOutputStream lineBos = new ByteArrayOutputStream();
             byte[] buf = new byte[BUF_SIZE];
             int len = 0;
@@ -154,6 +156,11 @@ public final class StreamPumper implements Runnable {
             for(OutputStream out : outStreams) {
                 try {
                     out.flush();
+                } catch (IOException e) {}
+            }
+            if (is != null) {
+                try {
+                    is.close();
                 } catch (IOException e) {}
             }
             try {

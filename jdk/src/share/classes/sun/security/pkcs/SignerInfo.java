@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,15 +28,38 @@ package sun.security.pkcs;
 import java.io.OutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.security.InvalidKeyException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.Principal;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.security.Timestamp;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.CertPath;
 import java.security.cert.X509Certificate;
-import java.security.*;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.Set;
 
-import sun.security.util.*;
+import sun.misc.HexDumpEncoder;
+import sun.security.timestamp.TimestampToken;
+import sun.security.util.CryptoPrimitive;
+import sun.security.util.Debug;
+import sun.security.util.DerEncoder;
+import sun.security.util.DerInputStream;
+import sun.security.util.DerOutputStream;
+import sun.security.util.DerValue;
+import sun.security.util.DisabledAlgorithmConstraints;
+import sun.security.util.KeyUtil;
+import sun.security.util.ObjectIdentifier;
 import sun.security.x509.AlgorithmId;
 import sun.security.x509.X500Name;
 import sun.security.x509.KeyUsageExtension;
-import sun.misc.HexDumpEncoder;
 
 /**
  * A SignerInfo, as defined in PKCS#7's signedData type.
@@ -45,12 +68,26 @@ import sun.misc.HexDumpEncoder;
  */
 public class SignerInfo implements DerEncoder {
 
+    // Digest and Signature restrictions
+    private static final Set<CryptoPrimitive> DIGEST_PRIMITIVE_SET =
+            Collections.unmodifiableSet(EnumSet.of(CryptoPrimitive.MESSAGE_DIGEST));
+
+    private static final Set<CryptoPrimitive> SIG_PRIMITIVE_SET =
+            Collections.unmodifiableSet(EnumSet.of(CryptoPrimitive.SIGNATURE));
+
+    private static final DisabledAlgorithmConstraints JAR_DISABLED_CHECK =
+            new DisabledAlgorithmConstraints(
+                    DisabledAlgorithmConstraints.PROPERTY_JAR_DISABLED_ALGS);
+
     BigInteger version;
     X500Name issuerName;
     BigInteger certificateSerialNumber;
     AlgorithmId digestAlgorithmId;
     AlgorithmId digestEncryptionAlgorithmId;
     byte[] encryptedDigest;
+    Timestamp timestamp;
+    private boolean hasTimestamp = true;
+    private static final Debug debug = Debug.getInstance("jar");
 
     PKCS9Attributes authenticatedAttributes;
     PKCS9Attributes unauthenticatedAttributes;
@@ -285,8 +322,6 @@ public class SignerInfo implements DerEncoder {
             }
 
             String digestAlgname = getDigestAlgorithmId().getName();
-            if (digestAlgname.equalsIgnoreCase("SHA"))
-                digestAlgname = "SHA1";
 
             byte[] dataSigned;
 
@@ -312,7 +347,15 @@ public class SignerInfo implements DerEncoder {
                 if (messageDigest == null) // fail if there is no message digest
                     return null;
 
-                MessageDigest md = MessageDigest.getInstance(digestAlgname);
+                // check that algorithm is not restricted
+                if (!JAR_DISABLED_CHECK.permits(DIGEST_PRIMITIVE_SET,
+                        digestAlgname, null)) {
+                    throw new SignatureException("Digest check failed. " +
+                            "Disabled algorithm used: " + digestAlgname);
+                }
+
+                MessageDigest md = MessageDigest.getInstance(
+                        AlgorithmId.getStandardDigestName(digestAlgname));
                 byte[] computedMessageDigest = md.digest(data);
 
                 if (messageDigest.length != computedMessageDigest.length)
@@ -336,16 +379,33 @@ public class SignerInfo implements DerEncoder {
             String encryptionAlgname =
                 getDigestEncryptionAlgorithmId().getName();
 
-            if (encryptionAlgname.equalsIgnoreCase("SHA1withDSA"))
-                encryptionAlgname = "DSA";
-            String algname = digestAlgname + "with" + encryptionAlgname;
+            // Workaround: sometimes the encryptionAlgname is actually
+            // a signature name
+            String tmp = AlgorithmId.getEncAlgFromSigAlg(encryptionAlgname);
+            if (tmp != null) encryptionAlgname = tmp;
+            String algname = AlgorithmId.makeSigAlg(
+                    digestAlgname, encryptionAlgname);
 
-            Signature sig = Signature.getInstance(algname);
+            // check that algorithm is not restricted
+            if (!JAR_DISABLED_CHECK.permits(SIG_PRIMITIVE_SET, algname, null)) {
+                throw new SignatureException("Signature check failed. " +
+                        "Disabled algorithm used: " + algname);
+            }
+
             X509Certificate cert = getCertificate(block);
-
+            PublicKey key = cert.getPublicKey();
             if (cert == null) {
                 return null;
             }
+
+            // check if the public key is restricted
+            if (!JAR_DISABLED_CHECK.permits(SIG_PRIMITIVE_SET, key)) {
+                throw new SignatureException("Public key check failed. " +
+                        "Disabled key used: " +
+                        KeyUtil.getKeySize(key) + " bit " +
+                        key.getAlgorithm());
+            }
+
             if (cert.hasUnsupportedCriticalExtension()) {
                 throw new SignatureException("Certificate has unsupported "
                                              + "critical extension(s)");
@@ -382,11 +442,9 @@ public class SignerInfo implements DerEncoder {
                 }
             }
 
-            PublicKey key = cert.getPublicKey();
+            Signature sig = Signature.getInstance(algname);
             sig.initVerify(key);
-
             sig.update(dataSigned);
-
             if (sig.verify(encryptedDigest)) {
                 return this;
             }
@@ -441,6 +499,99 @@ public class SignerInfo implements DerEncoder {
         return unauthenticatedAttributes;
     }
 
+    /*
+     * Extracts a timestamp from a PKCS7 SignerInfo.
+     *
+     * Examines the signer's unsigned attributes for a
+     * <tt>signatureTimestampToken</tt> attribute. If present,
+     * then it is parsed to extract the date and time at which the
+     * timestamp was generated.
+     *
+     * @param info A signer information element of a PKCS 7 block.
+     *
+     * @return A timestamp token or null if none is present.
+     * @throws IOException if an error is encountered while parsing the
+     *         PKCS7 data.
+     * @throws NoSuchAlgorithmException if an error is encountered while
+     *         verifying the PKCS7 object.
+     * @throws SignatureException if an error is encountered while
+     *         verifying the PKCS7 object.
+     * @throws CertificateException if an error is encountered while generating
+     *         the TSA's certpath.
+     */
+    public Timestamp getTimestamp()
+        throws IOException, NoSuchAlgorithmException, SignatureException,
+               CertificateException
+    {
+        if (timestamp != null || !hasTimestamp)
+            return timestamp;
+
+        if (unauthenticatedAttributes == null) {
+            hasTimestamp = false;
+            return null;
+        }
+        PKCS9Attribute tsTokenAttr =
+            unauthenticatedAttributes.getAttribute(
+                PKCS9Attribute.SIGNATURE_TIMESTAMP_TOKEN_OID);
+        if (tsTokenAttr == null) {
+            hasTimestamp = false;
+            return null;
+        }
+
+        PKCS7 tsToken = new PKCS7((byte[])tsTokenAttr.getValue());
+        // Extract the content (an encoded timestamp token info)
+        byte[] encTsTokenInfo = tsToken.getContentInfo().getData();
+        // Extract the signer (the Timestamping Authority)
+        // while verifying the content
+        SignerInfo[] tsa = tsToken.verify(encTsTokenInfo);
+        // Expect only one signer
+        ArrayList<X509Certificate> chain = tsa[0].getCertificateChain(tsToken);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        CertPath tsaChain = cf.generateCertPath(chain);
+        // Create a timestamp token info object
+        TimestampToken tsTokenInfo = new TimestampToken(encTsTokenInfo);
+        // Check that the signature timestamp applies to this signature
+        verifyTimestamp(tsTokenInfo);
+        // Create a timestamp object
+        timestamp = new Timestamp(tsTokenInfo.getDate(), tsaChain);
+        return timestamp;
+    }
+
+    /*
+     * Check that the signature timestamp applies to this signature.
+     * Match the hash present in the signature timestamp token against the hash
+     * of this signature.
+     */
+    private void verifyTimestamp(TimestampToken token)
+        throws NoSuchAlgorithmException, SignatureException {
+        String digestAlgname =
+            AlgorithmId.getStandardDigestName(token.getHashAlgorithm().getName());
+        // check that algorithm is not restricted
+        if (!JAR_DISABLED_CHECK.permits(DIGEST_PRIMITIVE_SET, digestAlgname,
+                null)) {
+            throw new SignatureException("Timestamp token digest check failed. " +
+                    "Disabled algorithm used: " + digestAlgname);
+        }
+
+        MessageDigest md =
+            MessageDigest.getInstance(digestAlgname);
+
+        if (!Arrays.equals(token.getHashedMessage(),
+            md.digest(encryptedDigest))) {
+
+            throw new SignatureException("Signature timestamp (#" +
+                token.getSerialNumber() + ") generated on " + token.getDate() +
+                " is inapplicable");
+        }
+
+        if (debug != null) {
+            debug.println();
+            debug.println("Detected signature timestamp (#" +
+                token.getSerialNumber() + ") generated on " + token.getDate());
+            debug.println();
+        }
+    }
+
     public String toString() {
         HexDumpEncoder hexDump = new HexDumpEncoder();
 
@@ -466,5 +617,4 @@ public class SignerInfo implements DerEncoder {
         }
         return out;
     }
-
 }

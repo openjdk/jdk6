@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -421,9 +421,11 @@ public class MenuItem extends MenuComponent implements Accessible {
     boolean handleShortcut(KeyEvent e) {
         MenuShortcut s = new MenuShortcut(e.getKeyCode(),
                              (e.getModifiers() & InputEvent.SHIFT_MASK) > 0);
+        MenuShortcut sE = new MenuShortcut(AWTAccessor.getKeyEventAccessor().getExtendedKeyCode(e),
+                             (e.getModifiers() & InputEvent.SHIFT_MASK) > 0);
         // Fix For 6185151: Menu shortcuts of all menuitems within a menu
         // should be disabled when the menu itself is disabled
-        if (s.equals(shortcut) && isItemEnabled()) {
+        if ((s.equals(shortcut) || sE.equals(shortcut)) && isItemEnabled()) {
             // MenuShortcut match -- issue an event on keydown.
             if (e.getID() == KeyEvent.KEY_PRESSED) {
                 doMenuEvent(e.getWhen(), e.getModifiers());
