@@ -165,13 +165,14 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
     private boolean doRestoreFocus(Component toFocus, Component vetoedComponent,
                                    boolean clearOnFailure)
     {
-        if (toFocus != vetoedComponent && toFocus.isShowing() && toFocus.isFocusable() &&
-            toFocus.requestFocus(false, CausedFocusEvent.Cause.ROLLBACK)) {
+        if (toFocus != vetoedComponent && toFocus.isShowing() && toFocus.canBeFocusOwner() &&
+            toFocus.requestFocus(false, CausedFocusEvent.Cause.ROLLBACK))
+        {
             return true;
         } else {
-            Component nextFocus = toFocus.preNextFocusHelper();
-            if (nextFocus != vetoedComponent
-                && Component.postNextFocusHelper(nextFocus, CausedFocusEvent.Cause.ROLLBACK))
+            Component nextFocus = toFocus.getNextFocusCandidate();
+            if (nextFocus != null && nextFocus != vetoedComponent &&
+                nextFocus.requestFocusInWindow(CausedFocusEvent.Cause.ROLLBACK))
             {
                 return true;
             } else if (clearOnFailure) {
@@ -490,7 +491,7 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
                 // that a Component outside of the focused Window receives a
                 // FOCUS_GAINED event. We synthesize a WINDOW_GAINED_FOCUS
                 // event in that case.
-                final Window newFocusedWindow = Component.getContainingWindow(newFocusOwner);
+                final Window newFocusedWindow = SunToolkit.getContainingWindow(newFocusOwner);
                 final Window currentFocusedWindow = getGlobalFocusedWindow();
                 if (newFocusedWindow != null &&
                     newFocusedWindow != currentFocusedWindow)
@@ -511,14 +512,24 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
                     }
                 }
 
-                if (!(newFocusOwner.isFocusable() && newFocusOwner.isEnabled()
-                      && newFocusOwner.isShowing()))
+                if (!(newFocusOwner.isFocusable() && newFocusOwner.isShowing() &&
+                    // Refuse focus on a disabled component if the focus event
+                    // isn't of UNKNOWN reason (i.e. not a result of a direct request
+                    // but traversal, activation or system generated).
+                    (newFocusOwner.isEnabled() || cause.equals(CausedFocusEvent.Cause.UNKNOWN))))
                 {
                     // we should not accept focus on such component, so reject it.
                     dequeueKeyEvents(-1, newFocusOwner);
-                    if (KeyboardFocusManager.isAutoFocusTransferEnabled())
-                    {
-                        restoreFocus(fe, newFocusedWindow);
+                    if (KeyboardFocusManager.isAutoFocusTransferEnabled()) {
+                        // If FOCUS_GAINED is for a disposed component (however
+                        // it shouldn't happen) its toplevel parent is null. In this
+                        // case we have to try to restore focus in the current focused
+                        // window (for the details: 6607170).
+                        if (newFocusedWindow == null) {
+                            restoreFocus(fe, currentFocusedWindow);
+                        } else {
+                            restoreFocus(fe, newFocusedWindow);
+                        }
                     }
                     break;
                 }
@@ -752,8 +763,7 @@ public class DefaultKeyboardFocusManager extends KeyboardFocusManager {
     public boolean dispatchKeyEvent(KeyEvent e) {
         Component focusOwner = (((AWTEvent)e).isPosted) ? getFocusOwner() : e.getComponent();
 
-        if (focusOwner != null && focusOwner.isShowing() &&
-            focusOwner.isFocusable() && focusOwner.isEnabled()) {
+        if (focusOwner != null && focusOwner.isShowing() && focusOwner.canBeFocusOwner()) {
             if (!e.isConsumed()) {
                 Component comp = e.getComponent();
                 if (comp != null && comp.isEnabled()) {

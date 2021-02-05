@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -45,7 +45,6 @@
 #include "awt_Unicode.h"
 #include "awt_Window.h"
 #include "awt_Win32GraphicsDevice.h"
-#include "ddrawUtils.h"
 #include "Hashtable.h"
 #include "ComCtl32Util.h"
 
@@ -165,6 +164,11 @@ struct SetRectangularShapeStruct {
     jint x1, x2, y1, y2;
     jobject region;
 };
+// Struct for _GetInsets function
+struct GetInsetsStruct {
+    jobject window;
+    RECT *insets;
+};
 /************************************************************************/
 
 //////////////////////////////////////////////////////////////////////////
@@ -216,9 +220,6 @@ BOOL AwtComponent::sm_rtl = PRIMARYLANGID(GetInputLanguage()) == LANG_ARABIC ||
                             PRIMARYLANGID(GetInputLanguage()) == LANG_HEBREW;
 BOOL AwtComponent::sm_rtlReadingOrder =
     PRIMARYLANGID(GetInputLanguage()) == LANG_ARABIC;
-
-UINT AwtComponent::sm_95WheelMessage = WM_NULL;
-UINT AwtComponent::sm_95WheelSupport = WM_NULL;
 
 HWND AwtComponent::sm_cursorOn;
 BOOL AwtComponent::m_QueryNewPaletteCalled = FALSE;
@@ -281,8 +282,7 @@ AwtComponent::~AwtComponent()
      * the native one anymore. So we can safely destroy component's
      * handle.
      */
-    AwtToolkit::DestroyComponentHWND(m_hwnd);
-    m_hwnd = NULL;
+    DestroyHWnd();
 
     if (sm_getComponentCache == this) {
         sm_getComponentCache = NULL;
@@ -412,7 +412,10 @@ BOOL AwtComponent::IsFocusable() {
     jobject peer = GetPeer(env);
     jobject target = env->GetObjectField(peer, AwtObject::targetID);
     BOOL res = env->GetBooleanField(target, focusableID);
-    res &= GetContainer()->IsFocusableWindow();
+    AwtWindow *pCont = GetContainer();
+    if (pCont) {
+        res &= pCont->IsFocusableWindow();
+    }
     env->DeleteLocalRef(target);
     return res;
 }
@@ -598,6 +601,17 @@ AwtComponent::CreateHWnd(JNIEnv *env, LPCWSTR title,
     }
     env->DeleteLocalRef(target);
     env->DeleteLocalRef(bkgrd);
+}
+
+/*
+ * Destroy this window's HWND
+ */
+void AwtComponent::DestroyHWnd() {
+    if (m_hwnd != NULL) {
+        AwtToolkit::DestroyComponentHWND(m_hwnd);
+        //AwtToolkit::DestroyComponent(this);
+        m_hwnd = NULL;
+    }
 }
 
 /*
@@ -901,8 +915,27 @@ void AwtComponent::Show()
 
 void AwtComponent::Hide()
 {
+    JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
+    jobject peer = GetPeer(env);
+    BOOL oldValue = sm_suppressFocusAndActivation;
     m_visible = false;
+
+    // On disposal the focus owner actually loses focus at the moment of hiding.
+    // So, focus change suppression (if requested) should be made here.
+    if (GetHWnd() == sm_focusOwner &&
+        !JNU_CallMethodByName(env, NULL, peer, "isAutoFocusTransferOnDisposal", "()Z").z)
+   {
+        sm_suppressFocusAndActivation = TRUE;
+        // The native system may autotransfer focus on hiding to the parent
+        // of the component. Nevertheless this focus change won't be posted
+        // to the Java level, we're better to avoid this. Anyway, after
+        // the disposal focus should be requested to the right component.
+        ::SetFocus(NULL);
+        sm_focusOwner = NULL;
+    }
     ::ShowWindow(GetHWnd(), SW_HIDE);
+
+    sm_suppressFocusAndActivation = oldValue;
 }
 
 BOOL
@@ -1915,25 +1948,6 @@ LRESULT AwtComponent::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
                                                   *((SIZE *)lParam));
           mr = mrConsume;
           break;
-      case WM_AWT_DD_CREATE_SURFACE:
-      {
-          return (LRESULT)WmDDCreateSurface((Win32SDOps*)wParam);
-      }
-      case WM_AWT_DD_ENTER_FULLSCREEN:
-      {
-          mr = WmDDEnterFullScreen((HMONITOR)wParam);
-          break;
-      }
-      case WM_AWT_DD_EXIT_FULLSCREEN:
-      {
-          mr = WmDDExitFullScreen((HMONITOR)wParam);
-          break;
-      }
-      case WM_AWT_DD_SET_DISPLAY_MODE:
-      {
-          mr = WmDDSetDisplayMode((HMONITOR)wParam, (DDrawDisplayMode*)lParam);
-          break;
-      }
       case WM_UNDOCUMENTED_CLICKMENUBAR:
       {
           if (::IsWindow(AwtWindow::GetModalBlocker(GetHWnd()))) {
@@ -2196,7 +2210,8 @@ AwtComponent::AwtSetFocus()
         }
     }
 
-    AwtFrame *owner = GetContainer()->GetOwningFrameOrDialog();
+    AwtWindow *pCont = GetContainer();
+    AwtFrame *owner = pCont ? pCont->GetOwningFrameOrDialog() : NULL;
 
     if (owner == NULL) {
         ::SetFocus(hwnd);
@@ -2347,12 +2362,12 @@ void AwtComponent::PaintUpdateRgn(const RECT *insets)
         if (insets != NULL) {
             ::OffsetRgn(rgn, insets->left, insets->top);
         }
-        int size = ::GetRegionData(rgn, 0, NULL);
+        DWORD size = ::GetRegionData(rgn, 0, NULL);
         if (size == 0) {
             ::DeleteObject((HGDIOBJ)rgn);
             return;
         }
-        char* buffer = new char[size];
+        char* buffer = new char[size]; // safe because sizeof(char)==1
         memset(buffer, 0, size);
         LPRGNDATA rgndata = (LPRGNDATA)buffer;
         rgndata->rdh.dwSize = sizeof(RGNDATAHEADER);
@@ -4692,6 +4707,25 @@ HDC AwtComponent::GetDCFromComponent()
     return hdc;
 }
 
+void AwtComponent::FillBackground(HDC hMemoryDC, SIZE &size)
+{
+    RECT eraseR = { 0, 0, size.cx, size.cy };
+    VERIFY(::FillRect(hMemoryDC, &eraseR, GetBackgroundBrush()));
+}
+
+void AwtComponent::FillAlpha(void *bitmapBits, SIZE &size, BYTE alpha)
+{
+    if (bitmapBits) {
+        DWORD* dest = (DWORD*)bitmapBits;
+        //XXX: might be optimized to use one loop (cy*cx -> 0).
+        for (int i = 0; i < size.cy; i++ ) {
+            for (int j = 0; j < size.cx; j++ ) {
+                ((BYTE*)(dest++))[3] = alpha;
+            }
+        }
+    }
+}
+
 jintArray AwtComponent::CreatePrintedPixels(SIZE &loc, SIZE &size) {
     JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
 
@@ -4749,31 +4783,6 @@ jintArray AwtComponent::CreatePrintedPixels(SIZE &loc, SIZE &size) {
     return pixelArray;
 }
 
-BOOL AwtComponent::WmDDCreateSurface(Win32SDOps* wsdo) {
-    return DDCreateSurface(wsdo);
-}
-
-// This method is fully implemented in AwtWindow
-MsgRouting AwtComponent::WmDDEnterFullScreen(HMONITOR monitor) {
-    DASSERT(FALSE);
-    return mrDoDefault;
-}
-
-// This method is fully implemented in AwtWindow
-MsgRouting AwtComponent::WmDDExitFullScreen(HMONITOR monitor) {
-    DASSERT(FALSE);
-    return mrDoDefault;
-}
-
-MsgRouting AwtComponent::WmDDSetDisplayMode(HMONITOR monitor,
-    DDrawDisplayMode* pDisplayMode) {
-
-    DDSetDisplayMode(monitor, *pDisplayMode);
-
-    delete pDisplayMode;
-    return mrDoDefault;
-}
-
 void *
 AwtComponent::GetNativeFocusOwner() {
     JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
@@ -4785,7 +4794,7 @@ void *
 AwtComponent::GetNativeFocusedWindow() {
     JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
     AwtComponent *comp =
-        AwtComponent::GetComponent(AwtComponent::sm_focusedWindow);
+        AwtComponent::GetComponent(AwtComponent::GetFocusedWindow());
     return (comp != NULL) ? comp->GetTargetAsGlobalRef(env) : NULL;
 }
 void
@@ -4885,7 +4894,7 @@ AwtComponent::SendKeyEventToFocusOwner(jint id, jlong when,
      * if focus owner is null, but focused window isn't
      * we will send key event to focused window
      */
-    HWND hwndTarget = ((sm_focusOwner != NULL) ? sm_focusOwner : sm_focusedWindow);
+    HWND hwndTarget = ((sm_focusOwner != NULL) ? sm_focusOwner : AwtComponent::GetFocusedWindow());
 
     if (hwndTarget == GetHWnd()) {
         SendKeyEvent(id, when, raw, cooked, modifiers, keyLocation, msg);
@@ -5318,7 +5327,8 @@ void AwtComponent::SynthesizeMouseMessage(JNIEnv *env, jobject mouseEvent)
     MSG* msg = CreateMessage(message, wParam, MAKELPARAM(x, y), x, y);
     // If the window is not focusable but if this is a focusing
     // message we should skip it then and perform our own actions.
-    if (((AwtWindow*)GetContainer())->IsFocusableWindow() || !ActMouseMessage(msg)) {
+    AwtWindow *pCont = GetContainer();
+    if ((pCont && pCont->IsFocusableWindow()) || !ActMouseMessage(msg)) {
         PostHandleEventMessage(msg, TRUE);
     } else {
         delete msg;
@@ -5836,7 +5846,10 @@ void AwtComponent::_NativeHandleEvent(void *param)
                 AwtComponent* p = (AwtComponent*)pData;
                 // If the window is not focusable but if this is a focusing
                 // message we should skip it then and perform our own actions.
-                if (((AwtWindow*)p->GetContainer())->IsFocusableWindow() || !p->ActMouseMessage(&msg)) {
+                AwtWindow *pCont = (AwtWindow*)(p->GetContainer());
+                if ((pCont && pCont->IsFocusableWindow()) ||
+                    !p->ActMouseMessage(&msg))
+                {
                     // Create copy for local msg
                     MSG* pCopiedMsg = new MSG;
                     memmove(pCopiedMsg, &msg, sizeof(MSG));
@@ -6295,37 +6308,50 @@ void AwtComponent::_SetRectangularShape(void *param)
 
     AwtComponent *c = NULL;
 
-
-
     PDATA pData;
     JNI_CHECK_PEER_GOTO(self, ret);
+
     c = (AwtComponent *)pData;
-    if (::IsWindow(c->GetHWnd()))
-    {
-        RGNDATA *pRgnData = NULL;
-        RGNDATAHEADER *pRgnHdr;
+    if (::IsWindow(c->GetHWnd())) {
+        HRGN hRgn = NULL;
 
-        /* reserving memory for the worst case */
-        size_t worstBufferSize = size_t(((x2 - x1) / 2 + 1) * (y2 - y1));
-        pRgnData = (RGNDATA *) safe_Malloc(sizeof(RGNDATAHEADER) +
-                sizeof(RECT_T) * worstBufferSize);
-        pRgnHdr = (RGNDATAHEADER *) pRgnData;
+            // If all the params are zeros, the shape must be simply reset.
+            // Otherwise, convert it into a region.
+        if (region || x1 || x2 || y1 || y2) {
+	    RECT_T rects[256];
+	    RECT_T *pRect = rects;
 
-        pRgnHdr->dwSize = sizeof(RGNDATAHEADER);
-        pRgnHdr->iType = RDH_RECTANGLES;
-        pRgnHdr->nRgnSize = 0;
-        pRgnHdr->rcBound.top = 0;
-        pRgnHdr->rcBound.left = 0;
-        pRgnHdr->rcBound.bottom = LONG(y2 - y1);
-        pRgnHdr->rcBound.right = LONG(x2 - x1);
+	    const int numrects = RegionToYXBandedRectangles(env, x1, y1, x2, y2,
+                        region, &pRect, sizeof(rects)/sizeof(rects[0]));
+	    if (!pRect) {
+		// RegionToYXBandedRectangles doesn't use safe_Malloc(),
+		// so throw the exception explicitly
+		throw std::bad_alloc();
+	    }
 
-        RECT_T * pRect = (RECT_T *) (((BYTE *) pRgnData) + sizeof(RGNDATAHEADER));
-        pRgnHdr->nCount = RegionToYXBandedRectangles(env, x1, y1, x2, y2, region, &pRect, worstBufferSize);
+	    RGNDATA *pRgnData = (RGNDATA *) SAFE_SIZE_STRUCT_ALLOC(safe_Malloc,
+                        sizeof(RGNDATAHEADER), sizeof(RECT_T), numrects);
+	    memcpy(pRgnData + sizeof(RGNDATAHEADER), pRect, sizeof(RECT_T) * numrects);
+	    if (pRect != rects) {
+		free(pRect);
+	    }
+	    pRect = NULL;
 
-        HRGN hRgn = ::ExtCreateRegion(NULL,
-                sizeof(RGNDATAHEADER) + sizeof(RECT_T) * pRgnHdr->nCount, pRgnData);
+	    RGNDATAHEADER *pRgnHdr = (RGNDATAHEADER *) pRgnData;
+            pRgnHdr->dwSize = sizeof(RGNDATAHEADER);
+            pRgnHdr->iType = RDH_RECTANGLES;
+            pRgnHdr->nRgnSize = 0;
+            pRgnHdr->rcBound.top = 0;
+            pRgnHdr->rcBound.left = 0;
+            pRgnHdr->rcBound.bottom = LONG(y2 - y1);
+            pRgnHdr->rcBound.right = LONG(x2 - x1);
+            pRgnHdr->nCount = numrects;
 
-        free(pRgnData);
+            hRgn = ::ExtCreateRegion(NULL,
+                    sizeof(RGNDATAHEADER) + sizeof(RECT_T) * pRgnHdr->nCount, pRgnData);
+
+            free(pRgnData);
+        }
 
         ::SetWindowRgn(c->GetHWnd(), hRgn, TRUE);
     }
@@ -6355,6 +6381,14 @@ void AwtComponent::PostUngrabEvent() {
     }
 }
 
+void AwtComponent::SetFocusedWindow(HWND window)
+{
+    HWND old = sm_focusedWindow;
+    sm_focusedWindow = window;
+
+    AwtWindow::FocusedWindowChanged(old, window);
+}
+
 /************************************************************************
  * Component native methods
  */
@@ -6373,6 +6407,46 @@ AwtComponent_GetHWnd(JNIEnv *env, jlong pData)
         return (HWND)0;
     }
     return p->GetHWnd();
+}
+
+static void _GetInsets(void* param)
+{
+    JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
+
+    GetInsetsStruct *gis = (GetInsetsStruct *)param;
+    jobject self = gis->window;
+
+    gis->insets->left = gis->insets->top =
+        gis->insets->right = gis->insets->bottom = 0;
+
+    PDATA pData;
+    JNI_CHECK_PEER_GOTO(self, ret);
+    AwtComponent *component = (AwtComponent *)pData;
+
+    component->GetInsets(gis->insets);
+
+  ret:
+    env->DeleteGlobalRef(self);
+    delete gis;
+}
+
+/**
+ * This method is called from the WGL pipeline when it needs to retrieve
+ * the insets associated with a ComponentPeer's C++ level object.
+ */
+void AwtComponent_GetInsets(JNIEnv *env, jobject peer, RECT *insets)
+{
+    TRY;
+
+    GetInsetsStruct *gis = new GetInsetsStruct;
+    gis->window = env->NewGlobalRef(peer);
+    gis->insets = insets;
+
+    AwtToolkit::GetInstance().InvokeFunction(_GetInsets, gis);
+    // global refs and mds are deleted in _UpdateWindow
+
+    CATCH_BAD_ALLOC;
+
 }
 
 JNIEXPORT void JNICALL
@@ -7280,3 +7354,4 @@ void ReleaseDCList(HWND hwnd, DCList &list) {
         delete tmpDCList;
     }
 }
+

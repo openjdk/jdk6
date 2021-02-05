@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,8 +38,10 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import sun.awt.AWTAutoShutdown;
 import sun.awt.SunToolkit;
+import sun.misc.ThreadGroupUtils;
 import sun.awt.Win32GraphicsDevice;
 import sun.awt.Win32GraphicsEnvironment;
+import sun.java2d.d3d.D3DRenderQueue;
 import sun.java2d.opengl.OGLRenderQueue;
 
 import sun.print.PrintJob2D;
@@ -211,6 +213,8 @@ public class WToolkit extends SunToolkit implements Runnable {
 
     private static native void postDispose();
 
+    private static native boolean startToolkitThread(Runnable thread, ThreadGroup rootThreadGroup);
+
     public WToolkit() {
         // Startup toolkit threads
         if (PerformanceLogger.loggingEnabled()) {
@@ -219,30 +223,35 @@ public class WToolkit extends SunToolkit implements Runnable {
 
         sun.java2d.Disposer.addRecord(anchor, new ToolkitDisposer());
 
-        synchronized (this) {
-            // Fix for bug #4046430 -- Race condition
-            // where notifyAll can be called before
-            // the "AWT-Windows" thread's parent thread is
-            // waiting, resulting in a deadlock on startup.
-            Thread toolkitThread = new Thread(this, "AWT-Windows");
+        /*
+         * Fix for 4701990.
+         * AWTAutoShutdown state must be changed before the toolkit thread
+         * starts to avoid race condition.
+         */
+        AWTAutoShutdown.notifyToolkitThreadBusy();
+
+        // Find a root TG and attach Appkit thread to it
+        ThreadGroup rootTG = AccessController.doPrivileged(new PrivilegedAction<ThreadGroup>() {
+		public ThreadGroup run() {
+		    return ThreadGroupUtils.getRootThreadGroup();
+		}
+	    });
+        if (!startToolkitThread(this, rootTG)) {
+            Thread toolkitThread = new Thread(rootTG, this, "AWT-Windows");
             toolkitThread.setDaemon(true);
-            toolkitThread.setPriority(Thread.NORM_PRIORITY+1);
-
-            /*
-             * Fix for 4701990.
-             * AWTAutoShutdown state must be changed before the toolkit thread
-             * starts to avoid race condition.
-             */
-            AWTAutoShutdown.notifyToolkitThreadBusy();
-
             toolkitThread.start();
-
-            try {
-                wait();
-            }
-            catch (InterruptedException x) {
-            }
         }
+
+        try {
+            synchronized(this) {
+                while(!inited) {
+                    wait();
+                }
+            }
+        } catch (InterruptedException x) {
+            // swallow the exception
+        }
+
         SunToolkit.setDataTransfererClassName(DATA_TRANSFERER_CLASS_NAME);
 
         // Enabled "live resizing" by default.  It remains controlled
@@ -250,34 +259,38 @@ public class WToolkit extends SunToolkit implements Runnable {
         setDynamicLayout(true);
     }
 
-    public void run() {
-        boolean startPump = init();
-
-        if (startPump) {
-            ThreadGroup mainTG = (ThreadGroup)AccessController.doPrivileged(
-                new PrivilegedAction() {
-                    public Object run() {
-                        ThreadGroup currentTG =
-                            Thread.currentThread().getThreadGroup();
-                        ThreadGroup parentTG = currentTG.getParent();
-                        while (parentTG != null) {
-                            currentTG = parentTG;
-                            parentTG = currentTG.getParent();
-                        }
-                        return currentTG;
-                    }
-            });
-
-            Runtime.getRuntime().addShutdownHook(
-                new Thread(mainTG, new Runnable() {
+    private final void registerShutdownHook() {
+        AccessController.doPrivileged(new PrivilegedAction<Void>() {
+            public Void run() {
+                Thread shutdown = new Thread(ThreadGroupUtils.getRootThreadGroup(), new Runnable() {
                     public void run() {
                         shutdown();
                     }
-                })
-            );
+                });
+                shutdown.setContextClassLoader(null);
+                Runtime.getRuntime().addShutdownHook(shutdown);
+                return null;
+            }
+        });
+     }
+
+    public void run() {
+        AccessController.doPrivileged(new PrivilegedAction<Void>() {
+            @Override
+            public Void run() {
+                Thread.currentThread().setContextClassLoader(null);
+                return null;
+            }
+        });
+        Thread.currentThread().setPriority(Thread.NORM_PRIORITY + 1);
+        boolean startPump = init();
+
+        if (startPump) {
+            registerShutdownHook();
         }
 
         synchronized(this) {
+            inited = true;
             notifyAll();
         }
 
@@ -295,6 +308,8 @@ public class WToolkit extends SunToolkit implements Runnable {
      * eventLoop() should Dispose the toolkit and exit.
      */
     private native boolean init();
+    private boolean inited = false;
+
     private native void eventLoop();
     private native void shutdown();
 
@@ -595,6 +610,8 @@ public class WToolkit extends SunToolkit implements Runnable {
         nativeSync();
         // now flush the OGL pipeline (this is a no-op if OGL is not enabled)
         OGLRenderQueue.sync();
+        // now flush the D3D pipeline (this is a no-op if D3D is not enabled)
+        D3DRenderQueue.sync();
     }
 
     public PrintJob getPrintJob(Frame frame, String doctitle,
@@ -914,8 +931,31 @@ public class WToolkit extends SunToolkit implements Runnable {
         return toolkit;
     }
 
+    /**
+     * There are two reasons why we don't use buffer per window when
+     * Vista's DWM (aka Aero) is enabled:
+     * - since with DWM all windows are already double-buffered, the application
+     *   doesn't get expose events so we don't get to use our true back-buffer,
+     *   wasting memory and performance (this is valid for both d3d and gdi
+     *   pipelines)
+     * - in some cases with buffer per window enabled it is possible for the
+     *   paint manager to redirect rendering to the screen for some operations
+     *   (like copyArea), and since bpw uses its own BufferStrategy the
+     *   d3d onscreen rendering support is disabled and rendering goes through
+     *   GDI. This doesn't work well with Vista's DWM since one
+     *   can not perform GDI and D3D operations on the same surface
+     *   (see 6630702 for more info)
+     *
+     * Note: even though DWM composition state can change during the lifetime
+     * of the application it is a rare event, and it is more often that it
+     * is temporarily disabled (because of some app) than it is getting
+     * permanently enabled so we can live with this approach without the
+     * complexity of dwm state listeners and such. This can be revisited if
+     * proved otherwise.
+     */
+    @Override
     public boolean useBufferPerWindow() {
-        return true;
+        return !Win32GraphicsEnvironment.isDWMCompositionEnabled();
     }
 
     public void grab(Window w) {
@@ -940,4 +980,34 @@ public class WToolkit extends SunToolkit implements Runnable {
     }
 
     private static native boolean isProtectedMode();
+
+    @Override
+    public boolean isWindowOpacitySupported() {
+        // supported in Win2K and later
+        return true;
+    }
+
+    @Override
+    public boolean isWindowShapingSupported() {
+        return true;
+    }
+
+    @Override
+    public boolean isWindowTranslucencySupported() {
+        // supported in Win2K and later
+        return true;
+    }
+
+    @Override
+    public boolean isTranslucencyCapable(GraphicsConfiguration gc) {
+        //XXX: worth checking if 8-bit? Anyway, it doesn't hurt.
+        return true;
+    }
+
+    // On MS Windows one must use the peer.updateWindow() to implement
+    // non-opaque windows.
+    @Override
+    public boolean needUpdateWindow() {
+        return true;
+    }
 }

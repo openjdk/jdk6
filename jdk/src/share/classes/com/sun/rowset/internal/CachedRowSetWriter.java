@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,8 +31,15 @@ import java.util.*;
 import java.io.*;
 
 import com.sun.rowset.*;
+import java.text.MessageFormat;
 import javax.sql.rowset.*;
+import javax.sql.rowset.serial.SQLInputImpl;
+import javax.sql.rowset.serial.SerialArray;
+import javax.sql.rowset.serial.SerialBlob;
+import javax.sql.rowset.serial.SerialClob;
+import javax.sql.rowset.serial.SerialStruct;
 import javax.sql.rowset.spi.*;
+import sun.reflect.misc.ReflectUtil;
 
 
 /**
@@ -53,6 +60,7 @@ import javax.sql.rowset.spi.*;
  * Standard JDBC RowSet implementations provide an object instance of this
  * writer by invoking the <code>SyncProvider.getRowSetWriter()</code> method.
  *
+ * @version 0.2
  * @author Jonathan Bruce
  * @see javax.sql.rowset.spi.SyncProvider
  * @see javax.sql.rowset.spi.SyncFactory
@@ -508,10 +516,11 @@ public class CachedRowSetWriter implements TransactionalWriter, Serializable {
 
             ResultSet rs = null;
             rs = pstmt.executeQuery();
-            if (rs.next() == true) {
+            ResultSetMetaData rsmd = rs.getMetaData();
 
+            if (rs.next()) {
                 if (rs.next()) {
-                  /**  More than one row conflict.
+                   /** More than one row conflict.
                     *  If rs has only one row we are able to
                     *  uniquely identify the row where update
                     *  have to happen else if more than one
@@ -528,7 +537,7 @@ public class CachedRowSetWriter implements TransactionalWriter, Serializable {
                 // we require the record in rs to be used.
                 // rs.close();
                 // pstmt.close();
-                        rs.first();
+                rs.first();
 
                 // how many fields need to be updated
                 int colsNotChanged = 0;
@@ -552,6 +561,45 @@ public class CachedRowSetWriter implements TransactionalWriter, Serializable {
                 orig = origVals.getObject(i);
                 curr = crs.getObject(i);
                 rsval = rs.getObject(i);
+                /*
+                 * the following block creates equivalent objects
+                 * that would have been created if this rs is populated
+                 * into a CachedRowSet so that comparison of the column values
+                 * from the ResultSet and CachedRowSet are possible
+                 */
+                Map map = (crs.getTypeMap() == null)?con.getTypeMap():crs.getTypeMap();
+                if (rsval instanceof Struct) {
+
+                    Struct s = (Struct)rsval;
+
+                    // look up the class in the map
+                    Class c = null;
+                    c = (Class)map.get(s.getSQLTypeName());
+                    if (c != null) {
+                        // create new instance of the class
+                        SQLData obj = null;
+                        try {
+                            obj = (SQLData)ReflectUtil.newInstance(c);
+                        } catch (Exception ex) {
+                            throw new SQLException("Unable to Instantiate: ", ex);
+                        }
+                        // get the attributes from the struct
+                        Object attribs[] = s.getAttributes(map);
+                        // create the SQLInput "stream"
+                        SQLInputImpl sqlInput = new SQLInputImpl(attribs, map);
+                        // read the values...
+                        obj.readSQL(sqlInput, s.getSQLTypeName());
+                        rsval = obj;
+                    }
+                } else if (rsval instanceof SQLData) {
+                    rsval = new SerialStruct((SQLData)rsval, map);
+                } else if (rsval instanceof Blob) {
+                    rsval = new SerialBlob((Blob)rsval);
+                } else if (rsval instanceof Clob) {
+                    rsval = new SerialClob((Clob)rsval);
+                } else if (rsval instanceof java.sql.Array) {
+                    rsval = new SerialArray((java.sql.Array)rsval, map);
+                }
 
                 // reset boolNull if it had been set
                 boolNull = true;
@@ -668,6 +716,9 @@ public class CachedRowSetWriter implements TransactionalWriter, Serializable {
                                       this.crsResolve.updateNull(i);
                                  }
                 } //end for
+
+                rs.close();
+                pstmt.close();
 
                this.crsResolve.insertRow();
                    this.crsResolve.moveToCurrentRow();
@@ -1179,11 +1230,22 @@ public class CachedRowSetWriter implements TransactionalWriter, Serializable {
     private void buildKeyDesc(CachedRowSet crs) throws SQLException {
 
         keyCols = crs.getKeyColumns();
+        ResultSetMetaData resultsetmd = crs.getMetaData();
         if (keyCols == null || keyCols.length == 0) {
-            keyCols = new int[callerColumnCount];
-            for (int i = 0; i < keyCols.length; ) {
-                keyCols[i] = ++i;
+            ArrayList<Integer> listKeys = new ArrayList<Integer>();
+
+            for (int i = 0; i < callerColumnCount; i++ ) {
+                if(resultsetmd.getColumnType(i+1) != java.sql.Types.CLOB &&
+                        resultsetmd.getColumnType(i+1) != java.sql.Types.STRUCT &&
+                        resultsetmd.getColumnType(i+1) != java.sql.Types.SQLXML &&
+                        resultsetmd.getColumnType(i+1) != java.sql.Types.BLOB &&
+                        resultsetmd.getColumnType(i+1) != java.sql.Types.ARRAY &&
+                        resultsetmd.getColumnType(i+1) != java.sql.Types.OTHER )
+                    listKeys.add(i+1);
             }
+            keyCols = new int[listKeys.size()];
+            for (int i = 0; i < listKeys.size(); i++ )
+                keyCols[i] = listKeys.get(i);
         }
         params = new Object[keyCols.length];
     }
@@ -1359,4 +1421,17 @@ public class CachedRowSetWriter implements TransactionalWriter, Serializable {
         }
     }
 
+    private void readObject(ObjectInputStream ois) throws IOException, ClassNotFoundException {
+        // Default state initialization happens here
+        ois.defaultReadObject();
+        // Initialization of  Res Bundle happens here .
+        try {
+           resBundle = JdbcRowSetResourceBundle.getJdbcRowSetResourceBundle();
+        } catch(IOException ioe) {
+            throw new RuntimeException(ioe);
+        }
+
+    }
+
+    static final long serialVersionUID =-8506030970299413976L;
 }

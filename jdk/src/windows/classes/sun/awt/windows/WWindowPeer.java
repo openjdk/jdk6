@@ -31,17 +31,15 @@ import java.awt.peer.*;
 
 import java.beans.*;
 
-import java.lang.ref.*;
 import java.lang.reflect.*;
-
-import java.security.*;
 
 import java.util.*;
 import java.util.List;
 import java.util.logging.*;
 
 import sun.awt.*;
-import sun.awt.image.*;
+
+import sun.java2d.pipe.Region;
 
 public class WWindowPeer extends WPanelPeer implements WindowPeer {
 
@@ -51,6 +49,10 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
     // we can't use WDialogPeer as blocker may be an instance of WPrintDialogPeer that
     // extends WWindowPeer, not WDialogPeer
     private WWindowPeer modalBlocker = null;
+
+    private boolean isOpaque;
+
+    private volatile TranslucentWindowPainter painter;
 
     /*
      * A key used for storing a list of active windows in AppContext. The value
@@ -90,9 +92,18 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
                 l.remove(this);
             }
         }
+
         // Remove ourself from the Map of DisplayChangeListeners
         GraphicsConfiguration gc = getGraphicsConfiguration();
         ((Win32GraphicsDevice)gc.getDevice()).removeDisplayChangedListener(this);
+
+        TranslucentWindowPainter currentPainter = painter;
+        if (currentPainter != null) {
+            currentPainter.flush();
+            // don't set the current one to null here; reduces the chances of
+            // MT issues (like NPEs)
+        }
+
         super.disposeImpl();
     }
 
@@ -168,6 +179,10 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
         }
 
         updateIconImages();
+
+        updateShape();
+        updateOpacity();
+        updateOpaque();
     }
 
     native void createAwtWindow(WComponentPeer parent);
@@ -201,6 +216,8 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
         if (((Window)target).isAlwaysOnTopSupported() && alwaysOnTop) {
             setAlwaysOnTop(alwaysOnTop);
         }
+
+        updateWindow(null);
     }
 
     // Synchronize the insets members (here & in helper) with actual window
@@ -280,6 +297,31 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
             } else {
                 setIconImagesData(null, 0, 0, null, 0, 0);
             }
+        }
+    }
+
+    private void updateShape() {
+        // Shape shape = ((Window)target).getShape();
+        Shape shape = AWTAccessor.getWindowAccessor().getShape((Window)target);
+        if (shape != null) {
+            applyShape(Region.getInstance(shape, null));
+        }
+    }
+
+    private void updateOpacity() {
+        // float opacity = ((Window)target).getOpacity();
+        float opacity = AWTAccessor.getWindowAccessor().getOpacity((Window)target);
+        if (opacity < 1.0f) {
+            setOpacity(opacity);
+        }
+    }
+
+    private void updateOpaque() {
+        this.isOpaque = true;
+        // boolean opaque = ((Window)target).isOpaque();
+        boolean opaque = AWTAccessor.getWindowAccessor().isOpaque((Window)target);
+        if (!opaque) {
+            setOpaque(opaque);
         }
     }
 
@@ -461,8 +503,10 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
      private volatile int sysH = 0;
 
      Rectangle constrainBounds(int x, int y, int width, int height) {
+         GraphicsConfiguration gc = this.winGraphicsConfig;
+
          // We don't restrict the setBounds() operation if the code is trusted.
-         if (!hasWarningWindow()) {
+         if (!hasWarningWindow() || gc == null) {
              return new Rectangle(x, y, width, height);
          }
 
@@ -471,24 +515,24 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
          int newW = width;
          int newH = height;
 
-         GraphicsConfiguration gc = ((Window)target).getGraphicsConfiguration();
          Rectangle sB = gc.getBounds();
-         Insets sIn = ((Window)target).getToolkit().getScreenInsets(gc);
+         Insets sIn = Toolkit.getDefaultToolkit().getScreenInsets(gc);
 
          int screenW = sB.width - sIn.left - sIn.right;
          int screenH = sB.height - sIn.top - sIn.bottom;
 
          // If it's undecorated or is not currently visible
-         if (!((Window)target).isVisible() || isTargetUndecorated()) {
+         if (!AWTAccessor.getComponentAccessor().isVisible_NoClientCode(
+                     (Component)target) || isTargetUndecorated())
+         {
              // Now check each point is within the visible part of the screen
              int screenX = sB.x + sIn.left;
              int screenY = sB.y + sIn.top;
 
-             // First make sure the size is withing the visible part of the screen
+             // First make sure the size is within the visible part of the screen
              if (newW > screenW) {
                  newW = screenW;
              }
-
              if (newH > screenH) {
                  newH = screenH;
              }
@@ -499,7 +543,6 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
              } else if (newX + newW > screenX + screenW) {
                  newX = screenX + screenW - newW;
              }
-
              if (newY < screenY) {
                  newY = screenY;
              } else if (newY + newH > screenY + screenH) {
@@ -514,7 +557,6 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
              if (newW > maxW) {
                  newW = maxW;
              }
-
              if (newH > maxH) {
                  newH = maxH;
              }
@@ -522,6 +564,8 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
 
          return new Rectangle(newX, newY, newW, newH);
      }
+
+     public native void repositionSecurityWarning();
 
      @Override
      public void setBounds(int x, int y, int width, int height, int op) {
@@ -534,6 +578,135 @@ public class WWindowPeer extends WPanelPeer implements WindowPeer {
 
          super.setBounds(newBounds.x, newBounds.y, newBounds.width, newBounds.height, op);
      }
+
+    @Override
+    public void print(Graphics g) {
+        // We assume we print the whole frame,
+        // so we expect no clip was set previously
+        Shape shape = AWTAccessor.getWindowAccessor().getShape((Window)target);
+        if (shape != null) {
+            g.setClip(shape);
+        }
+        super.print(g);
+    }
+
+    private void replaceSurfaceDataRecursively(Component c) {
+        if (c instanceof Container) {
+            for (Component child : ((Container)c).getComponents()) {
+                replaceSurfaceDataRecursively(child);
+            }
+        }
+        ComponentPeer cp = c.getPeer();
+        if (cp instanceof WComponentPeer) {
+            ((WComponentPeer)cp).replaceSurfaceDataLater();
+        }
+    }
+
+    private native void setOpacity(int iOpacity);
+
+    public void setOpacity(float opacity) {
+        if (!((SunToolkit)((Window)target).getToolkit()).
+            isWindowOpacitySupported())
+        {
+            return;
+        }
+
+        replaceSurfaceDataRecursively((Component)getTarget());
+
+        final int maxOpacity = 0xff;
+        int iOpacity = (int)(opacity * maxOpacity);
+        if (iOpacity < 0) {
+            iOpacity = 0;
+        }
+        if (iOpacity > maxOpacity) {
+            iOpacity = maxOpacity;
+        }
+
+        setOpacity(iOpacity);
+        updateWindow(null);
+    }
+
+    private native void setOpaqueImpl(boolean isOpaque);
+
+    public void setOpaque(boolean isOpaque) {
+        Window target = (Window)getTarget();
+
+        SunToolkit sunToolkit = (SunToolkit)target.getToolkit();
+        if (!sunToolkit.isWindowTranslucencySupported() ||
+            !sunToolkit.isTranslucencyCapable(target.getGraphicsConfiguration()))
+        {
+            return;
+        }
+
+        boolean opaqueChanged = this.isOpaque != isOpaque;
+        boolean isVistaOS = Win32GraphicsEnvironment.isVistaOS();
+
+        if (opaqueChanged && !isVistaOS){
+            // non-Vista OS: only replace the surface data if the opacity
+            // status changed (see WComponentPeer.isAccelCapable() for more)
+            replaceSurfaceDataRecursively(target);
+        }
+
+        this.isOpaque = isOpaque;
+
+        setOpaqueImpl(isOpaque);
+
+        if (opaqueChanged) {
+            if (isOpaque) {
+                TranslucentWindowPainter currentPainter = painter;
+                if (currentPainter != null) {
+                    currentPainter.flush();
+                    painter = null;
+                }
+            } else {
+                painter = TranslucentWindowPainter.createInstance(this);
+            }
+        }
+
+        if (opaqueChanged && isVistaOS) {
+            // On Vista: setting the window non-opaque makes the window look
+            // rectangular, though still catching the mouse clicks within
+            // its shape only. To restore the correct visual appearance
+            // of the window (i.e. w/ the correct shape) we have to reset
+            // the shape.
+            Shape shape = AWTAccessor.getWindowAccessor().getShape(target);
+            if (shape != null) {
+                AWTAccessor.getWindowAccessor().setShape(target, shape);
+            }
+        }
+
+        updateWindow(null);
+    }
+
+    public native void updateWindowImpl(int[] data, int width, int height);
+
+    public void updateWindow(BufferedImage backBuffer) {
+        if (isOpaque) {
+            return;
+        }
+
+        TranslucentWindowPainter currentPainter = painter;
+        if (currentPainter != null) {
+            currentPainter.updateWindow(backBuffer);
+        } else if (log.isLoggable(Level.FINER)) {
+            log.log(Level.FINER,
+                    "Translucent window painter is null in updateWindow");
+        }
+    }
+
+    /**
+     * Paints the Applet Warning into the passed Graphics2D. This method is
+     * called by the TranslucentWindowPainter before updating the layered
+     * window.
+     *
+     * @param g Graphics context to paint the warning to
+     * @param w the width of the area
+     * @param h the height of the area
+     * @see TranslucentWindowPainter
+     */
+    public void paintAppletWarning(Graphics2D g, int w, int h) {
+        // REMIND: the applet warning needs to be painted here
+    }
 
     /*
      * Static inner class, listens for 'activeWindow' KFM property changes and

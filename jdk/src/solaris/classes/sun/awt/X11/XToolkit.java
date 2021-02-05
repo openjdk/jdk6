@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,7 +46,7 @@ import javax.swing.LookAndFeel;
 import javax.swing.UIDefaults;
 import java.util.logging.*;
 import sun.font.FontManager;
-import sun.misc.PerformanceLogger;
+import sun.misc.*;
 import sun.print.PrintJob2D;
 import sun.security.action.GetBooleanAction;
 import sun.security.action.GetPropertyAction;
@@ -291,15 +291,23 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             awtUnlock();
         }
 
-        if (log.isLoggable(Level.FINE)) {
-            Runtime.getRuntime().addShutdownHook(new Thread() {
-                public void run() {
-                    if (log.isLoggable(Level.FINE)) {
-                        dumpPeers();
-                    }
+	if (log.isLoggable(Level.FINE)) {
+	    PrivilegedAction<Void> a = new PrivilegedAction<Void>() {
+		public Void run() {
+		    Thread shutdownThread = new Thread(ThreadGroupUtils.getRootThreadGroup(), "XToolkt-Shutdown-Thread") {
+			public void run() {
+			    if (log.isLoggable(Level.FINE)) {
+				dumpPeers();
+			    }
+			}
+		    };
+		    shutdownThread.setContextClassLoader(null);
+		    Runtime.getRuntime().addShutdownHook(shutdownThread);
+		    return null;
                 }
-            });
-        }
+            };
+	    AccessController.doPrivileged(a);
+	}
     }
 
     static String getCorrectXIDString(String val) {
@@ -341,22 +349,17 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
             init();
             XWM.init();
             SunToolkit.setDataTransfererClassName(DATA_TRANSFERER_CLASS_NAME);
-            toolkitThread = new Thread(this, "AWT-XAWT");
-            toolkitThread.setPriority(Thread.NORM_PRIORITY + 1);
-            toolkitThread.setDaemon(true);
-            ThreadGroup mainTG = (ThreadGroup)AccessController.doPrivileged(
-                                                                            new PrivilegedAction() {
-                                                                                    public Object run() {
-                                                                                        ThreadGroup currentTG =
-                                                                                            Thread.currentThread().getThreadGroup();
-                                                                                        ThreadGroup parentTG = currentTG.getParent();
-                                                                                        while (parentTG != null) {
-                                                                                            currentTG = parentTG;
-                                                                                            parentTG = currentTG.getParent();
-                                                                                        }
-                                                                                        return currentTG;
-                                                                                    }
-                                                                                });
+
+            PrivilegedAction<Thread> action = new PrivilegedAction() {
+                public Thread run() {
+                    Thread thread = new Thread(ThreadGroupUtils.getRootThreadGroup(), XToolkit.this, "AWT-XAWT");
+                    thread.setContextClassLoader(null);
+                    thread.setPriority(Thread.NORM_PRIORITY + 1);
+                    thread.setDaemon(true);
+                    return thread;
+                }
+            };
+            toolkitThread = AccessController.doPrivileged(action);
             toolkitThread.start();
         }
     }
@@ -2164,4 +2167,35 @@ public class XToolkit extends UNIXToolkit implements Runnable, XConstants {
         return new XDesktopPeer();
     }
 
+    @Override
+    public boolean isWindowOpacitySupported() {
+        XNETProtocol net_protocol = XWM.getWM().getNETProtocol();
+
+        if (net_protocol == null) {
+            return false;
+        }
+
+        return net_protocol.doOpacityProtocol();
+    }
+
+    @Override
+    public boolean isWindowShapingSupported() {
+        return XlibUtil.isShapingSupported();
+    }
+
+    @Override
+    public boolean isWindowTranslucencySupported() {
+        //NOTE: it may not be supported. The actual check is being performed
+        //      at com.sun.awt.AWTUtilities(). In X11 we need to check
+        //      whether there's any translucency-capable GC available.
+        return true;
+    }
+
+    @Override
+    public boolean isTranslucencyCapable(GraphicsConfiguration gc) {
+        if (!(gc instanceof X11GraphicsConfig)) {
+            return false;
+        }
+        return ((X11GraphicsConfig)gc).isTranslucencyCapable();
+    }
 }

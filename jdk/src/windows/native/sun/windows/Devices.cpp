@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2008, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -84,6 +84,7 @@
 #include "Devices.h"
 #include "Trace.h"
 #include "awt_Multimon.h"
+#include "D3DPipelineManager.h"
 
 Devices* Devices::theInstance = NULL;
 CriticalSection Devices::arrayLock;
@@ -96,8 +97,8 @@ Devices::Devices(int numDevices)
     J2dTraceLn1(J2D_TRACE_INFO, "Devices::Devices numDevices=%d", numDevices);
     this->numDevices = numDevices;
     this->refCount = 0;
-    devices = (AwtWin32GraphicsDevice**)safe_Malloc
-        (numDevices * sizeof(AwtWin32GraphicsDevice *));
+    devices = (AwtWin32GraphicsDevice**)SAFE_SIZE_ARRAY_ALLOC(safe_Malloc,
+        numDevices, sizeof(AwtWin32GraphicsDevice *));
 }
 
 /**
@@ -113,7 +114,8 @@ BOOL Devices::UpdateInstance(JNIEnv *env)
     J2dTraceLn(J2D_TRACE_INFO, "Devices::UpdateInstance");
 
     int numScreens = ::CountMonitors();
-    MHND *monHds = (MHND *)safe_Malloc(numScreens * sizeof(MHND));
+    MHND *monHds = (MHND *)SAFE_SIZE_ARRAY_ALLOC(safe_Malloc,
+            numScreens, sizeof(MHND));
     if (numScreens != ::CollectMonitors(monHds, numScreens)) {
         J2dRlsTraceLn(J2D_TRACE_ERROR,
                       "Devices::UpdateInstance: Failed to get all "\
@@ -133,13 +135,12 @@ BOOL Devices::UpdateInstance(JNIEnv *env)
     AwtWin32GraphicsDevice** rawDevices = newDevices->GetRawArray();
     int i;
     for (i = 0; i < numScreens; ++i) {
+        J2dTraceLn2(J2D_TRACE_VERBOSE, "  hmon[%d]=0x%x", i, monHds[i]);
         rawDevices[i] = new AwtWin32GraphicsDevice(i, monHds[i], newDevices);
     }
     for (i = 0; i < numScreens; ++i) {
         rawDevices[i]->Initialize();
     }
-    free(monHds);
-
     {
         CriticalSection::Lock l(arrayLock);
 
@@ -161,12 +162,14 @@ BOOL Devices::UpdateInstance(JNIEnv *env)
                             "Devices::UpdateInstance: device removed: %d", i);
                 oldDevices->GetDevice(i)->Invalidate(env);
             }
-
             // Now that we have a new array in place, remove this (possibly the
             // last) reference to the old instance.
             oldDevices->Release();
         }
+        D3DPipelineManager::HandleAdaptersChange((HMONITOR*)monHds,
+                                                 theInstance->GetNumDevices());
     }
+    free(monHds);
 
     return TRUE;
 }

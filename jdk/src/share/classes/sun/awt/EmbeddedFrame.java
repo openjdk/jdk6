@@ -579,5 +579,14 @@ public abstract class EmbeddedFrame extends Frame
         }
         public void updateMinimumSize() {
         }
-    }
+
+        public void setOpacity(float opacity) {
+        }
+        public void setOpaque(boolean isOpaque) {
+        }
+        public void updateWindow(BufferedImage backBuffer) {
+        }
+        public void repositionSecurityWarning() {
+        }
+     }
 } // class EmbeddedFrame
