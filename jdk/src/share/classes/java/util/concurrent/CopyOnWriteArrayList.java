@@ -36,6 +36,8 @@
 package java.util.concurrent;
 import java.util.*;
 import java.util.concurrent.locks.*;
+
+import sun.misc.SharedSecrets;
 import sun.misc.Unsafe;
 
 /**
@@ -870,6 +872,7 @@ public class CopyOnWriteArrayList<E>
 
         // Read in array length and allocate array
         int len = s.readInt();
+        SharedSecrets.getJavaOISAccess().checkArray(s, Object[].class, len);
         Object[] elements = new Object[len];
 
         // Read in all elements in the proper order.

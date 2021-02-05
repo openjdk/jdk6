@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2008, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,10 +33,12 @@ import java.security.spec.*;
 import javax.crypto.spec.DHParameterSpec;
 
 import sun.security.provider.ParameterCache;
+import static sun.security.util.SecurityProviderConstants.*;
 
 import static sun.security.pkcs11.TemplateManager.*;
 import sun.security.pkcs11.wrapper.*;
 import static sun.security.pkcs11.wrapper.PKCS11Constants.*;
+
 
 import sun.security.rsa.RSAKeyFactory;
 
@@ -80,9 +82,15 @@ final class P11KeyPairGenerator extends KeyPairGeneratorSpi {
         this.algorithm = algorithm;
         this.mechanism = mechanism;
         if (algorithm.equals("EC")) {
-            initialize(256, null);
+            initialize(DEF_EC_KEY_SIZE, null);
         } else {
-            initialize(1024, null);
+            if (algorithm.equals("DSA")) {
+                initialize(DEF_DSA_KEY_SIZE, null);
+            } else if (algorithm.equals("RSA")) {
+                initialize(DEF_RSA_KEY_SIZE, null);
+            } else {
+                initialize(DEF_DH_KEY_SIZE, null);
+            }
         }
     }
 

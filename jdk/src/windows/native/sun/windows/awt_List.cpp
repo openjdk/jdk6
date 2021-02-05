@@ -91,10 +91,9 @@ AwtList* AwtList::Create(jobject peer, jobject parent)
 
         PDATA pData;
         AwtCanvas* awtParent;
-        JNI_CHECK_PEER_GOTO(parent, done);
 
+        JNI_CHECK_PEER_GOTO(parent, done);
         awtParent = (AwtCanvas*)pData;
-        JNI_CHECK_NULL_GOTO(awtParent, "null awtParent", done);
 
         /* target is Hjava_awt_List * */
         target = env->GetObjectField(peer, AwtObject::targetID);
@@ -1002,9 +1001,6 @@ Java_sun_awt_windows_WListPeer_deselect(JNIEnv *env, jobject self,
 {
     TRY;
 
-    PDATA pData;
-    JNI_CHECK_PEER_RETURN(self);
-
     SelectElementStruct *ses = new SelectElementStruct;
     ses->list = env->NewGlobalRef(self);
     ses->index = pos;
@@ -1068,11 +1064,8 @@ Java_sun_awt_windows_WListPeer_create(JNIEnv *env, jobject self,
 {
     TRY;
 
-    PDATA pData;
-    JNI_CHECK_PEER_RETURN(parent);
     AwtToolkit::CreateComponent(self, parent,
                                 (AwtToolkit::ComponentFactory)AwtList::Create);
-    JNI_CHECK_PEER_CREATION_RETURN(self);
 
     CATCH_BAD_ALLOC;
 }

@@ -33,6 +33,8 @@
  */
 
 package java.util;
+import sun.misc.SharedSecrets;
+
 import java.io.*;
 
 /**
@@ -116,12 +118,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
 
     // ******  Array allocation and resizing utilities ******
 
-    /**
-     * Allocate empty array to hold the given number of elements.
-     *
-     * @param numElements  the number of elements to hold
-     */
-    private void allocateElements(int numElements) {
+    private static int calculateSize(int numElements) {
         int initialCapacity = MIN_INITIAL_CAPACITY;
         // Find the best power of two to hold elements.
         // Tests "<=" because arrays aren't kept full.
@@ -137,7 +134,16 @@ public class ArrayDeque<E> extends AbstractCollection<E>
             if (initialCapacity < 0)   // Too many elements, must back off
                 initialCapacity >>>= 1;// Good luck allocating 2 ^ 30 elements
         }
-        elements = (E[]) new Object[initialCapacity];
+        return initialCapacity;
+    }
+
+    /**
+     * Allocates empty array to hold the given number of elements.
+     *
+     * @param numElements  the number of elements to hold
+     */
+    private void allocateElements(int numElements) {
+        elements = (E[]) new Object[calculateSize(numElements)];
     }
 
     /**
@@ -855,6 +861,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
 
         // Read in size and allocate array
         int size = s.readInt();
+        int capacity = calculateSize(size);
+        SharedSecrets.getJavaOISAccess().checkArray(s, Object[].class, capacity);
         allocateElements(size);
         head = 0;
         tail = size;

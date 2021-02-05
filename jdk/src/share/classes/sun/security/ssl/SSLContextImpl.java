@@ -43,6 +43,7 @@ import javax.net.ssl.*;
 
 import sun.security.util.AlgorithmConstraints;
 import sun.security.util.CryptoPrimitive;
+import sun.security.validator.Validator;
 
 public abstract class SSLContextImpl extends SSLContextSpi {
 

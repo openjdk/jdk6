@@ -25,34 +25,23 @@
 
 package java.io;
 
-import java.lang.ref.Reference;
-import java.lang.ref.ReferenceQueue;
-import java.lang.ref.SoftReference;
-import java.lang.ref.WeakReference;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Member;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.Proxy;
-import java.security.AccessController;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivilegedAction;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import sun.misc.JavaSecurityAccess;
+import sun.misc.SharedSecrets;
 import sun.misc.Unsafe;
 import sun.reflect.CallerSensitive;
 import sun.reflect.Reflection;
 import sun.reflect.ReflectionFactory;
 import sun.reflect.misc.ReflectUtil;
+
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.SoftReference;
+import java.lang.ref.WeakReference;
+import java.lang.reflect.*;
+import java.security.*;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Serialization's descriptor for classes.  It contains the name and
@@ -148,6 +137,9 @@ public class ObjectStreamClass implements Serializable {
 
     /** serialization-appropriate constructor, or null if none */
     private Constructor cons;
+    /** protection domains that need to be checked when calling the constructor */
+    private ProtectionDomain[] domains;
+
     /** class-defined writeObject method, or null if none */
     private Method writeObjectMethod;
     /** class-defined readObject method, or null if none */
@@ -479,6 +471,7 @@ public class ObjectStreamClass implements Serializable {
                             cl, "readObjectNoData", null, Void.TYPE);
                         hasWriteObjectData = (writeObjectMethod != null);
                     }
+                    domains = getProtectionDomains(cons, cl);
                     writeReplaceMethod = getInheritableMethod(
                         cl, "writeReplace", null, Object.class);
                     readResolveMethod = getInheritableMethod(
@@ -523,6 +516,65 @@ public class ObjectStreamClass implements Serializable {
     }
 
     /**
+     * Creates a PermissionDomain that grants no permission.
+     */
+    private ProtectionDomain noPermissionsDomain() {
+        PermissionCollection perms = new Permissions();
+        perms.setReadOnly();
+        return new ProtectionDomain(null, perms);
+    }
+
+    /**
+     * Aggregate the ProtectionDomains of all the classes that separate
+     * a concrete class {@code cl} from its ancestor's class declaring
+     * a constructor {@code cons}.
+     *
+     * If {@code cl} is defined by the boot loader, or the constructor
+     * {@code cons} is declared by {@code cl}, or if there is no security
+     * manager, then this method does nothing and {@code null} is returned.
+     *
+     * @param cons A constructor declared by {@code cl} or one of its
+     *             ancestors.
+     * @param cl A concrete class, which is either the class declaring
+     *           the constructor {@code cons}, or a serializable subclass
+     *           of that class.
+     * @return An array of ProtectionDomain representing the set of
+     *         ProtectionDomain that separate the concrete class {@code cl}
+     *         from its ancestor's declaring {@code cons}, or {@code null}.
+     */
+    private ProtectionDomain[] getProtectionDomains(Constructor<?> cons,
+                                                    Class<?> cl) {
+        ProtectionDomain[] domains = null;
+        if (cons != null && cl.getClassLoader() != null
+                && System.getSecurityManager() != null) {
+            Class<?> cls = cl;
+            Class<?> fnscl = cons.getDeclaringClass();
+            Set<ProtectionDomain> pds = null;
+            while (cls != fnscl) {
+                ProtectionDomain pd = cls.getProtectionDomain();
+                if (pd != null) {
+                    if (pds == null) pds = new HashSet<ProtectionDomain>();
+                    pds.add(pd);
+                }
+                cls = cls.getSuperclass();
+                if (cls == null) {
+                    // that's not supposed to happen
+                    // make a ProtectionDomain with no permission.
+                    // should we throw instead?
+                    if (pds == null) pds = new HashSet<ProtectionDomain>();
+                    else pds.clear();
+                    pds.add(noPermissionsDomain());
+                    break;
+                }
+            }
+            if (pds != null) {
+                domains = pds.toArray(new ProtectionDomain[0]);
+            }
+        }
+        return domains;
+    }
+
+    /**
      * Initializes class descriptor representing a proxy class.
      */
     void initProxy(Class cl,
@@ -552,6 +604,7 @@ public class ObjectStreamClass implements Serializable {
             writeReplaceMethod = localDesc.writeReplaceMethod;
             readResolveMethod = localDesc.readResolveMethod;
             deserializeEx = localDesc.deserializeEx;
+            domains = localDesc.domains;
             cons = localDesc.cons;
         }
         fieldRefl = getReflector(fields, localDesc);
@@ -638,6 +691,7 @@ public class ObjectStreamClass implements Serializable {
             if (deserializeEx == null) {
                 deserializeEx = localDesc.deserializeEx;
             }
+            domains = localDesc.domains;
             cons = localDesc.cons;
         }
 
@@ -987,7 +1041,40 @@ public class ObjectStreamClass implements Serializable {
         requireInitialized();
         if (cons != null) {
             try {
-                return cons.newInstance();
+                if (domains == null || domains.length == 0) {
+                    return cons.newInstance();
+                } else {
+                    JavaSecurityAccess jsa = SharedSecrets.getJavaSecurityAccess();
+                    PrivilegedAction<?> pea = new PrivilegedAction<Object>() {
+                        @Override
+                        public Object run() {
+                            try {
+                                return cons.newInstance();
+                            } catch (InstantiationException x) {
+                                throw new UndeclaredThrowableException(x);
+                            } catch (InvocationTargetException x) {
+                                throw new UndeclaredThrowableException(x);
+                            } catch (IllegalAccessException x) {
+                                throw new UndeclaredThrowableException(x);
+                            }
+                        }
+                    }; // Can't use PrivilegedExceptionAction with jsa
+                    try {
+                        return jsa.doIntersectionPrivilege(pea,
+                                   AccessController.getContext(),
+                                   new AccessControlContext(domains));
+                    } catch (UndeclaredThrowableException x) {
+                        Throwable cause = x.getCause();
+                        if (cause instanceof InstantiationException)
+                            throw (InstantiationException) cause;
+                        if (cause instanceof InvocationTargetException)
+                            throw (InvocationTargetException) cause;
+                        if (cause instanceof IllegalAccessException)
+                            throw (IllegalAccessException) cause;
+                        // not supposed to happen
+                        throw x;
+                    }
+                }
             } catch (IllegalAccessException ex) {
                 // should not occur, as access checks have been suppressed
                 throw new InternalError();

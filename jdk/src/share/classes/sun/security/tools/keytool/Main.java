@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -77,6 +77,7 @@ import sun.security.provider.certpath.CertStoreHelper;
 import sun.security.util.DerOutputStream;
 import sun.security.util.Password;
 import sun.security.util.Resources;
+import sun.security.util.SecurityProviderConstants;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 
@@ -1091,8 +1092,9 @@ public final class Main {
             // If no signature algorithm was specified at the command line,
             // we choose one that is compatible with the selected private key
             String keyAlgName = privKey.getAlgorithm();
-            if ("DSA".equalsIgnoreCase(keyAlgName)
-                   || "DSS".equalsIgnoreCase(keyAlgName)) {
+            if ("DSA".equalsIgnoreCase(keyAlgName)) {
+                sigAlgName = "SHA256WithDSA";
+            } else if ("DSS".equalsIgnoreCase(keyAlgName)) {
                 sigAlgName = "SHA1WithDSA";
             } else if ("RSA".equalsIgnoreCase(keyAlgName)) {
                 sigAlgName = "SHA1WithRSA";
@@ -1260,11 +1262,13 @@ public final class Main {
     {
         if (keysize == -1) {
             if ("EC".equalsIgnoreCase(keyAlgName)) {
-                keysize = 256;
+                keysize = SecurityProviderConstants.DEF_EC_KEY_SIZE;
             } else if ("RSA".equalsIgnoreCase(keyAlgName)) {
+                // hardcode for now as DEF_RSA_KEY_SIZE is still 1024
+                keysize = 2048; // SecurityProviderConstants.DEF_RSA_KEY_SIZE;
+            } else if ("DSA".equalsIgnoreCase(keyAlgName)) {
+                // hardcode for now as DEF_DSA_KEY_SIZE is still 1024
                 keysize = 2048;
-            } else {
-                keysize = 1024;
             }
         }
 

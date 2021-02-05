@@ -595,6 +595,9 @@ javax/print/attribute/PSCopiesFlavorTest.java		 	generic-all
 # Only print test left, excluding just because all print tests have been
 javax/print/attribute/MediaMappingsTest.java 			generic-all
 
+# 8160071 ClientJSSEServerJSSE.java test failure
+sun/security/pkcs11/sslecc/ClientJSSEServerJSSE.java		linux-all
+
 ############################################################################
 
 # jdk_net
