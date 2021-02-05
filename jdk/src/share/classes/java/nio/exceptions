@@ -1,0 +1,32 @@
+# %W% %E%
+# Generated exception classes for java.nio
+
+SCCS_ID='%I%'
+SCCS_DATE='%E%'
+SINCE=1.4
+PACKAGE=java.nio
+
+
+SUPER=RuntimeException
+
+gen BufferOverflowException "
+ * Unchecked exception thrown when a relative <i>put</i> operation reaches
+ * the target buffer's limit."
+
+gen BufferUnderflowException "
+ * Unchecked exception thrown when a relative <i>get</i> operation reaches
+ * the source buffer's limit."
+
+
+SUPER=IllegalStateException
+
+gen InvalidMarkException "
+ * Unchecked exception thrown when an attempt is made to reset a buffer
+ * when its mark is not defined."
+
+
+SUPER=UnsupportedOperationException
+
+gen ReadOnlyBufferException "
+ * Unchecked exception thrown when a content-mutation method such as
+ * <tt>put</tt> or <tt>compact</tt> is invoked upon a read-only buffer."

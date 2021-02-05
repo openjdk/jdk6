@@ -1,0 +1,13 @@
+os_family = linux
+
+arch = sparc
+
+os_arch = linux_sparc
+
+lib_arch = sparc
+
+compiler = gcc
+
+gnu_dis_arch = sparc
+
+sysdefs = -DLINUX -D_GNU_SOURCE -DSPARC

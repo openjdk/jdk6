@@ -1,0 +1,14 @@
+# %W% %E%
+# Generated exception classes for sun.nio.ch
+
+SCCS_ID='%I%'
+SCCS_DATE='%E%'
+SINCE=1.4
+PACKAGE=sun.nio.ch
+
+
+SUPER=IllegalStateException
+
+gen AlreadyBoundException "
+ * Unchecked exception thrown when an attempt is made to bind a {@link
+ * SocketChannel} that is already bound."
