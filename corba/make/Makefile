@@ -130,10 +130,12 @@ SELF = $(lastword $(MAKEFILE_LIST))
 default: all
 
 #----- classes.jar
+EXCLUDES = sun/misc
 
 CLASSES_JAR = $(LIB_DIR)/classes.jar
 $(CLASSES_JAR):
 	$(MKDIR) -p $(@D)
+	( cd $(CLASSES_DIR) ; $(RM) -r $(EXCLUDES) )
 	$(BOOT_JAR_CMD) -cf $@ -C $(CLASSES_DIR) .
 
 #----- src.zip

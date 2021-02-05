@@ -109,6 +109,11 @@ Java_sun_misc_VM_getThreadStateValues(JNIEnv *env, jclass cls,
     get_thread_state_info(env, JAVA_THREAD_STATE_TERMINATED, values, names);
 }
 
+JNIEXPORT jobject JNICALL
+Java_sun_misc_VM_latestUserDefinedLoader0(JNIEnv *env, jclass cls) {
+    return JVM_LatestUserDefinedLoader(env);
+}
+
 JNIEXPORT void JNICALL
 Java_sun_misc_VM_initialize(JNIEnv *env, jclass cls) {
     char errmsg[128];

@@ -25,6 +25,7 @@
 
 package sun.misc;
 
+import java.io.IOException;
 import java.util.Properties;
 import java.util.HashMap;
 import java.util.Map;
@@ -385,6 +386,25 @@ public class VM {
     //
     private native static void getThreadStateValues(int[][] vmThreadStateValues,
                                                     String[][] vmThreadStateNames);
+
+    /*
+     * Returns first non-privileged class loader on the stack (excluding
+     * reflection generated frames) or the extension class loader if only
+     * class loaded by the boot class loader and extension class loader are
+     * found on the stack.
+    */
+    public static native ClassLoader latestUserDefinedLoader0();
+    public static ClassLoader latestUserDefinedLoader() {
+        ClassLoader loader = latestUserDefinedLoader0();
+        if (loader != null) {
+            return loader;
+        }
+        try {
+            return Launcher.ExtClassLoader.getExtClassLoader();
+        } catch (IOException e) {
+            return null;
+        }
+    }
 
     static {
         initialize();
