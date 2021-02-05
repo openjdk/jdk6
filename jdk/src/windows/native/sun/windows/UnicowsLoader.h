@@ -23,6 +23,12 @@
  * questions.
  */
 
+/*
+ * This file has been modified by Azul Systems, Inc. in 2014. These
+ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+ * available on the same license terms set forth above. 
+ */
+
 #ifndef UNICOWSLOADER_H
 #define UNICOWSLOADER_H
 
@@ -160,8 +166,10 @@ private:
 #define _wfullpath      UnicowsLoader::_wfullpathImpl
 #define _wremove        NotSupportedOnWin9X
 #define _wrename        NotSupportedOnWin9X
+#ifndef _INC_WCHAR
 #define _wstat          NotSupportedOnWin9X
 #define _wstati64       NotSupportedOnWin9X
+#endif
 #define _wstat64        NotSupportedOnWin9X
 #define _wunlink        NotSupportedOnWin9X
 #define _wfopen         NotSupportedOnWin9X
@@ -170,9 +178,11 @@ private:
 #define _wcreat         NotSupportedOnWin9X
 #define _wopen          NotSupportedOnWin9X
 #define _wsopen         NotSupportedOnWin9X
-#define _wfindfirst     NotSupportedOnWin9X
 #define _wfindfirst64   NotSupportedOnWin9X
+#ifndef _INC_WCHAR
+#define _wfindfirst     NotSupportedOnWin9X
 #define _wfindnext      NotSupportedOnWin9X
+#endif
 #define _wfindnext64    NotSupportedOnWin9X
 #define _wsystem        NotSupportedOnWin9X
 #define _wexcel         NotSupportedOnWin9X

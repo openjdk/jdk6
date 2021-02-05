@@ -23,6 +23,12 @@
 # questions.
 #
 
+#
+# This file has been modified by Azul Systems, Inc. in 2014. These
+# modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+# available on the same license terms set forth above. 
+#
+
 # Settings and rules to validate the JDK build environment.
 
 .PHONY: \
@@ -67,7 +73,6 @@ sanity-base: pre-sanity \
     sane-odbcdir \
     sane-msdevtools_path \
     sane-dxsdk \
-    sane-mslu \
     sane-compiler \
     sane-cacerts \
     sane-ant_version \

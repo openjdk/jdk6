@@ -23,6 +23,12 @@
 # questions.
 #
 
+#
+# This file has been modified by Azul Systems, Inc. in 2014. These
+# modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+# available on the same license terms set forth above. 
+#
+
 BUILDDIR = ../..
 PACKAGE = sun.awt
 LIBRARY = jawt
@@ -84,13 +90,7 @@ vpath %.cpp   $(PLATFORM_SRC)/native/sun/windows
 ifeq ($(ARCH_DATA_MODEL), 64)
 OTHER_LDLIBS = $(OBJDIR)/../../awt/$(OBJDIRNAME)/awt.lib 
 else
-OTHER_LDLIBS = /nod:kernel32.lib /nod:advapi32.lib /nod:user32.lib \
-               /nod:gdi32.lib /nod:shell32.lib /nod:comdlg32.lib \
-               /nod:version.lib /nod:mpr.lib /nod:rasapi32.lib \
-               /nod:winmm.lib /nod:winspool.lib /nod:vfw32.lib \
-               /nod:secur32.lib /nod:oleacc.lib /nod:oledlg.lib \
-               /nod:sensapi.lib \
-               $(UNICOWS_LIB_PATH)/unicows.lib kernel32.lib \
+OTHER_LDLIBS = kernel32.lib \
 	       $(OBJDIR)/../../awt/$(OBJDIRNAME)/awt.lib 
 endif
 else # PLATFORM
