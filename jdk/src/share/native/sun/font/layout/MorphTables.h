@@ -32,8 +32,16 @@
 #ifndef __MORPHTABLES_H
 #define __MORPHTABLES_H
 
+/**
+ * \file
+ * \internal
+ */
+
 #include "LETypes.h"
 #include "LayoutTables.h"
+#include "LETableReference.h"
+
+U_NAMESPACE_BEGIN
 
 class LEGlyphStorage;
 
@@ -58,6 +66,7 @@ struct ChainHeader
     le_int16           nSubtables;
     FeatureTableEntry   featureTable[ANY_NUMBER];
 };
+LE_VAR_ARRAY(ChainHeader, featureTable)
 
 struct MorphTableHeader
 {
@@ -65,8 +74,9 @@ struct MorphTableHeader
     le_uint32   nChains;
     ChainHeader chains[ANY_NUMBER];
 
-    void process(LEGlyphStorage &glyphStorage) const;
+  void process(const LETableReference& base, LEGlyphStorage &glyphStorage, LEErrorCode &success) const;
 };
+LE_VAR_ARRAY(MorphTableHeader, chains)
 
 typedef le_int16 SubtableCoverage;
 
@@ -95,7 +105,9 @@ struct MorphSubtableHeader
     SubtableCoverage    coverage;
     FeatureFlags        subtableFeatures;
 
-    void process(LEGlyphStorage &glyphStorage) const;
+  void process(const LEReferenceTo<MorphSubtableHeader> &base, LEGlyphStorage &glyphStorage, LEErrorCode &success) const;
 };
 
+U_NAMESPACE_END
 #endif
+

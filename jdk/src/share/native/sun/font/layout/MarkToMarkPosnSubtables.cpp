@@ -40,6 +40,8 @@
 #include "GlyphIterator.h"
 #include "LESwaps.h"
 
+U_NAMESPACE_BEGIN
+
 LEGlyphID MarkToMarkPositioningSubtable::findMark2Glyph(GlyphIterator *glyphIterator) const
 {
     if (glyphIterator->findMark2Glyph()) {
@@ -49,10 +51,10 @@ LEGlyphID MarkToMarkPositioningSubtable::findMark2Glyph(GlyphIterator *glyphIter
     return 0xFFFF;
 }
 
-le_int32 MarkToMarkPositioningSubtable::process(GlyphIterator *glyphIterator, const LEFontInstance *fontInstance) const
+le_int32 MarkToMarkPositioningSubtable::process(const LETableReference &base, GlyphIterator *glyphIterator, const LEFontInstance *fontInstance, LEErrorCode &success) const
 {
     LEGlyphID markGlyph = glyphIterator->getCurrGlyphID();
-    le_int32 markCoverage = getGlyphCoverage((LEGlyphID) markGlyph);
+    le_int32 markCoverage = getGlyphCoverage(base, (LEGlyphID) markGlyph, success);
 
     if (markCoverage < 0) {
         // markGlyph isn't a covered mark glyph
@@ -72,7 +74,7 @@ le_int32 MarkToMarkPositioningSubtable::process(GlyphIterator *glyphIterator, co
 
     GlyphIterator mark2Iterator(*glyphIterator);
     LEGlyphID mark2Glyph = findMark2Glyph(&mark2Iterator);
-    le_int32 mark2Coverage = getBaseCoverage((LEGlyphID) mark2Glyph);
+    le_int32 mark2Coverage = getBaseCoverage(base, (LEGlyphID) mark2Glyph, success);
     const Mark2Array *mark2Array = (const Mark2Array *) ((char *) this + SWAPW(baseArrayOffset));
     le_uint16 mark2Count = SWAPW(mark2Array->mark2RecordCount);
 
@@ -88,7 +90,7 @@ le_int32 MarkToMarkPositioningSubtable::process(GlyphIterator *glyphIterator, co
     const AnchorTable *anchorTable = (const AnchorTable *) ((char *) mark2Array + anchorTableOffset);
     LEPoint mark2Anchor, markAdvance, pixels;
 
-    if (anchorTableOffset == 0) { // jb4729
+    if (anchorTableOffset == 0) {
         // this seems to mean that the marks don't attach...
         return 0;
     }
@@ -111,9 +113,10 @@ le_int32 MarkToMarkPositioningSubtable::process(GlyphIterator *glyphIterator, co
         fontInstance->getGlyphAdvance(mark2Glyph, pixels);
         fontInstance->pixelsToUnits(pixels, mark2Advance);
 
-        glyphIterator->setCurrGlyphPositionAdjustment(anchorDiffX - mark2Advance.fX,
-            anchorDiffY - mark2Advance.fY, -markAdvance.fX, -markAdvance.fY);
+        glyphIterator->setCurrGlyphPositionAdjustment(anchorDiffX - mark2Advance.fX, anchorDiffY - mark2Advance.fY, -markAdvance.fX, -markAdvance.fY);
     }
 
     return 1;
 }
+
+U_NAMESPACE_END

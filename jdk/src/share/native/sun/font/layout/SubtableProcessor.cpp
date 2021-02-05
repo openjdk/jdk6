@@ -34,14 +34,16 @@
 #include "SubtableProcessor.h"
 #include "LESwaps.h"
 
+U_NAMESPACE_BEGIN
+
 SubtableProcessor::SubtableProcessor()
 {
 }
 
-SubtableProcessor::SubtableProcessor(const MorphSubtableHeader *morphSubtableHeader)
+SubtableProcessor::SubtableProcessor(const LEReferenceTo<MorphSubtableHeader> &morphSubtableHeader, LEErrorCode &success)
+  : length(0), coverage(0), subtableFeatures(0L), subtableHeader(morphSubtableHeader)
 {
-    subtableHeader = morphSubtableHeader;
-
+  if(LE_FAILURE(success)) return;
     length = SWAPW(subtableHeader->length);
     coverage = SWAPW(subtableHeader->coverage);
     subtableFeatures = SWAPL(subtableHeader->subtableFeatures);
@@ -50,3 +52,5 @@ SubtableProcessor::SubtableProcessor(const MorphSubtableHeader *morphSubtableHea
 SubtableProcessor::~SubtableProcessor()
 {
 }
+
+U_NAMESPACE_END

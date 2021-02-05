@@ -35,19 +35,24 @@
 #include "GlyphLookupTables.h"
 #include "LESwaps.h"
 
-le_bool GlyphLookupTableHeader::coversScript(LETag scriptTag) const
-{
-    const ScriptListTable *scriptListTable = (const ScriptListTable *) ((char *)this + SWAPW(scriptListOffset));
+U_NAMESPACE_BEGIN
 
-    return scriptListOffset != 0 && scriptListTable->findScript(scriptTag) != NULL;
+le_bool GlyphLookupTableHeader::coversScript(const LETableReference &base, LETag scriptTag, LEErrorCode &success) const
+{
+  LEReferenceTo<ScriptListTable> scriptListTable(base, success, SWAPW(scriptListOffset));
+
+  return (scriptListOffset != 0) && scriptListTable->findScript(scriptListTable, scriptTag, success) .isValid();
 }
 
-le_bool GlyphLookupTableHeader::coversScriptAndLanguage(LETag scriptTag, LETag languageTag, le_bool exactMatch) const
+le_bool GlyphLookupTableHeader::coversScriptAndLanguage(const LETableReference &base, LETag scriptTag, LETag languageTag, LEErrorCode &success, le_bool exactMatch) const
 {
-    const ScriptListTable *scriptListTable = (const ScriptListTable *) ((char *)this + SWAPW(scriptListOffset));
-    const LangSysTable    *langSysTable    = scriptListTable->findLanguage(scriptTag, languageTag, exactMatch);
+  LEReferenceTo<ScriptListTable> scriptListTable(base, success, SWAPW(scriptListOffset));
+  LEReferenceTo<LangSysTable> langSysTable = scriptListTable->findLanguage(scriptListTable,
+                                    scriptTag, languageTag, success, exactMatch);
 
     // FIXME: could check featureListOffset, lookupListOffset, and lookup count...
     // Note: don't have to SWAPW langSysTable->featureCount to check for non-zero.
-    return langSysTable != NULL && langSysTable->featureCount != 0;
+  return LE_SUCCESS(success)&&langSysTable.isValid() && langSysTable->featureCount != 0;
 }
+
+U_NAMESPACE_END

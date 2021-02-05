@@ -32,8 +32,15 @@
 #ifndef __COVERAGETABLES_H
 #define __COVERAGETABLES_H
 
+/**
+ * \file
+ * \internal
+ */
+
 #include "LETypes.h"
 #include "OpenTypeTables.h"
+
+U_NAMESPACE_BEGIN
 
 struct CoverageTable
 {
@@ -49,6 +56,8 @@ struct CoverageFormat1Table : CoverageTable
 
     le_int32 getGlyphCoverage(LEGlyphID glyphID) const;
 };
+LE_VAR_ARRAY(CoverageFormat1Table, glyphArray)
+
 
 struct CoverageFormat2Table : CoverageTable
 {
@@ -57,6 +66,7 @@ struct CoverageFormat2Table : CoverageTable
 
     le_int32 getGlyphCoverage(LEGlyphID glyphID) const;
 };
+LE_VAR_ARRAY(CoverageFormat2Table, rangeRecordArray)
 
-
+U_NAMESPACE_END
 #endif

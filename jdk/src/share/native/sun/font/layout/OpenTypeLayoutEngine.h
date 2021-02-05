@@ -23,10 +23,8 @@
  *
  */
 
-
 /*
- *
- * (C) Copyright IBM Corp. 1998-2005 - All Rights Reserved
+ * (C) Copyright IBM Corp. 1998-2010 - All Rights Reserved
  *
  */
 
@@ -37,10 +35,13 @@
 #include "LEGlyphFilter.h"
 #include "LEFontInstance.h"
 #include "LayoutEngine.h"
+#include "LETableReference.h"
 
 #include "GlyphSubstitutionTables.h"
 #include "GlyphDefinitionTables.h"
 #include "GlyphPositioningTables.h"
+
+U_NAMESPACE_BEGIN
 
 /**
  * OpenTypeLayoutEngine implements complex text layout for OpenType fonts - that is
@@ -67,7 +68,7 @@
  *
  * @internal
  */
-class OpenTypeLayoutEngine : public LayoutEngine
+class U_LAYOUT_API OpenTypeLayoutEngine : public LayoutEngine
 {
 public:
     /**
@@ -80,6 +81,7 @@ public:
      * @param scriptCode - the script
      * @param langaugeCode - the language
      * @param gsubTable - the GSUB table
+     * @param success - set to an error code if the operation fails
      *
      * @see LayoutEngine::layoutEngineFactory
      * @see ScriptAndLangaugeTags.h for script and language codes
@@ -87,7 +89,7 @@ public:
      * @internal
      */
     OpenTypeLayoutEngine(const LEFontInstance *fontInstance, le_int32 scriptCode, le_int32 languageCode,
-                         le_int32 typoFlags, const GlyphSubstitutionTableHeader *gsubTable);
+                            le_int32 typoFlags, const LEReferenceTo<GlyphSubstitutionTableHeader> &gsubTable, LEErrorCode &success);
 
     /**
      * This constructor is used when the font requires a "canned" GSUB table which can't be known
@@ -95,11 +97,13 @@ public:
      *
      * @param fontInstance - the font
      * @param scriptCode - the script
-     * @param languageCode - the language
+     * @param langaugeCode - the language
+     * @param success - set to an error code if the operation fails
      *
      * @internal
      */
-    OpenTypeLayoutEngine(const LEFontInstance *fontInstance, le_int32 scriptCode, le_int32 languageCode, le_int32 typoFlags);
+    OpenTypeLayoutEngine(const LEFontInstance *fontInstance, le_int32 scriptCode, le_int32 languageCode,
+                         le_int32 typoFlags, LEErrorCode &success);
 
     /**
      * The destructor, virtual for correct polymorphic invocation.
@@ -111,6 +115,8 @@ public:
     /**
      * A convenience method used to convert the script code into
      * the four byte script tag required by OpenType.
+         * For Indic languages where multiple script tags exist,
+         * the version 1 (old style) tag is returned.
      *
      * @param scriptCode - the script code
      *
@@ -119,6 +125,19 @@ public:
      * @internal
      */
     static LETag getScriptTag(le_int32 scriptCode);
+    /**
+     * A convenience method used to convert the script code into
+     * the four byte script tag required by OpenType.
+         * For Indic languages where multiple script tags exist,
+         * the version 2 tag is returned.
+     *
+     * @param scriptCode - the script code
+     *
+     * @return the four byte script tag
+     *
+     * @internal
+     */
+    static LETag getV2ScriptTag(le_int32 scriptCode);
 
     /**
      * A convenience method used to convert the langauge code into
@@ -131,6 +150,27 @@ public:
      * @internal
      */
     static LETag getLangSysTag(le_int32 languageCode);
+
+    /**
+     * ICU "poor man's RTTI", returns a UClassID for the actual class.
+     *
+     * @stable ICU 2.8
+     */
+    virtual UClassID getDynamicClassID() const;
+
+    /**
+     * ICU "poor man's RTTI", returns a UClassID for this class.
+     *
+     * @stable ICU 2.8
+     */
+    static UClassID getStaticClassID();
+
+    /**
+     * The array of language tags, indexed by language code.
+     *
+     * @internal
+     */
+    static const LETag languageTags[];
 
 private:
 
@@ -146,9 +186,9 @@ private:
     static const LETag scriptTags[];
 
     /**
-     * The array of language tags, indexed by language code.
+     * apply the typoflags. Only called by the c'tors.
      */
-    static const LETag languageTags[];
+    void applyTypoFlags();
 
 protected:
     /**
@@ -189,21 +229,21 @@ protected:
      *
      * @internal
      */
-    const GlyphSubstitutionTableHeader *fGSUBTable;
+    LEReferenceTo<GlyphSubstitutionTableHeader> fGSUBTable;
 
     /**
      * The address of the GDEF table.
      *
      * @internal
      */
-    const GlyphDefinitionTableHeader   *fGDEFTable;
+    LEReferenceTo<GlyphDefinitionTableHeader> fGDEFTable;
 
     /**
      * The address of the GPOS table.
      *
      * @internal
      */
-    const GlyphPositioningTableHeader  *fGPOSTable;
+    LEReferenceTo<GlyphPositioningTableHeader> fGPOSTable;
 
     /**
      * An optional filter used to inhibit substitutions
@@ -221,6 +261,13 @@ protected:
      * @internal
      */
     LETag fScriptTag;
+
+    /**
+     * The four byte script tag for V2 fonts.
+     *
+     * @internal
+     */
+    LETag fScriptTagV2;
 
     /**
      * The four byte language tag
@@ -254,9 +301,8 @@ protected:
      *
      * @internal
      */
-    virtual le_int32 characterProcessing(const LEUnicode /*chars*/[], le_int32 offset,
-        le_int32 count, le_int32 max, le_bool /*rightToLeft*/,
-        LEUnicode *&/*outChars*/, LEGlyphStorage &glyphStorage, LEErrorCode &success);
+    virtual le_int32 characterProcessing(const LEUnicode /*chars*/[], le_int32 offset, le_int32 count, le_int32 max, le_bool /*rightToLeft*/,
+            LEUnicode *&/*outChars*/, LEGlyphStorage &glyphStorage, LEErrorCode &success);
 
     /**
      * This method does character to glyph mapping, and applies the GSUB table. The
@@ -287,9 +333,10 @@ protected:
      *
      * @internal
      */
-    virtual le_int32 glyphProcessing(const LEUnicode chars[], le_int32 offset,
-        le_int32 count, le_int32 max, le_bool rightToLeft,
-        LEGlyphStorage &glyphStorage, LEErrorCode &success);
+    virtual le_int32 glyphProcessing(const LEUnicode chars[], le_int32 offset, le_int32 count, le_int32 max, le_bool rightToLeft,
+            LEGlyphStorage &glyphStorage, LEErrorCode &success);
+
+    virtual le_int32 glyphSubstitution(le_int32 count, le_int32 max, le_bool rightToLeft, LEGlyphStorage &glyphStorage, LEErrorCode &success);
 
     /**
      * This method does any processing necessary to convert "fake"
@@ -316,8 +363,7 @@ protected:
      *
      * @internal
      */
-    virtual le_int32 glyphPostProcessing(LEGlyphStorage &tempGlyphStorage,
-        LEGlyphStorage &glyphStorage, LEErrorCode &success);
+    virtual le_int32 glyphPostProcessing(LEGlyphStorage &tempGlyphStorage, LEGlyphStorage &glyphStorage, LEErrorCode &success);
 
     /**
      * This method applies the characterProcessing, glyphProcessing and glyphPostProcessing
@@ -341,8 +387,7 @@ protected:
      *
      * @internal
      */
-    virtual le_int32 computeGlyphs(const LEUnicode chars[], le_int32 offset, le_int32 count,
-        le_int32 max, le_bool rightToLeft, LEGlyphStorage &glyphStorage, LEErrorCode &success);
+    virtual le_int32 computeGlyphs(const LEUnicode chars[], le_int32 offset, le_int32 count, le_int32 max, le_bool rightToLeft, LEGlyphStorage &glyphStorage, LEErrorCode &success);
 
     /**
      * This method uses the GPOS table, if there is one, to adjust the glyph positions.
@@ -359,8 +404,7 @@ protected:
      *
      * @internal
      */
-    virtual void adjustGlyphPositions(const LEUnicode chars[], le_int32 offset, le_int32 count,
-        le_bool reverse, LEGlyphStorage &glyphStorage, LEErrorCode &success);
+    virtual void adjustGlyphPositions(const LEUnicode chars[], le_int32 offset, le_int32 count, le_bool reverse, LEGlyphStorage &glyphStorage, LEErrorCode &success);
 
     /**
      * This method frees the feature tag array so that the
@@ -372,4 +416,6 @@ protected:
     virtual void reset();
 };
 
+U_NAMESPACE_END
 #endif
+

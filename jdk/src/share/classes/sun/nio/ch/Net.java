@@ -29,14 +29,55 @@ import java.io.*;
 import java.lang.reflect.*;
 import java.net.*;
 import java.nio.channels.*;
-
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
 
 class Net {                                             // package-private
 
     private Net() { }
 
 
+    // Value of jdk.net.revealLocalAddress
+    private static boolean revealLocalAddress;
+
+    // True if jdk.net.revealLocalAddress had been read
+    private static volatile boolean propRevealLocalAddress;
+
+    // set to true if exclusive binding is on for Windows
+    private static final boolean exclusiveBind;
+
+    static {
+        int availLevel = isExclusiveBindAvailable();
+        if (availLevel >= 0) {
+            String exclBindProp =
+                java.security.AccessController.doPrivileged(
+                    new java.security.PrivilegedAction<String>() {
+                        public String run() {
+                            return System.getProperty(
+                                    "sun.net.useExclusiveBind");
+                        }
+                    });
+            if (exclBindProp != null) {
+                exclusiveBind = exclBindProp.length() == 0 ?
+                        true : Boolean.parseBoolean(exclBindProp);
+            } else if (availLevel == 1) {
+                exclusiveBind = true;
+            } else {
+                exclusiveBind = false;
+            }
+        } else {
+            exclusiveBind = false;
+        }
+    }
+
     // -- Miscellaneous utilities --
+
+    /**
+     * Returns true if exclusive binding is on
+     */
+    static boolean useExclusiveBind() {
+        return exclusiveBind;
+    }
 
     static InetSocketAddress checkAddress(SocketAddress sa) {
         if (sa == null)
@@ -119,10 +160,21 @@ class Net {                                             // package-private
         return IOUtil.newFD(socket0(stream, true));
     }
 
+    /*
+     * Returns 1 for Windows versions that support exclusive binding by default, 0
+     * for those that do not, and -1 for Solaris/Linux/Mac OS
+     */
+    private static native int isExclusiveBindAvailable();
+
     // Due to oddities SO_REUSEADDR on windows reuse is ignored
     private static native int socket0(boolean stream, boolean reuse);
 
-    static native void bind(FileDescriptor fd, InetAddress addr, int port)
+    static void bind(FileDescriptor fd, InetAddress addr, int port)
+        throws IOException {
+        bind0(fd, exclusiveBind, addr, port);
+    }
+
+    private static native void bind0(FileDescriptor fd, boolean useExclBind, InetAddress addr, int port)
         throws IOException;
 
     static native int connect(FileDescriptor fd,
@@ -180,6 +232,62 @@ class Net {                                             // package-private
     static {
         Util.load();
         initIDs();
+    }
+
+     /**
+     * Returns the local address after performing a SecurityManager#checkConnect.
+     */
+    static InetSocketAddress getRevealedLocalAddress(InetSocketAddress addr) {
+        SecurityManager sm = System.getSecurityManager();
+        if (addr == null || sm == null)
+            return addr;
+
+        if (!getRevealLocalAddress()) {
+            // Return loopback address only if security check fails
+            try{
+                sm.checkConnect(addr.getAddress().getHostAddress(), -1);
+                //Security check passed
+            } catch (SecurityException e) {
+                //Return loopback address
+                addr = getLoopbackAddress(addr.getPort());
+            }
+        }
+        return addr;
+    }
+
+    static String getRevealedLocalAddressAsString(InetSocketAddress addr) {
+        if (!getRevealLocalAddress() && System.getSecurityManager() != null)
+            addr = getLoopbackAddress(addr.getPort());
+        return addr.toString();
+    }
+
+    private static boolean getRevealLocalAddress() {
+        if (!propRevealLocalAddress) {
+            try {
+                revealLocalAddress = Boolean.parseBoolean(
+                      AccessController.doPrivileged(
+                          new PrivilegedExceptionAction<String>() {
+                              public String run() {
+                                  return System.getProperty(
+                                      "jdk.net.revealLocalAddress");
+                              }
+                          }));
+
+            } catch (Exception e) {
+                // revealLocalAddress is false
+            }
+            propRevealLocalAddress = true;
+        }
+        return revealLocalAddress;
+    }
+
+    private static InetSocketAddress getLoopbackAddress(int port) {
+	try {
+	    return new InetSocketAddress(InetAddress.getByName(null),
+					 port);
+	} catch (UnknownHostException e) { 
+	    throw new InternalError("Shouldn't reach here.");
+	}
     }
 
 }

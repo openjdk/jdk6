@@ -83,8 +83,8 @@ class DatagramChannelImpl
     private int state = ST_UNINITIALIZED;
 
     // Binding
-    private SocketAddress localAddress = null;
-    SocketAddress remoteAddress = null;
+    private InetSocketAddress localAddress = null;
+    InetSocketAddress remoteAddress = null;
 
     // Options
     private SocketOpts.IP options = null;
@@ -239,7 +239,7 @@ class DatagramChannelImpl
 
         synchronized (writeLock) {
             ensureOpen();
-            InetSocketAddress isa = (InetSocketAddress)target;
+            InetSocketAddress isa = Net.checkAddress(target);
             InetAddress ia = isa.getAddress();
             if (ia == null)
                 throw new IOException("Target address not resolved");
@@ -250,9 +250,9 @@ class DatagramChannelImpl
                     SecurityManager sm = System.getSecurityManager();
                     if (sm != null) {
                         if (ia.isMulticastAddress()) {
-                            sm.checkMulticast(isa.getAddress());
+                            sm.checkMulticast(ia);
                         } else {
-                            sm.checkConnect(isa.getAddress().getHostAddress(),
+                            sm.checkConnect(ia.getHostAddress(),
                                             isa.getPort());
                         }
                     }
@@ -272,7 +272,7 @@ class DatagramChannelImpl
                     return 0;
                 writerThread = NativeThread.current();
                 do {
-                    n = send(fd, src, target);
+                    n = send(fd, src, isa);
                 } while ((n == IOStatus.INTERRUPTED) && isOpen());
                 return IOStatus.normalize(n);
             } finally {
@@ -283,7 +283,7 @@ class DatagramChannelImpl
         }
     }
 
-    private int send(FileDescriptor fd, ByteBuffer src, SocketAddress target)
+    private int send(FileDescriptor fd, ByteBuffer src, InetSocketAddress target)
         throws IOException
     {
         if (src instanceof DirectBuffer)
@@ -315,7 +315,7 @@ class DatagramChannelImpl
     }
 
     private int sendFromNativeBuffer(FileDescriptor fd, ByteBuffer bb,
-                                            SocketAddress target)
+                                     InetSocketAddress target)
         throws IOException
     {
         int pos = bb.position();
@@ -324,7 +324,7 @@ class DatagramChannelImpl
         int rem = (pos <= lim ? lim - pos : 0);
 
         int written = send0(fd, ((DirectBuffer)bb).address() + pos,
-                            rem, target);
+                            rem, target.getAddress(), target.getPort());
         if (written > 0)
             bb.position(pos + written);
         return written;
@@ -473,6 +473,10 @@ class DatagramChannelImpl
                             {
                                 Net.setIntOption(fd, opt, arg);
                             }
+                            boolean getIsBoundCondition()
+                            {
+                                return localAddress != null;
+                            }
                         };
                 options = new SocketOptsImpl.IP(d);
             }
@@ -496,7 +500,7 @@ class DatagramChannelImpl
                 InetSocketAddress isa = (InetSocketAddress)localAddress;
                 sm.checkConnect(isa.getAddress().getHostAddress(), -1);
             }
-            return localAddress;
+            return Net.getRevealedLocalAddress(localAddress);
         }
     }
 
@@ -539,6 +543,7 @@ class DatagramChannelImpl
         }
     }
 
+    @Override
     public DatagramChannel connect(SocketAddress sa) throws IOException {
         int trafficClass = 0;
         int localPort = 0;
@@ -561,7 +566,7 @@ class DatagramChannelImpl
 
                     // Connection succeeded; disallow further invocation
                     state = ST_CONNECTED;
-                    remoteAddress = sa;
+                    remoteAddress = isa;
                     sender = isa;
                     cachedSenderInetAddress = isa.getAddress();
                     cachedSenderPort = isa.getPort();
@@ -577,7 +582,7 @@ class DatagramChannelImpl
                 synchronized (stateLock) {
                     if (!isConnected() || !isOpen())
                         return this;
-                    InetSocketAddress isa = (InetSocketAddress)remoteAddress;
+                    InetSocketAddress isa = remoteAddress;
                     SecurityManager sm = System.getSecurityManager();
                     if (sm != null)
                         sm.checkConnect(isa.getAddress().getHostAddress(),
@@ -703,8 +708,8 @@ class DatagramChannelImpl
                                 boolean connected)
         throws IOException;
 
-    private native int send0(FileDescriptor fd, long address, int len,
-                     SocketAddress sa)
+    private native int send0(FileDescriptor fd, long address,
+                             int len, InetAddress addr, int port)
         throws IOException;
 
     static {

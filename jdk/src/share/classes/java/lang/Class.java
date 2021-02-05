@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1994, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1994, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -65,7 +65,9 @@ import sun.reflect.generics.repository.ConstructorRepository;
 import sun.reflect.generics.scope.ClassScope;
 import sun.security.util.SecurityConstants;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Proxy;
 import sun.reflect.annotation.*;
+import sun.reflect.misc.ReflectUtil;
 
 /**
  * Instances of the class {@code Class} represent classes and
@@ -320,7 +322,7 @@ public final
         throws InstantiationException, IllegalAccessException
     {
         if (System.getSecurityManager() != null) {
-            checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader());
+            checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), false);
         }
         return newInstance0();
     }
@@ -910,13 +912,22 @@ public final
             for(int i = 0; i < parameterClasses.length; i++)
                 parameterClasses[i] = toClass(parameterTypes[i]);
 
+            // Perform access check
+            Class<?> enclosingCandidate = enclosingInfo.getEnclosingClass();
+            // be very careful not to change the stack depth of this
+            // checkMemberAccess call for security reasons
+            // see java.lang.SecurityManager.checkMemberAccess
+            //
+            // Note that we need to do this on the enclosing class
+            enclosingCandidate.checkMemberAccess(Member.DECLARED,
+                        ClassLoader.getCallerClassLoader(), true);
             /*
              * Loop over all declared methods; match method name,
              * number of and type of parameters, *and* return
              * type.  Matching return type is also necessary
              * because of covariant returns, etc.
              */
-            for(Method m: enclosingInfo.getEnclosingClass().getDeclaredMethods()) {
+            for(Method m: enclosingCandidate.getDeclaredMethods()) {
                 if (m.getName().equals(enclosingInfo.getName()) ) {
                     Class<?>[] candidateParamClasses = m.getParameterTypes();
                     if (candidateParamClasses.length == parameterClasses.length) {
@@ -1037,11 +1048,20 @@ public final
             for(int i = 0; i < parameterClasses.length; i++)
                 parameterClasses[i] = toClass(parameterTypes[i]);
 
+            // Perform access check
+            Class<?> enclosingCandidate = enclosingInfo.getEnclosingClass();
+            // be very careful not to change the stack depth of this
+            // checkMemberAccess call for security reasons
+            // see java.lang.SecurityManager.checkMemberAccess
+            //
+            // Note that we need to do this on the enclosing class
+            enclosingCandidate.checkMemberAccess(Member.DECLARED,
+                        ClassLoader.getCallerClassLoader(), true);
             /*
              * Loop over all declared constructors; match number
              * of and type of parameters.
              */
-            for(Constructor c: enclosingInfo.getEnclosingClass().getDeclaredConstructors()) {
+            for(Constructor<?> c: enclosingCandidate.getDeclaredConstructors()) {
                 Class<?>[] candidateParamClasses = c.getParameterTypes();
                 if (candidateParamClasses.length == parameterClasses.length) {
                     boolean matches = true;
@@ -1096,18 +1116,28 @@ public final
         // attribute if and only if it is a local class or an
         // anonymous class.
         EnclosingMethodInfo enclosingInfo = getEnclosingMethodInfo();
+        Class<?> enclosingCandidate;
 
         if (enclosingInfo == null) {
             // This is a top level or a nested class or an inner class (a, b, or c)
-            return getDeclaringClass();
+            enclosingCandidate = getDeclaringClass();
         } else {
             Class<?> enclosingClass = enclosingInfo.getEnclosingClass();
             // This is a local class or an anonymous class (d or e)
             if (enclosingClass == this || enclosingClass == null)
                 throw new InternalError("Malformed enclosing method information");
             else
-                return enclosingClass;
+                enclosingCandidate = enclosingClass;
         }
+
+        // be very careful not to change the stack depth of this
+        // checkMemberAccess call for security reasons
+        // see java.lang.SecurityManager.checkMemberAccess
+        if (enclosingCandidate != null) {
+            enclosingCandidate.checkMemberAccess(Member.DECLARED,
+                    ClassLoader.getCallerClassLoader(), true);
+        }
+        return enclosingCandidate;
     }
 
     /**
@@ -1294,7 +1324,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), false);
 
         // Privileged so this implementation can look at DECLARED classes,
         // something the caller might not have privilege to do.  The code here
@@ -1372,7 +1402,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
         return copyFields(privateGetPublicFields(null));
     }
 
@@ -1423,7 +1453,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
         return copyMethods(privateGetPublicMethods());
     }
 
@@ -1472,7 +1502,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
         return copyConstructors(privateGetDeclaredConstructors(true));
     }
 
@@ -1531,7 +1561,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
         Field field = getField0(name);
         if (field == null) {
             throw new NoSuchFieldException(name);
@@ -1616,7 +1646,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
         Method method = getMethod0(name, parameterTypes);
         if (method == null) {
             throw new NoSuchMethodException(getName() + "." + name + argumentTypesToString(parameterTypes));
@@ -1670,7 +1700,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
         return getConstructor0(parameterTypes, Member.PUBLIC);
     }
 
@@ -1712,7 +1742,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), false);
         return getDeclaredClasses0();
     }
 
@@ -1756,7 +1786,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
         return copyFields(privateGetDeclaredFields(false));
     }
 
@@ -1804,7 +1834,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
         return copyMethods(privateGetDeclaredMethods(false));
     }
 
@@ -1849,7 +1879,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
         return copyConstructors(privateGetDeclaredConstructors(false));
     }
 
@@ -1893,7 +1923,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
         Field field = searchFields(privateGetDeclaredFields(false), name);
         if (field == null) {
             throw new NoSuchFieldException(name);
@@ -1948,7 +1978,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
         Method method = searchMethods(privateGetDeclaredMethods(false), name, parameterTypes);
         if (method == null) {
             throw new NoSuchMethodException(getName() + "." + name + argumentTypesToString(parameterTypes));
@@ -1998,7 +2028,7 @@ public final
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader());
+        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
         return getConstructor0(parameterTypes, Member.DECLARED);
     }
 
@@ -2168,18 +2198,26 @@ public final
      * <p> Default policy: allow all clients access with normal Java access
      * control.
      */
-    private void checkMemberAccess(int which, ClassLoader ccl) {
+    private void checkMemberAccess(int which, ClassLoader ccl, boolean checkProxyInterfaces) {
         SecurityManager s = System.getSecurityManager();
         if (s != null) {
             s.checkMemberAccess(this, which);
             ClassLoader cl = getClassLoader0();
-            if ((ccl != null) && (ccl != cl) &&
-                  ((cl == null) || !cl.isAncestor(ccl))) {
+            if (ReflectUtil.needsPackageAccessCheck(ccl, cl)) {
+
                 String name = this.getName();
                 int i = name.lastIndexOf('.');
                 if (i != -1) {
-                    s.checkPackageAccess(name.substring(0, i));
+                    // skip the package access check on a proxy class in default proxy package
+                    String pkg = name.substring(0, i);
+                    if (!Proxy.isProxyClass(this) || ReflectUtil.isNonPublicProxyClass(this)) {
+                        s.checkPackageAccess(pkg);
+                    }
                 }
+            }
+            // check package access on the proxy interfaces
+            if (checkProxyInterfaces && Proxy.isProxyClass(this)) {
+                ReflectUtil.checkProxyPackageAccess(ccl, this.getInterfaces());
             }
         }
     }
