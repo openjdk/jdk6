@@ -312,9 +312,11 @@ final class CipherBox {
                     byte[] buf = null;
                     int limit = bb.limit();
                     if (bb.hasArray()) {
+                        int arrayOffset = bb.arrayOffset();
                         buf = bb.array();
-                        System.arraycopy(buf, pos,
-                                buf, pos + prefix.length, limit - pos);
+                        System.arraycopy(buf, arrayOffset + pos,
+                            buf, arrayOffset + pos + prefix.length,
+                            limit - pos);
                         bb.limit(limit + prefix.length);
                     } else {
                         buf = new byte[limit - pos];
