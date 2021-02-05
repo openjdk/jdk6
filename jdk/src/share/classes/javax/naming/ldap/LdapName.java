@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,7 @@ import java.io.IOException;
 
 /**
  * This class represents a distinguished name as specified by
- * <a href="http://ietf.org//rfc/rfc2253.txt">RFC 2253</a>.
+ * <a href="http://www.ietf.org/rfc/rfc2253.txt">RFC 2253</a>.
  * A distinguished name, or DN, is composed of an ordered list of
  * components called <em>relative distinguished name</em>s, or RDNs.
  * Details of a DN's syntax are described in RFC 2253.
@@ -115,7 +115,7 @@ public class LdapName implements Name {
      *
      * @param name  This is a non-null distinguished name formatted
      * according to the rules defined in
-     * <a href="http://ietf.org/rfc/rfc2253.txt">RFC 2253</a>.
+     * <a href="http://www.ietf.org/rfc/rfc2253.txt">RFC 2253</a>.
      *
      * @throws InvalidNameException if a syntax violation is detected.
      * @see Rdn#escapeValue(Object value)
@@ -614,7 +614,7 @@ public class LdapName implements Name {
 
     /**
      * Returns a string representation of this LDAP name in a format
-     * defined by <a href="http://ietf.org/rfc/rfc2253.txt">RFC 2253</a>
+     * defined by <a href="http://www.ietf.org/rfc/rfc2253.txt">RFC 2253</a>
      * and described in the class description. If the name has zero
      * components an empty string is returned.
      *

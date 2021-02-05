@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2005, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -451,7 +451,7 @@ public class DocFlavor implements Serializable, Cloneable {
     /**
      * A String representing the host operating system encoding.
      * This will follow the conventions documented in
-     * <a href="http://ietf.org/rfc/rfc2278.txt">
+     * <a href="http://www.ietf.org/rfc/rfc2278.txt">
      * <i>RFC&nbsp;2278:&nbsp;IANA Charset Registration Procedures</i></a>
      * except where historical names are returned for compatibility with
      * previous versions of the Java platform.

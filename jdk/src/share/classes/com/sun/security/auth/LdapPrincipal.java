@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,7 @@ import javax.naming.ldap.LdapName;
 
 /**
  * A principal identified by a distinguished name as specified by
- * <a href="http://ietf.org//rfc/rfc2253.txt">RFC 2253</a>.
+ * <a href="http://www.ietf.org/rfc/rfc2253.txt">RFC 2253</a>.
  *
  * <p>
  * After successful authentication, a user {@link java.security.Principal}
@@ -122,7 +122,7 @@ public final class LdapPrincipal implements Principal, java.io.Serializable {
 
     /**
      * Creates a string representation of this principal's name in the format
-     * defined by <a href="http://ietf.org/rfc/rfc2253.txt">RFC 2253</a>.
+     * defined by <a href="http://www.ietf.org/rfc/rfc2253.txt">RFC 2253</a>.
      * If the name has zero components an empty string is returned.
      *
      * @return The principal's string name.
