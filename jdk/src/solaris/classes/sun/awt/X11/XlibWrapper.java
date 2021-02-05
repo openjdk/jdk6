@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -613,4 +613,6 @@ static native String XSetLocaleModifiers(String modifier_list);
         String javaVersion = XToolkit.getSystemProperty("java.version");
         return javaVersion != null && javaVersion.contains("internal");
     }
+
+    static native void PrintXErrorEvent(long display, long event_ptr);
 }

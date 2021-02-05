@@ -1,5 +1,5 @@
 #
-# Copyright (c) 1998, 2006, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -72,9 +72,6 @@ $(CLASSBINDIR)/%.gif: $(SHARE_SRC)/classes/%.gif
 	$(install-file)
 
 $(CLASSBINDIR)/%.css: $(SHARE_SRC)/classes/%.css
-	$(install-file)
-
-$(CLASSBINDIR)/%.bdtd: $(SHARE_SRC)/classes/%.bdtd
 	$(install-file)
 
 $(CLASSBINDIR)/%.txt: $(SHARE_SRC)/classes/%.txt

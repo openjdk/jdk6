@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -490,22 +490,23 @@ Java_sun_font_FreetypeFontScaler_getFontMetricsNative(
 
     /* ascent */
     ax = 0;
-    ay = -(jfloat) FT26Dot6ToFloat(
-                       scalerInfo->face->size->metrics.ascender +
-                       bmodifier/2);
+    ay = -(jfloat) FT26Dot6ToFloat(FT_MulFix(
+                       ((jlong) scalerInfo->face->ascender + bmodifier/2),
+                       (jlong) scalerInfo->face->size->metrics.y_scale));
     /* descent */
     dx = 0;
-    dy = -(jfloat) FT26Dot6ToFloat(
-                       scalerInfo->face->size->metrics.descender +
-                       bmodifier/2);
+    dy = -(jfloat) FT26Dot6ToFloat(FT_MulFix(
+                       ((jlong) scalerInfo->face->descender + bmodifier/2),
+                       (jlong) scalerInfo->face->size->metrics.y_scale));
     /* baseline */
     bx = by = 0;
 
     /* leading */
     lx = 0;
-    ly = (jfloat) FT26Dot6ToFloat(
-                      scalerInfo->face->size->metrics.height +
-                      bmodifier) + ay - dy;
+    ly = (jfloat) FT26Dot6ToFloat(FT_MulFix(
+                      (jlong) scalerInfo->face->height + bmodifier,
+                      (jlong) scalerInfo->face->size->metrics.y_scale))
+                  + ay - dy;
     /* max advance */
     mx = (jfloat) FT26Dot6ToFloat(
                      scalerInfo->face->size->metrics.max_advance +
