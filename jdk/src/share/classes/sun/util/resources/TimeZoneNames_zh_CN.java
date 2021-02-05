@@ -361,7 +361,7 @@ public final class TimeZoneNames_zh_CN extends TimeZoneNamesBundle {
             {"America/Godthab", new String[] {"\u897f\u683c\u6797\u5170\u5c9b\u65f6\u95f4", "WGT",
                                               "\u897f\u683c\u6797\u5170\u5c9b\u590f\u4ee4\u65f6", "WGST"}},
             {"America/Goose_Bay", AST},
-            {"America/Grand_Turk", AST},
+            {"America/Grand_Turk", EST},
             {"America/Grenada", AST},
             {"America/Guadeloupe", AST},
             {"America/Guatemala", CST},

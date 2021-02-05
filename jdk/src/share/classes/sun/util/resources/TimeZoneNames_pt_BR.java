@@ -361,7 +361,7 @@ public final class TimeZoneNames_pt_BR extends TimeZoneNamesBundle {
             {"America/Godthab", new String[] {"Fuso hor\u00e1rio da Groenl\u00e2ndia Ocidental", "WGT",
                                               "Fuso hor\u00e1rio de ver\u00e3o da Groenl\u00e2ndia Ocidental", "WGST"}},
             {"America/Goose_Bay", AST},
-            {"America/Grand_Turk", AST},
+            {"America/Grand_Turk", EST},
             {"America/Grenada", AST},
             {"America/Guadeloupe", AST},
             {"America/Guatemala", CST},

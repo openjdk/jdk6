@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2009, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,8 +43,11 @@ import javax.naming.ldap.Control;
 import java.lang.reflect.Method;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.Arrays;
 import sun.misc.IOUtils;
+import sun.security.ssl.SSLSocketImpl;
 //import javax.net.SocketFactory;
 
 /**
@@ -157,6 +160,23 @@ public final class Connection implements Runnable {
     volatile boolean useable = true;  // is Connection still useable
 
     private int readTimeout;
+    private static final boolean IS_HOSTNAME_VERIFICATION_DISABLED
+            = hostnameVerificationDisabledValue();
+
+    private static boolean hostnameVerificationDisabledValue() {
+        PrivilegedAction<String> act = new PrivilegedAction<String>() {
+            @Override
+            public String run() {
+                return System.getProperty(
+                        "com.sun.jndi.ldap.object.disableEndpointIdentification");
+            }
+        };
+        String prop = AccessController.doPrivileged(act);
+        if (prop == null) {
+            return false;
+        }
+        return prop.isEmpty() ? true : Boolean.parseBoolean(prop);
+    }
 
     // true means v3; false means v2
     // Called in LdapClient.authenticate() (which is synchronized)
@@ -363,6 +383,15 @@ public final class Connection implements Runnable {
                 }
                 // connected socket
                 socket = new Socket(host, port);
+            }
+        }
+
+        if (!IS_HOSTNAME_VERIFICATION_DISABLED) {
+            if (socket instanceof SSLSocketImpl) {
+                boolean enabled = ((SSLSocketImpl)socket).trySetHostnameVerification("LDAPS");
+                if (debug) {
+                    System.out.println("Connection: enabling endpoint identification: " + enabled);
+                }
             }
         }
 
