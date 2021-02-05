@@ -27,9 +27,10 @@
 // However, the following notice accompanied the original version of this
 // file:
 //
+//---------------------------------------------------------------------------------
 //
-//  Little cms
-//  Copyright (C) 1998-2007 Marti Maria
+//  Little Color Management System
+//  Copyright (c) 1998-2017 Marti Maria Saguer
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the "Software"),
@@ -48,650 +49,528 @@
 // LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+//---------------------------------------------------------------------------------
+//
+
+#include "lcms2_internal.h"
 
 
-#include "lcms.h"
+#define cmsmin(a, b) (((a) < (b)) ? (a) : (b))
+#define cmsmax(a, b) (((a) > (b)) ? (a) : (b))
+
+// This file contains routines for resampling and LUT optimization, black point detection
+// and black preservation.
+
+// Black point detection -------------------------------------------------------------------------
 
 
-// ---------------------------------------------------------------------------------
-
-static volatile int GlobalBlackPreservationStrategy = 0;
-
-// Quantize a value 0 <= i < MaxSamples
-
-WORD _cmsQuantizeVal(double i, int MaxSamples)
-{
-       double x;
-
-       x = ((double) i * 65535.) / (double) (MaxSamples - 1);
-
-       return (WORD) floor(x + .5);
-}
-
-
-// Is a table linear?
-
-int cmsIsLinear(WORD Table[], int nEntries)
-{
-       register int i;
-       int diff;
-
-       for (i=0; i < nEntries; i++) {
-
-           diff = abs((int) Table[i] - (int) _cmsQuantizeVal(i, nEntries));
-           if (diff > 3)
-                     return 0;
-       }
-
-       return 1;
-}
-
-
-
-// pow() restricted to integer
-
+// PCS -> PCS round trip transform, always uses relative intent on the device -> pcs
 static
-int ipow(int base, int exp)
+cmsHTRANSFORM CreateRoundtripXForm(cmsHPROFILE hProfile, cmsUInt32Number nIntent)
 {
-        int res = base;
+    cmsContext ContextID = cmsGetProfileContextID(hProfile);
+    cmsHPROFILE hLab = cmsCreateLab4ProfileTHR(ContextID, NULL);
+    cmsHTRANSFORM xform;
+    cmsBool BPC[4] = { FALSE, FALSE, FALSE, FALSE };
+    cmsFloat64Number States[4] = { 1.0, 1.0, 1.0, 1.0 };
+    cmsHPROFILE hProfiles[4];
+    cmsUInt32Number Intents[4];
 
-        while (--exp)
-               res *= base;
+    hProfiles[0] = hLab; hProfiles[1] = hProfile; hProfiles[2] = hProfile; hProfiles[3] = hLab;
+    Intents[0]   = INTENT_RELATIVE_COLORIMETRIC; Intents[1] = nIntent; Intents[2] = INTENT_RELATIVE_COLORIMETRIC; Intents[3] = INTENT_RELATIVE_COLORIMETRIC;
 
-        return res;
+    xform =  cmsCreateExtendedTransform(ContextID, 4, hProfiles, BPC, Intents,
+        States, NULL, 0, TYPE_Lab_DBL, TYPE_Lab_DBL, cmsFLAGS_NOCACHE|cmsFLAGS_NOOPTIMIZE);
+
+    cmsCloseProfile(hLab);
+    return xform;
 }
 
-
-// Given n, 0<=n<=clut^dim, returns the colorant.
-
+// Use darker colorants to obtain black point. This works in the relative colorimetric intent and
+// assumes more ink results in darker colors. No ink limit is assumed.
 static
-int ComponentOf(int n, int clut, int nColorant)
+cmsBool  BlackPointAsDarkerColorant(cmsHPROFILE    hInput,
+                                    cmsUInt32Number Intent,
+                                    cmsCIEXYZ* BlackPoint,
+                                    cmsUInt32Number dwFlags)
 {
-        if (nColorant <= 0)
-                return (n % clut);
+    cmsUInt16Number *Black;
+    cmsHTRANSFORM xform;
+    cmsColorSpaceSignature Space;
+    cmsUInt32Number nChannels;
+    cmsUInt32Number dwFormat;
+    cmsHPROFILE hLab;
+    cmsCIELab  Lab;
+    cmsCIEXYZ  BlackXYZ;
+    cmsContext ContextID = cmsGetProfileContextID(hInput);
 
-        n /= ipow(clut, nColorant);
+    // If the profile does not support input direction, assume Black point 0
+    if (!cmsIsIntentSupported(hInput, Intent, LCMS_USED_AS_INPUT)) {
 
-        return (n % clut);
-}
-
-
-
-// This routine does a sweep on whole input space, and calls its callback
-// function on knots. returns TRUE if all ok, FALSE otherwise.
-
-LCMSBOOL LCMSEXPORT cmsSample3DGrid(LPLUT Lut, _cmsSAMPLER Sampler, LPVOID Cargo, DWORD dwFlags)
-{
-   int i, t, nTotalPoints, Colorant, index;
-   WORD In[MAXCHANNELS], Out[MAXCHANNELS];
-
-   nTotalPoints = ipow(Lut->cLutPoints, Lut -> InputChan);
-
-   index = 0;
-   for (i = 0; i < nTotalPoints; i++) {
-
-        for (t=0; t < (int) Lut -> InputChan; t++) {
-
-                Colorant =  ComponentOf(i, Lut -> cLutPoints, (Lut -> InputChan - t  - 1 ));
-                In[t]    = _cmsQuantizeVal(Colorant, Lut -> cLutPoints);
-        }
-
-
-        if (dwFlags & SAMPLER_HASTL1) {
-
-                 for (t=0; t < (int) Lut -> InputChan; t++)
-                     In[t] = cmsReverseLinearInterpLUT16(In[t],
-                                                Lut -> L1[t],
-                                                &Lut -> In16params);
-        }
-
-        for (t=0; t < (int) Lut -> OutputChan; t++)
-                     Out[t] = Lut->T[index + t];
-
-        if (dwFlags & SAMPLER_HASTL2) {
-
-             for (t=0; t < (int) Lut -> OutputChan; t++)
-                     Out[t] = cmsLinearInterpLUT16(Out[t],
-                                                   Lut -> L2[t],
-                                                   &Lut -> Out16params);
-        }
-
-
-        if (!Sampler(In, Out, Cargo))
-                return FALSE;
-
-        if (!(dwFlags & SAMPLER_INSPECT)) {
-
-            if (dwFlags & SAMPLER_HASTL2) {
-
-                for (t=0; t < (int) Lut -> OutputChan; t++)
-                     Out[t] = cmsReverseLinearInterpLUT16(Out[t],
-                                                   Lut -> L2[t],
-                                                   &Lut -> Out16params);
-                }
-
-
-            for (t=0; t < (int) Lut -> OutputChan; t++)
-                        Lut->T[index + t] = Out[t];
-
-        }
-
-        index += Lut -> OutputChan;
-
+        BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+        return FALSE;
     }
+
+    // Create a formatter which has n channels and floating point
+    dwFormat = cmsFormatterForColorspaceOfProfile(hInput, 2, FALSE);
+
+   // Try to get black by using black colorant
+    Space = cmsGetColorSpace(hInput);
+
+    // This function returns darker colorant in 16 bits for several spaces
+    if (!_cmsEndPointsBySpace(Space, NULL, &Black, &nChannels)) {
+
+        BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+        return FALSE;
+    }
+
+    if (nChannels != T_CHANNELS(dwFormat)) {
+       BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+       return FALSE;
+    }
+
+    // Lab will be used as the output space, but lab2 will avoid recursion
+    hLab = cmsCreateLab2ProfileTHR(ContextID, NULL);
+    if (hLab == NULL) {
+       BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+       return FALSE;
+    }
+
+    // Create the transform
+    xform = cmsCreateTransformTHR(ContextID, hInput, dwFormat,
+                                hLab, TYPE_Lab_DBL, Intent, cmsFLAGS_NOOPTIMIZE|cmsFLAGS_NOCACHE);
+    cmsCloseProfile(hLab);
+
+    if (xform == NULL) {
+
+        // Something went wrong. Get rid of open resources and return zero as black
+        BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+        return FALSE;
+    }
+
+    // Convert black to Lab
+    cmsDoTransform(xform, Black, &Lab, 1);
+
+    // Force it to be neutral, clip to max. L* of 50
+    Lab.a = Lab.b = 0;
+    if (Lab.L > 50) Lab.L = 50;
+
+    // Free the resources
+    cmsDeleteTransform(xform);
+
+    // Convert from Lab (which is now clipped) to XYZ.
+    cmsLab2XYZ(NULL, &BlackXYZ, &Lab);
+
+    if (BlackPoint != NULL)
+        *BlackPoint = BlackXYZ;
+
+    return TRUE;
+
+    cmsUNUSED_PARAMETER(dwFlags);
+}
+
+// Get a black point of output CMYK profile, discounting any ink-limiting embedded
+// in the profile. For doing that, we use perceptual intent in input direction:
+// Lab (0, 0, 0) -> [Perceptual] Profile -> CMYK -> [Rel. colorimetric] Profile -> Lab
+static
+cmsBool BlackPointUsingPerceptualBlack(cmsCIEXYZ* BlackPoint, cmsHPROFILE hProfile)
+{
+    cmsHTRANSFORM hRoundTrip;
+    cmsCIELab LabIn, LabOut;
+    cmsCIEXYZ  BlackXYZ;
+
+     // Is the intent supported by the profile?
+    if (!cmsIsIntentSupported(hProfile, INTENT_PERCEPTUAL, LCMS_USED_AS_INPUT)) {
+
+        BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+        return TRUE;
+    }
+
+    hRoundTrip = CreateRoundtripXForm(hProfile, INTENT_PERCEPTUAL);
+    if (hRoundTrip == NULL) {
+        BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+        return FALSE;
+    }
+
+    LabIn.L = LabIn.a = LabIn.b = 0;
+    cmsDoTransform(hRoundTrip, &LabIn, &LabOut, 1);
+
+    // Clip Lab to reasonable limits
+    if (LabOut.L > 50) LabOut.L = 50;
+    LabOut.a = LabOut.b = 0;
+
+    cmsDeleteTransform(hRoundTrip);
+
+    // Convert it to XYZ
+    cmsLab2XYZ(NULL, &BlackXYZ, &LabOut);
+
+    if (BlackPoint != NULL)
+        *BlackPoint = BlackXYZ;
 
     return TRUE;
 }
 
-
-
-
-
-
-// choose reasonable resolution
-int _cmsReasonableGridpointsByColorspace(icColorSpaceSignature Colorspace, DWORD dwFlags)
+// This function shouldn't exist at all -- there is such quantity of broken
+// profiles on black point tag, that we must somehow fix chromaticity to
+// avoid huge tint when doing Black point compensation. This function does
+// just that. There is a special flag for using black point tag, but turned
+// off by default because it is bogus on most profiles. The detection algorithm
+// involves to turn BP to neutral and to use only L component.
+cmsBool CMSEXPORT cmsDetectBlackPoint(cmsCIEXYZ* BlackPoint, cmsHPROFILE hProfile, cmsUInt32Number Intent, cmsUInt32Number dwFlags)
 {
-    int nChannels;
+    cmsProfileClassSignature devClass;
 
-    // Already specified?
-    if (dwFlags & 0x00FF0000) {
-            // Yes, grab'em
-            return (dwFlags >> 16) & 0xFF;
+    // Make sure the device class is adequate
+    devClass = cmsGetDeviceClass(hProfile);
+    if (devClass == cmsSigLinkClass ||
+        devClass == cmsSigAbstractClass ||
+        devClass == cmsSigNamedColorClass) {
+            BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+            return FALSE;
     }
 
-    nChannels = _cmsChannelsOf(Colorspace);
+    // Make sure intent is adequate
+    if (Intent != INTENT_PERCEPTUAL &&
+        Intent != INTENT_RELATIVE_COLORIMETRIC &&
+        Intent != INTENT_SATURATION) {
+            BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+            return FALSE;
+    }
 
-    // HighResPrecalc is maximum resolution
+    // v4 + perceptual & saturation intents does have its own black point, and it is
+    // well specified enough to use it. Black point tag is deprecated in V4.
+    if ((cmsGetEncodedICCversion(hProfile) >= 0x4000000) &&
+        (Intent == INTENT_PERCEPTUAL || Intent == INTENT_SATURATION)) {
 
-    if (dwFlags & cmsFLAGS_HIGHRESPRECALC) {
+            // Matrix shaper share MRC & perceptual intents
+            if (cmsIsMatrixShaper(hProfile))
+                return BlackPointAsDarkerColorant(hProfile, INTENT_RELATIVE_COLORIMETRIC, BlackPoint, 0);
 
-        if (nChannels > 4)
-                return 7;       // 7 for Hifi
+            // Get Perceptual black out of v4 profiles. That is fixed for perceptual & saturation intents
+            BlackPoint -> X = cmsPERCEPTUAL_BLACK_X;
+            BlackPoint -> Y = cmsPERCEPTUAL_BLACK_Y;
+            BlackPoint -> Z = cmsPERCEPTUAL_BLACK_Z;
 
-        if (nChannels == 4)     // 23 for CMYK
-                return 23;
-
-        return 49;      // 49 for RGB and others
+            return TRUE;
     }
 
 
-    // LowResPrecal is stripped resolution
+#ifdef CMS_USE_PROFILE_BLACK_POINT_TAG
 
-    if (dwFlags & cmsFLAGS_LOWRESPRECALC) {
+    // v2, v4 rel/abs colorimetric
+    if (cmsIsTag(hProfile, cmsSigMediaBlackPointTag) &&
+        Intent == INTENT_RELATIVE_COLORIMETRIC) {
 
-        if (nChannels > 4)
-                return 6;       // 6 for Hifi
+            cmsCIEXYZ *BlackPtr, BlackXYZ, UntrustedBlackPoint, TrustedBlackPoint, MediaWhite;
+            cmsCIELab Lab;
 
-        if (nChannels == 1)
-                return 33;      // For monochrome
+            // If black point is specified, then use it,
 
-        return 17;              // 17 for remaining
+            BlackPtr = cmsReadTag(hProfile, cmsSigMediaBlackPointTag);
+            if (BlackPtr != NULL) {
+
+                BlackXYZ = *BlackPtr;
+                _cmsReadMediaWhitePoint(&MediaWhite, hProfile);
+
+                // Black point is absolute XYZ, so adapt to D50 to get PCS value
+                cmsAdaptToIlluminant(&UntrustedBlackPoint, &MediaWhite, cmsD50_XYZ(), &BlackXYZ);
+
+                // Force a=b=0 to get rid of any chroma
+                cmsXYZ2Lab(NULL, &Lab, &UntrustedBlackPoint);
+                Lab.a = Lab.b = 0;
+                if (Lab.L > 50) Lab.L = 50; // Clip to L* <= 50
+                cmsLab2XYZ(NULL, &TrustedBlackPoint, &Lab);
+
+                if (BlackPoint != NULL)
+                    *BlackPoint = TrustedBlackPoint;
+
+                return TRUE;
+            }
     }
-
-    // Default values
-
-    if (nChannels > 4)
-                return 7;       // 7 for Hifi
-
-    if (nChannels == 4)
-                return 17;      // 17 for CMYK
-
-    return 33;                  // 33 for RGB
-
-}
-
-// Sampler implemented by another transform. This is a clean way to
-// precalculate the devicelink 3D CLUT for almost any transform
-
-static
-int XFormSampler(register WORD In[], register WORD Out[], register LPVOID Cargo)
-{
-        cmsDoTransform((cmsHTRANSFORM) Cargo, In, Out, 1);
-        return TRUE;
-}
-
-// This routine does compute the devicelink CLUT containing whole
-// transform. Handles any channel number.
-
-LPLUT _cmsPrecalculateDeviceLink(cmsHTRANSFORM h, DWORD dwFlags)
-{
-       _LPcmsTRANSFORM p = (_LPcmsTRANSFORM) h;
-       LPLUT Grid;
-       int nGridPoints;
-       DWORD dwFormatIn, dwFormatOut;
-       DWORD SaveFormatIn, SaveFormatOut;
-       int ChannelsIn, ChannelsOut;
-       LPLUT SaveGamutLUT;
-
-
-       // Remove any gamut checking
-       SaveGamutLUT = p ->Gamut;
-       p ->Gamut = NULL;
-
-       ChannelsIn   = _cmsChannelsOf(p -> EntryColorSpace);
-       ChannelsOut  = _cmsChannelsOf(p -> ExitColorSpace);
-
-       nGridPoints = _cmsReasonableGridpointsByColorspace(p -> EntryColorSpace, dwFlags);
-
-       Grid =  cmsAllocLUT();
-       if (!Grid) return NULL;
-
-       Grid = cmsAlloc3DGrid(Grid, nGridPoints, ChannelsIn, ChannelsOut);
-
-       // Compute device link on 16-bit basis
-       dwFormatIn   = (CHANNELS_SH(ChannelsIn)|BYTES_SH(2));
-       dwFormatOut  = (CHANNELS_SH(ChannelsOut)|BYTES_SH(2));
-
-       SaveFormatIn  = p ->InputFormat;
-       SaveFormatOut = p ->OutputFormat;
-
-       p -> InputFormat  = dwFormatIn;
-       p -> OutputFormat = dwFormatOut;
-       p -> FromInput    = _cmsIdentifyInputFormat(p, dwFormatIn);
-       p -> ToOutput     = _cmsIdentifyOutputFormat(p, dwFormatOut);
-
-       // Fix gamut & gamma possible mismatches.
-
-       if (!(dwFlags & cmsFLAGS_NOPRELINEARIZATION)) {
-
-           cmsHTRANSFORM hOne[1];
-           hOne[0] = h;
-
-           _cmsComputePrelinearizationTablesFromXFORM(hOne, 1, Grid);
-       }
-
-       // Attention to this typecast! we can take the luxury to
-       // do this since cmsHTRANSFORM is only an alias to a pointer
-       // to the transform struct.
-
-       if (!cmsSample3DGrid(Grid, XFormSampler, (LPVOID) p, Grid -> wFlags)) {
-
-                cmsFreeLUT(Grid);
-                Grid = NULL;
-       }
-
-       p ->Gamut        = SaveGamutLUT;
-       p ->InputFormat  = SaveFormatIn;
-       p ->OutputFormat = SaveFormatOut;
-
-       return Grid;
-}
-
-
-
-// Sampler for Black-preserving CMYK->CMYK transforms
-
-typedef struct {
-                cmsHTRANSFORM cmyk2cmyk;
-                cmsHTRANSFORM cmyk2Lab;
-                LPGAMMATABLE  KTone;
-                L16PARAMS     KToneParams;
-                LPLUT         LabK2cmyk;
-                double        MaxError;
-
-                cmsHTRANSFORM hRoundTrip;
-                int           MaxTAC;
-
-                cmsHTRANSFORM hProofOutput;
-
-    } BPCARGO, *LPBPCARGO;
-
-
-
-// Preserve black only if that is the only ink used
-static
-int BlackPreservingGrayOnlySampler(register WORD In[], register WORD Out[], register LPVOID Cargo)
-{
-    BPCARGO* bp = (LPBPCARGO) Cargo;
-
-    // If going across black only, keep black only
-    if (In[0] == 0 && In[1] == 0 && In[2] == 0) {
-
-        // TAC does not apply because it is black ink!
-        Out[0] = Out[1] = Out[2] = 0;
-        Out[3] = cmsLinearInterpLUT16(In[3], bp->KTone ->GammaTable, &bp->KToneParams);
-        return 1;
-    }
-
-    // Keep normal transform for other colors
-    cmsDoTransform(bp ->cmyk2cmyk, In, Out, 1);
-    return 1;
-}
-
-
-
-// Preserve all K plane.
-static
-int BlackPreservingSampler(register WORD In[], register WORD Out[], register LPVOID Cargo)
-{
-
-    WORD LabK[4];
-    double SumCMY, SumCMYK, Error;
-    cmsCIELab ColorimetricLab, BlackPreservingLab;
-    BPCARGO* bp = (LPBPCARGO) Cargo;
-
-    // Get the K across Tone curve
-    LabK[3] = cmsLinearInterpLUT16(In[3], bp->KTone ->GammaTable, &bp->KToneParams);
-
-    // If going across black only, keep black only
-    if (In[0] == 0 && In[1] == 0 && In[2] == 0) {
-
-        Out[0] = Out[1] = Out[2] = 0;
-        Out[3] = LabK[3];
-        return 1;
-    }
-
-    // Try the original transform, maybe K is already ok (valid on K=0)
-    cmsDoTransform(bp ->cmyk2cmyk, In, Out, 1);
-    if (Out[3] == LabK[3]) return 1;
-
-
-    // No, mesure and keep Lab measurement for further usage
-    cmsDoTransform(bp->hProofOutput, Out, &ColorimetricLab, 1);
-
-    // Is not black only and the transform doesn't keep black.
-    // Obtain the Lab of CMYK. After that we have Lab + K
-    cmsDoTransform(bp ->cmyk2Lab, In, LabK, 1);
-
-    // Obtain the corresponding CMY using reverse interpolation.
-    // As a seed, we use the colorimetric CMY
-    cmsEvalLUTreverse(bp ->LabK2cmyk, LabK, Out, Out);
-
-    // Estimate the error
-    cmsDoTransform(bp->hProofOutput, Out, &BlackPreservingLab, 1);
-    Error = cmsDeltaE(&ColorimetricLab, &BlackPreservingLab);
-
-
-    // Apply TAC if needed
-
-    SumCMY   = Out[0]  + Out[1] + Out[2];
-    SumCMYK  = SumCMY + Out[3];
-
-    if (SumCMYK > bp ->MaxTAC) {
-
-        double Ratio = 1 - ((SumCMYK - bp->MaxTAC) / SumCMY);
-        if (Ratio < 0)
-                  Ratio = 0;
-
-        Out[0] = (WORD) floor(Out[0] * Ratio + 0.5);     // C
-        Out[1] = (WORD) floor(Out[1] * Ratio + 0.5);     // M
-        Out[2] = (WORD) floor(Out[2] * Ratio + 0.5);     // Y
-    }
-
-    return 1;
-}
-
-
-// Sample whole gamut to estimate maximum TAC
-
-#ifdef _MSC_VER
-#pragma warning(disable : 4100)
 #endif
 
-static
-int EstimateTAC(register WORD In[], register WORD Out[], register LPVOID Cargo)
-{
-    BPCARGO* bp = (LPBPCARGO) Cargo;
-    WORD RoundTrip[4];
-    int Sum;
+    // That is about v2 profiles.
 
-    cmsDoTransform(bp->hRoundTrip, In, RoundTrip, 1);
+    // If output profile, discount ink-limiting and that's all
+    if (Intent == INTENT_RELATIVE_COLORIMETRIC &&
+        (cmsGetDeviceClass(hProfile) == cmsSigOutputClass) &&
+        (cmsGetColorSpace(hProfile)  == cmsSigCmykData))
+        return BlackPointUsingPerceptualBlack(BlackPoint, hProfile);
 
-    Sum = RoundTrip[0] + RoundTrip[1] + RoundTrip[2] + RoundTrip[3];
-
-    if (Sum > bp ->MaxTAC)
-            bp ->MaxTAC = Sum;
-
-    return 1;
+    // Nope, compute BP using current intent.
+    return BlackPointAsDarkerColorant(hProfile, Intent, BlackPoint, dwFlags);
 }
 
 
-// Estimate the maximum error
+
+// ---------------------------------------------------------------------------------------------------------
+
+// Least Squares Fit of a Quadratic Curve to Data
+// http://www.personal.psu.edu/jhm/f90/lectures/lsq2.html
+
 static
-int BlackPreservingEstimateErrorSampler(register WORD In[], register WORD Out[], register LPVOID Cargo)
+cmsFloat64Number RootOfLeastSquaresFitQuadraticCurve(int n, cmsFloat64Number x[], cmsFloat64Number y[])
 {
-    BPCARGO* bp = (LPBPCARGO) Cargo;
-    WORD ColorimetricOut[4];
-    cmsCIELab ColorimetricLab, BlackPreservingLab;
-    double Error;
+    double sum_x = 0, sum_x2 = 0, sum_x3 = 0, sum_x4 = 0;
+    double sum_y = 0, sum_yx = 0, sum_yx2 = 0;
+    double d, a, b, c;
+    int i;
+    cmsMAT3 m;
+    cmsVEC3 v, res;
 
-    if (In[0] == 0 && In[1] == 0 && In[2] == 0) return 1;
+    if (n < 4) return 0;
 
-    cmsDoTransform(bp->cmyk2cmyk, In, ColorimetricOut, 1);
+    for (i=0; i < n; i++) {
 
-    cmsDoTransform(bp->hProofOutput, ColorimetricOut, &ColorimetricLab, 1);
-    cmsDoTransform(bp->hProofOutput, Out, &BlackPreservingLab, 1);
+        double xn = x[i];
+        double yn = y[i];
 
-    Error = cmsDeltaE(&ColorimetricLab, &BlackPreservingLab);
+        sum_x  += xn;
+        sum_x2 += xn*xn;
+        sum_x3 += xn*xn*xn;
+        sum_x4 += xn*xn*xn*xn;
 
-    if (Error > bp ->MaxError)
-        bp ->MaxError = Error;
+        sum_y += yn;
+        sum_yx += yn*xn;
+        sum_yx2 += yn*xn*xn;
+    }
 
-    return 1;
-}
+    _cmsVEC3init(&m.v[0], n,      sum_x,  sum_x2);
+    _cmsVEC3init(&m.v[1], sum_x,  sum_x2, sum_x3);
+    _cmsVEC3init(&m.v[2], sum_x2, sum_x3, sum_x4);
 
-// Setup the K preservation strategy
-int LCMSEXPORT cmsSetCMYKPreservationStrategy(int n)
-{
-    int OldVal = GlobalBlackPreservationStrategy;
+    _cmsVEC3init(&v, sum_y, sum_yx, sum_yx2);
 
-    if (n >= 0)
-            GlobalBlackPreservationStrategy = n;
+    if (!_cmsMAT3solve(&res, &m, &v)) return 0;
 
-    return OldVal;
-}
 
-#pragma warning(disable: 4550)
+    a = res.n[2];
+    b = res.n[1];
+    c = res.n[0];
 
-// Get a pointer to callback on depending of strategy
-static
-_cmsSAMPLER _cmsGetBlackPreservationSampler(void)
-{
-    switch (GlobalBlackPreservationStrategy) {
+    if (fabs(a) < 1.0E-10) {
 
-        case 0: return BlackPreservingGrayOnlySampler;
-        default: return BlackPreservingSampler;
+        return cmsmin(0, cmsmax(50, -c/b ));
+    }
+    else {
+
+         d = b*b - 4.0 * a * c;
+         if (d <= 0) {
+             return 0;
+         }
+         else {
+
+             double rt = (-b + sqrt(d)) / (2.0 * a);
+
+             return cmsmax(0, cmsmin(50, rt));
+         }
    }
 
 }
 
-// This is the black-preserving devicelink generator
-LPLUT _cmsPrecalculateBlackPreservingDeviceLink(cmsHTRANSFORM hCMYK2CMYK, DWORD dwFlags)
+
+
+// Calculates the black point of a destination profile.
+// This algorithm comes from the Adobe paper disclosing its black point compensation method.
+cmsBool CMSEXPORT cmsDetectDestinationBlackPoint(cmsCIEXYZ* BlackPoint, cmsHPROFILE hProfile, cmsUInt32Number Intent, cmsUInt32Number dwFlags)
 {
-       _LPcmsTRANSFORM p = (_LPcmsTRANSFORM) hCMYK2CMYK;
-       BPCARGO Cargo;
-       LPLUT Grid;
-       DWORD LocalFlags;
-       cmsHPROFILE hLab = cmsCreateLabProfile(NULL);
-       int nGridPoints;
-       icTagSignature Device2PCS[] = {icSigAToB0Tag,       // Perceptual
-                                      icSigAToB1Tag,       // Relative colorimetric
-                                      icSigAToB2Tag,       // Saturation
-                                      icSigAToB1Tag };     // Absolute colorimetric
-                                                           // (Relative/WhitePoint)
+    cmsColorSpaceSignature ColorSpace;
+    cmsHTRANSFORM hRoundTrip = NULL;
+    cmsCIELab InitialLab, destLab, Lab;
+    cmsFloat64Number inRamp[256], outRamp[256];
+    cmsFloat64Number MinL, MaxL;
+    cmsBool NearlyStraightMidrange = TRUE;
+    cmsFloat64Number yRamp[256];
+    cmsFloat64Number x[256], y[256];
+    cmsFloat64Number lo, hi;
+    int n, l;
+    cmsProfileClassSignature devClass;
 
-       nGridPoints = _cmsReasonableGridpointsByColorspace(p -> EntryColorSpace, dwFlags);
+    // Make sure the device class is adequate
+    devClass = cmsGetDeviceClass(hProfile);
+    if (devClass == cmsSigLinkClass ||
+        devClass == cmsSigAbstractClass ||
+        devClass == cmsSigNamedColorClass) {
+            BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+            return FALSE;
+    }
 
-       // Get a copy of inteserting flags for this kind of xform
-       LocalFlags = cmsFLAGS_NOTPRECALC;
-       if (p -> dwOriginalFlags & cmsFLAGS_BLACKPOINTCOMPENSATION)
-           LocalFlags |= cmsFLAGS_BLACKPOINTCOMPENSATION;
-
-       // Fill in cargo struct
-       Cargo.cmyk2cmyk = hCMYK2CMYK;
-
-       // Compute tone curve.
-       Cargo.KTone  =  _cmsBuildKToneCurve(hCMYK2CMYK, 256);
-       if (Cargo.KTone == NULL) return NULL;
-       cmsCalcL16Params(Cargo.KTone ->nEntries, &Cargo.KToneParams);
-
-
-       // Create a CMYK->Lab "normal" transform on input, without K-preservation
-       Cargo.cmyk2Lab  = cmsCreateTransform(p ->InputProfile, TYPE_CMYK_16,
-                                            hLab, TYPE_Lab_16, p->Intent, LocalFlags);
-
-       // We are going to use the reverse of proof direction
-       Cargo.LabK2cmyk = cmsReadICCLut(p->OutputProfile, Device2PCS[p->Intent]);
-
-       // Is there any table available?
-       if (Cargo.LabK2cmyk == NULL) {
-
-           Grid = NULL;
-           goto Cleanup;
-       }
-
-       // Setup a roundtrip on output profile for TAC estimation
-       Cargo.hRoundTrip = cmsCreateTransform(p ->OutputProfile, TYPE_CMYK_16,
-                                             p ->OutputProfile, TYPE_CMYK_16, p->Intent, cmsFLAGS_NOTPRECALC);
+    // Make sure intent is adequate
+    if (Intent != INTENT_PERCEPTUAL &&
+        Intent != INTENT_RELATIVE_COLORIMETRIC &&
+        Intent != INTENT_SATURATION) {
+            BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+            return FALSE;
+    }
 
 
-       // Setup a proof CMYK->Lab on output
-       Cargo.hProofOutput  = cmsCreateTransform(p ->OutputProfile, TYPE_CMYK_16,
-                                            hLab, TYPE_Lab_DBL, p->Intent, LocalFlags);
+    // v4 + perceptual & saturation intents does have its own black point, and it is
+    // well specified enough to use it. Black point tag is deprecated in V4.
+    if ((cmsGetEncodedICCversion(hProfile) >= 0x4000000) &&
+        (Intent == INTENT_PERCEPTUAL || Intent == INTENT_SATURATION)) {
+
+            // Matrix shaper share MRC & perceptual intents
+            if (cmsIsMatrixShaper(hProfile))
+                return BlackPointAsDarkerColorant(hProfile, INTENT_RELATIVE_COLORIMETRIC, BlackPoint, 0);
+
+            // Get Perceptual black out of v4 profiles. That is fixed for perceptual & saturation intents
+            BlackPoint -> X = cmsPERCEPTUAL_BLACK_X;
+            BlackPoint -> Y = cmsPERCEPTUAL_BLACK_Y;
+            BlackPoint -> Z = cmsPERCEPTUAL_BLACK_Z;
+            return TRUE;
+    }
 
 
-       // Create an empty LUT for holding K-preserving xform
-       Grid =  cmsAllocLUT();
-       if (!Grid) goto Cleanup;
+    // Check if the profile is lut based and gray, rgb or cmyk (7.2 in Adobe's document)
+    ColorSpace = cmsGetColorSpace(hProfile);
+    if (!cmsIsCLUT(hProfile, Intent, LCMS_USED_AS_OUTPUT ) ||
+        (ColorSpace != cmsSigGrayData &&
+         ColorSpace != cmsSigRgbData  &&
+         ColorSpace != cmsSigCmykData)) {
 
-       Grid = cmsAlloc3DGrid(Grid, nGridPoints, 4, 4);
+        // In this case, handle as input case
+        return cmsDetectBlackPoint(BlackPoint, hProfile, Intent, dwFlags);
+    }
 
-       // Setup formatters
-       p -> FromInput = _cmsIdentifyInputFormat(p,  TYPE_CMYK_16);
-       p -> ToOutput  = _cmsIdentifyOutputFormat(p, TYPE_CMYK_16);
-
-
-
-       // Step #1, estimate TAC
-       Cargo.MaxTAC = 0;
-       if (!cmsSample3DGrid(Grid, EstimateTAC, (LPVOID) &Cargo, 0)) {
-
-                cmsFreeLUT(Grid);
-                Grid = NULL;
-                goto Cleanup;
-       }
+    // It is one of the valid cases!, use Adobe algorithm
 
 
-       // Step #2, compute approximation
-       if (!cmsSample3DGrid(Grid, _cmsGetBlackPreservationSampler(), (LPVOID) &Cargo, 0)) {
+    // Set a first guess, that should work on good profiles.
+    if (Intent == INTENT_RELATIVE_COLORIMETRIC) {
 
-                cmsFreeLUT(Grid);
-                Grid = NULL;
-                goto Cleanup;
-       }
+        cmsCIEXYZ IniXYZ;
 
-       // Step #3, estimate error
-        Cargo.MaxError = 0;
-        cmsSample3DGrid(Grid, BlackPreservingEstimateErrorSampler, (LPVOID) &Cargo, SAMPLER_INSPECT);
+        // calculate initial Lab as source black point
+        if (!cmsDetectBlackPoint(&IniXYZ, hProfile, Intent, dwFlags)) {
+            return FALSE;
+        }
+
+        // convert the XYZ to lab
+        cmsXYZ2Lab(NULL, &InitialLab, &IniXYZ);
+
+    } else {
+
+        // set the initial Lab to zero, that should be the black point for perceptual and saturation
+        InitialLab.L = 0;
+        InitialLab.a = 0;
+        InitialLab.b = 0;
+    }
 
 
-Cleanup:
+    // Step 2
+    // ======
 
-       if (Cargo.cmyk2Lab) cmsDeleteTransform(Cargo.cmyk2Lab);
-       if (Cargo.hRoundTrip) cmsDeleteTransform(Cargo.hRoundTrip);
-       if (Cargo.hProofOutput) cmsDeleteTransform(Cargo.hProofOutput);
+    // Create a roundtrip. Define a Transform BT for all x in L*a*b*
+    hRoundTrip = CreateRoundtripXForm(hProfile, Intent);
+    if (hRoundTrip == NULL)  return FALSE;
 
-       if (hLab) cmsCloseProfile(hLab);
-       if (Cargo.KTone) cmsFreeGamma(Cargo.KTone);
-       if (Cargo.LabK2cmyk) cmsFreeLUT(Cargo.LabK2cmyk);
+    // Compute ramps
 
-       return Grid;
+    for (l=0; l < 256; l++) {
+
+        Lab.L = (cmsFloat64Number) (l * 100.0) / 255.0;
+        Lab.a = cmsmin(50, cmsmax(-50, InitialLab.a));
+        Lab.b = cmsmin(50, cmsmax(-50, InitialLab.b));
+
+        cmsDoTransform(hRoundTrip, &Lab, &destLab, 1);
+
+        inRamp[l]  = Lab.L;
+        outRamp[l] = destLab.L;
+    }
+
+    // Make monotonic
+    for (l = 254; l > 0; --l) {
+        outRamp[l] = cmsmin(outRamp[l], outRamp[l+1]);
+    }
+
+    // Check
+    if (! (outRamp[0] < outRamp[255])) {
+
+        cmsDeleteTransform(hRoundTrip);
+        BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+        return FALSE;
+    }
+
+
+    // Test for mid range straight (only on relative colorimetric)
+    NearlyStraightMidrange = TRUE;
+    MinL = outRamp[0]; MaxL = outRamp[255];
+    if (Intent == INTENT_RELATIVE_COLORIMETRIC) {
+
+        for (l=0; l < 256; l++) {
+
+            if (! ((inRamp[l] <= MinL + 0.2 * (MaxL - MinL) ) ||
+                (fabs(inRamp[l] - outRamp[l]) < 4.0 )))
+                NearlyStraightMidrange = FALSE;
+        }
+
+        // If the mid range is straight (as determined above) then the
+        // DestinationBlackPoint shall be the same as initialLab.
+        // Otherwise, the DestinationBlackPoint shall be determined
+        // using curve fitting.
+        if (NearlyStraightMidrange) {
+
+            cmsLab2XYZ(NULL, BlackPoint, &InitialLab);
+            cmsDeleteTransform(hRoundTrip);
+            return TRUE;
+        }
+    }
+
+
+    // curve fitting: The round-trip curve normally looks like a nearly constant section at the black point,
+    // with a corner and a nearly straight line to the white point.
+    for (l=0; l < 256; l++) {
+
+        yRamp[l] = (outRamp[l] - MinL) / (MaxL - MinL);
+    }
+
+    // find the black point using the least squares error quadratic curve fitting
+    if (Intent == INTENT_RELATIVE_COLORIMETRIC) {
+        lo = 0.1;
+        hi = 0.5;
+    }
+    else {
+
+        // Perceptual and saturation
+        lo = 0.03;
+        hi = 0.25;
+    }
+
+    // Capture shadow points for the fitting.
+    n = 0;
+    for (l=0; l < 256; l++) {
+
+        cmsFloat64Number ff = yRamp[l];
+
+        if (ff >= lo && ff < hi) {
+            x[n] = inRamp[l];
+            y[n] = yRamp[l];
+            n++;
+        }
+    }
+
+
+    // No suitable points
+    if (n < 3 ) {
+        cmsDeleteTransform(hRoundTrip);
+        BlackPoint -> X = BlackPoint ->Y = BlackPoint -> Z = 0.0;
+        return FALSE;
+    }
+
+
+    // fit and get the vertex of quadratic curve
+    Lab.L = RootOfLeastSquaresFitQuadraticCurve(n, x, y);
+
+    if (Lab.L < 0.0) { // clip to zero L* if the vertex is negative
+        Lab.L = 0;
+    }
+
+    Lab.a = InitialLab.a;
+    Lab.b = InitialLab.b;
+
+    cmsLab2XYZ(NULL, BlackPoint, &Lab);
+
+    cmsDeleteTransform(hRoundTrip);
+    return TRUE;
 }
-
-
-
-// Fix broken LUT. just to obtain other CMS compatibility
-
-static
-void PatchLUT(LPLUT Grid, WORD At[], WORD Value[],
-                     int nChannelsOut, int nChannelsIn)
-{
-       LPL16PARAMS p16  = &Grid -> CLut16params;
-       double     px, py, pz, pw;
-       int        x0, y0, z0, w0;
-       int        i, index;
-
-
-       if (Grid ->wFlags & LUT_HASTL1) return;  // There is a prelinearization
-
-       px = ((double) At[0] * (p16->Domain)) / 65535.0;
-       py = ((double) At[1] * (p16->Domain)) / 65535.0;
-       pz = ((double) At[2] * (p16->Domain)) / 65535.0;
-       pw = ((double) At[3] * (p16->Domain)) / 65535.0;
-
-       x0 = (int) floor(px);
-       y0 = (int) floor(py);
-       z0 = (int) floor(pz);
-       w0 = (int) floor(pw);
-
-       if (nChannelsIn == 4) {
-
-              if (((px - x0) != 0) ||
-                  ((py - y0) != 0) ||
-                  ((pz - z0) != 0) ||
-                  ((pw - w0) != 0)) return; // Not on exact node
-
-              index = p16 -> opta4 * x0 +
-                      p16 -> opta3 * y0 +
-                      p16 -> opta2 * z0 +
-                      p16 -> opta1 * w0;
-       }
-       else
-       if (nChannelsIn == 3) {
-
-              if (((px - x0) != 0) ||
-                  ((py - y0) != 0) ||
-                  ((pz - z0) != 0)) return;  // Not on exact node
-
-              index = p16 -> opta3 * x0 +
-                      p16 -> opta2 * y0 +
-                      p16 -> opta1 * z0;
-       }
-       else
-       if (nChannelsIn == 1) {
-
-              if (((px - x0) != 0)) return; // Not on exact node
-
-              index = p16 -> opta1 * x0;
-       }
-       else {
-           cmsSignalError(LCMS_ERRC_ABORTED, "(internal) %d Channels are not supported on PatchLUT", nChannelsIn);
-           return;
-       }
-
-       for (i=0; i < nChannelsOut; i++)
-              Grid -> T[index + i] = Value[i];
-
-}
-
-
-
-LCMSBOOL _cmsFixWhiteMisalignment(_LPcmsTRANSFORM p)
-{
-
-       WORD *WhitePointIn, *WhitePointOut, *BlackPointIn, *BlackPointOut;
-       int nOuts, nIns;
-
-
-       if (!p -> DeviceLink) return FALSE;
-
-       if (p ->Intent == INTENT_ABSOLUTE_COLORIMETRIC) return FALSE;
-       if ((p ->PreviewProfile != NULL) &&
-           (p ->ProofIntent == INTENT_ABSOLUTE_COLORIMETRIC)) return FALSE;
-
-
-       if (!_cmsEndPointsBySpace(p -> EntryColorSpace,
-                                 &WhitePointIn, &BlackPointIn, &nIns)) return FALSE;
-
-
-       if (!_cmsEndPointsBySpace(p -> ExitColorSpace,
-                                   &WhitePointOut, &BlackPointOut, &nOuts)) return FALSE;
-
-       // Fix white only
-
-       PatchLUT(p -> DeviceLink, WhitePointIn, WhitePointOut, nOuts, nIns);
-       // PatchLUT(p -> DeviceLink, BlackPointIn, BlackPointOut, nOuts, nIns);
-
-       return TRUE;
-}
-

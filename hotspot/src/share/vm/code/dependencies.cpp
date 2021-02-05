@@ -719,6 +719,14 @@ class ClassHierarchyWalker {
     _signature = NULL;
     initialize(participant);
   }
+  ClassHierarchyWalker(klassOop participants[], int num_participants) {
+    _name      = NULL;
+    _signature = NULL;
+    initialize(NULL);
+    for (int i = 0; i < num_participants; ++i) {
+      add_participant(participants[i]);
+    }
+  }
 
   // This is common code for two searches:  One for concrete subtypes,
   // the other for concrete method implementations and overrides.
@@ -807,7 +815,27 @@ class ClassHierarchyWalker {
       return Dependencies::is_concrete_klass(k);
     } else {
       methodOop m = instanceKlass::cast(k)->find_method(_name, _signature);
-      if (m == NULL || !Dependencies::is_concrete_method(m))  return false;
+      if (m == NULL || !Dependencies::is_concrete_method(m)) {
+        // Check for re-abstraction of method
+        if (!Klass::cast(k)->is_interface() && m != NULL && m->is_abstract()) {
+          // Found a matching abstract method 'm' in the class hierarchy.
+          // This is fine iff 'k' is an abstract class and all concrete subtypes
+          // of 'k' override 'm' and are participates of the current search.
+          ClassHierarchyWalker wf(_participants, _num_participants);
+          klassOop w = wf.find_witness_subtype(k);
+          if (w != NULL) {
+            methodOop wm = instanceKlass::cast(w)->find_method(_name, _signature);
+            if (!Dependencies::is_concrete_method(wm)) {
+              // Found a concrete subtype 'w' which does not override abstract method 'm'.
+              // Bail out because 'm' could be called with 'w' as receiver (leading to an
+              // AbstractMethodError) and thus the method we are looking for is not unique.
+              _found_methods[_num_participants] = m;
+              return true;
+            }
+          }
+        }
+        return false;
+      }
       _found_methods[_num_participants] = m;
       // Note:  If add_participant(k) is called,
       // the method m will already be memoized for it.
@@ -1096,12 +1124,10 @@ bool Dependencies::is_concrete_klass(klassOop k) {
 }
 
 bool Dependencies::is_concrete_method(methodOop m) {
-  // Statics are irrelevant to virtual call sites.
-  if (m->is_static())  return false;
-
-  // We could also return false if m does not yet appear to be
-  // executed, if the VM version supports this distinction also.
-  return !m->is_abstract();
+  // NULL is not a concrete method,
+  // statics are irrelevant to virtual call sites,
+  // abstract methods are not concrete,
+  return ! ( m == NULL || m -> is_static() || m -> is_abstract());
 }
 
 

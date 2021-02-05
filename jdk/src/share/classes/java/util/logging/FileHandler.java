@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -126,8 +126,30 @@ public class FileHandler extends StreamHandler {
     private String lockFileName;
     private FileOutputStream lockStream;
     private File files[];
-    private static final int MAX_LOCKS = 100;
+    private static final int DEFAULT_MAX_LOCKS = 100;
+    private static int maxLocks;
     private static java.util.HashMap<String, String> locks = new java.util.HashMap<String, String>();
+
+    /*
+     * Initialize maxLocks from the System property if set.
+     * If invalid/no property is provided 100 will be used as a default value.
+     */
+    static {
+        maxLocks = java.security.AccessController.doPrivileged(
+                new PrivilegedAction<Integer>() {
+                    @Override
+                    public Integer run() {
+                        return Integer.getInteger(
+                                "jdk.internal.FileHandlerLogging.maxLocks",
+                                DEFAULT_MAX_LOCKS);
+                    }
+                }
+        );
+
+        if (maxLocks <= 0) {
+            maxLocks = DEFAULT_MAX_LOCKS;
+        }
+    }
 
     // A metered stream is a subclass of OutputStream that
     //   (a) forwards all its output to a target stream
@@ -385,8 +407,9 @@ public class FileHandler extends StreamHandler {
         int unique = -1;
         for (;;) {
             unique++;
-            if (unique > MAX_LOCKS) {
-                throw new IOException("Couldn't get lock for " + pattern);
+            if (unique > maxLocks) {
+                throw new IOException("Couldn't get lock for " + pattern
+                        + ", maxLocks: " + maxLocks);
             }
             // Generate a lock file name from the "unique" int.
             lockFileName = generate(pattern, 0, unique).toString() + ".lck";

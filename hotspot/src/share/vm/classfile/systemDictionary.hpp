@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -125,6 +125,7 @@ class SymbolPropertyTable;
   template(PhantomReference_klass,       java_lang_ref_PhantomReference, Pre) \
   template(Cleaner_klass,                sun_misc_Cleaner,               Pre) \
   template(Finalizer_klass,              java_lang_ref_Finalizer,        Pre) \
+  template(ReferenceQueue_klass,         java_lang_ref_ReferenceQueue,   Pre) \
                                                                               \
   template(Thread_klass,                 java_lang_Thread,               Pre) \
   template(ThreadGroup_klass,            java_lang_ThreadGroup,          Pre) \
@@ -623,12 +624,15 @@ private:
   static bool is_parallelCapable(Handle class_loader);
   static bool is_parallelDefine(Handle class_loader);
 
+public:
+  static bool is_ext_class_loader(Handle class_loader);
+
+private:
   static klassOop find_shared_class(Symbol* class_name);
 
   // Setup link to hierarchy
   static void add_to_hierarchy(instanceKlassHandle k, TRAPS);
 
-private:
   // We pass in the hashtable index so we can calculate it outside of
   // the SystemDictionary_lock.
 

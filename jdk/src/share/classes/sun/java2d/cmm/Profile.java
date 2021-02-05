@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,42 +23,21 @@
  * questions.
  */
 
-package com.sun.crypto.provider;
+package sun.java2d.cmm;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.io.ObjectStreamException;
-import java.security.AlgorithmParameters;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.SealedObject;
-import javax.crypto.spec.*;
+import java.awt.color.CMMException;
 
-/**
- * This class is introduced to workaround a problem in
- * the SunJCE provider shipped in JCE 1.2.1: the class
- * SealedObjectForKeyProtector was obfuscated due to a mistake.
- *
- * In order to retrieve secret keys in a JCEKS KeyStore written
- * by the SunJCE provider in JCE 1.2.1, this class will be used.
- *
- * @author Valerie Peng
- *
- *
- * @see JceKeyStore
- */
+public class Profile {
+    private final long nativePtr;
 
-final class ai extends javax.crypto.SealedObject {
-
-    static final long serialVersionUID = -7051502576727967444L;
-
-    ai(SealedObject so) {
-        super(so);
+    protected Profile(long ptr) {
+        nativePtr = ptr;
     }
 
-    Object readResolve() throws ObjectStreamException {
-        return new SealedObjectForKeyProtector(this);
+    protected final long getNativePtr() {
+        if (nativePtr == 0L) {
+            throw new CMMException("Invalid profile: ptr is null");
+        }
+        return nativePtr;
     }
 }

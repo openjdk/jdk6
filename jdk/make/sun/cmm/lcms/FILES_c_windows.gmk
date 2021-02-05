@@ -25,24 +25,29 @@
 
 FILES_c = \
     cmscam02.c \
-    cmscam97.c \
     cmscgats.c \
     cmscnvrt.c \
     cmserr.c \
     cmsgamma.c \
     cmsgmt.c \
+    cmshalf.c \
     cmsintrp.c \
     cmsio0.c \
     cmsio1.c \
     cmslut.c \
-    cmsmatsh.c \
+    cmsmd5.c \
     cmsmtrx.c \
     cmsnamed.c \
+    cmsopt.c \
     cmspack.c \
     cmspcs.c \
+    cmsplugin.c \
     cmsps2.c \
     cmssamp.c \
+    cmssm.c \
+    cmstypes.c \
     cmsvirt.c \
     cmswtpnt.c \
     cmsxform.c \
+    cmsalpha.c \
     LCMS.c

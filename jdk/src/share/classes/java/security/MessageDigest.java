@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,7 +57,7 @@ import java.nio.ByteBuffer;
  * and catching the CloneNotSupportedException: <p>
  *
 * <pre>
-* MessageDigest md = MessageDigest.getInstance("SHA");
+* MessageDigest md = MessageDigest.getInstance("SHA-256");
 *
 * try {
 *     md.update(toChapter1);
@@ -442,7 +442,7 @@ public abstract class MessageDigest extends MessageDigestSpi {
     /**
      * Returns a string that identifies the algorithm, independent of
      * implementation details. The name should be a standard
-     * Java Security name (such as "SHA", "MD5", and so on).
+     * Java Security name (such as "SHA-256").
      * See Appendix A in the <a href=
      * "../../../technotes/guides/security/crypto/CryptoSpec.html#AppA">
      * Java Cryptography Architecture API Specification &amp; Reference </a>
