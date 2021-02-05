@@ -300,7 +300,7 @@ public class BasicAttributes implements Attributes {
         s.defaultReadObject();  // read in the ignoreCase flag
         int n = s.readInt();    // number of attributes
         attrs = (n >= 1)
-            ? new Hashtable(n * 2)
+            ? new Hashtable(1 + (int) (Math.min(768, n) / .75f))
             : new Hashtable(2); // can't have initial size of 0 (grrr...)
         while (--n >= 0) {
             put((Attribute)s.readObject());

@@ -3215,7 +3215,7 @@ public class CSS implements Serializable {
         s.defaultReadObject();
         // Reconstruct the hashtable.
         int numValues = s.readInt();
-        valueConvertor = new Hashtable(Math.max(1, numValues));
+        valueConvertor = new Hashtable();
         while (numValues-- > 0) {
             Object key = s.readObject();
             Object value = s.readObject();

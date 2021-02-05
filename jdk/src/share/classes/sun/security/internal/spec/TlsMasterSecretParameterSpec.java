@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,6 +47,7 @@ public class TlsMasterSecretParameterSpec implements AlgorithmParameterSpec {
     private final SecretKey premasterSecret;
     private final int majorVersion, minorVersion;
     private final byte[] clientRandom, serverRandom;
+    private final byte[] extendedMasterSecretSessionHash;
 
     /**
      * Constructs a new TlsMasterSecretParameterSpec.
@@ -77,6 +78,40 @@ public class TlsMasterSecretParameterSpec implements AlgorithmParameterSpec {
         this.minorVersion = checkVersion(minorVersion);
         this.clientRandom = clientRandom.clone();
         this.serverRandom = serverRandom.clone();
+        this.extendedMasterSecretSessionHash = new byte[0];
+    }
+
+    /**
+     * Constructs a new TlsMasterSecretParameterSpec.
+     *
+     * <p>The <code>getAlgorithm()</code> method of <code>premasterSecret</code>
+     * should return <code>"TlsRsaPremasterSecret"</code> if the key exchange
+     * algorithm was RSA and <code>"TlsPremasterSecret"</code> otherwise.
+     *
+     * @param premasterSecret the premaster secret
+     * @param majorVersion the major number of the protocol version
+     * @param minorVersion the minor number of the protocol version
+     * @param extendedMasterSecretSessionHash the session hash for
+     *        Extended Master Secret
+     *
+     * @throws NullPointerException if premasterSecret is null
+     * @throws IllegalArgumentException if minorVersion or majorVersion are
+     *   negative or larger than 255
+     */
+    public TlsMasterSecretParameterSpec(SecretKey premasterSecret,
+            int majorVersion, int minorVersion,
+            byte[] extendedMasterSecretSessionHash) {
+        if (premasterSecret == null) {
+            throw new NullPointerException("premasterSecret must not be null");
+        }
+        this.premasterSecret = premasterSecret;
+        this.majorVersion = checkVersion(majorVersion);
+        this.minorVersion = checkVersion(minorVersion);
+        this.clientRandom = new byte[0];
+        this.serverRandom = new byte[0];
+        this.extendedMasterSecretSessionHash =
+                (extendedMasterSecretSessionHash != null ?
+                        extendedMasterSecretSessionHash.clone() : new byte[0]);
     }
 
     static int checkVersion(int version) {
@@ -132,4 +167,14 @@ public class TlsMasterSecretParameterSpec implements AlgorithmParameterSpec {
         return serverRandom.clone();
     }
 
+    /**
+     +     * Returns a copy of the Extended Master Secret session hash.
+     +     *
+     +     * @return a copy of the Extended Master Secret session hash, or an empty
+     +     *         array if no extended master secret session hash was provided
+     +     *         at instantiation time
+     +     */
+    public byte[] getExtendedMasterSecretSessionHash() {
+        return extendedMasterSecretSessionHash.clone();
+    }
 }

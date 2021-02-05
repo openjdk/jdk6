@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -270,7 +270,7 @@ public final class TimeZoneNames_zh_CN extends TimeZoneNamesBundle {
             {"Africa/Johannesburg", SAST},
             {"Africa/Juba", EAT},
             {"Africa/Kampala", EAT},
-            {"Africa/Khartoum", EAT},
+            {"Africa/Khartoum", CAT},
             {"Africa/Kigali", CAT},
             {"Africa/Kinshasa", WAT},
             {"Africa/Lagos", WAT},
@@ -295,7 +295,7 @@ public final class TimeZoneNames_zh_CN extends TimeZoneNamesBundle {
             {"Africa/Timbuktu", GMT},
             {"Africa/Tripoli", EET},
             {"Africa/Tunis", CET},
-            {"Africa/Windhoek", WAT},
+            {"Africa/Windhoek", CAT},
             {"America/Adak", HST},
             {"America/Anguilla", AST},
             {"America/Antigua", AST},
@@ -647,7 +647,6 @@ public final class TimeZoneNames_zh_CN extends TimeZoneNamesBundle {
             {"Brazil/West", AMT},
             {"Canada/Atlantic", AST},
             {"Canada/Central", CST},
-            {"Canada/East-Saskatchewan", CST},
             {"Canada/Eastern", EST},
             {"Canada/Mountain", MST},
             {"Canada/Newfoundland", NST},

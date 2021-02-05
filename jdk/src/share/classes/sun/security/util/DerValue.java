@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 1996, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -66,7 +66,7 @@ public class DerValue {
     protected DerInputBuffer    buffer;
 
     /**
-     * The DER-encoded data of the value.
+     * The DER-encoded data of the value, never null
      */
     public final DerInputStream data;
 
@@ -405,8 +405,6 @@ public class DerValue {
                         ("Indefinite length encoding not supported");
             length = DerInputStream.getLength(in);
         }
-        if (length == 0)
-            return null;
 
         if (fullyBuffered && in.available() != length)
             throw new IOException("extra data given to DerValue constructor");
@@ -493,15 +491,27 @@ public class DerValue {
      * @return the octet string held in this DER value
      */
     public byte[] getOctetString() throws IOException {
-        byte[] bytes;
 
         if (tag != tag_OctetString && !isConstructed(tag_OctetString)) {
             throw new IOException(
                 "DerValue.getOctetString, not an Octet String: " + tag);
         }
-        bytes = new byte[length];
-        if (buffer.read(bytes) != length)
+        // Note: do not attempt to call buffer.read(bytes) at all. There's a
+        // known bug that it returns -1 instead of 0.
+        if (length == 0) {
+            return new byte[0];
+        }
+
+        // Only allocate the array if there are enough bytes available.
+        // This only works for ByteArrayInputStream.
+        // The assignment below ensures that buffer has the required type.
+        ByteArrayInputStream arrayInput = buffer;
+        if (arrayInput.available() < length) {
             throw new IOException("short read on DerValue buffer");
+        }
+        byte[] bytes = new byte[length];
+        arrayInput.read(bytes);
+
         if (isConstructed()) {
             DerInputStream in = new DerInputStream(bytes, 0, bytes.length,
                 buffer.allowBER);
