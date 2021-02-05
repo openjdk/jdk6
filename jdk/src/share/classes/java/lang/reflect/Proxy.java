@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import sun.misc.ProxyGenerator;
+import sun.reflect.CallerSensitive;
 import sun.reflect.Reflection;
 import sun.reflect.misc.ReflectUtil;
 import sun.security.util.SecurityConstants;
@@ -404,28 +405,21 @@ public class Proxy implements java.io.Serializable {
      * @throws  NullPointerException if the {@code interfaces} array
      *          argument or any of its elements are {@code null}
      */
+    @CallerSensitive
     public static Class<?> getProxyClass(ClassLoader loader,
                                          Class<?>... interfaces)
         throws IllegalArgumentException
     {
-        return getProxyClass0(loader, interfaces); // stack walk magic: do not refactor
-    }
-
-    private static void checkProxyLoader(ClassLoader ccl,
-                                         ClassLoader loader)
-    {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
-            if (loader == null && ccl != null) {
-                if (!ProxyAccessHelper.allowNullLoader) {
-                    sm.checkPermission(SecurityConstants.GET_CLASSLOADER_PERMISSION);
-                }
-            }
+            checkProxyAccess(Reflection.getCallerClass(), loader, interfaces);
         }
+
+        return getProxyClass0(loader, interfaces);
     }
  
     /*
-     * Generate a proxy class (caller-sensitive).
+     * Check permissions required to create a proxy class.
      *
      * To define a proxy class, it performs the access checks as in
      * Class.forName (VM will invoke ClassLoader.checkPackageAccess):
@@ -442,16 +436,28 @@ public class Proxy implements java.io.Serializable {
      * will throw IllegalAccessError when the generated proxy class is
      * being defined via the defineClass0 method.
      */
-    private static Class<?> getProxyClass0(ClassLoader loader,
-                                           Class<?>... interfaces) {
+    private static void checkProxyAccess(Class<?> caller,
+                                         ClassLoader loader,
+                                         Class<?>... interfaces)
+    {
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
-            final int CALLER_FRAME = 3; // 0: Reflection, 1: getProxyClass0 2: Proxy 3: caller
-            final Class<?> caller = Reflection.getCallerClass(CALLER_FRAME);
-            final ClassLoader ccl = caller.getClassLoader();
-            checkProxyLoader(ccl, loader);
+            ClassLoader ccl = caller.getClassLoader();
+            if (loader == null && ccl != null) {
+                if (!ProxyAccessHelper.allowNullLoader) {
+                    sm.checkPermission(SecurityConstants.GET_CLASSLOADER_PERMISSION);
+                }
+            }
             ReflectUtil.checkProxyPackageAccess(ccl, interfaces);
         }
+    }
+
+    /**
+     * Generate a proxy class.  Must call the checkProxyAccess method
+     * to perform permission checks before calling this.
+     */
+    private static Class<?> getProxyClass0(ClassLoader loader,
+                                           Class<?>... interfaces) {
         if (interfaces.length > 65535) {
             throw new IllegalArgumentException("interface limit exceeded");
         }
@@ -603,7 +609,7 @@ public class Proxy implements java.io.Serializable {
             }
 
             if (proxyPkg == null) {
-                // if no non-public proxy interfaces, use sun.proxy package
+                // if no non-public proxy interfaces, use com.sun.proxy package
                 proxyPkg = ReflectUtil.PROXY_PACKAGE + ".";
             }
 
@@ -692,6 +698,7 @@ public class Proxy implements java.io.Serializable {
      *          if the invocation handler, {@code h}, is
      *          {@code null}
      */
+    @CallerSensitive
     public static Object newProxyInstance(ClassLoader loader,
                                           Class<?>[] interfaces,
                                           InvocationHandler h)
@@ -701,10 +708,15 @@ public class Proxy implements java.io.Serializable {
             throw new NullPointerException();
         }
 
+        final SecurityManager sm = System.getSecurityManager();
+        if (sm != null) {
+            checkProxyAccess(Reflection.getCallerClass(), loader, interfaces);
+        }
+
         /*
          * Look up or generate the designated proxy class.
          */
-        Class<?> cl = getProxyClass0(loader, interfaces); // stack walk magic: do not refactor
+        Class<?> cl = getProxyClass0(loader, interfaces);
 
         /*
          * Invoke its constructor with the designated invocation handler.
@@ -712,7 +724,6 @@ public class Proxy implements java.io.Serializable {
         try {
             final Constructor<?> cons = cl.getConstructor(constructorParams);
             final InvocationHandler ih = h;
-            SecurityManager sm = System.getSecurityManager();
             if (sm != null && ProxyAccessHelper.needsNewInstanceCheck(cl)) {
                 // create proxy instance with doPrivilege as the proxy class may
                 // implement non-public interfaces that requires a special permission
@@ -776,6 +787,7 @@ public class Proxy implements java.io.Serializable {
      * @throws  IllegalArgumentException if the argument is not a
      *          proxy instance
      */
+    @CallerSensitive
     public static InvocationHandler getInvocationHandler(Object proxy)
         throws IllegalArgumentException
     {
@@ -786,8 +798,19 @@ public class Proxy implements java.io.Serializable {
             throw new IllegalArgumentException("not a proxy instance");
         }
 
-        Proxy p = (Proxy) proxy;
-        return p.h;
+        final Proxy p = (Proxy) proxy;
+        final InvocationHandler ih = p.h;
+        if (System.getSecurityManager() != null) {
+            Class<?> ihClass = ih.getClass();
+            Class<?> caller = Reflection.getCallerClass();
+            if (ReflectUtil.needsPackageAccessCheck(caller.getClassLoader(),
+                                                    ihClass.getClassLoader()))
+            {
+                ReflectUtil.checkPackageAccess(ihClass);
+            }
+        }
+
+        return ih;
     }
 
     private static native Class defineClass0(ClassLoader loader, String name,

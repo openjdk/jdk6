@@ -52,7 +52,9 @@ import sun.misc.CompoundEnumeration;
 import sun.misc.Resource;
 import sun.misc.URLClassPath;
 import sun.misc.VM;
+import sun.reflect.CallerSensitive;
 import sun.reflect.Reflection;
+import sun.reflect.misc.ReflectUtil;
 import sun.security.util.SecurityConstants;
 
 /**
@@ -337,6 +339,13 @@ public abstract class ClassLoader {
     private void checkPackageAccess(Class cls, ProtectionDomain pd) {
         final SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
+            if (ReflectUtil.isNonPublicProxyClass(cls)) {
+                for (Class intf: cls.getInterfaces()) {
+                    checkPackageAccess(intf, pd);
+                }
+                return;
+            }
+
             final String name = cls.getName();
             final int i = name.lastIndexOf('.');
             if (i != -1) {
@@ -1214,15 +1223,13 @@ public abstract class ClassLoader {
      *
      * @since  1.2
      */
+    @CallerSensitive
     public final ClassLoader getParent() {
         if (parent == null)
             return null;
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
-            ClassLoader ccl = getCallerClassLoader();
-            if (ccl != null && !isAncestor(ccl)) {
-                sm.checkPermission(SecurityConstants.GET_CLASSLOADER_PERMISSION);
-            }
+            checkClassLoaderPermission(parent, Reflection.getCallerClass());
         }
         return parent;
     }
@@ -1282,6 +1289,7 @@ public abstract class ClassLoader {
      *
      * @revised  1.4
      */
+    @CallerSensitive
     public static ClassLoader getSystemClassLoader() {
         initSystemClassLoader();
         if (scl == null) {
@@ -1289,10 +1297,7 @@ public abstract class ClassLoader {
         }
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
-            ClassLoader ccl = getCallerClassLoader();
-            if (ccl != null && ccl != scl && !scl.isAncestor(ccl)) {
-                sm.checkPermission(SecurityConstants.GET_CLASSLOADER_PERMISSION);
-            }
+            checkClassLoaderPermission(scl, Reflection.getCallerClass());
         }
         return scl;
     }
@@ -1341,19 +1346,42 @@ public abstract class ClassLoader {
         return false;
     }
 
-    // Returns the invoker's class loader, or null if none.
-    // NOTE: This must always be invoked when there is exactly one intervening
-    // frame from the core libraries on the stack between this method's
-    // invocation and the desired invoker.
-    static ClassLoader getCallerClassLoader() {
-        // NOTE use of more generic Reflection.getCallerClass()
-        Class caller = Reflection.getCallerClass(3);
+    // Tests if class loader access requires "getClassLoader" permission
+    // check.  A class loader 'from' can access class loader 'to' if
+    // class loader 'from' is same as class loader 'to' or an ancestor
+    // of 'to'.  The class loader in a system domain can access
+    // any class loader.
+    private static boolean needsClassLoaderPermissionCheck(ClassLoader from,
+                                                           ClassLoader to)
+    {
+        if (from == to)
+            return false;
+
+        if (from == null)
+            return false;
+
+        return !to.isAncestor(from);
+    }
+
+    // Returns the class's class loader, or null if none.
+    static ClassLoader getClassLoader(Class<?> caller) {
         // This can be null if the VM is requesting it
         if (caller == null) {
             return null;
         }
         // Circumvent security check since this is package-private
         return caller.getClassLoader0();
+    }
+
+    static void checkClassLoaderPermission(ClassLoader cl, Class<?> caller) {
+        SecurityManager sm = System.getSecurityManager();
+        if (sm != null) {
+            // caller can be null if the VM is requesting it
+            ClassLoader ccl = getClassLoader(caller);
+            if (needsClassLoaderPermissionCheck(ccl, cl)) {
+                sm.checkPermission(SecurityConstants.GET_CLASSLOADER_PERMISSION);
+            }
+        }
     }
 
     // The class loader for the system
