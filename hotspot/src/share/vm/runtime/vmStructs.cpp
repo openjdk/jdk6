@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2009 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -263,7 +263,9 @@ static inline uint64_t cast_uint64_t(size_t x)
      static_field(Universe,                    _bootstrapping,                                bool)                                  \
      static_field(Universe,                    _fully_initialized,                            bool)                                  \
      static_field(Universe,                    _verify_count,                                 int)                                   \
-     static_field(Universe,                    _heap_base,                                    address)                                   \
+     static_field(Universe,                    _narrow_oop._base,                             address)                               \
+     static_field(Universe,                    _narrow_oop._shift,                            int)                                   \
+     static_field(Universe,                    _narrow_oop._use_implicit_null_checks,         bool)                                  \
                                                                                                                                      \
   /**********************************************************************************/                                               \
   /* Generation and Space hierarchies                                               */                                               \
@@ -307,6 +309,7 @@ static inline uint64_t cast_uint64_t(size_t x)
   nonstatic_field(CollectedHeap,               _reserved,                                     MemRegion)                             \
   nonstatic_field(SharedHeap,                  _perm_gen,                                     PermGen*)                              \
   nonstatic_field(CollectedHeap,               _barrier_set,                                  BarrierSet*)                           \
+  nonstatic_field(CollectedHeap,               _defer_initial_card_mark,                      bool)                                  \
   nonstatic_field(CollectedHeap,               _is_gc_active,                                 bool)                                  \
   nonstatic_field(CompactibleSpace,            _compaction_top,                               HeapWord*)                             \
   nonstatic_field(CompactibleSpace,            _first_dead,                                   HeapWord*)                             \
