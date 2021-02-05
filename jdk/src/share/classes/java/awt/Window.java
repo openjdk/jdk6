@@ -26,8 +26,10 @@ package java.awt;
 
 import java.applet.Applet;
 import java.awt.event.*;
+import java.awt.geom.Point2D;
 import java.awt.im.InputContext;
 import java.awt.image.BufferStrategy;
+import java.awt.image.BufferedImage;
 import java.awt.peer.ComponentPeer;
 import java.awt.peer.WindowPeer;
 import java.beans.PropertyChangeListener;
@@ -292,6 +294,25 @@ public class Window extends Container implements Accessible {
      */
     transient boolean isInShow = false;
 
+    /*
+     * Opacity level of the window
+     *
+     * @see #setOpacity(float)
+     * @see #getOpacity()
+     * @since 1.7
+     */
+    private float opacity = 1.0f;
+
+    /*
+     * The shape assigned to this window. This field is set to null if
+     * no shape is set (rectangular window).
+     *
+     * @see #getShape()
+     * @see #setShape(Shape)
+     * @since 1.7
+     */
+    private Shape shape = null;
+
     private static final String base = "win";
     private static int nameCounter = 0;
 
@@ -305,6 +326,23 @@ public class Window extends Container implements Accessible {
     private static final boolean locationByPlatformProp;
 
     transient boolean isTrayIconWindow = false;
+
+    /**
+     * These fields are initialized in the native peer code
+     * or via AWTAccessor's WindowAccessor.
+     */
+    private transient volatile int securityWarningWidth = 0;
+    private transient volatile int securityWarningHeight = 0;
+
+    /**
+     * These fields represent the desired location for the security
+     * warning if this window is untrusted.
+     * See com.sun.awt.SecurityWarning for more details.
+     */
+    private transient double securityWarningPointX = 2.0;
+    private transient double securityWarningPointY = 0.0;
+    private transient float securityWarningAlignmentX = RIGHT_ALIGNMENT;
+    private transient float securityWarningAlignmentY = TOP_ALIGNMENT;
 
     static {
         /* ensure that the necessary native libraries are loaded */
@@ -321,11 +359,76 @@ public class Window extends Container implements Accessible {
         locationByPlatformProp = (s != null && s.equals("true"));
 
         AWTAccessor.setWindowAccessor(new AWTAccessor.WindowAccessor() {
+            public float getOpacity(Window window) {
+                return window.opacity;
+            }
+            public void setOpacity(Window window, float opacity) {
+                window.setOpacity(opacity);
+            }
+            public Shape getShape(Window window) {
+                return window.getShape();
+            }
+            public void setShape(Window window, Shape shape) {
+                window.setShape(shape);
+            }
+            public boolean isOpaque(Window window) {
+                /*
+                return window.getBackground().getAlpha() < 255;
+                */
+                synchronized (window.getTreeLock()) {
+                    return window.opaque;
+                }
+            }
+            public void setOpaque(Window window, boolean opaque) {
+                /*
+                Color bg = window.getBackground();
+                window.setBackground(new Color(bg.getRed(), bg.getGreen(), bg.getBlue(),
+                                               opaque ? 255 : 0));
+                */
+                window.setOpaque(opaque);
+            }
+            public void updateWindow(Window window, BufferedImage backBuffer) {
+                window.updateWindow(backBuffer);
+            }
+
             public void setLWRequestStatus(Window changed, boolean status) {
                 changed.syncLWRequests = status;
             }
-        });
-    }
+
+            public Dimension getSecurityWarningSize(Window window) {
+                return new Dimension(window.securityWarningWidth,
+                        window.securityWarningHeight);
+            }
+
+            public void setSecurityWarningSize(Window window, int width, int height)
+            {
+                window.securityWarningWidth = width;
+                window.securityWarningHeight = height;
+            }
+
+            public void setSecurityWarningPosition(Window window,
+                    Point2D point, float alignmentX, float alignmentY)
+            {
+                window.securityWarningPointX = point.getX();
+                window.securityWarningPointY = point.getY();
+                window.securityWarningAlignmentX = alignmentX;
+                window.securityWarningAlignmentY = alignmentY;
+
+                synchronized (window.getTreeLock()) {
+                    WindowPeer peer = (WindowPeer)window.getPeer();
+                    if (peer != null) {
+                        peer.repositionSecurityWarning();
+                    }
+                }
+            }
+
+            public Point2D calculateSecurityWarningPosition(Window window,
+                    double x, double y, double w, double h)
+            {
+                return window.calculateSecurityWarningPosition(x, y, w, h);
+            }
+        }); // WindowAccessor
+    } // static
 
     /**
      * Initialize JNI field and method IDs for fields that may be
@@ -2772,6 +2875,15 @@ public class Window extends Container implements Accessible {
          if(aot) {
              setAlwaysOnTop(aot); // since 1.5; subject to permission check
          }
+         shape = (Shape)f.get("shape", null);
+         opacity = (Float)f.get("opacity", 1.0f);
+
+         this.securityWarningWidth = 0;
+         this.securityWarningHeight = 0;
+         this.securityWarningPointX = 2.0;
+         this.securityWarningPointY = 0.0;
+         this.securityWarningAlignmentX = RIGHT_ALIGNMENT;
+         this.securityWarningAlignmentY = TOP_ALIGNMENT;
 
          deserializeResources(s);
     }
@@ -3033,9 +3145,7 @@ public class Window extends Container implements Accessible {
         Component previousComp = temporaryLostComponent;
         // Check that "component" is an acceptable focus owner and don't store it otherwise
         // - or later we will have problems with opposite while handling  WINDOW_GAINED_FOCUS
-        if (component == null
-            || (component.isDisplayable() && component.isVisible() && component.isEnabled() && component.isFocusable()))
-        {
+        if (component == null || component.canBeFocusOwner()) {
             temporaryLostComponent = component;
         } else {
             temporaryLostComponent = null;
@@ -3191,6 +3301,225 @@ public class Window extends Container implements Accessible {
     }
 
 
+    // ******************** SHAPES & TRANSPARENCY CODE ********************
+
+    /**
+     * JavaDoc
+     */
+    /*public */float getOpacity() {
+        synchronized (getTreeLock()) {
+            return opacity;
+        }
+    }
+
+    /**
+     * JavaDoc
+     */
+    /*public */void setOpacity(float opacity) {
+        synchronized (getTreeLock()) {
+            if (opacity < 0.0f || opacity > 1.0f) {
+                throw new IllegalArgumentException(
+                    "The value of opacity should be in the range [0.0f .. 1.0f].");
+            }
+            GraphicsConfiguration gc = getGraphicsConfiguration();
+            GraphicsDevice gd = gc.getDevice();
+            if (!gd.isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.TRANSLUCENT)) {
+                throw new UnsupportedOperationException(
+                        "TRANSLUCENT translucency is not supported.");
+            }
+            if ((gc.getDevice().getFullScreenWindow() == this) && (opacity < 1.0f)) {
+                throw new IllegalArgumentException(
+                    "Setting opacity for full-screen window is not supported.");
+            }
+            this.opacity = opacity;
+            WindowPeer peer = (WindowPeer)getPeer();
+            if (peer != null) {
+                peer.setOpacity(opacity);
+            }
+        }
+    }
+
+    /**
+     * JavaDoc
+     */
+    /*public */Shape getShape() {
+        synchronized (getTreeLock()) {
+            return shape;
+        }
+    }
+
+    /**
+     * JavaDoc
+     *
+     * @param window the window to set the shape to
+     * @param shape the shape to set to the window
+     * @throws IllegalArgumentException if the window is in full screen mode,
+     *                                  and the shape is not null
+     */
+    /*public */void setShape(Shape shape) {
+        synchronized (getTreeLock()) {
+            GraphicsConfiguration gc = getGraphicsConfiguration();
+            GraphicsDevice gd = gc.getDevice();
+            if (!gd.isWindowTranslucencySupported(
+                    GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSPARENT))
+            {
+                throw new UnsupportedOperationException(
+                        "PERPIXEL_TRANSPARENT translucency is not supported.");
+            }
+            if ((gc.getDevice().getFullScreenWindow() == this) && (shape != null)) {
+                throw new IllegalArgumentException(
+                    "Setting shape for full-screen window is not supported.");
+            }
+            this.shape = shape;
+            WindowPeer peer = (WindowPeer)getPeer();
+            if (peer != null) {
+                peer.applyShape(shape == null ? null : Region.getInstance(shape, null));
+            }
+        }
+    }
+
+    /**
+     * JavaDoc
+     */
+/*
+    @Override
+    public void setBackground(Color bgColor) {
+        int alpha = bgColor.getAlpha();
+        if (alpha < 255) { // non-opaque window
+            GraphicsConfiguration gc = getGraphicsConfiguration();
+            GraphicsDevice gd = gc.getDevice();
+            if (gc.getDevice().getFullScreenWindow() == this) {
+                throw new IllegalArgumentException(
+                    "Making full-screen window non opaque is not supported.");
+            }
+            if (!gc.isTranslucencyCapable()) {
+                GraphicsConfiguration capableGC = gd.getTranslucencyCapableGC();
+                if (capableGC == null) {
+                    throw new IllegalArgumentException(
+                        "PERPIXEL_TRANSLUCENT translucency is not supported");
+                }
+                // TODO: change GC
+            }
+            setLayersOpaque(this, false);
+        }
+
+        super.setBackground(bgColor);
+
+        WindowPeer peer = (WindowPeer)getPeer();
+        if (peer != null) {
+            peer.setOpaque(alpha == 255);
+        }
+    }
+*/
+
+    private transient boolean opaque = true;
+
+    void setOpaque(boolean opaque) {
+        synchronized (getTreeLock()) {
+            GraphicsConfiguration gc = getGraphicsConfiguration();
+            if (!opaque && !com.sun.awt.AWTUtilities.isTranslucencyCapable(gc)) {
+            throw new IllegalArgumentException(
+                    "The window must use a translucency-compatible graphics configuration");
+            }
+            if (!com.sun.awt.AWTUtilities.isTranslucencySupported(
+                    com.sun.awt.AWTUtilities.Translucency.PERPIXEL_TRANSLUCENT))
+            {
+                throw new UnsupportedOperationException(
+                        "PERPIXEL_TRANSLUCENT translucency is not supported.");
+            }
+            if ((gc.getDevice().getFullScreenWindow() == this) && !opaque) {
+                throw new IllegalArgumentException(
+                    "Making full-screen window non opaque is not supported.");
+            }
+            setLayersOpaque(this, opaque);
+            this.opaque = opaque;
+            WindowPeer peer = (WindowPeer)getPeer();
+            if (peer != null) {
+                peer.setOpaque(opaque);
+            }
+        }
+    }
+
+    private void updateWindow(BufferedImage backBuffer) {
+        synchronized (getTreeLock()) {
+            WindowPeer peer = (WindowPeer)getPeer();
+            if (peer != null) {
+                peer.updateWindow(backBuffer);
+            }
+        }
+    }
+
+    private static final Color TRANSPARENT_BACKGROUND_COLOR = new Color(0, 0, 0, 0);
+
+    private static void setLayersOpaque(Component component, boolean isOpaque) {
+        // Shouldn't use instanceof to avoid loading Swing classes
+        //    if it's a pure AWT application.
+        if (Component.doesImplement(component, "javax.swing.RootPaneContainer")) {
+            javax.swing.RootPaneContainer rpc = (javax.swing.RootPaneContainer)component;
+            javax.swing.JRootPane root = rpc.getRootPane();
+            javax.swing.JLayeredPane lp = root.getLayeredPane();
+            Container c = root.getContentPane();
+            javax.swing.JComponent content =
+                (c instanceof javax.swing.JComponent) ? (javax.swing.JComponent)c : null;
+            javax.swing.JComponent gp =
+                (rpc.getGlassPane() instanceof javax.swing.JComponent) ?
+                (javax.swing.JComponent)rpc.getGlassPane() : null;
+            if (gp != null) {
+                gp.setDoubleBuffered(isOpaque);
+            }
+            lp.setOpaque(isOpaque);
+            root.setOpaque(isOpaque);
+            root.setDoubleBuffered(isOpaque); //XXX: the "white rect" workaround
+            if (content != null) {
+                content.setOpaque(isOpaque);
+                content.setDoubleBuffered(isOpaque); //XXX: the "white rect" workaround
+
+                // Iterate down one level to see whether we have a JApplet
+                // (which is also a RootPaneContainer) which requires processing
+                int numChildren = content.getComponentCount();
+                if (numChildren > 0) {
+                    Component child = content.getComponent(0);
+                    // It's OK to use instanceof here because we've
+                    // already loaded the RootPaneContainer class by now
+                    if (child instanceof javax.swing.RootPaneContainer) {
+                        setLayersOpaque(child, isOpaque);
+                    }
+                }
+            }
+        }
+
+        Color bg = component.getBackground();
+        boolean hasTransparentBg = TRANSPARENT_BACKGROUND_COLOR.equals(bg);
+
+        Container container = null;
+        if (component instanceof Container) {
+            container = (Container) component;
+        }
+
+        if (isOpaque) {
+            if (hasTransparentBg) {
+                // Note: we use the SystemColor.window color as the default.
+                // This color is used in the WindowPeer implementations to
+                // initialize the background color of the window if it is null.
+                // (This might not be the right thing to do for other
+                // RootPaneContainers we might be invoked with)
+                Color newColor = null;
+                if (container != null && container.preserveBackgroundColor != null) {
+                    newColor = container.preserveBackgroundColor;
+                } else {
+                    newColor = SystemColor.window;
+                }
+                component.setBackground(newColor);
+            }
+        } else {
+            if (!hasTransparentBg && container != null) {
+                container.preserveBackgroundColor = bg;
+            }
+            component.setBackground(TRANSPARENT_BACKGROUND_COLOR);
+        }
+    }
+
+
     // ************************** MIXING CODE *******************************
 
     // A window has a parent, but it does NOT have a container
@@ -3227,6 +3556,18 @@ public class Window extends Container implements Accessible {
     }
 
     // ****************** END OF MIXING CODE ********************************
+
+    // This method gets the window location/size as reported by the native
+    // system since the locally cached values may represent outdated data.
+    // NOTE: this method is invoked on the toolkit thread, and therefore
+    // is not supposed to become public/user-overridable.
+    private Point2D calculateSecurityWarningPosition(double x, double y,
+            double w, double h)
+    {
+        return new Point2D.Double(
+                x + w * securityWarningAlignmentX + securityWarningPointX,
+                y + h * securityWarningAlignmentY + securityWarningPointY);
+    }
 
 } // class Window
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -178,6 +178,34 @@ class XNETProtocol extends XProtocol implements XStateProtocol, XLayerProtocol {
         return ((layer == LAYER_ALWAYS_ON_TOP) || (layer == LAYER_NORMAL)) && doLayerProtocol();
     }
 
+    public void requestState(XWindow window, XAtom state, boolean isAdd) {
+        XClientMessageEvent req = new XClientMessageEvent();
+        try {
+            req.set_type((int)XConstants.ClientMessage);
+            req.set_window(window.getWindow());
+            req.set_message_type(XA_NET_WM_STATE.getAtom());
+            req.set_format(32);
+            req.set_data(0, isAdd ? _NET_WM_STATE_ADD : _NET_WM_STATE_REMOVE);
+            req.set_data(1, state.getAtom());
+            // Fix for 6735584: req.data[2] must be set to 0 when only one property is changed
+            req.set_data(2, 0);
+            log.log(Level.FINE, "Setting _NET_STATE atom {0} on {1} for {2}", new Object[] {state, window, Boolean.valueOf(isAdd)});
+            XToolkit.awtLock();
+            try {
+                XlibWrapper.XSendEvent(XToolkit.getDisplay(),
+                        XlibWrapper.RootWindow(XToolkit.getDisplay(), window.getScreenNumber()),
+                        false,
+                        XConstants.SubstructureRedirectMask | XConstants.SubstructureNotifyMask,
+                        req.pData);
+            }
+            finally {
+                XToolkit.awtUnlock();
+            }
+        } finally {
+            req.dispose();
+        }
+    }
+
     /**
      * Helper function to set/reset one state in NET_WM_STATE
      * If window is showing then it uses ClientMessage, otherwise adjusts NET_WM_STATE list
@@ -190,32 +218,7 @@ class XNETProtocol extends XProtocol implements XStateProtocol, XLayerProtocol {
                 new Object[] {Boolean.valueOf(window.isWithdrawn()), Boolean.valueOf(window.isVisible()),
                               Boolean.valueOf(window.isMapped()), Boolean.valueOf(window.isShowing())});
         if (window.isShowing()) {
-            XClientMessageEvent req = new XClientMessageEvent();
-            try {
-                req.set_type((int)XlibWrapper.ClientMessage);
-                req.set_window(window.getWindow());
-                req.set_message_type(XA_NET_WM_STATE.getAtom());
-                req.set_format(32);
-                req.set_data(0, (!set) ? _NET_WM_STATE_REMOVE : _NET_WM_STATE_ADD);
-                req.set_data(1, state.getAtom());
-                if (log.isLoggable(Level.FINE)) {
-                    log.log(Level.FINE, "Setting _NET_STATE atom {0} on {1} for {2}",
-                            new Object[] {String.valueOf(state), String.valueOf(window), Boolean.valueOf(set)});
-                }
-                XToolkit.awtLock();
-                try {
-                    XlibWrapper.XSendEvent(XToolkit.getDisplay(),
-                                           XlibWrapper.RootWindow(XToolkit.getDisplay(), window.getScreenNumber()),
-                                           false,
-                                           XlibWrapper.SubstructureRedirectMask | XlibWrapper.SubstructureNotifyMask,
-                                           req.pData);
-                }
-                finally {
-                    XToolkit.awtUnlock();
-                }
-            } finally {
-                req.dispose();
-            }
+            requestState(window, state, set);
         } else {
             XAtomList net_wm_state = window.getNETWMState();
             if (log.isLoggable(Level.FINE)) {
@@ -268,6 +271,8 @@ class XNETProtocol extends XProtocol implements XStateProtocol, XLayerProtocol {
     XAtom XA_NET_WM_WINDOW_TYPE = XAtom.get("_NET_WM_WINDOW_TYPE");
     XAtom XA_NET_WM_WINDOW_TYPE_DIALOG = XAtom.get("_NET_WM_WINDOW_TYPE_DIALOG");
 
+    XAtom XA_NET_WM_WINDOW_OPACITY = XAtom.get("_NET_WM_WINDOW_OPACITY");
+
 /* For _NET_WM_STATE ClientMessage requests */
     final static int _NET_WM_STATE_REMOVE      =0; /* remove/unset property */
     final static int _NET_WM_STATE_ADD         =1; /* add/set property      */
@@ -304,6 +309,12 @@ class XNETProtocol extends XProtocol implements XStateProtocol, XLayerProtocol {
         boolean res = active() && checkProtocol(XA_NET_SUPPORTED, XA_NET_WM_STATE_MODAL);
         return res;
     }
+
+    boolean doOpacityProtocol() {
+        boolean res = active() && checkProtocol(XA_NET_SUPPORTED, XA_NET_WM_WINDOW_OPACITY);
+        return res;
+    }
+
     boolean isWMName(String name) {
         if (!active()) {
             return false;

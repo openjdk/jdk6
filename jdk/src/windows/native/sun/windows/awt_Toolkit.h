@@ -244,6 +244,8 @@ public:
                                              LPARAM lParam);
     static LRESULT CALLBACK ForegroundIdleFilter(int code, WPARAM wParam,
                                                  LPARAM lParam);
+    static LRESULT CALLBACK MouseLowLevelHook(int code, WPARAM wParam,
+            LPARAM lParam);
 
     INLINE static AwtToolkit& GetInstance() { return theInstance; }
     INLINE void SetPeer(JNIEnv *env, jobject wToolkit) {
@@ -345,6 +347,30 @@ public:
     HICON GetAwtIcon();
     HICON GetAwtIconSm();
 
+    // Calculate a wave-like value out of the integer 'value' and
+    // the specified period.
+    // The argument 'value' is an integer 0, 1, 2, ... *infinity*.
+    //
+    // Examples:
+    //    Period == 3
+    //    Generated sequence: 0 1 2 1 0 .....
+    //
+    //    Period == 4
+    //    Generated sequence: 0 1 2 3 2 1 0 .....
+    static inline UINT CalculateWave(UINT value, const UINT period) {
+        if (period < 2) {
+            return 0;
+        }
+        // -2 is necessary to avoid repeating extreme values (0 and period-1)
+        value %= period * 2 -2;
+        if (value >= period) {
+            value = period * 2 -2 - value;
+        }
+        return value;
+    }
+
+    HICON GetSecurityWarningIcon(UINT index, UINT w, UINT h);
+
     /* Turns on/off dialog modality for the system. */
     INLINE AwtDialog* SetModal(AwtDialog* frame) {
         AwtDialog* previousDialog = m_pModalDialog;
@@ -401,6 +427,7 @@ private:
     BOOL                m_mouseDown;
 
     HHOOK m_hGetMessageHook;
+    HHOOK m_hMouseLLHook;
     UINT_PTR  m_timer;
 
     class AwtCmdIDList* m_cmdIDs;
@@ -437,6 +464,169 @@ public:
  public:
     static void SetEnv(JNIEnv *env);
     static JNIEnv* GetEnv();
+
+    static BOOL GetScreenInsets(int screenNum, RECT * rect);
+
+    // If the DWM is active, this function uses
+    // DwmGetWindowAttribute()/DWMWA_EXTENDED_FRAME_BOUNDS.
+    // Otherwise, fall back to regular ::GetWindowRect().
+    // See 6711576 for more details.
+    static void GetWindowRect(HWND hWnd, LPRECT lpRect);
+
+ private:
+    // The window handle of a toplevel window last seen under the mouse cursor.
+    // See MouseLowLevelHook() for details.
+    HWND m_lastWindowUnderMouse;
+ public:
+    HWND GetWindowUnderMouse() { return m_lastWindowUnderMouse; }
+
+    void InstallMouseLowLevelHook();
+    void UninstallMouseLowLevelHook();
+
+
+/* AWT preloading (early Toolkit thread start)
+ */
+public:
+    /* Toolkit preload action class.
+     * Preload actions should be registered with
+     * AwtToolkit::getInstance().GetPreloadThread().AddAction().
+     * AwtToolkit thread calls InitImpl method at the beghining
+     * and CleanImpl(false) before exiting for all registered actions.
+     * If an application provides own Toolkit thread
+     * (sun.awt.windows.WToolkit.embeddedInit), the thread calls Clean(true)
+     * for each action.
+     */
+    class PreloadThread;    // forward declaration
+    class PreloadAction {
+        friend class PreloadThread;
+    public:
+        PreloadAction() : initThreadId(0), pNext(NULL) {}
+        virtual ~PreloadAction() {}
+
+    protected:
+        // called by PreloadThread or as result
+        // of EnsureInited() call (on Toolkit thread!).
+        virtual void InitImpl() = 0;
+
+        // called by PreloadThread (before exiting).
+        // reInit == false: normal shutdown;
+        // reInit == true: PreloadThread is shutting down due external
+        //   Toolkit thread was provided.
+        virtual void CleanImpl(bool reInit) = 0;
+
+    public:
+        // Initialized the action on the Toolkit thread if not yet initialized.
+        bool EnsureInited();
+
+        // returns thread ID which the action was inited on (0 if not inited)
+        DWORD GetInitThreadID();
+
+        // Allows to deinitialize action earlier.
+        // The method must be called on the Toolkit thread only.
+        // returns true on success,
+        //         false if the action was inited on other thread.
+        bool Clean();
+
+    private:
+        unsigned initThreadId;
+        // lock for Init/Clean
+        CriticalSection initLock;
+
+        // Chain support (for PreloadThread)
+        PreloadAction *pNext;   // for action chain used by PreloadThread
+        void SetNext(PreloadAction *pNext) { this->pNext = pNext; }
+        PreloadAction *GetNext() { return pNext; }
+
+        // wrapper for AwtToolkit::InvokeFunction
+        static void InitWrapper(void *param);
+
+        void Init();
+        void Clean(bool reInit);
+
+    };
+
+    /** Toolkit preload thread class.
+     */
+    class PreloadThread {
+    public:
+        PreloadThread();
+        ~PreloadThread();
+
+        // adds action & start the thread if not yet started
+        bool AddAction(PreloadAction *pAction);
+
+        // sets termination flag; returns true if the thread is running.
+        // wrongThread specifies cause of the termination:
+        //   false means termination on the application shutdown;
+        // wrongThread is used as reInit parameter for action cleanup.
+        bool Terminate(bool wrongThread);
+        bool InvokeAndTerminate(void(_cdecl *fn)(void *), void *param);
+
+        // waits for the the thread completion;
+        // use the method after Terminate() only if Terminate() returned true
+        INLINE void Wait4Finish() {
+            ::WaitForSingleObject(hFinished, INFINITE);
+        }
+
+        INLINE unsigned GetThreadId() {
+            CriticalSection::Lock lock(threadLock);
+            return threadId;
+        }
+        INLINE bool IsWrongThread() {
+            CriticalSection::Lock lock(threadLock);
+            return wrongThread;
+        }
+
+    private:
+        // data access lock
+        CriticalSection threadLock;
+
+        // the thread status
+        enum Status {
+            None = -1,      // initial
+            Preloading = 0, // preloading in progress
+            RunningToolkit, // Running as Toolkit thread
+            Cleaning,       // exited from Toolkit thread proc, cleaning
+            Finished        //
+        } status;
+
+        // "wrong thread" flag
+        bool wrongThread;
+
+        // thread proc (calls (this)param->ThreadProc())
+        static unsigned WINAPI StaticThreadProc(void *param);
+        unsigned ThreadProc();
+
+        INLINE void AwakeThread() {
+            ::SetEvent(hAwake);
+        }
+
+        // if threadId != 0 -> we are running
+        unsigned threadId;
+        // ThreadProc sets the event on exit
+        HANDLE hFinished;
+        // ThreadProc waits on the event for NewAction/Terminate/InvokeAndTerminate
+        HANDLE hAwake;
+
+        // function/param to invoke (InvokeAndTerminate)
+        // if execFunc == NULL => just terminate
+        void(_cdecl *execFunc)(void *);
+        void *execParam;
+
+        // action chain
+        PreloadAction *pActionChain;
+        PreloadAction *pLastProcessedAction;
+
+        // returns next action in the list (NULL if no more actions)
+        PreloadAction* GetNextAction();
+
+    };
+
+    INLINE PreloadThread& GetPreloadThread() { return preloadThread; }
+
+private:
+    PreloadThread preloadThread;
+
 };
 
 /*

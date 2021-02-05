@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,19 +39,21 @@ import java.awt.event.PaintEvent;
 import java.awt.event.InvocationEvent;
 import java.awt.event.KeyEvent;
 import sun.awt.Win32GraphicsConfig;
+import sun.awt.Win32GraphicsEnvironment;
 import sun.java2d.InvalidPipeException;
-import sun.java2d.SunGraphics2D;
 import sun.java2d.SurfaceData;
+import sun.java2d.ScreenUpdateManager;
+import sun.java2d.d3d.D3DSurfaceData;
 import sun.java2d.opengl.OGLSurfaceData;
+import sun.java2d.pipe.Region;
 import sun.awt.DisplayChangedListener;
 import sun.awt.PaintEventDispatcher;
+import sun.awt.SunToolkit;
 import sun.awt.event.IgnorePaintEvent;
 
 import java.awt.dnd.DropTarget;
 import java.awt.dnd.peer.DropTargetPeer;
 import sun.awt.ComponentAccessor;
-
-import java.util.logging.*;
 
 import java.util.logging.*;
 
@@ -87,6 +89,7 @@ public abstract class WComponentPeer extends WObjectPeer
     int     oldHeight = -1;
     private int numBackBuffers = 0;
     private VolatileImage backBuffer = null;
+    private BufferCapabilities backBufferCaps = null;
 
     // foreground, background and color are cached to avoid calling back
     // into the Component.
@@ -191,10 +194,12 @@ public abstract class WComponentPeer extends WObjectPeer
                 cont.invalidate();
                 cont.validate();
 
-                if (surfaceData instanceof OGLSurfaceData) {
-                    // 6290245: When OGL is enabled, it is necessary to
+                if (surfaceData instanceof D3DSurfaceData.D3DWindowSurfaceData ||
+                    surfaceData instanceof OGLSurfaceData)
+                {
+                    // When OGL or D3D is enabled, it is necessary to
                     // replace the SurfaceData for each dynamic layout
-                    // request so that the OGL viewport stays in sync
+                    // request so that the viewport stays in sync
                     // with the window bounds.
                     try {
                         replaceSurfaceData();
@@ -261,7 +266,7 @@ public abstract class WComponentPeer extends WObjectPeer
             int[] pix = createPrintedPixels(0, startY, totalW, h);
             if (pix != null) {
                 BufferedImage bim = new BufferedImage(totalW, h,
-                                              BufferedImage.TYPE_INT_RGB);
+                                              BufferedImage.TYPE_INT_ARGB);
                 bim.setRGB(0, 0, totalW, h, pix, 0, totalW);
                 g.drawImage(bim, 0, startY, null);
                 bim.flush();
@@ -377,7 +382,7 @@ public abstract class WComponentPeer extends WObjectPeer
      * just call that version with our current numBackBuffers.
      */
     public void replaceSurfaceData() {
-        replaceSurfaceData(this.numBackBuffers);
+        replaceSurfaceData(this.numBackBuffers, this.backBufferCaps);
     }
 
     /**
@@ -386,34 +391,50 @@ public abstract class WComponentPeer extends WObjectPeer
      * order, but also needs to perform additional functions inside the
      * locks.
      */
-    public void replaceSurfaceData(int newNumBackBuffers) {
+    public void replaceSurfaceData(int newNumBackBuffers,
+                                   BufferCapabilities caps)
+    {
+        SurfaceData oldData = null;
+        VolatileImage oldBB = null;
         synchronized(((Component)target).getTreeLock()) {
             synchronized(this) {
                 if (pData == 0) {
                     return;
                 }
                 numBackBuffers = newNumBackBuffers;
-                SurfaceData oldData = surfaceData;
                 Win32GraphicsConfig gc =
-                    (Win32GraphicsConfig)getGraphicsConfiguration();
-                surfaceData = gc.createSurfaceData(this, numBackBuffers);
+                        (Win32GraphicsConfig)getGraphicsConfiguration();
+                ScreenUpdateManager mgr = ScreenUpdateManager.getInstance();
+                oldData = surfaceData;
+                mgr.dropScreenSurface(oldData);
+                surfaceData =
+                    mgr.createScreenSurface(gc, this, numBackBuffers, true);
                 if (oldData != null) {
                     oldData.invalidate();
-                    // null out the old data to make it collected faster
-                    oldData = null;
                 }
 
-                if (backBuffer != null) {
-                    // this will remove the back buffer from the
-                    // display change notification list
-                    backBuffer.flush();
+                oldBB = backBuffer;
+                if (numBackBuffers > 0) {
+                    // set the caps first, they're used when creating the bb
+                    backBufferCaps = caps;
+                    backBuffer = gc.createBackBuffer(this);
+                } else if (backBuffer != null) {
+                    backBufferCaps = null;
                     backBuffer = null;
                 }
-
-                if (numBackBuffers > 0) {
-                    backBuffer = gc.createBackBuffer(this);
-                }
             }
+        }
+        // it would be better to do this before we create new ones,
+        // but then we'd run into deadlock issues
+        if (oldData != null) {
+            oldData.flush();
+            // null out the old data to make it collected faster
+            oldData = null;
+        }
+        if (oldBB != null) {
+            oldBB.flush();
+            // null out the old data to make it collected faster
+            oldData = null;
         }
     }
 
@@ -519,7 +540,10 @@ public abstract class WComponentPeer extends WObjectPeer
             if (font == null) {
                 font = defaultFont;
             }
-            return new SunGraphics2D(surfaceData, fgColor, bgColor, font);
+            ScreenUpdateManager mgr =
+                ScreenUpdateManager.getInstance();
+            return mgr.createGraphics(surfaceData, this, fgColor,
+                                      bgColor, font);
         }
         return null;
     }
@@ -531,6 +555,7 @@ public abstract class WComponentPeer extends WObjectPeer
     protected void disposeImpl() {
         SurfaceData oldData = surfaceData;
         surfaceData = null;
+        ScreenUpdateManager.getInstance().dropScreenSurface(oldData);
         oldData.invalidate();
         // remove from updater before calling targetDisposedPeer
         WToolkit.targetDisposedPeer(target, this);
@@ -545,6 +570,16 @@ public abstract class WComponentPeer extends WObjectPeer
     public synchronized void setBackground(Color c) {
         background = c;
         _setBackground(c.getRGB());
+    }
+
+    /**
+     * This method is intentionally not synchronized as it is called while
+     * holding other locks.
+     *
+     * @see sun.java2d.d3d.D3DScreenUpdateManager#validate(D3DWindowSurfaceData)
+     */
+    public Color getBackgroundNoSync() {
+        return background;
     }
 
     public native void _setForeground(int rgb);
@@ -618,8 +653,9 @@ public abstract class WComponentPeer extends WObjectPeer
         checkCreation();
         this.winGraphicsConfig =
             (Win32GraphicsConfig)getGraphicsConfiguration();
-        this.surfaceData =
-            winGraphicsConfig.createSurfaceData(this, numBackBuffers);
+        ScreenUpdateManager mgr = ScreenUpdateManager.getInstance();
+        this.surfaceData = mgr.createScreenSurface(winGraphicsConfig, this,
+                                                   numBackBuffers, false);
         initialize();
         start();  // Initialize enable/disable state, turn on callbacks
     }
@@ -794,6 +830,7 @@ public abstract class WComponentPeer extends WObjectPeer
      * native windowing system specific actions.
      */
 
+    @Override
     public void createBuffers(int numBuffers, BufferCapabilities caps)
         throws AWTException
     {
@@ -803,38 +840,43 @@ public abstract class WComponentPeer extends WObjectPeer
 
         // Re-create the primary surface with the new number of back buffers
         try {
-            replaceSurfaceData(numBuffers - 1);
+            replaceSurfaceData(numBuffers - 1, caps);
         } catch (InvalidPipeException e) {
             throw new AWTException(e.getMessage());
         }
     }
 
-    public synchronized void destroyBuffers() {
-        disposeBackBuffer();
-        numBackBuffers = 0;
+    @Override
+    public void destroyBuffers() {
+        replaceSurfaceData(0, null);
     }
 
-    private synchronized void disposeBackBuffer() {
-        if (backBuffer == null) {
-            return;
-        }
-        backBuffer = null;
-    }
-
-    public synchronized void flip(BufferCapabilities.FlipContents flipAction) {
+    @Override
+    public void flip(int x1, int y1, int x2, int y2,
+                                  BufferCapabilities.FlipContents flipAction)
+    {
+        VolatileImage backBuffer = this.backBuffer;
         if (backBuffer == null) {
             throw new IllegalStateException("Buffers have not been created");
         }
         Win32GraphicsConfig gc =
             (Win32GraphicsConfig)getGraphicsConfiguration();
-        gc.flip(this, (Component)target, backBuffer, flipAction);
+        gc.flip(this, (Component)target, backBuffer, x1, y1, x2, y2, flipAction);
     }
 
+    @Override
     public synchronized Image getBackBuffer() {
+        Image backBuffer = this.backBuffer;
         if (backBuffer == null) {
             throw new IllegalStateException("Buffers have not been created");
         }
         return backBuffer;
+    }
+    public BufferCapabilities getBackBufferCaps() {
+        return backBufferCaps;
+    }
+    public int getBackBuffersNum() {
+        return numBackBuffers;
     }
 
     /* override and return false on components that DO NOT require
@@ -862,16 +904,50 @@ public abstract class WComponentPeer extends WObjectPeer
     public void setBoundsOperation(int operation) {
     }
 
+    /**
+     * Returns whether this component is capable of being hw accelerated.
+     * More specifically, whether rendering to this component or a
+     * BufferStrategy's back-buffer for this component can be hw accelerated.
+     *
+     * Conditions which could prevent hw acceleration include the toplevel
+     * window containing this component being
+     * {@link com.sun.awt.AWTUtilities.Translucency#TRANSLUCENT TRANSLUCENT}.
+     *
+     * @return {@code true} if this component is capable of being hw
+     * accelerated, {@code false} otherwise
+     * @see com.sun.awt.AWTUtilities.Translucency#TRANSLUCENT
+     */
+    public boolean isAccelCapable() {
+        boolean isTranslucent =
+            SunToolkit.isContainingTopLevelTranslucent((Component)target);
+        // D3D/OGL and translucent windows interacted poorly in Windows XP;
+        // these problems are no longer present in Vista
+        return !isTranslucent || Win32GraphicsEnvironment.isVistaOS();
+    }
 
     native void setRectangularShape(int lox, int loy, int hix, int hiy,
-                     sun.java2d.pipe.Region region);
+                     Region region);
 
+
+    // REMIND: Temp workaround for issues with using HW acceleration
+    // in the browser on Vista when DWM is enabled.
+    // @return true if the toplevel container is not an EmbeddedFrame or
+    // if this EmbeddedFrame is acceleration capable, false otherwise
+    private static final boolean isContainingTopLevelAccelCapable(Component c) {
+        while (c != null && !(c instanceof WEmbeddedFrame)) {
+            c = c.getParent();
+        }
+        if (c == null) {
+            return true;
+        }
+        return ((WEmbeddedFramePeer)c.getPeer()).isAccelCapable();
+    }
 
     /**
      * Applies the shape to the native component window.
      * @since 1.7
      */
-    public void applyShape(sun.java2d.pipe.Region shape) {
+    public void applyShape(Region shape) {
         if (shapeLog.isLoggable(Level.FINER)) {
             shapeLog.finer(
                     "*** INFO: Setting shape: PEER: " + this
@@ -879,8 +955,12 @@ public abstract class WComponentPeer extends WObjectPeer
                     + "; SHAPE: " + shape);
         }
 
-        setRectangularShape(shape.getLoX(), shape.getLoY(), shape.getHiX(), shape.getHiY(),
-                (shape.isRectangular() ? null : shape));
+        if (shape != null) {
+            setRectangularShape(shape.getLoX(), shape.getLoY(), shape.getHiX(), shape.getHiY(),
+                    (shape.isRectangular() ? null : shape));
+        } else {
+            setRectangularShape(0, 0, 0, 0, null);
+        }
     }
 
 }

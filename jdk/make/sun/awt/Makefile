@@ -1,5 +1,5 @@
 #
-# Copyright (c) 1995, 2007, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 1995, 2009, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -51,7 +51,7 @@ OTHER_CFLAGS += -D__MEDIALIB_OLD_NAMES -D__USE_J2D_NAMES
 # sun/awt/resources       handled by java/awt/Makefile
 # sun/java2d/pisces       handled by sun/pisces/Makefile
 #
-AUTO_FILES_JAVA_DIRS = sun/awt sun/java2d
+AUTO_FILES_JAVA_DIRS = sun/awt sun/java2d com/sun/awt
 AUTO_JAVA_PRUNE = resources pisces
 
 ifeq ($(PLATFORM), windows)
@@ -69,7 +69,6 @@ include FILES_export_windows.gmk
 #
 AUTO_JAVA_PRUNE += RemoteOffScreenImage.java
 
-OTHER_CXXFLAGS += -DD3D_OVERLOADS
 OTHER_CFLAGS += $(GX_OPTION) -DMLIB_NO_LIBSUNMATH -DUNICODE -D_UNICODE
 OTHER_CXXFLAGS += $(GX_OPTION) -DUNICODE -D_UNICODE
 
@@ -225,6 +224,7 @@ vpath %.c   $(SHARE_SRC)/native/$(PKGDIR)/image/cvutils
 vpath %.c   $(SHARE_SRC)/native/$(PKGDIR)/shell
 vpath %.c   $(SHARE_SRC)/native/$(PKGDIR)/medialib
 vpath %.c   $(SHARE_SRC)/native/$(PKGDIR)/debug
+vpath %.c   $(SHARE_SRC)/native/$(PKGDIR)/utility
 vpath %.c   $(SHARE_SRC)/native/$(PKGDIR)/../java2d
 vpath %.c   $(SHARE_SRC)/native/$(PKGDIR)/../java2d/loops
 vpath %.c   $(SHARE_SRC)/native/$(PKGDIR)/../java2d/pipe
@@ -481,7 +481,7 @@ OTHER_INCLUDES += -I$(CLASSHDRDIR)/../../java/jvm \
 	-I$(SHARE_SRC)/native/sun/dc/path \
 	-I$(SHARE_SRC)/native/sun/dc/doe \
 	-I$(SHARE_SRC)/native/sun/awt/debug \
-	-I$(PLATFORM_SRC)/native/sun/awt \
+	-I$(PLATFORM_SRC)/native/sun/awt
 #	-I$(WINAWT_COMMON_native)
 
 # this is only required for compiling )/native/sun/awt/medialib/*.c files
@@ -552,3 +552,4 @@ CLASSES.export += java.io.InputStream \
 
 .PHONY: dgalibs dgalib.clean fontconfigs fontconfigs.clean
 
+# DO NOT DELETE

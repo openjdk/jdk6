@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2007, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,7 @@
 #include "awt_Brush.h"
 #include "awt_Pen.h"
 #include "awt_Win32GraphicsDevice.h"
-#include "Win32SurfaceData.h"
+#include "GDIWindowSurfaceData.h"
 
 #include "java_awt_Component.h"
 #include "sun_awt_windows_WComponentPeer.h"
@@ -61,8 +61,6 @@ const UINT MAX_ACP_STR_LEN = 7; // ANSI CP identifiers are no longer than this
 class AwtPopupMenu;
 
 class AwtDropTarget;
-
-class DDrawDisplayMode;
 
 struct WmComponentSetFocusData;
 
@@ -129,12 +127,13 @@ public:
     virtual void RegisterClass();
     virtual void UnregisterClass();
 
-    void CreateHWnd(JNIEnv *env, LPCWSTR title,
+    virtual void CreateHWnd(JNIEnv *env, LPCWSTR title,
                     DWORD windowStyle, DWORD windowExStyle,
                     int x, int y, int w, int h,
                     HWND hWndParent, HMENU hMenu,
                     COLORREF colorForeground, COLORREF colorBackground,
                     jobject peer);
+    virtual void DestroyHWnd();
     void InitPeerGraphicsConfig(JNIEnv *env, jobject peer);
 
     virtual void Dispose();
@@ -203,7 +202,8 @@ public:
      */
     AwtComponent* GetParent();
 
-    /* Get the component's immediate container. */
+    /* Get the component's immediate container. Note: may return NULL while
+       the component is being reparented in full-screen mode by Direct3D */
     class AwtWindow* GetContainer();
 
     /* Is a component a container? Used by above method */
@@ -423,9 +423,6 @@ public:
     /* Functions for MouseWheel support on Windows95
      * These should only be called if running on 95
      */
-    static void Wheel95Init();
-    INLINE static UINT Wheel95GetMsg() {return sm_95WheelMessage;}
-    static UINT Wheel95GetScrLines();
 
     /* Determines whether the component is obscured by another window */
     // Called on Toolkit thread
@@ -600,11 +597,6 @@ public:
 
     jintArray CreatePrintedPixels(SIZE &loc, SIZE &size);
 
-    virtual BOOL WmDDCreateSurface(Win32SDOps* wsdo);
-    virtual MsgRouting WmDDEnterFullScreen(HMONITOR monitor);
-    virtual MsgRouting WmDDExitFullScreen(HMONITOR monitor);
-    virtual MsgRouting WmDDSetDisplayMode(HMONITOR monitor, DDrawDisplayMode* pDisplayMode);
-
     static void * GetNativeFocusOwner();
     static void * GetNativeFocusedWindow();
     static void   ClearGlobalFocusOwner();
@@ -679,7 +671,13 @@ public:
     static void _SetRectangularShape(void *param);
 
     static HWND sm_focusOwner;
+
+private:
     static HWND sm_focusedWindow;
+
+public:
+    static inline HWND GetFocusedWindow() { return sm_focusedWindow; }
+    static void SetFocusedWindow(HWND window);
 
     static BOOL m_isWin95;
     static BOOL m_isWin2000;
@@ -720,9 +718,9 @@ protected:
     virtual void SetDragCapture(UINT flags);
     virtual void ReleaseDragCapture(UINT flags);
 
-    // 95 support for mouse wheel
-    static UINT sm_95WheelMessage;
-    static UINT sm_95WheelSupport;
+    //These functions are overridden in AwtWindow to handle non-opaque windows.
+    virtual void FillBackground(HDC hMemoryDC, SIZE &size);
+    virtual void FillAlpha(void *bitmapBits, SIZE &size, BYTE alpha);
 
 private:
     BOOL m_bSubclassed;
