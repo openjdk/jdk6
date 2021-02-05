@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)cardTableExtension.hpp	1.20 07/05/05 17:05:26 JVM"
-#endif
 /*
- * Copyright 2001-2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class MutableSpace;
@@ -34,7 +31,7 @@ class CardTableExtension : public CardTableModRefBS {
  private:
   // Support methods for resizing the card table.
   void resize_commit_uncommit(int changed_region, MemRegion new_region);
-  void resize_update_card_table_entries(int changed_region, 
+  void resize_update_card_table_entries(int changed_region,
                                         MemRegion new_region);
   void resize_update_committed_table(int changed_region, MemRegion new_region);
   void resize_update_covered_table(int changed_region, MemRegion new_region);
@@ -60,7 +57,7 @@ class CardTableExtension : public CardTableModRefBS {
                          MutableSpace* sp,
                          HeapWord* space_top,
                          PSPromotionManager* pm);
-    
+
   void scavenge_contents_parallel(ObjectStartArray* start_array,
                                   MutableSpace* sp,
                                   HeapWord* space_top,
@@ -83,7 +80,7 @@ class CardTableExtension : public CardTableModRefBS {
   static bool card_is_verify(int value)     { return value == verify_card; }
 
   // Card marking
-  void inline_write_ref_field_gc(oop* field, oop new_val) {
+  void inline_write_ref_field_gc(void* field, oop new_val) {
     jbyte* byte = byte_for(field);
     *byte = youngergen_card;
   }
@@ -92,10 +89,10 @@ class CardTableExtension : public CardTableModRefBS {
   // Allows adjustment of the base and size of the covered regions
   void resize_covered_region(MemRegion new_region);
   // Finds the covered region to resize based on the start address
-  // of the covered regions.  
+  // of the covered regions.
   void resize_covered_region_by_start(MemRegion new_region);
   // Finds the covered region to resize based on the end address
-  // of the covered regions.  
+  // of the covered regions.
   void resize_covered_region_by_end(int changed_region, MemRegion new_region);
   // Finds the lowest start address of a covered region that is
   // previous (i.e., lower index) to the covered region with index "ind".
@@ -106,7 +103,6 @@ class CardTableExtension : public CardTableModRefBS {
   bool is_valid_card_address(jbyte* addr) {
     return (addr >= _byte_map) && (addr < _byte_map + _byte_map_size);
   }
-  
+
 #endif // ASSERT
 };
-

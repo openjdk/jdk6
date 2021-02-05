@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)lcm.cpp	1.102 07/05/17 15:58:55 JVM"
-#endif
 /*
- * Copyright 1998-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Optimization - Graph Style
@@ -31,7 +28,7 @@
 #include "incls/_lcm.cpp.incl"
 
 //------------------------------implicit_null_check----------------------------
-// Detect implicit-null-check opportunities.  Basically, find NULL checks 
+// Detect implicit-null-check opportunities.  Basically, find NULL checks
 // with suitable memory ops nearby.  Use the memory op to do the NULL check.
 // I can generate a memory op if there is not one nearby.
 // The proj is the control projection for the not-null case.
@@ -60,6 +57,9 @@ void Block::implicit_null_check(PhaseCFG *cfg, Node *proj, Node *val, int allowe
     assert(_nodes[_nodes.size()-2] == proj, "proj is one or the other");
     not_null_block = _succs[0];
     null_block     = _succs[1];
+  }
+  while (null_block->is_Empty() == Block::empty_with_goto) {
+    null_block     = null_block->_succs[0];
   }
 
   // Search the exception block for an uncommon trap.
@@ -95,7 +95,7 @@ void Block::implicit_null_check(PhaseCFG *cfg, Node *proj, Node *val, int allowe
       return;
     }
   }
-  
+
   // Search the successor block for a load or store who's base value is also
   // the tested value.  There may be several.
   Node_List *out = new Node_List(Thread::current()->resource_area());
@@ -113,8 +113,10 @@ void Block::implicit_null_check(PhaseCFG *cfg, Node *proj, Node *val, int allowe
     case Op_LoadI:
     case Op_LoadL:
     case Op_LoadP:
+    case Op_LoadN:
     case Op_LoadS:
     case Op_LoadKlass:
+    case Op_LoadNKlass:
     case Op_LoadRange:
     case Op_LoadD_unaligned:
     case Op_LoadL_unaligned:
@@ -127,14 +129,16 @@ void Block::implicit_null_check(PhaseCFG *cfg, Node *proj, Node *val, int allowe
     case Op_StoreI:
     case Op_StoreL:
     case Op_StoreP:
+    case Op_StoreN:
       was_store = true;         // Memory op is a store op
       // Stores will have their address in slot 2 (memory in slot 1).
       // If the value being nul-checked is in another slot, it means we
       // are storing the checked value, which does NOT check the value!
       if( mach->in(2) != val ) continue;
       break;                    // Found a memory op?
-    case Op_StrComp:            
-      // Not a legit memory op for implicit null check regardless of 
+    case Op_StrComp:
+    case Op_AryEq:
+      // Not a legit memory op for implicit null check regardless of
       // embedded loads
       continue;
     default:                    // Also check for embedded loads
@@ -148,6 +152,10 @@ void Block::implicit_null_check(PhaseCFG *cfg, Node *proj, Node *val, int allowe
       const TypePtr *adr_type = NULL;  // Do not need this return value here
       const Node* base = mach->get_base_and_disp(offset, adr_type);
       if (base == NULL || base == NodeSentinel) {
+        // Narrow oop address doesn't have base, only index
+        if( val->bottom_type()->isa_narrowoop() &&
+            MacroAssembler::needs_explicit_null_check(offset) )
+          continue;             // Give up if offset is beyond page size
         // cannot reason about it; is probably not implicit null exception
       } else {
         const TypePtr* tptr = base->bottom_type()->is_ptr();
@@ -155,7 +163,7 @@ void Block::implicit_null_check(PhaseCFG *cfg, Node *proj, Node *val, int allowe
         if( offset == Type::OffsetBot || tptr->_offset == Type::OffsetBot )
           continue;
         offset += tptr->_offset; // correct if base is offseted
-        if( MacroAssembler::needs_explicit_null_check(offset) ) 
+        if( MacroAssembler::needs_explicit_null_check(offset) )
           continue;             // Give up is reference is beyond 4K page size
       }
     }
@@ -190,9 +198,9 @@ void Block::implicit_null_check(PhaseCFG *cfg, Node *proj, Node *val, int allowe
       if( b != inb )
         break;
     }
-    if( j > 0 ) 
+    if( j > 0 )
       continue;
-    Block *mb = cfg->_bbs[mach->_idx]; 
+    Block *mb = cfg->_bbs[mach->_idx];
     // Hoisting stores requires more checks for the anti-dependence case.
     // Give up hoisting if we have to move the store past any load.
     if( was_store ) {
@@ -203,7 +211,7 @@ void Block::implicit_null_check(PhaseCFG *cfg, Node *proj, Node *val, int allowe
         uint k;
         for( k = 1; k < b->_nodes.size(); k++ ) {
           Node *n = b->_nodes[k];
-          if( n->needs_anti_dependence_check() && 
+          if( n->needs_anti_dependence_check() &&
               n->in(LoadNode::Memory) == mach->in(StoreNode::Memory) )
             break;              // Found anti-dependent load
         }
@@ -221,9 +229,9 @@ void Block::implicit_null_check(PhaseCFG *cfg, Node *proj, Node *val, int allowe
     if( e->is_MachNullCheck() && e->in(1) == mach )
       continue;                 // Already being used as a NULL check
 
-    // Found a candidate!  Pick one with least dom depth - the highest 
+    // Found a candidate!  Pick one with least dom depth - the highest
     // in the dom tree should be closest to the null check.
-    if( !best || 
+    if( !best ||
         cfg->_bbs[mach->_idx]->_dom_depth < cfg->_bbs[best->_idx]->_dom_depth ) {
       best = mach;
       bidx = vidx;
@@ -271,7 +279,7 @@ void Block::implicit_null_check(PhaseCFG *cfg, Node *proj, Node *val, int allowe
     Node *tmp1 = _nodes[end_idx()+1];
     Node *tmp2 = _nodes[end_idx()+2];
     _nodes.map(end_idx()+1, tmp2);
-    _nodes.map(end_idx()+2, tmp1);    
+    _nodes.map(end_idx()+2, tmp1);
     Node *tmp = new (C, 1) Node(C->top()); // Use not NULL input
     tmp1->replace_by(tmp);
     tmp2->replace_by(tmp1);
@@ -321,7 +329,7 @@ Node *Block::select(PhaseCFG *cfg, Node_List &worklist, int *ready_cnt, VectorSe
   uint choice  = 0; // Bigger is most important
   uint latency = 0; // Bigger is scheduled first
   uint score   = 0; // Bigger is better
-  uint idx;         // Index in worklist
+  int idx = -1;     // Index in worklist
 
   for( uint i=0; i<cnt; i++ ) { // Inspect entire worklist
     // Order in worklist is used to break ties.
@@ -335,7 +343,7 @@ Node *Block::select(PhaseCFG *cfg, Node_List &worklist, int *ready_cnt, VectorSe
         n->Opcode()== Op_Con || // So does constant 'Top'
         iop == Op_CreateEx ||   // Create-exception must start block
         iop == Op_CheckCastPP
-        ) {  
+        ) {
       worklist.map(i,worklist.pop());
       return n;
     }
@@ -372,7 +380,7 @@ Node *Block::select(PhaseCFG *cfg, Node_List &worklist, int *ready_cnt, VectorSe
         if (ready_cnt[use->_idx] > 1)
           n_choice = 1;
       }
-  
+
       // loop terminated, prefer not to use this instruction
       if (found_machif)
         continue;
@@ -411,9 +419,10 @@ Node *Block::select(PhaseCFG *cfg, Node_List &worklist, int *ready_cnt, VectorSe
     }
   } // End of for all ready nodes in worklist
 
-  Node *n = worklist[idx];      // Get the winner
+  assert(idx >= 0, "index should be set");
+  Node *n = worklist[(uint)idx];      // Get the winner
 
-  worklist.map(idx,worklist.pop());     // Compress worklist
+  worklist.map((uint)idx, worklist.pop());     // Compress worklist
   return n;
 }
 
@@ -424,16 +433,16 @@ void Block::set_next_call( Node *n, VectorSet &next_call, Block_Array &bbs ) {
   for( uint i=0; i<n->len(); i++ ) {
     Node *m = n->in(i);
     if( !m ) continue;  // must see all nodes in block that precede call
-    if( bbs[m->_idx] == this ) 
+    if( bbs[m->_idx] == this )
       set_next_call( m, next_call, bbs );
   }
 }
 
 //------------------------------needed_for_next_call---------------------------
 // Set the flag 'next_call' for each Node that is needed for the next call to
-// be scheduled.  This flag lets me bias scheduling so Nodes needed for the 
+// be scheduled.  This flag lets me bias scheduling so Nodes needed for the
 // next subroutine call get priority - basically it moves things NOT needed
-// for the next call till after the call.  This prevents me from trying to 
+// for the next call till after the call.  This prevents me from trying to
 // carry lots of stuff live across a call.
 void Block::needed_for_next_call(Node *this_call, VectorSet &next_call, Block_Array &bbs) {
   // Find the next control-defining Node in this block
@@ -468,7 +477,7 @@ uint Block::sched_call( Matcher &matcher, Block_Array &bbs, uint node_cnt, Node_
     // Collect defined registers
     regs.OR(n->out_RegMask());
     // Check for scheduling the next control-definer
-    if( n->bottom_type() == Type::CONTROL ) 
+    if( n->bottom_type() == Type::CONTROL )
       // Warm up next pile of heuristic bits
       needed_for_next_call(n, next_call, bbs);
 
@@ -477,10 +486,10 @@ uint Block::sched_call( Matcher &matcher, Block_Array &bbs, uint node_cnt, Node_
       Node* m = n->fast_out(j); // Get user
       if( bbs[m->_idx] != this ) continue;
       if( m->is_Phi() ) continue;
-      if( !--ready_cnt[m->_idx] ) 
+      if( !--ready_cnt[m->_idx] )
         worklist.push(m);
     }
-  
+
   }
 
   // Act as if the call defines the Frame Pointer.
@@ -513,7 +522,7 @@ uint Block::sched_call( Matcher &matcher, Block_Array &bbs, uint node_cnt, Node_
     default:
       ShouldNotReachHere();
   }
-                                                      
+
   // When using CallRuntime mark SOE registers as killed by the call
   // so values that could show up in the RegisterMap aren't live in a
   // callee saved register since the register wouldn't know where to
@@ -526,7 +535,7 @@ uint Block::sched_call( Matcher &matcher, Block_Array &bbs, uint node_cnt, Node_
 
   // Fill in the kill mask for the call
   for( OptoReg::Name r = OptoReg::Name(0); r < _last_Mach_Reg; r=OptoReg::add(r,1) ) {
-    if( !regs.Member(r) ) {     // Not already defined by the call  
+    if( !regs.Member(r) ) {     // Not already defined by the call
       // Save-on-call register?
       if ((save_policy[r] == 'C') ||
           (save_policy[r] == 'A') ||
@@ -586,7 +595,7 @@ bool Block::schedule_local(PhaseCFG *cfg, Matcher &matcher, int *ready_cnt, Vect
 
       // A few node types require changing a required edge to a precedence edge
       // before allocation.
-      if( UseConcMarkSweepGC ) {
+      if( UseConcMarkSweepGC || UseG1GC ) {
         if( n->is_Mach() && n->as_Mach()->ideal_Opcode() == Op_StoreCM ) {
           // Note: Required edges with an index greater than oper_input_base
           // are not supported by the allocator.
@@ -598,7 +607,14 @@ bool Block::schedule_local(PhaseCFG *cfg, Matcher &matcher, int *ready_cnt, Vect
           assert(cfg->_bbs[oop_store->_idx]->_dom_depth <= this->_dom_depth, "oop_store must dominate card-mark");
         }
       }
-      if( n->is_Mach() && n->as_Mach()->ideal_Opcode() == Op_MemBarAcquire ) {
+      if( n->is_Mach() && n->as_Mach()->ideal_Opcode() == Op_MemBarAcquire &&
+          n->req() > TypeFunc::Parms ) {
+        // MemBarAcquire could be created without Precedent edge.
+        // del_req() replaces the specified edge with the last input edge
+        // and then removes the last edge. If the specified edge > number of
+        // edges the last edge will be moved outside of the input edges array
+        // and the edge will be lost. This is why this code should be
+        // executed only when Precedent (== TypeFunc::Parms) edge is present.
         Node *x = n->in(TypeFunc::Parms);
         n->del_req(TypeFunc::Parms);
         n->add_prec(x);
@@ -623,13 +639,17 @@ bool Block::schedule_local(PhaseCFG *cfg, Matcher &matcher, int *ready_cnt, Vect
   // Make a worklist
   Node_List worklist;
   for(uint i4=i3; i4<node_cnt; i4++ ) {    // Put ready guys on worklist
-    Node *m = _nodes[i4];    
+    Node *m = _nodes[i4];
     if( !ready_cnt[m->_idx] ) {   // Zero ready count?
       if (m->is_iteratively_computed()) {
         // Push induction variable increments last to allow other uses
         // of the phi to be scheduled first. The select() method breaks
         // ties in scheduling by worklist order.
         delay.push(m);
+      } else if (m->is_Mach() && m->as_Mach()->ideal_Opcode() == Op_CreateEx) {
+        // Force the CreateEx to the top of the list so it's processed
+        // first and ends up at the start of the block.
+        worklist.insert(0, m);
       } else {
         worklist.push(m);         // Then on to worklist!
       }
@@ -699,7 +719,7 @@ bool Block::schedule_local(PhaseCFG *cfg, Matcher &matcher, int *ready_cnt, Vect
       Node* m = n->fast_out(i5); // Get user
       if( cfg->_bbs[m->_idx] != this ) continue;
       if( m->is_Phi() ) continue;
-      if( !--ready_cnt[m->_idx] ) 
+      if( !--ready_cnt[m->_idx] )
         worklist.push(m);
     }
   }
@@ -751,35 +771,35 @@ static void catch_cleanup_fix_all_inputs(Node *use, Node *old_def, Node *new_def
 //------------------------------catch_cleanup_find_cloned_def------------------
 static Node *catch_cleanup_find_cloned_def(Block *use_blk, Node *def, Block *def_blk, Block_Array &bbs, int n_clone_idx) {
   assert( use_blk != def_blk, "Inter-block cleanup only");
-  
+
   // The use is some block below the Catch.  Find and return the clone of the def
   // that dominates the use. If there is no clone in a dominating block, then
   // create a phi for the def in a dominating block.
-  
+
   // Find which successor block dominates this use.  The successor
   // blocks must all be single-entry (from the Catch only; I will have
   // split blocks to make this so), hence they all dominate.
   while( use_blk->_dom_depth > def_blk->_dom_depth+1 )
     use_blk = use_blk->_idom;
-  
+
   // Find the successor
   Node *fixup = NULL;
 
   uint j;
   for( j = 0; j < def_blk->_num_succs; j++ )
-    if( use_blk == def_blk->_succs[j] ) 
+    if( use_blk == def_blk->_succs[j] )
       break;
 
   if( j == def_blk->_num_succs ) {
-    // Block at same level in dom-tree is not a successor.  It needs a 
+    // Block at same level in dom-tree is not a successor.  It needs a
     // PhiNode, the PhiNode uses from the def and IT's uses need fixup.
     Node_Array inputs = new Node_List(Thread::current()->resource_area());
     for(uint k = 1; k < use_blk->num_preds(); k++) {
       inputs.map(k, catch_cleanup_find_cloned_def(bbs[use_blk->pred(k)->_idx], def, def_blk, bbs, n_clone_idx));
     }
 
-    // Check to see if the use_blk already has an identical phi inserted.  
-    // If it exists, it will be at the first position since all uses of a 
+    // Check to see if the use_blk already has an identical phi inserted.
+    // If it exists, it will be at the first position since all uses of a
     // def are processed together.
     Node *phi = use_blk->_nodes[1];
     if( phi->is_Phi() ) {
@@ -803,7 +823,7 @@ static Node *catch_cleanup_find_cloned_def(Block *use_blk, Node *def, Block *def
       }
       fixup = new_phi;
     }
-    
+
   } else {
     // Found the use just below the Catch.  Make it use the clone.
     fixup = use_blk->_nodes[n_clone_idx];
@@ -854,7 +874,7 @@ void Block::call_catch_cleanup(Block_Array &bbs) {
   if( !_nodes[end]->is_Catch() ) return;
   // Start of region to clone
   uint beg = end;
-  while( _nodes[beg-1]->Opcode() != Op_MachProj || 
+  while( _nodes[beg-1]->Opcode() != Op_MachProj ||
         !_nodes[beg-1]->in(0)->is_Call() ) {
     beg--;
     assert(beg > 0,"Catch cleanup walking beyond block boundary");
@@ -935,7 +955,3 @@ void Block::call_catch_cleanup(Block_Array &bbs) {
     }
   }
 }
-
-
-
-

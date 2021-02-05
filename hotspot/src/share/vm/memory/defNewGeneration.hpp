@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)defNewGeneration.hpp	1.40 07/05/17 15:54:44 JVM"
-#endif
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +19,12 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class EdenSpace;
 class ContiguousSpace;
+class ScanClosure;
 
 // DefNewGeneration is a young generation containing eden, from- and
 // to-space.
@@ -39,15 +37,15 @@ protected:
   int         _tenuring_threshold;   // Tenuring threshold for next collection.
   ageTable    _age_table;
   // Size of object to pretenure in words; command line provides bytes
-  size_t        _pretenure_size_threshold_words; 
+  size_t        _pretenure_size_threshold_words;
 
   ageTable*   age_table() { return &_age_table; }
-  // Initialize state to optimistically assume no promotion failure will 
-  // happen. 
-  void   init_assuming_no_promotion_failure(); 
-  // True iff a promotion has failed in the current collection. 
-  bool   _promotion_failed; 
-  bool   promotion_failed() { return _promotion_failed; } 
+  // Initialize state to optimistically assume no promotion failure will
+  // happen.
+  void   init_assuming_no_promotion_failure();
+  // True iff a promotion has failed in the current collection.
+  bool   _promotion_failed;
+  bool   promotion_failed() { return _promotion_failed; }
 
   // Handling promotion failure.  A young generation collection
   // can fail if a live object cannot be copied out of its
@@ -67,22 +65,22 @@ protected:
   //     All objects in the young generation are unmarked.
   //     Eden, from-space, and to-space will all be collected by
   //       the full collection.
-  void handle_promotion_failure(oop); 
+  void handle_promotion_failure(oop);
 
   // In the absence of promotion failure, we wouldn't look at "from-space"
   // objects after a young-gen collection.  When promotion fails, however,
   // the subsequent full collection will look at from-space objects:
   // therefore we must remove their forwarding pointers.
-  void remove_forwarding_pointers(); 
+  void remove_forwarding_pointers();
 
-  // Preserve the mark of "obj", if necessary, in preparation for its mark 
-  // word being overwritten with a self-forwarding-pointer. 
-  void   preserve_mark_if_necessary(oop obj, markOop m); 
+  // Preserve the mark of "obj", if necessary, in preparation for its mark
+  // word being overwritten with a self-forwarding-pointer.
+  void   preserve_mark_if_necessary(oop obj, markOop m);
 
-  // When one is non-null, so is the other.  Together, they each pair is 
-  // an object with a preserved mark, and its mark value. 
-  GrowableArray<oop>*     _objs_with_preserved_marks; 
-  GrowableArray<markOop>* _preserved_marks_of_objs; 
+  // When one is non-null, so is the other.  Together, they each pair is
+  // an object with a preserved mark, and its mark value.
+  GrowableArray<oop>*     _objs_with_preserved_marks;
+  GrowableArray<markOop>* _preserved_marks_of_objs;
 
   // Returns true if the collection can be safely attempted.
   // If this method returns false, a collection is not
@@ -158,17 +156,21 @@ protected:
   protected:
     ScanWeakRefClosure* _cl;
     CardTableRS* _rs;
+    template <class T> void do_oop_work(T* p);
   public:
     KeepAliveClosure(ScanWeakRefClosure* cl);
-    void do_oop(oop* p);
+    virtual void do_oop(oop* p);
+    virtual void do_oop(narrowOop* p);
   };
 
   class FastKeepAliveClosure: public KeepAliveClosure {
   protected:
     HeapWord* _boundary;
+    template <class T> void do_oop_work(T* p);
   public:
     FastKeepAliveClosure(DefNewGeneration* g, ScanWeakRefClosure* cl);
-    void do_oop(oop* p);
+    virtual void do_oop(oop* p);
+    virtual void do_oop(narrowOop* p);
   };
 
   class EvacuateFollowersClosure: public VoidClosure {
@@ -178,7 +180,7 @@ protected:
     ScanClosure* _scan_older;
   public:
     EvacuateFollowersClosure(GenCollectedHeap* gch, int level,
-			     ScanClosure* cur, ScanClosure* older);
+                             ScanClosure* cur, ScanClosure* older);
     void do_void();
   };
 
@@ -192,9 +194,9 @@ protected:
     FastScanClosure* _scan_older;
   public:
     FastEvacuateFollowersClosure(GenCollectedHeap* gch, int level,
-				 DefNewGeneration* gen,
-				 FastScanClosure* cur,
-				 FastScanClosure* older);
+                                 DefNewGeneration* gen,
+                                 FastScanClosure* cur,
+                                 FastScanClosure* older);
     void do_void();
   };
 
@@ -209,7 +211,7 @@ protected:
   ContiguousSpace* from() const           { return _from_space;  }
   ContiguousSpace* to()   const           { return _to_space;    }
 
-  inline CompactibleSpace* first_compaction_space() const;
+  virtual CompactibleSpace* first_compaction_space() const;
 
   // Space enquiries
   size_t capacity() const;
@@ -229,8 +231,8 @@ protected:
 
   // Thread-local allocation buffers
   bool supports_tlab_allocation() const { return true; }
-  inline size_t tlab_capacity() const;
-  inline size_t unsafe_max_tlab_alloc() const;
+  size_t tlab_capacity() const;
+  size_t unsafe_max_tlab_alloc() const;
 
   // Grow the generation by the specified number of bytes.
   // The size of bytes is assumed to be properly aligned.
@@ -260,22 +262,25 @@ protected:
     const bool check_too_big = _pretenure_size_threshold_words > 0;
     const bool not_too_big   = word_size < _pretenure_size_threshold_words;
     const bool size_ok       = is_tlab || !check_too_big || not_too_big;
-      
+
     bool result = !overflows &&
-                  non_zero   && 
+                  non_zero   &&
                   size_ok;
 
     return result;
   }
 
-  inline HeapWord* allocate(size_t word_size, bool is_tlab);
+  HeapWord* allocate(size_t word_size, bool is_tlab);
   HeapWord* allocate_from_space(size_t word_size);
 
-  inline HeapWord* par_allocate(size_t word_size, bool is_tlab);
+  HeapWord* par_allocate(size_t word_size, bool is_tlab);
 
   // Prologue & Epilogue
-  inline virtual void gc_prologue(bool full);
+  virtual void gc_prologue(bool full);
   virtual void gc_epilogue(bool full);
+
+  // Save the tops for eden, from, and to
+  virtual void record_spaces_top();
 
   // Doesn't require additional work during GC prologue and epilogue
   virtual bool performs_in_place_marking() const { return false; }
@@ -288,29 +293,32 @@ protected:
   // Need to declare the full complement of closures, whether we'll
   // override them or not, or get message from the compiler:
   //   oop_since_save_marks_iterate_nv hides virtual function...
-#define DefNew_SINCE_SAVE_MARKS_DECL(OopClosureType, nv_suffix)	\
+#define DefNew_SINCE_SAVE_MARKS_DECL(OopClosureType, nv_suffix) \
   void oop_since_save_marks_iterate##nv_suffix(OopClosureType* cl);
 
   ALL_SINCE_SAVE_MARKS_CLOSURES(DefNew_SINCE_SAVE_MARKS_DECL)
 
 #undef DefNew_SINCE_SAVE_MARKS_DECL
-  
+
   // For non-youngest collection, the DefNewGeneration can contribute
   // "to-space".
-  void contribute_scratch(ScratchBlock*& list, Generation* requestor,
-			  size_t max_alloc_words);
+  virtual void contribute_scratch(ScratchBlock*& list, Generation* requestor,
+                          size_t max_alloc_words);
+
+  // Reset for contribution of "to-space".
+  virtual void reset_scratch();
 
   // GC support
   virtual void compute_new_size();
   virtual void collect(bool   full,
                        bool   clear_all_soft_refs,
-                       size_t size, 
+                       size_t size,
                        bool   is_tlab);
   HeapWord* expand_and_allocate(size_t size,
-				bool is_tlab,
-				bool parallel = false);
+                                bool is_tlab,
+                                bool parallel = false);
 
-  oop copy_to_survivor_space(oop old, oop* from);
+  oop copy_to_survivor_space(oop old);
   int tenuring_threshold() { return _tenuring_threshold; }
 
   // Performance Counter support
@@ -329,7 +337,12 @@ protected:
   void verify(bool allow_dirty);
 
  protected:
-  void compute_space_boundaries(uintx minimum_eden_size);
+  // If clear_space is true, clear the survivor spaces.  Eden is
+  // cleared if the minimum size of eden is 0.  If mangle_space
+  // is true, also mangle the space in debug mode.
+  void compute_space_boundaries(uintx minimum_eden_size,
+                                bool clear_space,
+                                bool mangle_space);
   // Scavenge support
   void swap_spaces();
 };

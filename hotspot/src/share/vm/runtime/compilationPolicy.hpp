@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)compilationPolicy.hpp	1.15 07/05/05 17:06:44 JVM"
-#endif
 /*
  * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // The CompilationPolicy selects which method (if any) should be compiled.
@@ -34,7 +31,7 @@ class CompilationPolicy : public CHeapObj {
   static CompilationPolicy* _policy;
   // Accumulated time
   static elapsedTimer       _accumulated_time;
-  
+
   static bool               _in_vm_startup;
 
  public:
@@ -50,7 +47,7 @@ class CompilationPolicy : public CHeapObj {
   static  bool delayCompilationDuringStartup() { return _in_vm_startup; }
 
   static bool mustBeCompiled(methodHandle m);      // m must be compiled before executing it
-  static bool canBeCompiled(methodHandle m);       // m is allowed to be compiled   
+  static bool canBeCompiled(methodHandle m);       // m is allowed to be compiled
 
   static void set_policy(CompilationPolicy* policy) { _policy = policy; }
   static CompilationPolicy* policy() { return _policy; }
@@ -85,9 +82,9 @@ class StackWalkCompPolicy : public CompilationPolicy {
   static const char* _msg;            // reason for not inlining
 
   static const char* shouldInline   (methodHandle callee, float frequency, int cnt);
-  // positive filter: should send be inlined?  returns NULL (--> yes) or rejection msg 
+  // positive filter: should send be inlined?  returns NULL (--> yes) or rejection msg
   static const char* shouldNotInline(methodHandle callee);
-  // negative filter: should send NOT be inlined?  returns NULL (--> inline) or rejection msg 
+  // negative filter: should send NOT be inlined?  returns NULL (--> inline) or rejection msg
 
 };
 #endif

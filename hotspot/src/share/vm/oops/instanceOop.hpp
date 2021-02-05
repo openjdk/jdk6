@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)instanceOop.hpp	1.15 07/05/05 17:06:04 JVM"
-#endif
 /*
- * Copyright 1997-2000 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // An instanceOop is an instance of a Java Class
@@ -30,7 +27,19 @@
 
 class instanceOopDesc : public oopDesc {
  public:
+  // aligned header size.
   static int header_size() { return sizeof(instanceOopDesc)/HeapWordSize; }
+
+  // If compressed, the offset of the fields of the instance may not be aligned.
+  static int base_offset_in_bytes() {
+    return UseCompressedOops ?
+             klass_gap_offset_in_bytes() :
+             sizeof(instanceOopDesc);
+  }
+
+  static bool contains_field_offset(int offset, int nonstatic_field_size) {
+    int base_in_bytes = base_offset_in_bytes();
+    return (offset >= base_in_bytes &&
+            (offset-base_in_bytes) < nonstatic_field_size * heapOopSize);
+  }
 };
-
-

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)codeCache.hpp	1.68 07/09/01 18:01:02 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // The CodeCache implements the code cache for various pieces of generated
@@ -48,9 +45,9 @@ class CodeCache : AllStatic {
   static int _number_of_blobs;
   static int _number_of_nmethods_with_dependencies;
   static bool _needs_cache_clean;
-  
+
   static void verify_if_often() PRODUCT_RETURN;
- public:     
+ public:
 
   // Initialization
   static void initialize();
@@ -62,9 +59,9 @@ class CodeCache : AllStatic {
   static int alignment_offset();                    // guaranteed offset of first CodeBlob byte within alignment unit (i.e., allocation header)
   static void free(CodeBlob* cb);                   // frees a CodeBlob
   static void flush();                              // flushes all CodeBlobs
-  static bool contains(void *p);                    // returns whether p is included  
-  static void blobs_do(void f(CodeBlob* cb));       // iterates over all CodeBlobs 
-  static void nmethods_do(void f(nmethod* nm));     // iterates over all nmethods 
+  static bool contains(void *p);                    // returns whether p is included
+  static void blobs_do(void f(CodeBlob* cb));       // iterates over all CodeBlobs
+  static void nmethods_do(void f(nmethod* nm));     // iterates over all nmethods
 
   // Lookup
   static CodeBlob* find_blob(void* start);
@@ -73,14 +70,29 @@ class CodeCache : AllStatic {
   // Lookup that does not fail if you lookup a zombie method (if you call this, be sure to know
   // what you are doing)
   static CodeBlob* find_blob_unsafe(void* start) {
-    CodeBlob* result = (CodeBlob*)_heap->find_start(start); 
-    assert(result == NULL || result->blob_contains((address)start), "found wrong CodeBlob");      
-    return result;   
-  } 
+    CodeBlob* result = (CodeBlob*)_heap->find_start(start);
+    // this assert is too strong because the heap code will return the
+    // heapblock containing start. That block can often be larger than
+    // the codeBlob itself. If you look up an address that is within
+    // the heapblock but not in the codeBlob you will assert.
+    //
+    // Most things will not lookup such bad addresses. However
+    // AsyncGetCallTrace can see intermediate frames and get that kind
+    // of invalid address and so can a developer using hsfind.
+    //
+    // The more correct answer is to return NULL if blob_contains() returns
+    // false.
+    // assert(result == NULL || result->blob_contains((address)start), "found wrong CodeBlob");
+
+    if (result != NULL && !result->blob_contains((address)start)) {
+      result = NULL;
+    }
+    return result;
+  }
 
   // Iteration
   static CodeBlob* first();
-  static CodeBlob* next (CodeBlob* cb);  
+  static CodeBlob* next (CodeBlob* cb);
   static CodeBlob* alive(CodeBlob *cb);
   static nmethod* alive_nmethod(CodeBlob *cb);
   static int       nof_blobs()                 { return _number_of_blobs; }
@@ -95,22 +107,22 @@ class CodeCache : AllStatic {
                            OopClosure* keep_alive,
                            bool unloading_occurred);
   static void oops_do(OopClosure* f);
-  
+
   // Printing/debugging
-  static void print()   PRODUCT_RETURN;          // prints summary 
+  static void print()   PRODUCT_RETURN;          // prints summary
   static void print_internals();
   static void verify();                          // verifies the code cache
 
   // The full limits of the codeCache
   static address  low_bound()                    { return (address) _heap->low_boundary(); }
   static address  high_bound()                   { return (address) _heap->high_boundary(); }
-  
+
   // Profiling
   static address first_address();                // first address used for CodeBlobs
   static address last_address();                 // last  address used for CodeBlobs
   static size_t  capacity()                      { return _heap->capacity(); }
   static size_t  max_capacity()                  { return _heap->max_capacity(); }
-  static size_t  unallocated_capacity()          { return _heap->unallocated_capacity(); }  
+  static size_t  unallocated_capacity()          { return _heap->unallocated_capacity(); }
 
   static bool needs_cache_clean()                { return _needs_cache_clean; }
   static void set_needs_cache_clean(bool v)      { _needs_cache_clean = v;    }

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)vectornode.cpp	1.5 07/05/17 16:02:33 JVM"
-#endif
 /*
- * Copyright 2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2007-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -114,17 +111,17 @@ PackNode* PackNode::make(Compile* C, Node* s, const Type* opd_t) {
   case T_BOOLEAN:
   case T_BYTE:
     return new (C, 2) PackBNode(s);
-  case T_CHAR:     
+  case T_CHAR:
     return new (C, 2) PackCNode(s);
-  case T_SHORT:    
+  case T_SHORT:
     return new (C, 2) PackSNode(s);
-  case T_INT:      
+  case T_INT:
     return new (C, 2) PackINode(s);
-  case T_LONG:     
+  case T_LONG:
     return new (C, 2) PackLNode(s);
-  case T_FLOAT:    
+  case T_FLOAT:
     return new (C, 2) PackFNode(s);
-  case T_DOUBLE:   
+  case T_DOUBLE:
     return new (C, 2) PackDNode(s);
   }
   ShouldNotReachHere();
@@ -138,7 +135,7 @@ Node* PackNode::binaryTreePack(Compile* C, int lo, int hi) {
   int mid = lo + ct/2;
   Node* n1 = ct == 2 ? in(lo)   : binaryTreePack(C, lo,  mid);
   Node* n2 = ct == 2 ? in(lo+1) : binaryTreePack(C, mid, hi );
-  int rslt_bsize = ct * type2aelembytes[elt_basic_type()];
+  int rslt_bsize = ct * type2aelembytes(elt_basic_type());
   if (bottom_type()->is_floatingpoint()) {
     switch (rslt_bsize) {
     case  8: return new (C, 3) PackFNode(n1, n2);
@@ -402,23 +399,23 @@ VectorLoadNode* VectorLoadNode::make(Compile* C, int opc, Node* ctl, Node* mem,
   case Op_Load16B: return new (C, 3) Load16BNode(ctl, mem, adr, atyp);
   case Op_Load8B:  return new (C, 3) Load8BNode(ctl, mem, adr, atyp);
   case Op_Load4B:  return new (C, 3) Load4BNode(ctl, mem, adr, atyp);
- 
+
   case Op_Load8C:  return new (C, 3) Load8CNode(ctl, mem, adr, atyp);
   case Op_Load4C:  return new (C, 3) Load4CNode(ctl, mem, adr, atyp);
   case Op_Load2C:  return new (C, 3) Load2CNode(ctl, mem, adr, atyp);
- 
+
   case Op_Load8S:  return new (C, 3) Load8SNode(ctl, mem, adr, atyp);
   case Op_Load4S:  return new (C, 3) Load4SNode(ctl, mem, adr, atyp);
   case Op_Load2S:  return new (C, 3) Load2SNode(ctl, mem, adr, atyp);
- 
+
   case Op_Load4I:  return new (C, 3) Load4INode(ctl, mem, adr, atyp);
   case Op_Load2I:  return new (C, 3) Load2INode(ctl, mem, adr, atyp);
- 
+
   case Op_Load2L:  return new (C, 3) Load2LNode(ctl, mem, adr, atyp);
- 
+
   case Op_Load4F:  return new (C, 3) Load4FNode(ctl, mem, adr, atyp);
   case Op_Load2F:  return new (C, 3) Load2FNode(ctl, mem, adr, atyp);
- 
+
   case Op_Load2D:  return new (C, 3) Load2DNode(ctl, mem, adr, atyp);
   }
   ShouldNotReachHere();

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)task.cpp	1.27 07/05/05 17:06:59 JVM"
-#endif
 /*
- * Copyright 1997-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -70,7 +67,6 @@ void PeriodicTask::real_time_tick(size_t delay_time) {
 
 PeriodicTask::PeriodicTask(size_t interval_time) :
   _counter(0), _interval(interval_time) {
-  assert(is_init_completed(), "Periodic tasks should not start during VM initialization");
   // Sanity check the interval time
   assert(_interval >= PeriodicTask::min_interval &&
          _interval <= PeriodicTask::max_interval &&
@@ -84,7 +80,7 @@ PeriodicTask::~PeriodicTask() {
 }
 
 bool PeriodicTask::is_enrolled() const {
-  for(int index = 0; index < _num_tasks; index++) 
+  for(int index = 0; index < _num_tasks; index++)
     if (_tasks[index] == this) return true;
   return false;
 }
@@ -109,26 +105,4 @@ void PeriodicTask::disenroll() {
   for (; index < _num_tasks; index++) {
     _tasks[index] = _tasks[index+1];
   }
-}
-
-TimeMillisUpdateTask* TimeMillisUpdateTask::_task = NULL;
-
-void TimeMillisUpdateTask::task() {
-  os::update_global_time();
-}
-
-void TimeMillisUpdateTask::engage() {
-  assert(_task == NULL, "init twice?");
-  os::update_global_time(); // initial update
-  os::enable_global_time();
-  _task = new TimeMillisUpdateTask(CacheTimeMillisGranularity);
-  _task->enroll();
-}
-
-void TimeMillisUpdateTask::disengage() {
-  assert(_task != NULL, "uninit twice?");
-  os::disable_global_time();
-  _task->disenroll();
-  delete _task;
-  _task = NULL;
 }

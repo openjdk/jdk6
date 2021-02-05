@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)vframe_hp.cpp	1.159 07/05/24 14:38:39 JVM"
-#endif
 /*
- * Copyright 1997-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -31,7 +28,7 @@
 
 // ------------- compiledVFrame --------------
 
-StackValueCollection* compiledVFrame::locals() const {  
+StackValueCollection* compiledVFrame::locals() const {
   // Natives has no scope
   if (scope() == NULL) return new StackValueCollection(0);
   GrowableArray<ScopeValue*>*  scv_list = scope()->locals();
@@ -49,8 +46,8 @@ StackValueCollection* compiledVFrame::locals() const {
     // In real life this never happens or is typically a single element search
     for (int i = 0; i < list->length(); i++) {
       if (list->at(i)->matches((vframe*)this)) {
-	deferred = list->at(i)->locals();
-	break;
+        deferred = list->at(i)->locals();
+        break;
       }
     }
   }
@@ -65,37 +62,37 @@ StackValueCollection* compiledVFrame::locals() const {
       jvmtiDeferredLocalVariable* val = deferred->at(l);
       switch (val->type()) {
       case T_BOOLEAN:
-	result->set_int_at(val->index(), val->value().z);
-	break;
+        result->set_int_at(val->index(), val->value().z);
+        break;
       case T_CHAR:
-	result->set_int_at(val->index(), val->value().c);
-	break;
+        result->set_int_at(val->index(), val->value().c);
+        break;
       case T_FLOAT:
-	result->set_float_at(val->index(), val->value().f);
-	break;
+        result->set_float_at(val->index(), val->value().f);
+        break;
       case T_DOUBLE:
-	result->set_double_at(val->index(), val->value().d);
-	break;
+        result->set_double_at(val->index(), val->value().d);
+        break;
       case T_BYTE:
-	result->set_int_at(val->index(), val->value().b);
-	break;
+        result->set_int_at(val->index(), val->value().b);
+        break;
       case T_SHORT:
-	result->set_int_at(val->index(), val->value().s);
-	break;
+        result->set_int_at(val->index(), val->value().s);
+        break;
       case T_INT:
-	result->set_int_at(val->index(), val->value().i);
-	break;
+        result->set_int_at(val->index(), val->value().i);
+        break;
       case T_LONG:
-	result->set_long_at(val->index(), val->value().j);
-	break;
-      case T_OBJECT: 
-	{
-	  Handle obj((oop)val->value().l);
-	  result->set_obj_at(val->index(), obj);
-	}
-	break;
+        result->set_long_at(val->index(), val->value().j);
+        break;
+      case T_OBJECT:
+        {
+          Handle obj((oop)val->value().l);
+          result->set_obj_at(val->index(), obj);
+        }
+        break;
       default:
-	ShouldNotReachHere();
+        ShouldNotReachHere();
       }
     }
   }
@@ -121,18 +118,18 @@ void compiledVFrame::update_local(BasicType type, int index, jvalue value) {
     int f;
     for ( f = 0 ; f < deferred->length() ; f++ ) {
       if (deferred->at(f)->matches(this)) {
-	// Matching, vframe now see if the local already had deferred write
-	GrowableArray<jvmtiDeferredLocalVariable*>* locals = deferred->at(f)->locals();
-	int l;
-	for (l = 0 ; l < locals->length() ; l++ ) {
-	  if (locals->at(l)->index() == index) {
-	    locals->at(l)->set_value(value);
-	    return;
-	  }
-	}
-	// No matching local already present. Push a new value onto the deferred collection
-	locals->push(new jvmtiDeferredLocalVariable(index, type, value));
-	return;
+        // Matching, vframe now see if the local already had deferred write
+        GrowableArray<jvmtiDeferredLocalVariable*>* locals = deferred->at(f)->locals();
+        int l;
+        for (l = 0 ; l < locals->length() ; l++ ) {
+          if (locals->at(l)->index() == index) {
+            locals->at(l)->set_value(value);
+            return;
+          }
+        }
+        // No matching local already present. Push a new value onto the deferred collection
+        locals->push(new jvmtiDeferredLocalVariable(index, type, value));
+        return;
       }
     }
     // No matching vframe must push a new vframe
@@ -193,7 +190,7 @@ GrowableArray<MonitorInfo*>* compiledVFrame::monitors() const {
     // Casting away const
     frame& fr = (frame&) _fr;
     MonitorInfo* info = new MonitorInfo(fr.compiled_synchronized_native_monitor_owner(nm),
-                                        fr.compiled_synchronized_native_monitor(nm));
+                                        fr.compiled_synchronized_native_monitor(nm), false);
     monitors->push(info);
     return monitors;
   }
@@ -205,7 +202,7 @@ GrowableArray<MonitorInfo*>* compiledVFrame::monitors() const {
   for (int index = 0; index < monitors->length(); index++) {
     MonitorValue* mv = monitors->at(index);
     StackValue *owner_sv = create_stack_value(mv->owner()); // it is an oop
-    result->push(new MonitorInfo(owner_sv->get_obj()(), resolve_monitor_lock(mv->basic_lock())));
+    result->push(new MonitorInfo(owner_sv->get_obj()(), resolve_monitor_lock(mv->basic_lock()), mv->eliminated()));
   }
   return result;
 }
@@ -276,7 +273,7 @@ vframe* compiledVFrame::sender() const {
     assert(nm->is_native_method(), "must be native");
     return vframe::sender();
   } else {
-    return scope()->is_top() 
+    return scope()->is_top()
       ? vframe::sender()
       : new compiledVFrame(&f, register_map(), thread(), scope()->sender());
   }

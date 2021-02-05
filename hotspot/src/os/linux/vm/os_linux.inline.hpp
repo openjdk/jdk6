@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)os_linux.inline.hpp	1.31 07/06/29 04:01:54 JVM"
-#endif
 /*
- * Copyright 1999-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1999-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 inline void* os::thread_local_storage_at(int index) {
@@ -123,3 +120,6 @@ inline int os::closedir(DIR *dirp)
   RESTARTABLE(_cmd, _result); \
   return _result; \
 } while(false)
+
+inline bool os::numa_has_static_binding()   { return true; }
+inline bool os::numa_has_group_homing()     { return false;  }

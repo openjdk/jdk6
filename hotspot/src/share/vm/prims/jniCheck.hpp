@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)jniCheck.hpp	1.11 07/05/05 17:06:32 JVM"
-#endif
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +19,21 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
+
+extern "C" {
+  // Report a JNI failure caught by -Xcheck:jni.  Perform a core dump.
+  // Note: two variations -- one to be called when in VM state (e.g. when
+  // within IN_VM macro), one to be called when in NATIVE state.
+
+  // When in VM state:
+  static void ReportJNIFatalError(JavaThread* thr, const char *msg) {
+    tty->print_cr("FATAL ERROR in native method: %s", msg);
+    thr->print_stack();
+    os::abort(true);
+  }
+}
 
 //
 // Checked JNI routines that are useful for outside of checked JNI

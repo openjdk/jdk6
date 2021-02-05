@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 import java.io.*;
@@ -32,10 +32,11 @@ public class Database {
   // files that have implicit dependency on platform files
   // e.g. os.hpp: os_<os_family>.hpp os_<os_arch>.hpp but only
   // recorded if the platform file was seen.
-  private FileList platformFiles; 
+  private FileList platformFiles;
   private FileList outerFiles;
   private FileList indivIncludes;
   private FileList grandInclude; // the results for the grand include file
+  private HashMap<String,String> platformDepFiles;
   private long threshold;
   private int nOuterFiles;
   private int nPrecompiledFiles;
@@ -57,6 +58,7 @@ public class Database {
     outerFiles      = new FileList("outerFiles", plat);
     indivIncludes   = new FileList("IndivIncludes", plat);
     grandInclude    = new FileList(plat.getGIFileTemplate().nameOfList(), plat);
+    platformDepFiles = new HashMap<String,String>();
 
     threshold = t;
     nOuterFiles = 0;
@@ -175,7 +177,7 @@ public class Database {
               // derive generic name from platform specific name
               // e.g. os_<arch_os>.hpp => os.hpp. We enforce the
               // restriction (imperfectly) noted in includeDB_core
-              // that platform specific files will have an underscore 
+              // that platform specific files will have an underscore
               // preceding the macro invocation.
 
               // First expand macro as null string.
@@ -209,6 +211,10 @@ public class Database {
               FileList p = allFiles.listForFile(includer);
               p.setPlatformDependentInclude(pdName.dirPreStemSuff());
 
+              // Record the implicit include of this file so that the
+              // dependencies for precompiled headers can mention it.
+              platformDepFiles.put(newIncluder, includer);
+
               // Add an implicit dependency on platform
               // specific file for the generic file
 
@@ -240,7 +246,7 @@ public class Database {
 
               if (includee.equals(plat.noGrandInclude())) {
                 p.setUseGrandInclude(false);
-              } else {            
+              } else {
                 FileList q = allFiles.listForFile(includee);
                 p.addIfAbsent(q);
               }
@@ -260,13 +266,13 @@ public class Database {
       if (firstFile != null) {
         FileList p = allFiles.listForFile(firstFile);
         allFiles.setFirstFile(p);
-        outerFiles.setFirstFile(p);	  
+        outerFiles.setFirstFile(p);
       }
 
       if (lastFile != null) {
         FileList p = allFiles.listForFile(lastFile);
         allFiles.setLastFile(p);
-        outerFiles.setLastFile(p);	  
+        outerFiles.setLastFile(p);
       }
     }
 
@@ -345,7 +351,7 @@ public class Database {
   }
 
   private void writeGrandUnixMakefile() throws IOException {
-    if (!plat.writeDeps()) 
+    if (!plat.writeDeps())
       return;
 
     System.out.println("\twriting dependencies file\n");
@@ -383,7 +389,7 @@ public class Database {
       // write Obj_Files = ...
       gd.println("Obj_Files = \\");
       gd.println(firstName + plat.objFileSuffix() + " \\");
-      for (Iterator iter = sortList.iterator(); iter.hasNext(); ) {            
+      for (Iterator iter = sortList.iterator(); iter.hasNext(); ) {
         gd.println(iter.next() + plat.objFileSuffix() + " \\");
       }
       gd.println(lastName + plat.objFileSuffix() + " \\");
@@ -408,6 +414,12 @@ public class Database {
       for (Iterator iter = grandInclude.iterator(); iter.hasNext(); ) {
         FileList list = (FileList) iter.next();
         gd.println(list.getName() + " \\");
+        String platformDep = platformDepFiles.get(list.getName());
+        if (platformDep != null) {
+            // make sure changes to the platform dependent file will
+            // cause regeneration of the pch file.
+            gd.println(platformDep + " \\");
+        }
       }
       gd.println();
       gd.println();
@@ -471,7 +483,7 @@ public class Database {
         }
 
         if (plat.includeGIDependencies()
-            && nPrecompiledFiles > 0 
+            && nPrecompiledFiles > 0
             && anII.getUseGrandInclude()) {
           gd.println("    $(Precompiled_Files) \\");
         }

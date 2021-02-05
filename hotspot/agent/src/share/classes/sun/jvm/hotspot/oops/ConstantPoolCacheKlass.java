@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2001 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.oops;
@@ -32,7 +32,7 @@ import sun.jvm.hotspot.types.*;
 
 // A ConstantPoolCacheKlass is the klass of a ConstantPoolCache
 
-public class ConstantPoolCacheKlass extends ArrayKlass {
+public class ConstantPoolCacheKlass extends Klass {
   static {
     VM.registerVMInitializedObserver(new Observer() {
         public void update(Observable o, Object data) {
@@ -40,16 +40,21 @@ public class ConstantPoolCacheKlass extends ArrayKlass {
         }
       });
   }
-  
+
   private static synchronized void initialize(TypeDataBase db) throws WrongTypeException {
     Type type  = db.lookupType("constantPoolCacheKlass");
+    headerSize = type.getSize() + Oop.getHeaderSize();
   }
 
   ConstantPoolCacheKlass(OopHandle handle, ObjectHeap heap) {
     super(handle, heap);
   }
 
+  public long getObjectSize() { return alignObjectSize(headerSize); }
+
   public void printValueOn(PrintStream tty) {
     tty.print("ConstantPoolCacheKlass");
   }
+
+  private static long headerSize;
 }

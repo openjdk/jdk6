@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)stubCodeGenerator.cpp	1.30 07/05/17 16:06:31 JVM"
-#endif
 /*
- * Copyright 1997-2004 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -72,7 +69,6 @@ StubCodeGenerator::StubCodeGenerator(CodeBuffer* code) {
   _first_stub = _last_stub = NULL;
 }
 
-#ifndef PRODUCT
 extern "C" {
   static int compare_cdesc(const void* void_a, const void* void_b) {
     int ai = (*((StubCodeDesc**) void_a))->index();
@@ -80,10 +76,8 @@ extern "C" {
     return ai - bi;
   }
 }
-#endif
 
 StubCodeGenerator::~StubCodeGenerator() {
-#ifndef PRODUCT
   if (PrintStubCode) {
     CodeBuffer* cbuf = _masm->code();
     CodeBlob*   blob = CodeCache::find_blob_unsafe(cbuf->insts()->start());
@@ -108,7 +102,6 @@ StubCodeGenerator::~StubCodeGenerator() {
       tty->cr();
     }
   }
-#endif //PRODUCT
 }
 
 
@@ -146,4 +139,3 @@ StubCodeMark::~StubCodeMark() {
     JvmtiExport::post_dynamic_code_generated(_cdesc->name(), _cdesc->begin(), _cdesc->end());
   }
 }
-
