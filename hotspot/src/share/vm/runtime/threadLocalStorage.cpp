@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)threadLocalStorage.cpp	1.46 07/05/05 17:07:00 JVM"
-#endif
 /*
- * Copyright 1997-2003 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -45,9 +42,13 @@ void ThreadLocalStorage::set_thread(Thread* thread) {
 }
 
 void ThreadLocalStorage::init() {
-  assert(ThreadLocalStorage::thread_index() == -1, "More than one attempt to initialize threadLocalStorage");
+  assert(!is_initialized(),
+         "More than one attempt to initialize threadLocalStorage");
   pd_init();
   set_thread_index(os::allocate_thread_local_storage());
   generate_code_for_get_thread();
 }
 
+bool ThreadLocalStorage::is_initialized() {
+    return (thread_index() != -1);
+}

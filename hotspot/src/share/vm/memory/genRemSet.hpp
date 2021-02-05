@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)genRemSet.hpp	1.23 07/05/05 17:05:50 JVM"
-#endif
 /*
- * Copyright 2001-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // A GenRemSet provides ways of iterating over pointers accross generations.
@@ -37,7 +34,7 @@ class GenRemSet: public CHeapObj {
   friend class Generation;
 
   BarrierSet* _bs;
-  
+
 public:
   enum Name {
     CardTable,
@@ -45,6 +42,7 @@ public:
   };
 
   GenRemSet(BarrierSet * bs) : _bs(bs) {}
+  GenRemSet() : _bs(NULL) {}
 
   virtual Name rs_kind() = 0;
 
@@ -55,6 +53,9 @@ public:
 
   // Return the barrier set associated with "this."
   BarrierSet* bs() { return _bs; }
+
+  // Set the barrier set.
+  void set_bs(BarrierSet* bs) { _bs = bs; }
 
   // Do any (sequential) processing necessary to prepare for (possibly
   // "parallel", if that arg is true) calls to younger_refs_iterate.
@@ -67,17 +68,17 @@ public:
   virtual void younger_refs_iterate(Generation* g, OopsInGenClosure* blk) = 0;
 
   virtual void younger_refs_in_space_iterate(Space* sp,
-					     OopsInGenClosure* cl) = 0;
+                                             OopsInGenClosure* cl) = 0;
 
   // This method is used to notify the remembered set that "new_val" has
   // been written into "field" by the garbage collector.
-  void write_ref_field_gc(oop* field, oop new_val);
+  void write_ref_field_gc(void* field, oop new_val);
 protected:
-  virtual void write_ref_field_gc_work(oop* field, oop new_val) = 0;
+  virtual void write_ref_field_gc_work(void* field, oop new_val) = 0;
 public:
 
   // A version of the above suitable for use by parallel collectors.
-  virtual void write_ref_field_gc_par(oop* field, oop new_val) = 0;
+  virtual void write_ref_field_gc_par(void* field, oop new_val) = 0;
 
   // Resize one of the regions covered by the remembered set.
   virtual void resize_covered_region(MemRegion new_region) = 0;
@@ -94,9 +95,16 @@ public:
   virtual void verify() = 0;
 
   // Verify that the remembered set has no entries for
-  // the heap interval denoted by mr.
-  virtual void verify_empty(MemRegion mr) = 0;
-  
+  // the heap interval denoted by mr.  If there are any
+  // alignment constraints on the remembered set, only the
+  // part of the region that is aligned is checked.
+  //
+  //   alignment boundaries
+  //   +--------+-------+--------+-------+
+  //         [ region mr              )
+  //            [ part checked   )
+  virtual void verify_aligned_region_empty(MemRegion mr) = 0;
+
   // If appropriate, print some information about the remset on "tty".
   virtual void print() {}
 
@@ -112,8 +120,11 @@ public:
 
   // Informs the RS that refs in the given "mr" may have changed
   // arbitrarily, and therefore may contain old-to-young pointers.
-  virtual void invalidate(MemRegion mr) = 0;
-  
+  // If "whole heap" is true, then this invalidation is part of an
+  // invalidation of the whole heap, which an implementation might
+  // handle differently than that of a sub-part of the heap.
+  virtual void invalidate(MemRegion mr, bool whole_heap = false) = 0;
+
   // Informs the RS that refs in this generation
   // may have changed arbitrarily, and therefore may contain
   // old-to-young pointers in arbitrary locations. The parameter

@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)parse3.cpp	1.269 08/11/24 12:24:07 JVM"
-#endif
 /*
- * Copyright 1998-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1998-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #include "incls/_precompiled.incl"
@@ -35,13 +32,13 @@ bool Parse::static_field_ok_in_clinit(ciField *field, ciMethod *method) {
   // Could be the field_holder's <clinit> method, or <clinit> for a subklass.
   // Better to check now than to Deoptimize as soon as we execute
   assert( field->is_static(), "Only check if field is static");
-  // is_being_initialized() is too generous.  It allows access to statics 
+  // is_being_initialized() is too generous.  It allows access to statics
   // by threads that are not running the <clinit> before the <clinit> finishes.
   // return field->holder()->is_being_initialized();
 
   // The following restriction is correct but conservative.
   // It is also desirable to allow compilation of methods called from <clinit>
-  // but this generated code will need to be made safe for execution by 
+  // but this generated code will need to be made safe for execution by
   // other threads, or the transition from interpreted to compiled code would
   // need to be guarded.
   ciInstanceKlass *field_holder = field->holder();
@@ -161,13 +158,13 @@ void Parse::do_get_xxx(const TypePtr* obj_type, Node* obj, ciField* field, bool 
   } else {
     type = Type::get_const_basic_type(bt);
   }
-  // Build the load.  
+  // Build the load.
   Node* ld = make_load(NULL, adr, type, bt, adr_type, is_vol);
 
   // Adjust Java stack
-  if (type2size[bt] == 1) 
+  if (type2size[bt] == 1)
     push(ld);
-  else 
+  else
     push_pair(ld);
 
   if (must_assert_null) {
@@ -222,7 +219,7 @@ void Parse::do_put_xxx(const TypePtr* obj_type, Node* obj, ciField* field, bool 
   // Round doubles before storing
   if (bt == T_DOUBLE)  val = dstore_rounding(val);
 
-  // Store the value.  
+  // Store the value.
   Node* store;
   if (bt == T_OBJECT) {
     const TypePtr* field_type;
@@ -245,12 +242,12 @@ void Parse::do_put_xxx(const TypePtr* obj_type, Node* obj, ciField* field, bool 
     int adr_idx = C->get_alias_index(adr_type);
     insert_mem_bar_volatile(Op_MemBarVolatile, adr_idx);
 
-    // Now place a membar for AliasIdxBot for the unknown yet-to-be-parsed 
+    // Now place a membar for AliasIdxBot for the unknown yet-to-be-parsed
     // volatile alias indices. Skip this if the membar is redundant.
     if (adr_idx != Compile::AliasIdxBot) {
       insert_mem_bar_volatile(Op_MemBarVolatile, Compile::AliasIdxBot);
     }
-      
+
     // Finally, place alias-index-specific membars for each volatile index
     // that isn't the adr_idx membar. Typically there's only 1 or 2.
     for( int i = Compile::AliasIdxRaw; i < C->num_alias_types(); i++ ) {
@@ -323,7 +320,7 @@ void Parse::do_anewarray() {
   // we need the loaded class for the rest of graph; do not
   // initialize the container class (see Java spec)!!!
   assert(will_link, "anewarray: typeflow responsibility");
-  
+
   ciObjArrayKlass* array_klass = ciObjArrayKlass::make(klass);
   // Check that array_klass object is loaded
   if (!array_klass->is_loaded()) {
@@ -333,7 +330,7 @@ void Parse::do_anewarray() {
                   array_klass);
     return;
   }
-  
+
   kill_dead_locals();
 
   const TypeKlassPtr* array_klass_type = TypeKlassPtr::make(array_klass);
@@ -368,7 +365,7 @@ Node* Parse::expand_multianewarray(ciArrayKlass* array_klass, Node* *lengths, in
     const intptr_t header   = arrayOopDesc::base_offset_in_bytes(T_OBJECT);
     for (jint i = 0; i < length_con; i++) {
       Node*    elem   = expand_multianewarray(array_klass_1, &lengths[1], ndimensions-1);
-      intptr_t offset = header + ((intptr_t)i << LogBytesPerWord);
+      intptr_t offset = header + ((intptr_t)i << LogBytesPerHeapOop);
       Node*    eaddr  = basic_plus_adr(array, offset);
       store_oop_to_array(control(), array, eaddr, adr_type, elem, elemtype, T_OBJECT);
     }
@@ -411,7 +408,7 @@ void Parse::do_multianewarray() {
     jint dim_con = find_int_con(length[j], -1);
     expand_fanout *= dim_con;
     expand_count  += expand_fanout; // count the level-J sub-arrays
-    if (dim_con < 0
+    if (dim_con <= 0
         || dim_con > expand_limit
         || expand_count > expand_limit) {
       expand_count = 0;

@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)classLoadingService.hpp	1.10 07/05/05 17:07:05 JVM"
-#endif
 /*
  * Copyright 2003-2005 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class instanceKlass;
@@ -31,7 +28,7 @@ class instanceKlass;
 class ClassLoadingService : public AllStatic {
 private:
   // Counters for classes loaded from class files
-  static PerfCounter*  _classes_loaded_count;  
+  static PerfCounter*  _classes_loaded_count;
   static PerfCounter*  _classes_unloaded_count;
   static PerfCounter*  _classbytes_loaded;
   static PerfCounter*  _classbytes_unloaded;
@@ -43,7 +40,7 @@ private:
   static PerfCounter*  _shared_classbytes_unloaded;
 
   static PerfVariable* _class_methods_size;
- 
+
   static size_t compute_class_size(instanceKlass* k);
 
 public:
@@ -136,4 +133,3 @@ public:
     _loaded_classes->append(h);
   }
 };
-

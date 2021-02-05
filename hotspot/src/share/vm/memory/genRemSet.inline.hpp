@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)genRemSet.inline.hpp	1.10 07/05/05 17:05:50 JVM"
-#endif
 /*
- * Copyright 2001 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,14 +19,14 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // Inline functions of GenRemSet, which de-virtualize this
 // performance-critical call when when the rem set is the most common
 // card-table kind.
 
-void GenRemSet::write_ref_field_gc(oop* field, oop new_val) {
+void GenRemSet::write_ref_field_gc(void* field, oop new_val) {
   if (kind() == CardTableModRef) {
     ((CardTableRS*)this)->inline_write_ref_field_gc(field, new_val);
   } else {

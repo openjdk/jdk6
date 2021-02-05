@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)symbolOop.cpp	1.28 07/05/05 17:06:08 JVM"
-#endif
 /*
  * Copyright 1997-2005 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -32,7 +29,7 @@ bool symbolOopDesc::equals(const char* str, int len) const {
   int l = utf8_length();
   if (l != len) return false;
   while (l-- > 0) {
-    if (str[l] != (char) byte_at(l)) 
+    if (str[l] != (char) byte_at(l))
       return false;
   }
   assert(l == -1, "we should be at the beginning");
@@ -71,8 +68,17 @@ char* symbolOopDesc::as_C_string_flexible_buffer(Thread* t,
 
 void symbolOopDesc::print_symbol_on(outputStream* st) {
   st = st ? st : tty;
-  for (int index = 0; index < utf8_length(); index++)
-    st->put((char)byte_at(index));
+  int length = UTF8::unicode_length((const char*)bytes(), utf8_length());
+  const char *ptr = (const char *)bytes();
+  jchar value;
+  for (int index = 0; index < length; index++) {
+    ptr = UTF8::next(ptr, &value);
+    if (value >= 32 && value < 127 || value == '\'' || value == '\\') {
+      st->put(value);
+    } else {
+      st->print("\\u%04x", value);
+    }
+  }
 }
 
 jchar* symbolOopDesc::as_unicode(int& length) const {

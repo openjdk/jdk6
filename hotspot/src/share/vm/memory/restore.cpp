@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)restore.cpp	1.14 07/05/05 17:05:44 JVM"
-#endif
 /*
- * Copyright 2003-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2003-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -52,6 +49,8 @@ public:
     assert(SharedSkipVerify || obj->is_oop_or_null(), "invalid oop");
     *p = obj;
   }
+
+  void do_oop(narrowOop* p) { ShouldNotReachHere(); }
 
   void do_ptr(void** p) {
     assert(*p == NULL, "initializing previous initialized pointer.");
@@ -173,23 +172,23 @@ void CompactingPermGenGen::initialize_oops() {
   // are always added at the beginning of the linked lists, THESE LINKED
   // LIST ELEMENTS ARE READ-ONLY.
 
-  int len = *(intptr_t*)buffer;	// skip over symbol table entries
+  int len = *(intptr_t*)buffer; // skip over symbol table entries
   buffer += sizeof(intptr_t);
   buffer += len;
 
-  len = *(intptr_t*)buffer;	// skip over string table entries
+  len = *(intptr_t*)buffer;     // skip over string table entries
   buffer += sizeof(intptr_t);
   buffer += len;
 
-  len = *(intptr_t*)buffer;	// skip over shared dictionary entries
+  len = *(intptr_t*)buffer;     // skip over shared dictionary entries
   buffer += sizeof(intptr_t);
   buffer += len;
 
-  len = *(intptr_t*)buffer;	// skip over package info table entries
+  len = *(intptr_t*)buffer;     // skip over package info table entries
   buffer += sizeof(intptr_t);
   buffer += len;
 
-  len = *(intptr_t*)buffer;	// skip over package info table char[] arrays.
+  len = *(intptr_t*)buffer;     // skip over package info table char[] arrays.
   buffer += sizeof(intptr_t);
   buffer += len;
 

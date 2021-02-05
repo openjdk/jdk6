@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)virtualspace.hpp	1.42 07/10/04 10:49:29 JVM"
-#endif
 /*
- * Copyright 1997-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // ReservedSpace is a data structure for reserving a contiguous address range.
@@ -32,49 +29,59 @@ class ReservedSpace VALUE_OBJ_CLASS_SPEC {
  private:
   char*  _base;
   size_t _size;
+  size_t _noaccess_prefix;
   size_t _alignment;
   bool   _special;
 
   // ReservedSpace
   ReservedSpace(char* base, size_t size, size_t alignment, bool special);
   void initialize(size_t size, size_t alignment, bool large,
-		  char* requested_address = NULL);
+                  char* requested_address,
+                  const size_t noaccess_prefix);
 
   // Release parts of an already-reserved memory region [addr, addr + len) to
   // get a new region that has "compound alignment."  Return the start of the
   // resulting region, or NULL on failure.
-  // 
+  //
   // The region is logically divided into a prefix and a suffix.  The prefix
   // starts at the result address, which is aligned to prefix_align.  The suffix
   // starts at result address + prefix_size, which is aligned to suffix_align.
   // The total size of the result region is size prefix_size + suffix_size.
   char* align_reserved_region(char* addr, const size_t len,
-			      const size_t prefix_size,
-			      const size_t prefix_align,
-			      const size_t suffix_size,
-			      const size_t suffix_align);
+                              const size_t prefix_size,
+                              const size_t prefix_align,
+                              const size_t suffix_size,
+                              const size_t suffix_align);
 
   // Reserve memory, call align_reserved_region() to alignment it and return the
   // result.
   char* reserve_and_align(const size_t reserve_size,
-			  const size_t prefix_size,
-			  const size_t prefix_align,
-			  const size_t suffix_size,
-			  const size_t suffix_align);
+                          const size_t prefix_size,
+                          const size_t prefix_align,
+                          const size_t suffix_size,
+                          const size_t suffix_align);
+
+ protected:
+  // Create protection page at the beginning of the space.
+  void protect_noaccess_prefix(const size_t size);
 
  public:
   // Constructor
   ReservedSpace(size_t size);
   ReservedSpace(size_t size, size_t alignment, bool large,
-		char* requested_address = NULL);
+                char* requested_address = NULL,
+                const size_t noaccess_prefix = 0);
   ReservedSpace(const size_t prefix_size, const size_t prefix_align,
-		const size_t suffix_size, const size_t suffix_align);
+                const size_t suffix_size, const size_t suffix_align,
+                const size_t noaccess_prefix);
 
   // Accessors
   char*  base()      const { return _base;      }
   size_t size()      const { return _size;      }
   size_t alignment() const { return _alignment; }
   bool   special()   const { return _special;   }
+
+  size_t noaccess_prefix()   const { return _noaccess_prefix;   }
 
   bool is_reserved() const { return _base != NULL; }
   void release();
@@ -86,7 +93,7 @@ class ReservedSpace VALUE_OBJ_CLASS_SPEC {
 
   // These simply call the above using the default alignment.
   inline ReservedSpace first_part(size_t partition_size,
-				  bool split = false, bool realloc = true);
+                                  bool split = false, bool realloc = true);
   inline ReservedSpace last_part (size_t partition_size);
 
   // Alignment
@@ -107,6 +114,16 @@ ReservedSpace ReservedSpace::last_part(size_t partition_size)
   return last_part(partition_size, alignment());
 }
 
+// Class encapsulating behavior specific of memory space reserved for Java heap
+class ReservedHeapSpace : public ReservedSpace {
+public:
+  // Constructor
+  ReservedHeapSpace(size_t size, size_t forced_base_alignment,
+                    bool large, char* requested_address);
+  ReservedHeapSpace(const size_t prefix_size, const size_t prefix_align,
+                    const size_t suffix_size, const size_t suffix_align);
+};
+
 // VirtualSpace is data structure for committing a previously reserved address range in smaller chunks.
 
 class VirtualSpace VALUE_OBJ_CLASS_SPEC {
@@ -126,11 +143,11 @@ class VirtualSpace VALUE_OBJ_CLASS_SPEC {
 
   // MPSS Support
   // Each virtualspace region has a lower, middle, and upper region.
-  // Each region has an end boundary and a high pointer which is the 
+  // Each region has an end boundary and a high pointer which is the
   // high water mark for the last allocated byte.
   // The lower and upper unaligned to LargePageSizeInBytes uses default page.
   // size.  The middle region uses large page size.
-  char* _lower_high;  
+  char* _lower_high;
   char* _middle_high;
   char* _upper_high;
 
@@ -150,7 +167,7 @@ class VirtualSpace VALUE_OBJ_CLASS_SPEC {
   char* lower_high_boundary() const { return _lower_high_boundary; }
   char* middle_high_boundary() const { return _middle_high_boundary; }
   char* upper_high_boundary() const { return _upper_high_boundary; }
-  
+
   size_t lower_alignment() const { return _lower_alignment; }
   size_t middle_alignment() const { return _middle_alignment; }
   size_t upper_alignment() const { return _upper_alignment; }
@@ -170,7 +187,7 @@ class VirtualSpace VALUE_OBJ_CLASS_SPEC {
   // Initialization
   VirtualSpace();
   bool initialize(ReservedSpace rs, size_t committed_byte_size);
-  
+
   // Destruction
   ~VirtualSpace();
 

@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)libproc_impl.h	1.13 07/05/05 17:02:02 JVM"
-#endif
 /*
  * Copyright 2003-2005 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 #ifndef _LIBPROC_IMPL_H_
@@ -42,7 +39,7 @@ typedef struct lib_info {
   char             name[BUF_SIZE];
   uintptr_t        base;
   struct symtab*   symtab;
-  int              fd;        // file descriptor for lib 
+  int              fd;        // file descriptor for lib
   struct lib_info* next;
 } lib_info;
 
@@ -56,11 +53,11 @@ typedef struct thread_info {
 
 // list of virtual memory maps
 typedef struct map_info {
-   int              fd;       // file descriptor 
-   off_t            offset;   // file offset of this mapping 
-   uintptr_t        vaddr;    // starting virtual address 
-   size_t           memsz;    // size of the mapping 
-   struct map_info* next;     
+   int              fd;       // file descriptor
+   off_t            offset;   // file offset of this mapping
+   uintptr_t        vaddr;    // starting virtual address
+   size_t           memsz;    // size of the mapping
+   struct map_info* next;
 } map_info;
 
 // vtable for ps_prochandle
@@ -80,7 +77,7 @@ typedef struct ps_prochandle_ops {
 // the ps_prochandle
 
 struct core_data {
-   int                core_fd;   // file descriptor of core file 
+   int                core_fd;   // file descriptor of core file
    int                exec_fd;   // file descriptor of exec file
    int                interp_fd; // file descriptor of interpreter (ld-linux.so.2)
    // part of the class sharing workaround
@@ -129,4 +126,3 @@ thread_info* add_thread_info(struct ps_prochandle* ph, pthread_t pthread_id, lwp
 bool is_elf_file(int fd);
 
 #endif //_LIBPROC_IMPL_H_
-

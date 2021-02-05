@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_SRC
-#pragma ident "@(#)methodDataOop.cpp	1.51 07/05/29 09:44:22 JVM"
-#endif
 /*
- * Copyright 2000-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 # include "incls/_precompiled.incl"
@@ -35,7 +32,7 @@
 
 // Some types of data layouts need a length field.
 bool DataLayout::needs_array_len(u1 tag) {
-  return (tag == multi_branch_data_tag);
+  return (tag == multi_branch_data_tag) || (tag == arg_info_data_tag);
 }
 
 // Perform generic initialization of the data.  More specific
@@ -171,18 +168,18 @@ void ReceiverTypeData::oop_iterate(OopClosure* blk) {
       blk->do_oop(adr_receiver(row));
     }
   }
-}  
+}
 
 void ReceiverTypeData::oop_iterate_m(OopClosure* blk, MemRegion mr) {
   for (uint row = 0; row < row_limit(); row++) {
     if (receiver(row) != NULL) {
       oop* adr = adr_receiver(row);
       if (mr.contains(adr)) {
-	blk->do_oop(adr);
+        blk->do_oop(adr);
       }
     }
   }
-}  
+}
 
 void ReceiverTypeData::adjust_pointers() {
   for (uint row = 0; row < row_limit(); row++) {
@@ -247,7 +244,7 @@ void VirtualCallData::print_data_on(outputStream* st) {
 // been executed, followed by a series of triples of the form
 // (bci, count, di) which count the number of times that some bci was the
 // target of the ret and cache a corresponding displacement.
-  
+
 void RetData::post_initialize(BytecodeStream* stream, methodDataOop mdo) {
   for (uint row = 0; row < row_limit(); row++) {
     set_bci_displacement(row, -1);
@@ -297,7 +294,7 @@ void RetData::print_data_on(outputStream* st) {
     if (bci(row) != no_bci) {
       tab(st);
       st->print_cr("bci(%d: count(%u) displacement(%d))",
-		   bci(row), bci_count(row), bci_displacement(row));
+                   bci(row), bci_count(row), bci_displacement(row));
     }
   }
 }
@@ -323,7 +320,7 @@ void BranchData::post_initialize(BytecodeStream* stream, methodDataOop mdo) {
 void BranchData::print_data_on(outputStream* st) {
   print_shared(st, "BranchData");
   st->print_cr("taken(%u) displacement(%d)",
-	       taken(), displacement());
+               taken(), displacement());
   tab(st);
   st->print_cr("not taken(%u)", not_taken());
 }
@@ -350,7 +347,7 @@ int MultiBranchData::compute_cell_count(BytecodeStream* stream) {
 }
 
 void MultiBranchData::post_initialize(BytecodeStream* stream,
-				      methodDataOop mdo) {
+                                      methodDataOop mdo) {
   assert(stream->bci() == bci(), "wrong pos");
   int target;
   int my_di;
@@ -366,7 +363,7 @@ void MultiBranchData::post_initialize(BytecodeStream* stream,
       target_di = mdo->bci_to_di(target);
       offset = target_di - my_di;
       set_displacement_at(count, offset);
-    }         
+    }
     target = sw->default_offset() + bci();
     my_di = mdo->dp_to_di(dp());
     target_di = mdo->bci_to_di(target);
@@ -397,16 +394,27 @@ void MultiBranchData::post_initialize(BytecodeStream* stream,
 void MultiBranchData::print_data_on(outputStream* st) {
   print_shared(st, "MultiBranchData");
   st->print_cr("default_count(%u) displacement(%d)",
-	       default_count(), default_displacement());
+               default_count(), default_displacement());
   int cases = number_of_cases();
   for (int i = 0; i < cases; i++) {
     tab(st);
     st->print_cr("count(%u) displacement(%d)",
-		 count_at(i), displacement_at(i));
+                 count_at(i), displacement_at(i));
   }
 }
 #endif
 
+#ifndef PRODUCT
+void ArgInfoData::print_data_on(outputStream* st) {
+  print_shared(st, "ArgInfoData");
+  int nargs = number_of_args();
+  for (int i = 0; i < nargs; i++) {
+    st->print("  0x%x", arg_modified(i));
+  }
+  st->cr();
+}
+
+#endif
 // ==================================================================
 // methodDataOop
 //
@@ -423,15 +431,15 @@ int methodDataOopDesc::bytecode_cell_count(Bytecodes::Code code) {
     } else {
       return BitData::static_cell_count();
     }
-  case Bytecodes::_invokespecial: 
+  case Bytecodes::_invokespecial:
   case Bytecodes::_invokestatic:
     return CounterData::static_cell_count();
-  case Bytecodes::_goto: 
-  case Bytecodes::_goto_w: 
+  case Bytecodes::_goto:
+  case Bytecodes::_goto_w:
   case Bytecodes::_jsr:
   case Bytecodes::_jsr_w:
     return JumpData::static_cell_count();
-  case Bytecodes::_invokevirtual: 
+  case Bytecodes::_invokevirtual:
   case Bytecodes::_invokeinterface:
     return VirtualCallData::static_cell_count();
   case Bytecodes::_ret:
@@ -511,6 +519,9 @@ int methodDataOopDesc::compute_allocation_size_in_bytes(methodHandle method) {
   int extra_data_count = compute_extra_data_count(data_size, empty_bc_count);
   object_size += extra_data_count * DataLayout::compute_size_in_bytes(0);
 
+  // Add a cell to record information about modified arguments.
+  int arg_size = method->size_of_parameters();
+  object_size += DataLayout::compute_size_in_bytes(arg_size+1);
   return object_size;
 }
 
@@ -525,7 +536,7 @@ int methodDataOopDesc::compute_allocation_size_in_words(methodHandle method) {
 // Initialize an individual data segment.  Returns the size of
 // the segment in bytes.
 int methodDataOopDesc::initialize_data(BytecodeStream* stream,
-				       int data_index) {
+                                       int data_index) {
   int cell_count = -1;
   int tag = DataLayout::no_tag;
   DataLayout* data_layout = data_layout_at(data_index);
@@ -607,7 +618,7 @@ ProfileData* methodDataOopDesc::data_at(int data_index) {
     return NULL;
   }
   DataLayout* data_layout = data_layout_at(data_index);
-  
+
   switch (data_layout->tag()) {
   case DataLayout::no_tag:
   default:
@@ -629,6 +640,8 @@ ProfileData* methodDataOopDesc::data_at(int data_index) {
     return new BranchData(data_layout);
   case DataLayout::multi_branch_data_tag:
     return new MultiBranchData(data_layout);
+  case DataLayout::arg_info_data_tag:
+    return new ArgInfoData(data_layout);
   };
 }
 
@@ -684,7 +697,17 @@ void methodDataOopDesc::initialize(methodHandle method) {
 
   // Add some extra DataLayout cells (at least one) to track stray traps.
   int extra_data_count = compute_extra_data_count(data_size, empty_bc_count);
-  object_size += extra_data_count * DataLayout::compute_size_in_bytes(0);
+  int extra_size = extra_data_count * DataLayout::compute_size_in_bytes(0);
+
+  // Add a cell to record information about modified arguments.
+  // Set up _args_modified array after traps cells so that
+  // the code for traps cells works.
+  DataLayout *dp = data_layout_at(data_size + extra_size);
+
+  int arg_size = method->size_of_parameters();
+  dp->initialize(DataLayout::arg_info_data_tag, 0, arg_size+1);
+
+  object_size += extra_size + DataLayout::compute_size_in_bytes(arg_size+1);
 
   // Set an initial hint. Don't use set_hint_di() because
   // first_di() may be out of bounds if data_size is 0.
@@ -701,14 +724,14 @@ void methodDataOopDesc::initialize(methodHandle method) {
 int methodDataOopDesc::mileage_of(methodOop method) {
   int mileage = 0;
   int iic = method->interpreter_invocation_count();
-  if (mileage < iic)  mileage = iic; 
+  if (mileage < iic)  mileage = iic;
 
   InvocationCounter* ic = method->invocation_counter();
   InvocationCounter* bc = method->backedge_counter();
 
   int icval = ic->count();
   if (ic->carry()) icval += CompileThreshold;
-  if (mileage < icval)  mileage = icval; 
+  if (mileage < icval)  mileage = icval;
   int bcval = bc->count();
   if (bc->carry()) bcval += CompileThreshold;
   if (mileage < bcval)  mileage = bcval;
@@ -767,6 +790,10 @@ ProfileData* methodDataOopDesc::bci_to_extra_data(int bci, bool create_if_missin
     // No need for "OrderAccess::load_acquire" ops,
     // since the data structure is monotonic.
     if (dp->tag() == DataLayout::no_tag)  break;
+    if (dp->tag() == DataLayout::arg_info_data_tag) {
+      dp = end; // ArgInfoData is at the end of extra data section.
+      break;
+    }
     if (dp->bci() == bci) {
       assert(dp->tag() == DataLayout::bit_data_tag, "sane");
       return new BitData(dp);
@@ -788,6 +815,16 @@ ProfileData* methodDataOopDesc::bci_to_extra_data(int bci, bool create_if_missin
   return NULL;
 }
 
+ArgInfoData *methodDataOopDesc::arg_info() {
+  DataLayout* dp    = extra_data_base();
+  DataLayout* end   = extra_data_limit();
+  for (; dp < end; dp = next_extra(dp)) {
+    if (dp->tag() == DataLayout::arg_info_data_tag)
+      return new ArgInfoData(dp);
+  }
+  return NULL;
+}
+
 #ifndef PRODUCT
 void methodDataOopDesc::print_data_on(outputStream* st) {
   ResourceMark rm;
@@ -797,15 +834,20 @@ void methodDataOopDesc::print_data_on(outputStream* st) {
     st->fill_to(6);
     data->print_data_on(st);
   }
+  st->print_cr("--- Extra data:");
   DataLayout* dp    = extra_data_base();
   DataLayout* end   = extra_data_limit();
   for (; dp < end; dp = next_extra(dp)) {
     // No need for "OrderAccess::load_acquire" ops,
     // since the data structure is monotonic.
-    if (dp->tag() == DataLayout::no_tag)  break;
-    if (dp == extra_data_base())
-      st->print_cr("--- Extra data:");
-    data = new BitData(dp);
+    if (dp->tag() == DataLayout::no_tag)  continue;
+    if (dp->tag() == DataLayout::bit_data_tag) {
+      data = new BitData(dp);
+    } else {
+      assert(dp->tag() == DataLayout::arg_info_data_tag, "must be BitData or ArgInfo");
+      data = new ArgInfoData(dp);
+      dp = end; // ArgInfoData is at the end of extra data section.
+    }
     st->print("%d", dp_to_di(data->dp()));
     st->fill_to(6);
     data->print_data_on(st);

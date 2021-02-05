@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)cardTableModRefBS.hpp	1.53 07/10/04 10:49:32 JVM"
-#endif
 /*
- * Copyright 2000-2006 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // This kind of "BarrierSet" allows a "CollectedHeap" to detect and
@@ -55,10 +52,15 @@ class CardTableModRefBS: public ModRefBarrierSet {
 
   enum CardValues {
     clean_card                  = -1,
+    // The mask contains zeros in places for all other values.
+    clean_card_mask             = clean_card - 31,
+
     dirty_card                  =  0,
     precleaned_card             =  1,
-    last_card                   =  4,
-    CT_MR_BS_last_reserved      = 10
+    claimed_card                =  2,
+    deferred_card               =  4,
+    last_card                   =  8,
+    CT_MR_BS_last_reserved      = 16
   };
 
   // dirty and precleaned are equivalent wrt younger_refs_iter.
@@ -73,7 +75,7 @@ class CardTableModRefBS: public ModRefBarrierSet {
     return CardTableModRefBS::card_is_dirty_wrt_gen_iter(cv);
   }
 
-  // Returns "true" iff the value "cv" may have represented a dirty card at 
+  // Returns "true" iff the value "cv" may have represented a dirty card at
   // some point.
   virtual bool card_may_have_been_dirty(jbyte cv) {
     return card_is_dirty_wrt_gen_iter(cv);
@@ -126,18 +128,18 @@ class CardTableModRefBS: public ModRefBarrierSet {
   void resize_covered_region(MemRegion new_region);
 
   // Returns the leftmost end of a committed region corresponding to a
-  // covered region before covered region "ind", or else "NULL" if "ind" is 
+  // covered region before covered region "ind", or else "NULL" if "ind" is
   // the first covered region.
   HeapWord* largest_prev_committed_end(int ind) const;
 
-  // Returns the part of the region mr that doesn't intersect with 
-  // any committed region other than self.  Used to prevent uncommitting 
+  // Returns the part of the region mr that doesn't intersect with
+  // any committed region other than self.  Used to prevent uncommitting
   // regions that are also committed by other regions.  Also protects
   // against uncommitting the guard region.
   MemRegion committed_unique_to_self(int self, MemRegion mr) const;
 
   // Mapping from address to card marking array entry
-  jbyte* byte_for(const void* p) const { 
+  jbyte* byte_for(const void* p) const {
     assert(_whole_heap.contains(p),
            "out of bounds access to card marking array");
     jbyte* result = &byte_map_base[uintptr_t(p) >> card_shift];
@@ -153,17 +155,6 @@ class CardTableModRefBS: public ModRefBarrierSet {
     return byte_for(p) + 1;
   }
 
-  // Mapping from card marking array entry to address of first word
-  HeapWord* addr_for(const jbyte* p) const { 
-    assert(p >= _byte_map && p < _byte_map + _byte_map_size,
-	   "out of bounds access to card marking array");
-    size_t delta = pointer_delta(p, byte_map_base, sizeof(jbyte));
-    HeapWord* result = (HeapWord*) (delta << card_shift);
-    assert(_whole_heap.contains(result),
-           "out of bounds accessor from card marking array");
-    return result;
-  }
-
   // Iterate over the portion of the card-table which covers the given
   // region mr in the given space and apply cl to any dirty sub-regions
   // of mr. cl and dcto_cl must either be the same closure or cl must
@@ -171,13 +162,13 @@ class CardTableModRefBS: public ModRefBarrierSet {
   // may be modified. Note that this function will operate in a parallel
   // mode if worker threads are available.
   void non_clean_card_iterate(Space* sp, MemRegion mr,
-			      DirtyCardToOopClosure* dcto_cl,
-			      MemRegionClosure* cl,
-			      bool clear);
+                              DirtyCardToOopClosure* dcto_cl,
+                              MemRegionClosure* cl,
+                              bool clear);
 
   // Utility function used to implement the other versions below.
   void non_clean_card_iterate_work(MemRegion mr, MemRegionClosure* cl,
-				   bool clear);
+                                   bool clear);
 
   void par_non_clean_card_iterate_work(Space* sp, MemRegion mr,
                                        DirtyCardToOopClosure* dcto_cl,
@@ -216,16 +207,16 @@ class CardTableModRefBS: public ModRefBarrierSet {
   // covering "sp", and "lowest_non_clean_base_chunk_index" to the chunk
   // index of the corresponding to the first element of that array.
   // Ensures that these arrays are of sufficient size, allocating if necessary.
-  // May be called by several threads concurrently.  
+  // May be called by several threads concurrently.
   void get_LNC_array_for_space(Space* sp,
-			       jbyte**& lowest_non_clean, 
-			       uintptr_t& lowest_non_clean_base_chunk_index,
-			       size_t& lowest_non_clean_chunk_size);
+                               jbyte**& lowest_non_clean,
+                               uintptr_t& lowest_non_clean_base_chunk_index,
+                               size_t& lowest_non_clean_chunk_size);
 
   // Returns the number of chunks necessary to cover "mr".
   size_t chunks_to_cover(MemRegion mr) {
     return (size_t)(addr_to_chunk_index(mr.last()) -
-  		    addr_to_chunk_index(mr.start()) + 1);
+                    addr_to_chunk_index(mr.start()) + 1);
   }
 
   // Returns the index of the chunk in a stride which
@@ -238,25 +229,25 @@ class CardTableModRefBS: public ModRefBarrierSet {
   // Apply cl, which must either itself apply dcto_cl or be dcto_cl,
   // to the cards in the stride (of n_strides) within the given space.
   void process_stride(Space* sp,
-		      MemRegion used,
-		      jint stride, int n_strides,
-		      DirtyCardToOopClosure* dcto_cl,
-		      MemRegionClosure* cl,
-		      bool clear,
-		      jbyte** lowest_non_clean,
-		      uintptr_t lowest_non_clean_base_chunk_index,
-		      size_t lowest_non_clean_chunk_size);
+                      MemRegion used,
+                      jint stride, int n_strides,
+                      DirtyCardToOopClosure* dcto_cl,
+                      MemRegionClosure* cl,
+                      bool clear,
+                      jbyte** lowest_non_clean,
+                      uintptr_t lowest_non_clean_base_chunk_index,
+                      size_t lowest_non_clean_chunk_size);
 
   // Makes sure that chunk boundaries are handled appropriately, by
   // adjusting the min_done of dcto_cl, and by using a special card-table
   // value to indicate how min_done should be set.
   void process_chunk_boundaries(Space* sp,
-				DirtyCardToOopClosure* dcto_cl,
-				MemRegion chunk_mr,
-				MemRegion used,
-				jbyte** lowest_non_clean,
-				uintptr_t lowest_non_clean_base_chunk_index,
-				size_t    lowest_non_clean_chunk_size);
+                                DirtyCardToOopClosure* dcto_cl,
+                                MemRegion chunk_mr,
+                                MemRegion used,
+                                jbyte** lowest_non_clean,
+                                uintptr_t lowest_non_clean_base_chunk_index,
+                                size_t    lowest_non_clean_chunk_size);
 
 public:
   // Constants
@@ -266,29 +257,37 @@ public:
     card_size_in_words          = card_size / sizeof(HeapWord)
   };
 
+  static int clean_card_val()      { return clean_card; }
+  static int clean_card_mask_val() { return clean_card_mask; }
+  static int dirty_card_val()      { return dirty_card; }
+  static int claimed_card_val()    { return claimed_card; }
+  static int precleaned_card_val() { return precleaned_card; }
+  static int deferred_card_val()   { return deferred_card; }
+
   // For RTTI simulation.
-  BarrierSet::Name kind() { return BarrierSet::CardTableModRef; }
   bool is_a(BarrierSet::Name bsn) {
-    return bsn == BarrierSet::CardTableModRef || bsn == BarrierSet::ModRef;
+    return bsn == BarrierSet::CardTableModRef || ModRefBarrierSet::is_a(bsn);
   }
 
-  CardTableModRefBS(MemRegion whole_heap, int max_covered_regions); 
+  CardTableModRefBS(MemRegion whole_heap, int max_covered_regions);
 
   // *** Barrier set functions.
 
-  inline bool write_ref_needs_barrier(oop* field, oop new_val) {
+  bool has_write_ref_pre_barrier() { return false; }
+
+  inline bool write_ref_needs_barrier(void* field, oop new_val) {
     // Note that this assumes the perm gen is the highest generation
     // in the address space
     return new_val != NULL && !new_val->is_perm();
   }
 
   // Record a reference update. Note that these versions are precise!
-  // The scanning code has to handle the fact that the write barrier may be 
-  // either precise or imprecise. We make non-virtual inline variants of 
+  // The scanning code has to handle the fact that the write barrier may be
+  // either precise or imprecise. We make non-virtual inline variants of
   // these functions here for performance.
 protected:
   void write_ref_field_work(oop obj, size_t offset, oop newVal);
-  void write_ref_field_work(oop* field, oop newVal);
+  void write_ref_field_work(void* field, oop newVal);
 public:
 
   bool has_write_ref_array_opt() { return true; }
@@ -318,10 +317,40 @@ public:
 
   // *** Card-table-barrier-specific things.
 
-  inline void inline_write_ref_field(oop* field, oop newVal) {
+  inline void inline_write_ref_field_pre(void* field, oop newVal) {}
+
+  inline void inline_write_ref_field(void* field, oop newVal) {
     jbyte* byte = byte_for(field);
     *byte = dirty_card;
   }
+
+  // These are used by G1, when it uses the card table as a temporary data
+  // structure for card claiming.
+  bool is_card_dirty(size_t card_index) {
+    return _byte_map[card_index] == dirty_card_val();
+  }
+
+  void mark_card_dirty(size_t card_index) {
+    _byte_map[card_index] = dirty_card_val();
+  }
+
+  bool is_card_claimed(size_t card_index) {
+    jbyte val = _byte_map[card_index];
+    return (val & (clean_card_mask_val() | claimed_card_val())) == claimed_card_val();
+  }
+
+  bool claim_card(size_t card_index);
+
+  bool is_card_clean(size_t card_index) {
+    return _byte_map[card_index] == clean_card_val();
+  }
+
+  bool is_card_deferred(size_t card_index) {
+    jbyte val = _byte_map[card_index];
+    return (val & (clean_card_mask_val() | deferred_card_val())) == deferred_card_val();
+  }
+
+  bool mark_card_deferred(size_t card_index);
 
   // Card marking array base (adjusted for heap low boundary)
   // This would be the 0th element of _byte_map, if the heap started at 0x0.
@@ -347,12 +376,13 @@ public:
   }
 
   // ModRefBS functions.
-  void invalidate(MemRegion mr);
+  virtual void invalidate(MemRegion mr, bool whole_heap = false);
   void clear(MemRegion mr);
+  void dirty(MemRegion mr);
   void mod_oop_in_space_iterate(Space* sp, OopClosure* cl,
-				bool clear = false,
-				bool before_save_marks = false);
- 
+                                bool clear = false,
+                                bool before_save_marks = false);
+
   // *** Card-table-RemSet-specific things.
 
   // Invoke "cl.do_MemRegion" on a set of MemRegions that collectively
@@ -372,29 +402,54 @@ public:
   // for cards within the MemRegion "mr" (which is required to be
   // card-aligned and sized.)
   void mod_card_iterate(MemRegion mr, MemRegionClosure* cl,
-			bool clear = false) {
+                        bool clear = false) {
     non_clean_card_iterate_work(mr, cl, clear);
   }
 
   static uintx ct_max_alignment_constraint();
 
-  // Apply closure cl to the dirty cards lying completely
-  // within MemRegion mr, setting the cards to precleaned.
-  void      dirty_card_iterate(MemRegion mr, MemRegionClosure* cl);
+  // Apply closure "cl" to the dirty cards containing some part of
+  // MemRegion "mr".
+  void dirty_card_iterate(MemRegion mr, MemRegionClosure* cl);
 
   // Return the MemRegion corresponding to the first maximal run
-  // of dirty cards lying completely within MemRegion mr, after
-  // marking those cards precleaned.
-  MemRegion dirty_card_range_after_preclean(MemRegion mr);
+  // of dirty cards lying completely within MemRegion mr.
+  // If reset is "true", then sets those card table entries to the given
+  // value.
+  MemRegion dirty_card_range_after_reset(MemRegion mr, bool reset,
+                                         int reset_val);
 
   // Set all the dirty cards in the given region to precleaned state.
   void preclean_dirty_cards(MemRegion mr);
 
+  // Provide read-only access to the card table array.
+  const jbyte* byte_for_const(const void* p) const {
+    return byte_for(p);
+  }
+  const jbyte* byte_after_const(const void* p) const {
+    return byte_after(p);
+  }
+
+  // Mapping from card marking array entry to address of first word
+  HeapWord* addr_for(const jbyte* p) const {
+    assert(p >= _byte_map && p < _byte_map + _byte_map_size,
+           "out of bounds access to card marking array");
+    size_t delta = pointer_delta(p, byte_map_base, sizeof(jbyte));
+    HeapWord* result = (HeapWord*) (delta << card_shift);
+    assert(_whole_heap.contains(result),
+           "out of bounds accessor from card marking array");
+    return result;
+  }
+
   // Mapping from address to card marking array index.
-  int index_for(void* p) {
+  size_t index_for(void* p) {
     assert(_whole_heap.contains(p),
-	   "out of bounds access to card marking array");
+           "out of bounds access to card marking array");
     return byte_for(p) - _byte_map;
+  }
+
+  const jbyte* byte_for_index(const size_t card_index) const {
+    return _byte_map + card_index;
   }
 
   void verify();
@@ -405,6 +460,7 @@ public:
   static size_t par_chunk_heapword_alignment() {
     return CardsPerStrideChunk * card_size_in_words;
   }
+
 };
 
 class CardTableRS;
@@ -417,8 +473,8 @@ protected:
   bool card_may_have_been_dirty(jbyte cv);
 public:
   CardTableModRefBSForCTRS(MemRegion whole_heap,
-			   int max_covered_regions) :
+                           int max_covered_regions) :
     CardTableModRefBS(whole_heap, max_covered_regions) {}
-    
+
   void set_CTRS(CardTableRS* rs) { _rs = rs; }
 };

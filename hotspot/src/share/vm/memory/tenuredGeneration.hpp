@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)tenuredGeneration.hpp	1.27 07/05/29 09:44:17 JVM"
-#endif
 /*
- * Copyright 2001-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2001-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 // TenuredGeneration models the heap containing old (promoted/tenured) objects.
@@ -35,7 +32,7 @@ class TenuredGeneration: public OneContigSpaceCardGeneration {
   // current shrinking effect: this damps shrinking when the heap gets empty.
   size_t _shrink_factor;
   // Some statistics from before gc started.
-  // These are gathered in the gc_prologue (and should_collect) 
+  // These are gathered in the gc_prologue (and should_collect)
   // to control growing/shrinking policy in spite of promotions.
   size_t _capacity_at_prologue;
   size_t _used_at_prologue;
@@ -52,13 +49,13 @@ class TenuredGeneration: public OneContigSpaceCardGeneration {
 
   GenerationCounters*   _gen_counters;
   CSpaceCounters*       _space_counters;
-  
+
  public:
   TenuredGeneration(ReservedSpace rs, size_t initial_byte_size, int level,
-		    GenRemSet* remset);
-  
+                    GenRemSet* remset);
+
   Generation::Name kind() { return Generation::MarkSweepCompact; }
-  
+
   // Printing
   const char* name() const;
   const char* short_name() const { return "Tenured"; }
@@ -76,7 +73,6 @@ class TenuredGeneration: public OneContigSpaceCardGeneration {
 
   // Mark sweep support
   void compute_new_size();
-  int allowed_dead_ratio() const;
 
   virtual void gc_prologue(bool full);
   virtual void gc_epilogue(bool full);
@@ -86,15 +82,15 @@ class TenuredGeneration: public OneContigSpaceCardGeneration {
 
   virtual void collect(bool full,
                        bool clear_all_soft_refs,
-                       size_t size, 
+                       size_t size,
                        bool is_tlab);
 
 #ifndef SERIALGC
   // Overrides.
   virtual oop par_promote(int thread_num,
-			  oop obj, markOop m, size_t word_sz);
+                          oop obj, markOop m, size_t word_sz);
   virtual void par_promote_alloc_undo(int thread_num,
-				      HeapWord* obj, size_t word_sz);
+                                      HeapWord* obj, size_t word_sz);
   virtual void par_promote_alloc_done(int thread_num);
 #endif // SERIALGC
 

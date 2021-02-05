@@ -1,8 +1,5 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)psPromotionManager.hpp	1.20 07/09/25 16:47:42 JVM"
-#endif
 /*
- * Copyright 2002-2007 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2002-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 //
@@ -44,8 +41,6 @@
 class MutableSpace;
 class PSOldGen;
 class ParCompactionManager;
-
-#define PS_CHUNKED_ARRAY_OOP_MASK  1
 
 #define PS_PM_STATS         0
 
@@ -83,7 +78,7 @@ class PSPromotionManager : public CHeapObj {
   PrefetchQueue                       _prefetch_queue;
 
   OopStarTaskQueue                    _claimed_stack_depth;
-  GrowableArray<oop*>*                _overflow_stack_depth;
+  GrowableArray<StarTask>*            _overflow_stack_depth;
   OopTaskQueue                        _claimed_stack_breadth;
   GrowableArray<oop>*                 _overflow_stack_breadth;
 
@@ -95,13 +90,15 @@ class PSPromotionManager : public CHeapObj {
   uint                                _min_array_size_for_chunking;
 
   // Accessors
-  static PSOldGen* old_gen()              { return _old_gen; }
-  static MutableSpace* young_space()      { return _young_space; }
+  static PSOldGen* old_gen()         { return _old_gen; }
+  static MutableSpace* young_space() { return _young_space; }
 
   inline static PSPromotionManager* manager_array(int index);
+  template <class T> inline void claim_or_forward_internal_depth(T* p);
+  template <class T> inline void claim_or_forward_internal_breadth(T* p);
 
-  GrowableArray<oop*>* overflow_stack_depth()  { return _overflow_stack_depth; }
-  GrowableArray<oop>* overflow_stack_breadth()   { return _overflow_stack_breadth; }
+  GrowableArray<StarTask>* overflow_stack_depth() { return _overflow_stack_depth; }
+  GrowableArray<oop>*  overflow_stack_breadth()   { return _overflow_stack_breadth; }
 
   // On the task queues we push reference locations as well as
   // partially-scanned arrays (in the latter case, we push an oop to
@@ -119,27 +116,37 @@ class PSPromotionManager : public CHeapObj {
   // (oop). We do all the necessary casting in the mask / unmask
   // methods to avoid sprinkling the rest of the code with more casts.
 
-  bool is_oop_masked(oop* p) {
-    return ((intptr_t) p & PS_CHUNKED_ARRAY_OOP_MASK) == PS_CHUNKED_ARRAY_OOP_MASK;
+  // These are added to the taskqueue so PS_CHUNKED_ARRAY_OOP_MASK (or any
+  // future masks) can't conflict with COMPRESSED_OOP_MASK
+#define PS_CHUNKED_ARRAY_OOP_MASK  0x2
+
+  bool is_oop_masked(StarTask p) {
+    // If something is marked chunked it's always treated like wide oop*
+    return (((intptr_t)(oop*)p) & PS_CHUNKED_ARRAY_OOP_MASK) ==
+                                  PS_CHUNKED_ARRAY_OOP_MASK;
   }
 
   oop* mask_chunked_array_oop(oop obj) {
     assert(!is_oop_masked((oop*) obj), "invariant");
-    oop* ret = (oop*) ((intptr_t) obj  | PS_CHUNKED_ARRAY_OOP_MASK);
+    oop* ret = (oop*) ((uintptr_t)obj | PS_CHUNKED_ARRAY_OOP_MASK);
     assert(is_oop_masked(ret), "invariant");
     return ret;
   }
 
-  oop unmask_chunked_array_oop(oop* p) {
+  oop unmask_chunked_array_oop(StarTask p) {
     assert(is_oop_masked(p), "invariant");
-    oop ret = oop((intptr_t) p & ~PS_CHUNKED_ARRAY_OOP_MASK);
+    assert(!p.is_narrow(), "chunked array oops cannot be narrow");
+    oop *chunk = (oop*)p;  // cast p to oop (uses conversion operator)
+    oop ret = oop((oop*)((uintptr_t)chunk & ~PS_CHUNKED_ARRAY_OOP_MASK));
     assert(!is_oop_masked((oop*) ret), "invariant");
     return ret;
   }
 
+  template <class T> void  process_array_chunk_work(oop obj,
+                                                    int start, int end);
   void process_array_chunk(oop old);
 
-  void push_depth(oop* p) {
+  template <class T> void push_depth(T* p) {
     assert(depth_first(), "pre-condition");
 
 #if PS_PM_STATS
@@ -152,7 +159,7 @@ class PSPromotionManager : public CHeapObj {
       ++_overflow_pushes;
       uint stack_length = (uint) overflow_stack_depth()->length();
       if (stack_length > _max_overflow_length) {
-	_max_overflow_length = stack_length;
+        _max_overflow_length = stack_length;
       }
 #endif // PS_PM_STATS
     }
@@ -171,14 +178,14 @@ class PSPromotionManager : public CHeapObj {
       ++_overflow_pushes;
       uint stack_length = (uint) overflow_stack_breadth()->length();
       if (stack_length > _max_overflow_length) {
-	_max_overflow_length = stack_length;
+        _max_overflow_length = stack_length;
       }
 #endif // PS_PM_STATS
     }
   }
 
  protected:
-  static OopStarTaskQueueSet* stack_array_depth() { return _stack_array_depth; }
+  static OopStarTaskQueueSet* stack_array_depth()   { return _stack_array_depth; }
   static OopTaskQueueSet*     stack_array_breadth() { return _stack_array_breadth; }
 
  public:
@@ -230,6 +237,7 @@ class PSPromotionManager : public CHeapObj {
       drain_stacks_breadth(totally_drain);
     }
   }
+ public:
   void drain_stacks_cond_depth() {
     if (claimed_stack_depth()->size() > _target_stack_size) {
       drain_stacks_depth(false);
@@ -259,15 +267,11 @@ class PSPromotionManager : public CHeapObj {
     return _depth_first;
   }
 
-  inline void process_popped_location_depth(oop* p);
+  inline void process_popped_location_depth(StarTask p);
 
   inline void flush_prefetch_queue();
-
-  inline void claim_or_forward_depth(oop* p);
-  inline void claim_or_forward_internal_depth(oop* p);
-
-  inline void claim_or_forward_breadth(oop* p);
-  inline void claim_or_forward_internal_breadth(oop* p);
+  template <class T> inline void claim_or_forward_depth(T* p);
+  template <class T> inline void claim_or_forward_breadth(T* p);
 
 #if PS_PM_STATS
   void increment_steals(oop* p = NULL) {

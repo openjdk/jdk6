@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2005 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 2000-2008 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 package sun.jvm.hotspot.types;
@@ -122,5 +122,6 @@ public interface Type {
   public JShortField         getJShortField        (String fieldName) throws WrongTypeException;
   public CIntegerField       getCIntegerField      (String fieldName) throws WrongTypeException;
   public OopField            getOopField           (String fieldName) throws WrongTypeException;
+  public NarrowOopField      getNarrowOopField     (String fieldName) throws WrongTypeException;
   public AddressField        getAddressField       (String fieldName);
 }

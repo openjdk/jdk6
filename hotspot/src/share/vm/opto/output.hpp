@@ -1,6 +1,3 @@
-#ifdef USE_PRAGMA_IDENT_HDR
-#pragma ident "@(#)output.hpp	1.28 07/05/05 17:06:24 JVM"
-#endif
 /*
  * Copyright 2000-2005 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -22,7 +19,7 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
 class Arena;
@@ -84,7 +81,7 @@ private:
 
   // Mapping from register to Node
   Node_List _reg_node;
-  
+
   // Free list for pinch nodes.
   Node_List _pinch_free_list;
 
@@ -216,4 +213,3 @@ public:
 #endif
 
 };
-
