@@ -210,6 +210,13 @@ class InetAddress implements java.io.Serializable {
             this.family = family;
         }
 
+        void init(String hostName, int family) {
+            this.hostName = hostName;
+            if (family != -1) {
+                this.family = family;
+            }
+        }
+
         String hostName;
 
         String getHostName() {
@@ -1579,7 +1586,6 @@ class InetAddress implements java.io.Serializable {
         pf.put("address", holder().address);
         pf.put("family", holder().family);
         s.writeFields();
-        s.flush();
     }
 }
 

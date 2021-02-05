@@ -357,6 +357,7 @@ TOOLS = \
 	com/sun/jarsigner	\
 	com/sun/mirror		\
 	com/sun/source          \
+	com/sun/tools/classfile \
 	com/sun/tools/doclets   \
 	com/sun/tools/example/debug/expr \
 	com/sun/tools/example/debug/tty  \
@@ -366,6 +367,7 @@ TOOLS = \
 	com/sun/tools/javadoc   \
 	com/sun/tools/apt       \
 	com/sun/tools/javah     \
+	com/sun/tools/javap     \
 	com/sun/tools/corba     \
 	com/sun/tools/internal/xjc       \
 	com/sun/tools/internal/ws       \
@@ -558,6 +560,8 @@ $(NOT_RT_JAR_LIST): FRC
 	$(ECHO) "sun/tools/java/" >> $@
 	$(ECHO) "sun/tools/javac/" >> $@
 	$(ECHO) "sun/tools/javap/" >> $@
+	$(ECHO) "com/sun/tools/classfile/" >> $@
+	$(ECHO) "com/sun/tools/javap/" >> $@
 	$(ECHO) "sun/tools/jconsole/" >> $@
 	$(ECHO) "sun/tools/jps/" >> $@
 	$(ECHO) "sun/tools/jstat/" >> $@
@@ -855,6 +859,11 @@ initial-image-jdk-setup:
 	      | $(CPIO) -pdum $(JDK_IMAGE_DIR)/jre )
 	$(RM) -rf $(JDK_IMAGE_DIR)/jre/man
 	$(CHMOD) a+rx `$(FIND) $(JDK_IMAGE_DIR) -type d`
+  ifneq (,$(findstring $(PLATFORM), linux solaris)) # If linux or solaris 
+	($(CD) $(LIBDIR)/.. && $(TAR) cf - \
+	    `$(FIND) lib -name $(LIB_PREFIX)jli.$(LIB_SUFFIX) -print `) | \
+	    ($(CD) $(JDK_IMAGE_DIR) && $(TAR) xf -)
+  endif # PLATFORM
 
 initial-image-jdk64-bindemos:
 	for dir in bin demo ; do \
@@ -891,7 +900,7 @@ endif
 initial-image-jdk:: initial-image-jdk-setup \
 		    initial-image-jdk-db \
 		    $(JDK_LICENSES) $(JDK_DOCFILES)
-	$(MKDIR) $(JDK_IMAGE_DIR)/lib
+	$(MKDIR) -p $(JDK_IMAGE_DIR)/lib
 	@#
 	@# Copy in the jars in lib that only belong in the JDK
 	@#

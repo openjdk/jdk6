@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
+import javax.xml.XMLConstants;
 
 import com.sun.org.apache.xerces.internal.impl.Constants;
 import com.sun.org.apache.xerces.internal.impl.XML11DTDScannerImpl;
@@ -49,6 +50,7 @@ import com.sun.org.apache.xerces.internal.impl.xs.XMLSchemaValidator;
 import com.sun.org.apache.xerces.internal.impl.xs.XSMessageFormatter;
 import com.sun.org.apache.xerces.internal.util.ParserConfigurationSettings;
 import com.sun.org.apache.xerces.internal.util.SymbolTable;
+import com.sun.org.apache.xerces.internal.utils.XMLSecurityManager;
 import com.sun.org.apache.xerces.internal.xni.XMLDTDContentModelHandler;
 import com.sun.org.apache.xerces.internal.xni.XMLDTDHandler;
 import com.sun.org.apache.xerces.internal.xni.XMLDocumentHandler;
@@ -259,6 +261,9 @@ public class XML11Configuration extends ParserConfigurationSettings
     protected static final String LOCALE =
         Constants.XERCES_PROPERTY_PREFIX + Constants.LOCALE_PROPERTY;
 
+    /** Property identifier: Security manager. */
+    private static final String SECURITY_MANAGER = Constants.SECURITY_MANAGER;
+
     // debugging
 
     /** Set to true and recompile to print exception stack trace. */
@@ -268,33 +273,33 @@ public class XML11Configuration extends ParserConfigurationSettings
     // Data
     //
 
-	protected SymbolTable fSymbolTable;
+    protected SymbolTable fSymbolTable;
     protected XMLInputSource fInputSource;
     protected ValidationManager fValidationManager;
-	protected XMLVersionDetector fVersionDetector;
+    protected XMLVersionDetector fVersionDetector;
     protected XMLLocator fLocator;
-	protected Locale fLocale;
+    protected Locale fLocale;
 
-	/** XML 1.0 Components. */
-	protected ArrayList fComponents;
+    /** XML 1.0 Components. */
+    protected ArrayList fComponents;
     
-	/** XML 1.1. Components. */
-	protected ArrayList fXML11Components = null;
-	
-	/** Common components: XMLEntityManager, XMLErrorReporter, XMLSchemaValidator */
-	protected ArrayList fCommonComponents = null;
+    /** XML 1.1. Components. */
+    protected ArrayList fXML11Components = null;
+    
+    /** Common components: XMLEntityManager, XMLErrorReporter, XMLSchemaValidator */
+    protected ArrayList fCommonComponents = null;
 
-	/** The document handler. */
-	protected XMLDocumentHandler fDocumentHandler;
+    /** The document handler. */
+    protected XMLDocumentHandler fDocumentHandler;
 
-	/** The DTD handler. */
-	protected XMLDTDHandler fDTDHandler;
+    /** The DTD handler. */
+    protected XMLDTDHandler fDTDHandler;
+    
+    /** The DTD content model handler. */
+    protected XMLDTDContentModelHandler fDTDContentModelHandler;
 
-	/** The DTD content model handler. */
-	protected XMLDTDContentModelHandler fDTDContentModelHandler;
-
-	/** Last component in the document pipeline */     
-	protected XMLDocumentSource fLastComponent;
+    /** Last component in the document pipeline */     
+    protected XMLDocumentSource fLastComponent;
 
     /** 
      * True if a parse is in progress. This state is needed because
@@ -428,30 +433,30 @@ public class XML11Configuration extends ParserConfigurationSettings
         XMLGrammarPool grammarPool,
         XMLComponentManager parentSettings) {
 		
-		super(parentSettings);
+	super(parentSettings);
 
-		// create a vector to hold all the components in use
-		// XML 1.0 specialized components
-		fComponents = new ArrayList();
-		// XML 1.1 specialized components
-		fXML11Components = new ArrayList();
-		// Common components for XML 1.1. and XML 1.0
-		fCommonComponents = new ArrayList();
+	// create a vector to hold all the components in use
+	// XML 1.0 specialized components
+	fComponents = new ArrayList();
+	// XML 1.1 specialized components
+	fXML11Components = new ArrayList();
+	// Common components for XML 1.1. and XML 1.0
+	fCommonComponents = new ArrayList();
 
-		// create storage for recognized features and properties
-		fRecognizedFeatures = new ArrayList();
-		fRecognizedProperties = new ArrayList();
-
-		// create table for features and properties
-		fFeatures = new HashMap();
-		fProperties = new HashMap();
+	// create storage for recognized features and properties
+	fRecognizedFeatures = new ArrayList();
+	fRecognizedProperties = new ArrayList();
+	
+	// create table for features and properties
+	fFeatures = new HashMap();
+	fProperties = new HashMap();
 
         // add default recognized features
         final String[] recognizedFeatures =
             {   
             	CONTINUE_AFTER_FATAL_ERROR, LOAD_EXTERNAL_DTD, // from XMLDTDScannerImpl
-				VALIDATION,                 
-				NAMESPACES,
+		VALIDATION,                 
+		NAMESPACES,
                 NORMALIZE_DATA, SCHEMA_ELEMENT_DEFAULT, SCHEMA_AUGMENT_PSVI,
                 GENERATE_SYNTHETIC_ANNOTATIONS, VALIDATE_ANNOTATIONS,
                 HONOUR_ALL_SCHEMALOCATIONS, USE_GRAMMAR_POOL_ONLY,
@@ -460,26 +465,29 @@ public class XML11Configuration extends ParserConfigurationSettings
             	//       features might not have been set and it would cause a
             	//       not-recognized exception to be thrown. -Ac
             	XMLSCHEMA_VALIDATION, XMLSCHEMA_FULL_CHECKING, 			
-				EXTERNAL_GENERAL_ENTITIES,  
-				EXTERNAL_PARAMETER_ENTITIES,
-				PARSER_SETTINGS
+		EXTERNAL_GENERAL_ENTITIES,  
+		EXTERNAL_PARAMETER_ENTITIES,
+		PARSER_SETTINGS,
+                XMLConstants.FEATURE_SECURE_PROCESSING
 			};
+
         addRecognizedFeatures(recognizedFeatures);
 		// set state for default features
-		fFeatures.put(VALIDATION, Boolean.FALSE);
-		fFeatures.put(NAMESPACES, Boolean.TRUE);
-		fFeatures.put(EXTERNAL_GENERAL_ENTITIES, Boolean.TRUE);
-		fFeatures.put(EXTERNAL_PARAMETER_ENTITIES, Boolean.TRUE);
-		fFeatures.put(CONTINUE_AFTER_FATAL_ERROR, Boolean.FALSE);
-		fFeatures.put(LOAD_EXTERNAL_DTD, Boolean.TRUE);
-		fFeatures.put(SCHEMA_ELEMENT_DEFAULT, Boolean.TRUE);
-		fFeatures.put(NORMALIZE_DATA, Boolean.TRUE);
-		fFeatures.put(SCHEMA_AUGMENT_PSVI, Boolean.TRUE);
+	fFeatures.put(VALIDATION, Boolean.FALSE);
+	fFeatures.put(NAMESPACES, Boolean.TRUE);
+	fFeatures.put(EXTERNAL_GENERAL_ENTITIES, Boolean.TRUE);
+	fFeatures.put(EXTERNAL_PARAMETER_ENTITIES, Boolean.TRUE);
+	fFeatures.put(CONTINUE_AFTER_FATAL_ERROR, Boolean.FALSE);
+	fFeatures.put(LOAD_EXTERNAL_DTD, Boolean.TRUE);
+	fFeatures.put(SCHEMA_ELEMENT_DEFAULT, Boolean.TRUE);
+	fFeatures.put(NORMALIZE_DATA, Boolean.TRUE);
+	fFeatures.put(SCHEMA_AUGMENT_PSVI, Boolean.TRUE);
         fFeatures.put(GENERATE_SYNTHETIC_ANNOTATIONS, Boolean.FALSE);
         fFeatures.put(VALIDATE_ANNOTATIONS, Boolean.FALSE);
         fFeatures.put(HONOUR_ALL_SCHEMALOCATIONS, Boolean.FALSE);
         fFeatures.put(USE_GRAMMAR_POOL_ONLY, Boolean.FALSE);
-		fFeatures.put(PARSER_SETTINGS, Boolean.TRUE);
+	fFeatures.put(PARSER_SETTINGS, Boolean.TRUE);
+        fFeatures.put(XMLConstants.FEATURE_SECURE_PROCESSING, Boolean.TRUE);
 
         // add default recognized properties
         final String[] recognizedProperties =
@@ -507,6 +515,7 @@ public class XML11Configuration extends ParserConfigurationSettings
             	SCHEMA_LOCATION,
                 SCHEMA_NONS_LOCATION,
                 LOCALE,
+                SECURITY_MANAGER,
         };
         addRecognizedProperties(recognizedProperties);
 		
