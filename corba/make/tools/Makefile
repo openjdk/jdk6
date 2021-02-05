@@ -33,6 +33,7 @@ include $(BUILDDIR)/common/Defs.gmk
 SUBDIRS =                   \
   strip_properties          \
   idlj                      \
+  logutil		    \
 
 all build clean clobber::
 	$(SUBDIRS-loop)

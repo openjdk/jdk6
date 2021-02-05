@@ -1,5 +1,5 @@
 #
-# Copyright 1998-2005 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright 2008 Sun Microsystems, Inc.  All Rights Reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -24,25 +24,20 @@
 #
 
 #
-# Makefile for building the winver tool
+# Makefile for building the idlj tool
 #
 
 BUILDDIR = ../..
+PACKAGE = com.sun.tools.corba.se.logutil
 PRODUCT = tools
-PROGRAM = winver
+PROGRAM = MC
 include $(BUILDDIR)/common/Defs.gmk
 
-build: permissions
-
-permissions:
-ifeq ($(PLATFORM),windows)
-	$(CHMOD) a+x bin/winver.exe
-endif
+BUILDTOOL_SOURCE_ROOT = $(SHARE_SRC)/classes
+BUILDTOOL_MAIN        = $(PKGDIR)/MC.java
 
 #
-# Rules.
+# Build tool jar rules.
 #
-include $(BUILDDIR)/common/Rules.gmk
-
-.PHONY: permissions
+include $(BUILDDIR)/common/BuildToolJar.gmk
 

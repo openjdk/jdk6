@@ -1,12 +1,10 @@
 /*
- * Copyright 2001 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright 1997-2002 Sun Microsystems, Inc.  All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Sun designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Sun in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -21,29 +19,43 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
+ *
  */
 
-// getver.cpp : Defines the entry point for the console application.
-//
+/*
+ * @test
+ * @bug 6659207
+ * @summary access violation in CompilerThread0
+ */
 
-#include "stdafx.h"
-#include <windows.h>
+public class Test {
+    static int[] array = new int[12];
 
-int main(int argc, char* argv[])
-{
-        OSVERSIONINFO verInfo;
+    static int index(int i) {
+        if (i == 0) return 0;
+        for (int n = 0; n < array.length; n++)
+            if (i < array[n]) return n;
+        return -1;
+    }
 
-        memset(&verInfo,0,sizeof(verInfo));
-        verInfo.dwOSVersionInfoSize = sizeof(verInfo);
+    static int test(int i) {
+        int result = 0;
+        i = index(i);
+        if (i >= 0)
+            if (array[i] != 0)
+                result++;
 
-        if (GetVersionEx(&verInfo))
-        {
-                printf("%d %d %s",verInfo.dwMajorVersion,verInfo.dwMinorVersion,verInfo.szCSDVersion);
+        if (i != -1)
+            array[i]++;
+
+        return result;
+    }
+
+    public static void main(String[] args) {
+        int total = 0;
+        for (int i = 0; i < 100000; i++) {
+            total += test(10);
         }
-        else
-        {
-                printf("No version info available");
-        }
-
-        return 0;
+        System.out.println(total);
+    }
 }
