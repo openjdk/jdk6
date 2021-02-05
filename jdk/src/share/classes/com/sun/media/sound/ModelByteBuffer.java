@@ -25,6 +25,7 @@
 package com.sun.media.sound;
 
 import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -44,7 +45,7 @@ public class ModelByteBuffer {
     private long fileoffset;
     private byte[] buffer;
     private long offset;
-    private long len;
+    private final long len;
 
     private class RandomFileInputStream extends InputStream {
 
@@ -106,11 +107,12 @@ public class ModelByteBuffer {
         }
 
         public int read(byte[] b) throws IOException {
+            int len = b.length;
             if (len > left)
                 len = (int)left;
             if (left == 0)
                 return -1;
-            int len = raf.read(b);
+            len = raf.read(b, 0, len);
             if (len == -1)
                 return -1;
             left -= len;
@@ -118,12 +120,12 @@ public class ModelByteBuffer {
         }
 
         public int read() throws IOException {
-            if (len == 0)
+            if (left == 0)
                 return -1;
             int b = raf.read();
             if (b == -1)
                 return -1;
-            len--;
+            left--;
             return b;
         }
 
@@ -136,15 +138,15 @@ public class ModelByteBuffer {
             long beginIndex, long endIndex, boolean independent) {
         this.root = parent.root;
         this.offset = 0;
-        this.len = parent.len;
+        long parent_len = parent.len;
         if (beginIndex < 0)
             beginIndex = 0;
-        if (beginIndex > len)
-            beginIndex = len;
+        if (beginIndex > parent_len)
+            beginIndex = parent_len;
         if (endIndex < 0)
             endIndex = 0;
-        if (endIndex > len)
-            endIndex = len;
+        if (endIndex > parent_len)
+            endIndex = parent_len;
         if (beginIndex > endIndex)
             beginIndex = endIndex;
         offset = beginIndex;
@@ -274,10 +276,10 @@ public class ModelByteBuffer {
                 int avail = buffer.length;
                 while (read != avail) {
                     if (avail - read > 65536) {
-                        raf.read(buffer, read, 65536);
+                        raf.readFully(buffer, read, 65536);
                         read += 65536;
                     } else {
-                        raf.read(buffer, read, avail - read);
+                        raf.readFully(buffer, read, avail - read);
                         read = avail;
                     }
 
@@ -304,10 +306,10 @@ public class ModelByteBuffer {
                     "No file associated with this ByteBuffer!");
         }
 
-        InputStream is = getInputStream();
+        DataInputStream is = new DataInputStream(getInputStream());
         buffer = new byte[(int) capacity()];
         offset = 0;
-        is.read(buffer);
+        is.readFully(buffer);
         is.close();
 
     }
