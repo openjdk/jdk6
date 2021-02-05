@@ -25,6 +25,12 @@
 
 package javax.security.auth;
 
+import java.security.Security;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.security.PrivilegedExceptionAction;
+import sun.security.util.Debug;
+
 /**
  * <p> This is an abstract class for representing the system policy for
  * Subject-based authorization.  A subclass implementation
@@ -157,16 +163,13 @@ package javax.security.auth;
 public abstract class Policy {
 
     private static Policy policy;
-    private static ClassLoader contextClassLoader;
 
-    static {
-        contextClassLoader = java.security.AccessController.doPrivileged
-                (new java.security.PrivilegedAction<ClassLoader>() {
-                public ClassLoader run() {
-                    return Thread.currentThread().getContextClassLoader();
-                }
-        });
-    };
+    private final java.security.AccessControlContext acc =
+            java.security.AccessController.getContext();
+
+    // true if a custom (not com.sun.security.auth.PolicyFile) system-wide
+    // policy object is set
+    private static boolean isCustomPolicy;
 
     /**
      * Sole constructor.  (For invocation by subclass constructors, typically
@@ -210,8 +213,8 @@ public abstract class Policy {
 
                 if (policy == null) {
                     String policy_class = null;
-                    policy_class = java.security.AccessController.doPrivileged
-                        (new java.security.PrivilegedAction<String>() {
+                    policy_class = AccessController.doPrivileged
+                        (new PrivilegedAction<String>() {
                         public String run() {
                             return java.security.Security.getProperty
                                 ("auth.policy.provider");
@@ -223,17 +226,31 @@ public abstract class Policy {
 
                     try {
                         final String finalClass = policy_class;
-                        policy = java.security.AccessController.doPrivileged
-                            (new java.security.PrivilegedExceptionAction<Policy>() {
-                            public Policy run() throws ClassNotFoundException,
-                                                InstantiationException,
-                                                IllegalAccessException {
-                                return (Policy) Class.forName
-                                        (finalClass,
-                                        true,
-                                        contextClassLoader).newInstance();
-                            }
-                        });
+                        final Policy untrustedImpl = AccessController.doPrivileged(
+                                new PrivilegedExceptionAction<Policy>() {
+                                    public Policy run() throws ClassNotFoundException,
+                                            InstantiationException,
+                                            IllegalAccessException {
+                                        Class<? extends Policy> implClass = Class.forName(
+                                                finalClass, false,
+                                                Thread.currentThread().getContextClassLoader()
+                                        ).asSubclass(Policy.class);
+                                        return implClass.newInstance();
+                                    }
+                                });
+                        if (untrustedImpl.acc == null) {
+                            throw new NullPointerException();
+                        }
+                        AccessController.doPrivileged(
+                                new PrivilegedExceptionAction<Void>() {
+                                    public Void run() {
+                                        setPolicy(untrustedImpl);
+                                        isCustomPolicy =
+                                            !finalClass.equals("com.sun.security.auth.PolicyFile");
+                                        return null;
+                                    }
+                                }, untrustedImpl.acc
+                        );
                     } catch (Exception e) {
                         throw new SecurityException
                                 (sun.security.util.ResourcesMgr.getString
@@ -265,6 +282,46 @@ public abstract class Policy {
         java.lang.SecurityManager sm = System.getSecurityManager();
         if (sm != null) sm.checkPermission(new AuthPermission("setPolicy"));
         Policy.policy = policy;
+        // all non-null policy objects are assumed to be custom
+        isCustomPolicy = policy != null ? true : false;
+    }
+
+    /**
+     * Returns true if a custom (not com.sun.security.auth.PolicyFile)
+     * system-wide policy object has been set or installed. This method is
+     * called by SubjectDomainCombiner to provide backwards compatibility for
+     * developers that provide their own javax.security.auth.Policy
+     * implementations.
+     *
+     * @return true if a custom (not com.sun.security.auth.PolicyFile)
+     * system-wide policy object has been set; false otherwise
+     */
+    static boolean isCustomPolicySet(Debug debug) {
+        if (policy != null) {
+            if (debug != null && isCustomPolicy) {
+                debug.println("Providing backwards compatibility for " +
+                              "javax.security.auth.policy implementation: " +
+                              policy.toString());
+            }
+            return isCustomPolicy;
+        }
+        // check if custom policy has been set using auth.policy.provider prop
+        String policyClass = java.security.AccessController.doPrivileged
+            (new java.security.PrivilegedAction<String>() {
+                public String run() {
+                    return Security.getProperty("auth.policy.provider");
+                }
+        });
+        if (policyClass != null
+            && !policyClass.equals("com.sun.security.auth.PolicyFile")) {
+            if (debug != null) {
+                debug.println("Providing backwards compatibility for " +
+                              "javax.security.auth.policy implementation: " +
+                              policyClass);
+            }
+            return true;
+        }
+        return false;
     }
 
     /**
