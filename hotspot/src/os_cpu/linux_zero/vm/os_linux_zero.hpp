@@ -1,6 +1,6 @@
 /*
- * Copyright 2003-2004 Sun Microsystems, Inc.  All Rights Reserved.
- * Copyright 2007, 2008 Red Hat, Inc.
+ * Copyright (c) 2003, 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright 2007, 2008, 2010 Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -17,9 +17,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -39,7 +39,13 @@
                   "stfd %0, 0(%2)\n"
                   : "=f"(tmp)
                   : "b"(src), "b"(dst));
+#elif defined(S390) && !defined(_LP64)
+    double tmp;
+    asm volatile ("ld  %0, 0(%1)\n"
+                  "std %0, 0(%2)\n"
+                  : "=r"(tmp)
+                  : "a"(src), "a"(dst));
 #else
     *(jlong *) dst = *(jlong *) src;
-#endif // PPC && !_LP64
+#endif
   }

@@ -1,14 +1,14 @@
 #!/bin/sh
 
 #
-# Copyright 2007 Sun Microsystems, Inc.  All Rights Reserved.
+# Copyright (c) 2007, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License version 2 only, as
-# published by the Free Software Foundation.  Sun designates this
+# published by the Free Software Foundation.  Oracle designates this
 # particular file as subject to the "Classpath" exception as provided
-# by Sun in the LICENSE file that accompanied this code.
+# by Oracle in the LICENSE file that accompanied this code.
 #
 # This code is distributed in the hope that it will be useful, but WITHOUT
 # ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -20,9 +20,9 @@
 # 2 along with this work; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
-# CA 95054 USA or visit www.sun.com if you need additional information or
-# have any questions.
+# Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+# or visit www.oracle.com if you need additional information or have any
+# questions.
 #
 
 
@@ -79,15 +79,10 @@
 #    ALT_COMPILER_PATH
 #    ALT_BOOTDIR
 #    ALT_BINARY_PLUGS_PATH
-#    ALT_CLOSED_JDK_IMPORT_PATH
 #    Windows Only:
 #      ALT_UNIXCOMMAND_PATH
 #      ALT_MSDEVTOOLS_PATH
 #      ALT_DXSDK_PATH
-#      ALT_MSVCRT_DLL_PATH
-#      ALT_MSVCR71_DLL_PATH
-#      ALT_UNICOWS_LIB_PATH
-#      ALT_UNICOWS_DLL_PATH
 #
 #############################################################################
 #
@@ -248,14 +243,14 @@ else
     path4sdk="${compiler_path};${path4sdk}"
   elif [ "${windows_arch}" = amd64 ] ; then
     # AMD64 64bit Windows compiler settings
-    if [ "${ALT_DEPLOY_MSSDK}" != "" ] ; then
-      platform_sdk=${ALT_DEPLOY_MSSDK}
+    if [ "${MSSDK}" != "" ] ; then
+      platform_sdk=${MSSDK}
     else
       platform_sdk=$(${cygpath} "C:/Program Files/Microsoft Platform SDK/")
     fi
     if [ "${ALT_COMPILER_PATH}" != "" ] ; then
       compiler_path=${ALT_COMPILER_PATH}
-      if [ "${ALT_DEPLOY_MSSDK}" = "" ] ; then
+      if [ "${MSSDK}" = "" ] ; then
         platform_sdk=${ALT_COMPILER_PATH}/../../../..
       fi
     else
@@ -312,28 +307,6 @@ fi
 if [ "${ALT_JDK_IMPORT_PATH}" = "" -a -d ${jdk_instances}/${importjdk} ] ; then
   ALT_JDK_IMPORT_PATH=${jdk_instances}/${importjdk}
   export ALT_JDK_IMPORT_PATH
-fi
-
-# Get the latest JDK binary plugs or build to import pre-built binaries
-if [ "${ALT_BINARY_PLUGS_PATH}" = "" ] ; then
-  binplugs=${jdk_instances}/openjdk-binary-plugs
-  jdkplugs=${jdk_instances}/${importjdk}
-  if [ -d ${binplugs} ] ; then
-    ALT_BINARY_PLUGS_PATH=${binplugs}
-    export ALT_BINARY_PLUGS_PATH
-  elif [  "${ALT_CLOSED_JDK_IMPORT_PATH}" = "" -a -d ${jdkplugs} ] ; then
-    ALT_CLOSED_JDK_IMPORT_PATH=${jdkplugs}
-    export ALT_CLOSED_JDK_IMPORT_PATH
-  fi
-  if [ "${ALT_BINARY_PLUGS_PATH}" = "" ] ; then
-    echo "WARNING: Missing ALT_BINARY_PLUGS_PATH: ${binplugs}"
-  fi
-fi
-if [ "${ALT_BINARY_PLUGS_PATH}" != "" -a ! -d "${ALT_BINARY_PLUGS_PATH}" ] ; then
-  echo "WARNING: Cannot access ALT_BINARY_PLUGS_PATH=${ALT_BINARY_PLUGS_PATH}"
-fi
-if [ "${ALT_CLOSED_JDK_IMPORT_PATH}" != "" -a ! -d "${ALT_CLOSED_JDK_IMPORT_PATH}" ] ; then
-  echo "WARNING: Cannot access ALT_CLOSED_JDK_IMPORT_PATH=${ALT_CLOSED_JDK_IMPORT_PATH}"
 fi
 
 # Export PATH setting

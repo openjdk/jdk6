@@ -1,5 +1,5 @@
 /*
- * Copyright 1997-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 1997, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -310,6 +310,20 @@ address AbstractInterpreter::deopt_continue_after_entry(methodOop method, addres
       if (!is_top_frame) {
         int index = Bytes::get_native_u2(bcp+1);
         method->constants()->cache()->entry_at(index)->set_parameter_size(callee_parameters);
+      }
+      break;
+    }
+
+   case Bytecodes::_invokedynamic: {
+      Thread *thread = Thread::current();
+      ResourceMark rm(thread);
+      methodHandle mh(thread, method);
+      type = Bytecode_invoke_at(mh, bci)->result_type(thread);
+      // since the cache entry might not be initialized:
+      // (NOT needed for the old calling convension)
+      if (!is_top_frame) {
+        int index = Bytes::get_native_u4(bcp+1);
+        method->constants()->cache()->secondary_entry_at(index)->set_parameter_size(callee_parameters);
       }
       break;
     }
