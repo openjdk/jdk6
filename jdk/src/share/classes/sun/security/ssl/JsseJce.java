@@ -63,6 +63,29 @@ final class JsseJce {
     // If yes, then all the EC based crypto we need is available.
     private static volatile Boolean ecAvailable;
 
+    // Flag indicating whether Kerberos crypto is available.
+    // If true, then all the Kerberos-based crypto we need is available.
+    private final static boolean kerberosAvailable;
+    static {
+        boolean temp;
+        try {
+            AccessController.doPrivileged(
+                new PrivilegedExceptionAction<Void>() {
+                    public Void run() throws Exception {
+                        // Test for Kerberos using the bootstrap class loader
+                        Class.forName("sun.security.krb5.PrincipalName", true,
+                                null);
+                        return null;
+                    }
+                });
+            temp = true;
+
+        } catch (Exception e) {
+            temp = false;
+        }
+        kerberosAvailable = temp;
+    }
+
     static {
         // force FIPS flag initialization
         // Because isFIPS() is synchronized and cryptoProvider is not modified
@@ -176,6 +199,7 @@ final class JsseJce {
                 JsseJce.getKeyAgreement("ECDH");
                 JsseJce.getKeyFactory("EC");
                 JsseJce.getKeyPairGenerator("EC");
+                JsseJce.getAlgorithmParameters("EC");
                 ecAvailable = true;
             } catch (Exception e) {
                 ecAvailable = false;
@@ -186,6 +210,10 @@ final class JsseJce {
 
     static void clearEcAvailable() {
         ecAvailable = null;
+    }
+
+    static boolean isKerberosAvailable() {
+        return kerberosAvailable;
     }
 
     /**
@@ -277,6 +305,15 @@ final class JsseJce {
             return KeyFactory.getInstance(algorithm);
         } else {
             return KeyFactory.getInstance(algorithm, cryptoProvider);
+        }
+    }
+
+    static AlgorithmParameters getAlgorithmParameters(String algorithm)
+            throws NoSuchAlgorithmException {
+        if (cryptoProvider == null) {
+            return AlgorithmParameters.getInstance(algorithm);
+        } else {
+            return AlgorithmParameters.getInstance(algorithm, cryptoProvider);
         }
     }
 

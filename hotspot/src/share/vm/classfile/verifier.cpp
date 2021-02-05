@@ -503,19 +503,13 @@ void ErrorContext::stackmap_details(outputStream* ss, methodOop method) const {
     stack_map_frame* sm_frame = sm_table->entries();
     streamIndentor si2(ss);
     int current_offset = -1;
-    // Subtract two from StackMapAttribute length because the length includes
-    // two bytes for number of table entries.
-    size_t sm_table_space = method->stackmap_data()->length() - 2;
+    address end_of_sm_table = (address)sm_table + method->stackmap_data()->length();
     for (u2 i = 0; i < sm_table->number_of_entries(); ++i) {
       ss->indent();
-      size_t sm_frame_size = sm_frame->size();
-      // If the size of the next stackmap exceeds the length of the entire
-      // stackmap table then print a truncated message and return.
-      if (sm_frame_size > sm_table_space) {
+      if (!sm_frame->verify((address)sm_frame, end_of_sm_table)) {
         sm_frame->print_truncated(ss, current_offset);
         return;
       }
-      sm_table_space -= sm_frame_size;
       sm_frame->print_on(ss, current_offset);
       ss->print_cr("");
       current_offset += sm_frame->offset_delta();
@@ -1797,7 +1791,7 @@ u2 ClassVerifier::verify_stackmap_table(u2 stackmap_index, u2 bci,
       // If matched, current_frame will be updated by this method.
       bool matches = stackmap_table->match_stackmap(
         current_frame, this_offset, stackmap_index,
-        !no_control_flow, true, false, &ctx, CHECK_VERIFY_(this, 0));
+        !no_control_flow, true, &ctx, CHECK_VERIFY_(this, 0));
       if (!matches) {
         // report type error
         verify_error(ctx, "Instruction type does not match stack map");
@@ -1844,7 +1838,7 @@ void ClassVerifier::verify_exception_handler_targets(u2 bci, bool this_uninit, S
       }
       ErrorContext ctx;
       bool matches = stackmap_table->match_stackmap(
-        new_frame, handler_pc, true, false, true, &ctx, CHECK_VERIFY(this));
+        new_frame, handler_pc, true, false, &ctx, CHECK_VERIFY(this));
       if (!matches) {
         verify_error(ctx, "Stack map does not match the one at "
             "exception handler %d", handler_pc);
@@ -2234,14 +2228,20 @@ void ClassVerifier::verify_field_instructions(RawBytecodeStream* bcs,
 }
 
 // Look at the method's handlers.  If the bci is in the handler's try block
-// then check if the handler_pc is already on the stack.  If not, push it.
+// then check if the handler_pc is already on the stack.  If not, push it
+// unless the handler has already been scanned.
 void ClassVerifier::push_handlers(ExceptionTable* exhandlers,
+                                  GrowableArray<u4>* handler_list,
                                   GrowableArray<u4>* handler_stack,
                                   u4 bci) {
   int exlength = exhandlers->length();
   for(int x = 0; x < exlength; x++) {
     if (bci >= exhandlers->start_pc(x) && bci < exhandlers->end_pc(x)) {
-      handler_stack->append_if_missing(exhandlers->handler_pc(x));
+      u4 exhandler_pc = exhandlers->handler_pc(x);
+      if (!handler_list->contains(exhandler_pc)) {
+        handler_stack->append_if_missing(exhandler_pc);
+        handler_list->append(exhandler_pc);
+      }
     }
   }
 }
@@ -2259,6 +2259,10 @@ bool ClassVerifier::ends_in_athrow(u4 start_bc_offset) {
   GrowableArray<u4>* bci_stack = new GrowableArray<u4>(30);
   // Create stack for handlers for try blocks containing this handler.
   GrowableArray<u4>* handler_stack = new GrowableArray<u4>(30);
+  // Create list of handlers that have been pushed onto the handler_stack
+  // so that handlers embedded inside of their own TRY blocks only get
+  // scanned once.
+  GrowableArray<u4>* handler_list = new GrowableArray<u4>(30);
   // Create list of visited branch opcodes (goto* and if*).
   GrowableArray<u4>* visited_branches = new GrowableArray<u4>(30);
   ExceptionTable exhandlers(_method());
@@ -2277,7 +2281,7 @@ bool ClassVerifier::ends_in_athrow(u4 start_bc_offset) {
 
     // If the bytecode is in a TRY block, push its handlers so they
     // will get parsed.
-    push_handlers(&exhandlers, handler_stack, bci);
+    push_handlers(&exhandlers, handler_list, handler_stack, bci);
 
     switch (opcode) {
       case Bytecodes::_if_icmpeq:

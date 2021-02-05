@@ -431,7 +431,9 @@ public class TestLibrary {
             int unusedRandomPort = -1;
             ex = null; //reset
 
-            try (ServerSocket ss = new ServerSocket(0)) {
+            ServerSocket ss = null;
+            try {
+                ss = new ServerSocket(0);
                 unusedRandomPort = ss.getLocalPort();
             } catch (IOException e) {
                 ex = e;
@@ -442,6 +444,14 @@ public class TestLibrary {
                         + (numTries==MAX_SERVER_SOCKET_TRIES ? " (the final try)."
                         : "."));
                 ex.printStackTrace();
+            } finally {
+                try {
+                    if (ss != null) {
+                        ss.close();
+                    }
+                } catch (IOException ioe) {
+                    ioe.printStackTrace();
+                }
             }
 
             if (unusedRandomPort >= 0) {

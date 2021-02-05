@@ -103,11 +103,11 @@ public final class DOMManifest extends DOMStructure implements Manifest {
             refElem = DOMUtils.getNextSiblingElement(refElem);
 
             refCount++;
-            if (secVal && (refCount > DOMSignedInfo.MAXIMUM_REFERENCE_COUNT)) {
-                String error = "A maxiumum of " +
-                               DOMSignedInfo.MAXIMUM_REFERENCE_COUNT +
-                               " references per Manifest are allowed with" +
-                               " secure validation";
+            if (secVal && Policy.restrictNumReferences(refs.size())) {
+                String error = "A maximum of " + Policy.maxReferences()
+                    + " references per Manifest are allowed when"
+                    + " secure validation is enabled";
+
                 throw new MarshalException(error);
             }
         }
