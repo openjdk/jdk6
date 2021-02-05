@@ -1,0 +1,13 @@
+os_family = solaris
+
+arch = i486
+
+os_arch = solaris_i486
+
+lib_arch = i386
+
+compiler = gcc
+
+gnu_dis_arch = i386
+
+sysdefs = -DSOLARIS -D_GNU_SOURCE -DIA32
