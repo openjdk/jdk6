@@ -560,12 +560,7 @@ public class XMLDocumentFragmentScannerImpl
         } catch (XMLConfigurationException e) {
             fSecurityManager = null;
         }
-        fLimitAnalyzer = fSecurityManager.getLimitAnalyzer();
 
-        fElementAttributeLimit = (fSecurityManager != null)?
-                fSecurityManager.getLimit(XMLSecurityManager.Limit.ELEMENT_ATTRIBUTE_LIMIT):0;
-
-        
         try {
             fNotifyBuiltInRefs = componentManager.getFeature(NOTIFY_BUILTIN_REFS);
         } catch (XMLConfigurationException e) {
@@ -580,19 +575,6 @@ public class XMLDocumentFragmentScannerImpl
             fExternalSubsetResolver = null;
         }
                         
-        // initialize vars
-        fMarkupDepth = 0;
-        fCurrentElement = null;
-        fElementStack.clear();
-        fHasExternalDTD = false;
-        fStandaloneSet = false;
-        fStandalone = false;
-        fInScanContent = false;
-        //skipping algorithm
-        fShouldSkip = false;
-        fAdd = false;
-        fSkip = false;
-        
         //attribute
         fReadingAttributes = false;
         //xxx: external entities are supported in Xerces
@@ -604,10 +586,8 @@ public class XMLDocumentFragmentScannerImpl
         // setup Driver
         setScannerState(SCANNER_STATE_CONTENT);
         setDriver(fContentDriver);
-        fEntityStore = fEntityManager.getEntityStore();
-        
-        dtdGrammarUtil = null;
     
+        resetCommon();
         //fEntityManager.test();
     } // reset(XMLComponentManager)
     
@@ -621,17 +601,7 @@ public class XMLDocumentFragmentScannerImpl
         fNamespaces = ((Boolean)propertyManager.getProperty(XMLInputFactory.IS_NAMESPACE_AWARE)).booleanValue();
         fNotifyBuiltInRefs = false ;
                 
-        // initialize vars
-        fMarkupDepth = 0;
-        fCurrentElement = null;
-        fShouldSkip = false;
-        fAdd = false;
-        fSkip = false;
-        fElementStack.clear();
         //fElementStack2.clear();
-        fHasExternalDTD = false;
-        fStandaloneSet = false;
-        fStandalone = false;
         //fReplaceEntityReferences = true;
         //fSupportExternalEntities = true;
         Boolean bo = (Boolean)propertyManager.getProperty(XMLInputFactoryImpl.IS_REPLACING_ENTITY_REFERENCES);
@@ -652,15 +622,40 @@ public class XMLDocumentFragmentScannerImpl
         //we dont need to do this -- nb.
         //setScannerState(SCANNER_STATE_CONTENT);
         //setDriver(fContentDriver);
-        fEntityStore = fEntityManager.getEntityStore();
         //fEntityManager.test();
         
-        dtdGrammarUtil = null;
-                
         fSecurityManager = (XMLSecurityManager)propertyManager.getProperty(Constants.SECURITY_MANAGER);
-        fLimitAnalyzer = fSecurityManager.getLimitAnalyzer();
+
+        resetCommon();
     } // reset(XMLComponentManager)
-    
+
+    void resetCommon() {
+        // initialize vars
+        fMarkupDepth = 0;
+        fCurrentElement = null;
+        fElementStack.clear();
+        fHasExternalDTD = false;
+        fStandaloneSet = false;
+        fStandalone = false;
+        fInScanContent = false;
+        //skipping algorithm
+        fShouldSkip = false;
+        fAdd = false;
+        fSkip = false;
+
+        fEntityStore = fEntityManager.getEntityStore();
+        dtdGrammarUtil = null;
+
+        if (fSecurityManager != null) {
+            fElementAttributeLimit = fSecurityManager.getLimit(XMLSecurityManager.Limit.ELEMENT_ATTRIBUTE_LIMIT);
+        } else {
+            fElementAttributeLimit = 0;
+        }
+        fLimitAnalyzer = new XMLLimitAnalyzer();
+        fEntityManager.setLimitAnalyzer(fLimitAnalyzer);
+    }
+
+
     /**
      * Returns a list of feature identifiers that are recognized by
      * this component. This method may return null if no features
@@ -1294,6 +1289,7 @@ public class XMLDocumentFragmentScannerImpl
         
         fAttributes.removeAllAttributes();
         
+        checkDepth(rawname);
         if(!seekCloseOfStartTag()){
             fReadingAttributes = true;
             fAttributeCacheUsedCount =0;
@@ -1305,7 +1301,7 @@ public class XMLDocumentFragmentScannerImpl
                         fAttributes.getLength() > fElementAttributeLimit){
                     fErrorReporter.reportError(XMLMessageFormatter.XML_DOMAIN,
                                                  "ElementAttributeLimit",
-                                                 new Object[]{rawname, new Integer(fAttributes.getLength()) },
+                                                 new Object[]{rawname, fElementAttributeLimit },
                                                  XMLErrorReporter.SEVERITY_FATAL_ERROR );
                 }
                 
@@ -1895,6 +1891,21 @@ public class XMLDocumentFragmentScannerImpl
     
     // utility methods
     
+    /**
+     * Check if the depth exceeds the maxElementDepth limit
+     * @param elementName name of the current element
+     */
+    void checkDepth(String elementName) {
+        fLimitAnalyzer.addValue(Limit.MAX_ELEMENT_DEPTH_LIMIT, elementName, fElementStack.fDepth);
+        if (fSecurityManager.isOverLimit(Limit.MAX_ELEMENT_DEPTH_LIMIT,fLimitAnalyzer)) {
+            fSecurityManager.debugPrint(fLimitAnalyzer);
+            reportFatalError("MaxElementDepthLimit", new Object[]{elementName,
+                fLimitAnalyzer.getTotalValue(Limit.MAX_ELEMENT_DEPTH_LIMIT),
+                fSecurityManager.getLimit(Limit.MAX_ELEMENT_DEPTH_LIMIT),
+                "maxElementDepth"});
+        }
+    }
+
     /**
      * Calls document handler with a single character resulting from
      * built-in entity resolution.
@@ -3125,15 +3136,15 @@ public class XMLDocumentFragmentScannerImpl
 	protected void checkLimit(XMLStringBuffer buffer) {
 	    if (fLimitAnalyzer.isTracking(fCurrentEntityName)) {
 		fLimitAnalyzer.addValue(Limit.GENEAL_ENTITY_SIZE_LIMIT, fCurrentEntityName, buffer.length);
-		if (fSecurityManager.isOverLimit(Limit.GENEAL_ENTITY_SIZE_LIMIT)) {
-		    fSecurityManager.debugPrint();
+		if (fSecurityManager.isOverLimit(Limit.GENEAL_ENTITY_SIZE_LIMIT, fLimitAnalyzer)) {
+		    fSecurityManager.debugPrint(fLimitAnalyzer);
 		    reportFatalError("MaxEntitySizeLimit", new Object[]{fCurrentEntityName,
 		        fLimitAnalyzer.getValue(Limit.GENEAL_ENTITY_SIZE_LIMIT),
 			fSecurityManager.getLimit(Limit.GENEAL_ENTITY_SIZE_LIMIT),
 			fSecurityManager.getStateLiteral(Limit.GENEAL_ENTITY_SIZE_LIMIT)});
 		}
-		if (fSecurityManager.isOverLimit(Limit.TOTAL_ENTITY_SIZE_LIMIT)) {
-		    fSecurityManager.debugPrint();
+		if (fSecurityManager.isOverLimit(Limit.TOTAL_ENTITY_SIZE_LIMIT, fLimitAnalyzer)) {
+		    fSecurityManager.debugPrint(fLimitAnalyzer);
 		    reportFatalError("TotalEntitySizeLimit",
 				     new Object[]{fLimitAnalyzer.getTotalValue(Limit.TOTAL_ENTITY_SIZE_LIMIT),
 						  fSecurityManager.getLimit(Limit.TOTAL_ENTITY_SIZE_LIMIT),

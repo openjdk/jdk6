@@ -66,7 +66,8 @@ public final class XMLSecurityManager {
         ELEMENT_ATTRIBUTE_LIMIT(Constants.JDK_ELEMENT_ATTRIBUTE_LIMIT, Constants.SP_ELEMENT_ATTRIBUTE_LIMIT, 0, 10000),
         TOTAL_ENTITY_SIZE_LIMIT(Constants.JDK_TOTAL_ENTITY_SIZE_LIMIT, Constants.SP_TOTAL_ENTITY_SIZE_LIMIT, 0, 50000000),
         GENEAL_ENTITY_SIZE_LIMIT(Constants.JDK_GENEAL_ENTITY_SIZE_LIMIT, Constants.SP_GENEAL_ENTITY_SIZE_LIMIT, 0, 0),
-        PARAMETER_ENTITY_SIZE_LIMIT(Constants.JDK_PARAMETER_ENTITY_SIZE_LIMIT, Constants.SP_PARAMETER_ENTITY_SIZE_LIMIT, 0, 1000000);
+        PARAMETER_ENTITY_SIZE_LIMIT(Constants.JDK_PARAMETER_ENTITY_SIZE_LIMIT, Constants.SP_PARAMETER_ENTITY_SIZE_LIMIT, 0, 1000000),
+        MAX_ELEMENT_DEPTH_LIMIT(Constants.JDK_MAX_ELEMENT_DEPTH, Constants.SP_MAX_ELEMENT_DEPTH, 0, 0);
 
         final String apiProperty;
         final String systemProperty;
@@ -148,7 +149,6 @@ public final class XMLSecurityManager {
     private boolean[] isSet;
 
 
-    private XMLLimitAnalyzer limitAnalyzer;
     /**
      * Index of the special entityCountInfo property
      */
@@ -169,7 +169,6 @@ public final class XMLSecurityManager {
      * @param secureProcessing
      */
     public XMLSecurityManager(boolean secureProcessing) {
-        limitAnalyzer = new XMLLimitAnalyzer(this);
         values = new int[Limit.values().length];
         states = new State[Limit.values().length];
         isSet = new boolean[Limit.values().length];
@@ -249,13 +248,15 @@ public final class XMLSecurityManager {
         if (index == indexEntityCountInfo) {
             printEntityCountInfo = (String)value;
         } else {
-            int temp = 0;
-            try {
+            int temp;
+            if (Integer.class.isAssignableFrom(value.getClass())) {
+                temp = ((Integer)value).intValue();
+            } else {
                 temp = Integer.parseInt((String) value);
                 if (temp < 0) {
                     temp = 0;
                 }
-            } catch (NumberFormatException e) {}
+            }
             setLimit(index, state, temp);
         }
     }
@@ -387,8 +388,9 @@ public final class XMLSecurityManager {
      * @param size the size (count or length) of the entity
      * @return true if the size is over the limit, false otherwise
      */
-    public boolean isOverLimit(Limit limit, String entityName, int size) {
-        return isOverLimit(limit.ordinal(), entityName, size);
+    public boolean isOverLimit(Limit limit, String entityName, int size,
+            XMLLimitAnalyzer limitAnalyzer) {
+        return isOverLimit(limit.ordinal(), entityName, size, limitAnalyzer);
     }
 
     /**
@@ -400,7 +402,8 @@ public final class XMLSecurityManager {
      * @param size the size (count or length) of the entity
      * @return true if the size is over the limit, false otherwise
      */
-    public boolean isOverLimit(int index, String entityName, int size) {
+    public boolean isOverLimit(int index, String entityName, int size,
+            XMLLimitAnalyzer limitAnalyzer) {
         if (values[index] == NO_LIMIT) {
             return false;
         }
@@ -418,47 +421,31 @@ public final class XMLSecurityManager {
      * @param size the size (count or length) of the entity
      * @return true if the size is over the limit, false otherwise
      */
-    public boolean isOverLimit(Limit limit) {
-        return isOverLimit(limit.ordinal());
+    public boolean isOverLimit(Limit limit, XMLLimitAnalyzer limitAnalyzer) {
+        return isOverLimit(limit.ordinal(), limitAnalyzer);
     }
 
-    public boolean isOverLimit(int index) {
+    public boolean isOverLimit(int index, XMLLimitAnalyzer limitAnalyzer) {
         if (values[index] == NO_LIMIT) {
             return false;
         }
 
-        if (index==Limit.ELEMENT_ATTRIBUTE_LIMIT.ordinal() ||
-                index==Limit.ENTITY_EXPANSION_LIMIT.ordinal() ||
-                index==Limit.TOTAL_ENTITY_SIZE_LIMIT.ordinal()) {
+        if (index == Limit.ELEMENT_ATTRIBUTE_LIMIT.ordinal() ||
+                index == Limit.ENTITY_EXPANSION_LIMIT.ordinal() ||
+                index == Limit.TOTAL_ENTITY_SIZE_LIMIT.ordinal() ||
+                index == Limit.MAX_ELEMENT_DEPTH_LIMIT.ordinal()) {
             return (limitAnalyzer.getTotalValue(index) > values[index]);
         } else {
             return (limitAnalyzer.getValue(index) > values[index]);
         }
     }
 
-    public void debugPrint() {
+    public void debugPrint(XMLLimitAnalyzer limitAnalyzer) {
         if (printEntityCountInfo.equals(Constants.JDK_YES)) {
-            limitAnalyzer.debugPrint();
+            limitAnalyzer.debugPrint(this);
         }
     }
 
-    /**
-     * Return the limit analyzer
-     *
-     * @return the limit analyzer
-     */
-    public XMLLimitAnalyzer getLimitAnalyzer() {
-        return limitAnalyzer;
-    }
-
-    /**
-     * Set limit analyzer
-     *
-     * @param analyzer a limit analyzer
-     */
-    public void setLimitAnalyzer(XMLLimitAnalyzer analyzer) {
-        limitAnalyzer = analyzer;
-    }
 
     /**
      * Indicate if a property is set explicitly

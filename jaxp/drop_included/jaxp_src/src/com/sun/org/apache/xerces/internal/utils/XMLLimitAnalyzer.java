@@ -77,7 +77,6 @@ public final class XMLLimitAnalyzer {
         }
     }
 
-    private XMLSecurityManager securityManager;
     /**
      * Max value accumulated for each property
      */
@@ -101,8 +100,7 @@ public final class XMLLimitAnalyzer {
      * Default constructor. Establishes default values for known security
      * vulnerabilities.
      */
-    public XMLLimitAnalyzer(XMLSecurityManager securityManager) {
-        this.securityManager = securityManager;
+    public XMLLimitAnalyzer() {
         values = new int[Limit.values().length];
         totalValue = new int[Limit.values().length];
         names = new String[Limit.values().length];
@@ -132,6 +130,10 @@ public final class XMLLimitAnalyzer {
                 index == Limit.MAX_OCCUR_NODE_LIMIT.ordinal() ||
                 index == Limit.ELEMENT_ATTRIBUTE_LIMIT.ordinal()) {
             totalValue[index] += value;
+            return;
+        }
+        if (index == Limit.MAX_ELEMENT_DEPTH_LIMIT.ordinal()) {
+            totalValue[index] = value;
             return;
         }
 
@@ -221,7 +223,7 @@ public final class XMLLimitAnalyzer {
         }
     }
 
-    public void debugPrint() {
+    public void debugPrint(XMLSecurityManager securityManager) {
         Formatter formatter = new Formatter();
         System.out.println(formatter.format("%30s %15s %15s %15s %30s",
                 "Property","Limit","Total size","Size","Entity Name"));

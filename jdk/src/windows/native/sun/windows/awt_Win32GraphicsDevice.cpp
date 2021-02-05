@@ -23,7 +23,11 @@
  * questions.
  */
 
-
+/*
+ * This file has been modified by Azul Systems, Inc. in 2014. These
+ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+ * available on the same license terms set forth above. 
+ */
 
 /**
  * This class holds the information for a particular graphics device.
@@ -83,9 +87,9 @@ AwtWin32GraphicsDevice::AwtWin32GraphicsDevice(int screen,
     cData = NULL;
     gpBitmapInfo = NULL;
     monitor = mhnd;
-    pMonitorInfo = (PMONITOR_INFO)new MONITOR_INFO_EXTENDED;
-    pMonitorInfo->dwSize = sizeof(MONITOR_INFO_EXTENDED);
-    ::GetMonitorInfo(monitor, pMonitorInfo);
+    pMonitorInfo = (MONITOR_INFO*)new MONITOR_INFO;
+    //pMonitorInfo->dwSize = sizeof(MONITOR_INFO_EXTENDED);
+    ::GetMonitorInfo(monitor, (PMONITOR_INFO)pMonitorInfo);
 
     // Set primary device info: other devices will need to know
     // whether the primary is palettized during the initialization
@@ -662,7 +666,7 @@ void AwtWin32GraphicsDevice::ResetAllMonitorInfo()
     for (int deviceIndex = 0; deviceIndex < devicesNum; deviceIndex++) {
         MHND monitor = devices->GetDevice(deviceIndex)->GetMonitor();
         ::GetMonitorInfo(monitor,
-                         devices->GetDevice(deviceIndex)->pMonitorInfo);
+                         (PMONITOR_INFO)devices->GetDevice(deviceIndex)->pMonitorInfo);
     }
 }
 
@@ -755,12 +759,12 @@ BOOL AwtWin32GraphicsDevice::AreSameMonitors(MHND mon1, MHND mon2) {
     MONITOR_INFO mi2;
 
     memset((void*)(&mi1),0,sizeof(MONITOR_INFO));
-    mi1.dwSize = sizeof(MONITOR_INFO);
+    //mi1.dwSize = sizeof(MONITOR_INFO);
     memset((void*)(&mi2),0,sizeof(MONITOR_INFO));
-    mi2.dwSize = sizeof(MONITOR_INFO);
+    //mi2.dwSize = sizeof(MONITOR_INFO);
 
-    if (::GetMonitorInfo(mon1,&mi1) != 0 &&
-        ::GetMonitorInfo(mon2,&mi2) != 0 ) {
+    if (::GetMonitorInfo(mon1,(PMONITOR_INFO)&mi1) != 0 &&
+        ::GetMonitorInfo(mon2,(PMONITOR_INFO)&mi2) != 0 ) {
 
         if (::EqualRect(&mi1.rMonitor,&mi2.rMonitor) &&
             ::EqualRect(&mi1.rWork,&mi2.rWork) &&

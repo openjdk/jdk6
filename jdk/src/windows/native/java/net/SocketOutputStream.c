@@ -23,6 +23,12 @@
  * questions.
  */
 
+/*
+ * This file has been modified by Azul Systems, Inc. in 2014. These
+ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+ * available on the same license terms set forth above. 
+ */
+
 #include <windows.h>
 #include <winsock2.h>
 #include <ctype.h>
@@ -64,7 +70,6 @@ Java_java_net_SocketOutputStream_socketWrite0(JNIEnv *env, jobject this,
     char BUF[MAX_BUFFER_LEN];
     int buflen;
     int fd;
-    jint n;
 
     if (IS_NULL(fdObj)) {
         JNU_ThrowByName(env, JNU_JAVANETPKG "SocketException", "Socket closed");

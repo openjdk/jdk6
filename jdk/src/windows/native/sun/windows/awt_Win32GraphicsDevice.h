@@ -23,9 +23,16 @@
  * questions.
  */
 
+/*
+ * This file has been modified by Azul Systems, Inc. in 2014. These
+ * modifications are Copyright (c) 2014 Azul Systems, Inc., and are made
+ * available on the same license terms set forth above. 
+ */
+
 #ifndef AWT_WIN32GRAPHICSDEVICE_H
 #define AWT_WIN32GRAPHICSDEVICE_H
 
+#include "windows.h"
 #include "awt.h"
 extern "C" {
     #include "img_globals.h"
