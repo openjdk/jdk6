@@ -25,6 +25,7 @@
 
 package sun.misc;
 
+import javax.crypto.SealedObject;
 import java.io.ObjectInputStream;
 import java.util.jar.JarFile;
 import java.io.Console;
@@ -59,6 +60,7 @@ public class SharedSecrets {
     private static JavaOISAccess javaOISAccess;
     private static JavaIOFileAccess javaIOFileAccess;
     private static JavaObjectInputStreamAccess javaObjectInputStreamAccess;
+    private static JavaxCryptoSealedObjectAccess javaxCryptoSealedObjectAccess;
 
     public static JavaUtilJarAccess javaUtilJarAccess() {
         if (javaUtilJarAccess == null) {
@@ -191,6 +193,17 @@ public class SharedSecrets {
     
     public static void setJavaIOFileAccess(JavaIOFileAccess access) {
         javaIOFileAccess = access;
+    }
+
+    public static void setJavaxCryptoSealedObjectAccess(JavaxCryptoSealedObjectAccess jcsoa) {
+        javaxCryptoSealedObjectAccess = jcsoa;
+    }
+
+    public static JavaxCryptoSealedObjectAccess getJavaxCryptoSealedObjectAccess() {
+        if (javaxCryptoSealedObjectAccess == null) {
+            unsafe.ensureClassInitialized(SealedObject.class);
+        }
+        return javaxCryptoSealedObjectAccess;
     }
 
     public static JavaIOFileAccess getJavaIOFileAccess() {

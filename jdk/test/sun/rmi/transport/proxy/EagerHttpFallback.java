@@ -27,7 +27,7 @@
  *          sun.rmi.transport.proxy.eagerHttpFallback system property is set.
  * @library ../../../../java/rmi/testlibrary
  * @build TestLibrary
- * @run main/othervm EagerHttpFallback
+ * @run main/othervm -Dsun.rmi.server.disableIncomingHttp=false EagerHttpFallback
  */
 
 import java.rmi.*;
