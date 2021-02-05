@@ -677,7 +677,7 @@ final class Win32ShellFolder2 extends ShellFolder {
             security.checkRead(getPath());
         }
 
-        return new ComTask<File[]>() {
+        File[] files = new ComTask<File[]>() {
             public File[] call() throws Exception {
                 if (!isDirectory()) {
                     return null;
@@ -730,6 +730,8 @@ final class Win32ShellFolder2 extends ShellFolder {
                 return (ShellFolder[])list.toArray(new ShellFolder[list.size()]);
             }
         }.execute();
+
+        return Win32ShellFolderManager2.checkFiles(files);
     }
 
 

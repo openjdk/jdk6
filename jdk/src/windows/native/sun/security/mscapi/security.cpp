@@ -151,7 +151,6 @@ JNIEXPORT jbyteArray JNICALL Java_sun_security_mscapi_PRNG_generateSeed
 {
 
     HCRYPTPROV hCryptProv = NULL;
-    BYTE*      pbData = NULL;
     jbyte*     reseedBytes = NULL;
     jbyte*     seedBytes = NULL;
     jbyteArray result = NULL;
@@ -195,25 +194,17 @@ JNIEXPORT jbyteArray JNICALL Java_sun_security_mscapi_PRNG_generateSeed
 
             result = NULL;
 
-        } else if (length > 0) {
+        } else {
 
-            pbData = new BYTE[length];
-
-            if (::CryptGenRandom(
-                hCryptProv,
-                length,
-                pbData) == FALSE) {
-
-                ThrowException(env, PROVIDER_EXCEPTION, GetLastError());
-                __leave;
+            if (length > 0) {
+                seed = env->NewByteArray(length);
+                if (seed == NULL) {
+                    __leave;
+                }
+            } else {
+                length = env->GetArrayLength(seed);
             }
 
-            result = env->NewByteArray(length);
-            env->SetByteArrayRegion(result, 0, length, (jbyte*) pbData);
-
-        } else { // length == 0
-
-            length = env->GetArrayLength(seed);
             if ((seedBytes = env->GetByteArrayElements(seed, 0)) == NULL) {
                 __leave;
             }
@@ -237,9 +228,6 @@ JNIEXPORT jbyteArray JNICALL Java_sun_security_mscapi_PRNG_generateSeed
 
         if (reseedBytes)
             env->ReleaseByteArrayElements(seed, reseedBytes, JNI_ABORT);
-
-        if (pbData)
-            delete [] pbData;
 
         if (seedBytes)
             env->ReleaseByteArrayElements(seed, seedBytes, 0); // update orig
