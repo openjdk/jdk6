@@ -2778,9 +2778,7 @@ VMRegPair *SharedRuntime::find_callee_arguments(Symbol* sig, bool has_receiver, 
   // ResourceObject, so do not put any ResourceMarks in here.
   char *s = sig->as_C_string();
   int len = (int)strlen(s);
-  *s++; len--;                  // Skip opening paren
-  char *t = s+len;
-  while( *(--t) != ')' ) ;      // Find close paren
+  s++; len--;                   // Skip opening paren
 
   BasicType *sig_bt = NEW_RESOURCE_ARRAY( BasicType, 256 );
   VMRegPair *regs = NEW_RESOURCE_ARRAY( VMRegPair, 256 );
@@ -2789,7 +2787,7 @@ VMRegPair *SharedRuntime::find_callee_arguments(Symbol* sig, bool has_receiver, 
     sig_bt[cnt++] = T_OBJECT; // Receiver is argument 0; not in signature
   }
 
-  while( s < t ) {
+  while( *s != ')' ) {          // Find closing right paren
     switch( *s++ ) {            // Switch on signature character
     case 'B': sig_bt[cnt++] = T_BYTE;    break;
     case 'C': sig_bt[cnt++] = T_CHAR;    break;

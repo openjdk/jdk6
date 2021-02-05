@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,6 +35,7 @@
 #include "oops/fieldStreams.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/objArrayKlass.hpp"
+#include "oops/methodOop.hpp"
 #include "prims/jvm.h"
 #include "prims/jvm_misc.hpp"
 #include "prims/jvmtiExport.hpp"
@@ -2292,11 +2293,11 @@ JVM_QUICK_ENTRY(void, JVM_GetMethodIxExceptionTableEntry(JNIEnv *env, jclass cls
   klassOop k = java_lang_Class::as_klassOop(JNIHandles::resolve_non_null(cls));
   k = JvmtiThreadState::class_to_verify_considering_redefinition(k, thread);
   oop method = instanceKlass::cast(k)->methods()->obj_at(method_index);
-  typeArrayOop extable = methodOop(method)->exception_table();
-  entry->start_pc   = extable->int_at(entry_index * 4);
-  entry->end_pc     = extable->int_at(entry_index * 4 + 1);
-  entry->handler_pc = extable->int_at(entry_index * 4 + 2);
-  entry->catchType  = extable->int_at(entry_index * 4 + 3);
+  ExceptionTable extable((methodOop(method)));
+  entry->start_pc   = extable.start_pc(entry_index);
+  entry->end_pc     = extable.end_pc(entry_index);
+  entry->handler_pc = extable.handler_pc(entry_index);
+  entry->catchType  = extable.catch_type_index(entry_index);
 JVM_END
 
 
@@ -2305,7 +2306,7 @@ JVM_QUICK_ENTRY(jint, JVM_GetMethodIxExceptionTableLength(JNIEnv *env, jclass cl
   klassOop k = java_lang_Class::as_klassOop(JNIHandles::resolve_non_null(cls));
   k = JvmtiThreadState::class_to_verify_considering_redefinition(k, thread);
   oop method = instanceKlass::cast(k)->methods()->obj_at(method_index);
-  return methodOop(method)->exception_table()->length() / 4;
+  return methodOop(method)->exception_table_length();
 JVM_END
 
 
@@ -2412,7 +2413,6 @@ JVM_ENTRY(const char*, JVM_GetCPMethodNameUTF(JNIEnv *env, jclass cls, jint cp_i
   switch (cp->tag_at(cp_index).value()) {
     case JVM_CONSTANT_InterfaceMethodref:
     case JVM_CONSTANT_Methodref:
-    case JVM_CONSTANT_NameAndType:  // for invokedynamic
       return cp->uncached_name_ref_at(cp_index)->as_utf8();
     default:
       fatal("JVM_GetCPMethodNameUTF: illegal constant");
@@ -2430,7 +2430,6 @@ JVM_ENTRY(const char*, JVM_GetCPMethodSignatureUTF(JNIEnv *env, jclass cls, jint
   switch (cp->tag_at(cp_index).value()) {
     case JVM_CONSTANT_InterfaceMethodref:
     case JVM_CONSTANT_Methodref:
-    case JVM_CONSTANT_NameAndType:  // for invokedynamic
       return cp->uncached_signature_ref_at(cp_index)->as_utf8();
     default:
       fatal("JVM_GetCPMethodSignatureUTF: illegal constant");
@@ -2655,7 +2654,18 @@ extern "C" {
 int jio_vsnprintf(char *str, size_t count, const char *fmt, va_list args) {
   // see bug 4399518, 4417214
   if ((intptr_t)count <= 0) return -1;
-  return vsnprintf(str, count, fmt, args);
+
+  int result = vsnprintf(str, count, fmt, args);
+  // Note: on truncation vsnprintf(3) on Unix returns number of
+  // characters which would have been written had the buffer been large
+  // enough; on Windows, it returns -1. We handle both cases here and
+  // always return -1, and perform null termination.
+  if ((result > 0 && (size_t)result >= count) || result == -1) {
+    str[count - 1] = '\0';
+    result = -1;
+  }
+
+  return result;
 }
 
 
