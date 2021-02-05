@@ -176,6 +176,11 @@ struct GetInsetsStruct {
     jobject window;
     RECT *insets;
 };
+// Struct for _SetParent function
+struct SetParentStruct {
+    jobject component;
+    jobject parentComp;
+};
 /************************************************************************/
 
 //////////////////////////////////////////////////////////////////////////
@@ -287,9 +292,6 @@ AwtComponent::~AwtComponent()
 {
     DASSERT(AwtToolkit::IsMainThread());
 
-    /* Disconnect all links. */
-    UnlinkObjects();
-
     /*
      * All the messages for this component are processed, native
      * resources are freed, and Java object is not connected to
@@ -301,6 +303,8 @@ AwtComponent::~AwtComponent()
 
 void AwtComponent::Dispose()
 {
+    DASSERT(AwtToolkit::IsMainThread());
+
     if (sm_focusOwner == GetHWnd()) {
         ::SetFocus(NULL);
     }
@@ -326,8 +330,10 @@ void AwtComponent::Dispose()
     /* Release global ref to input method */
     SetInputMethod(NULL, TRUE);
 
-    if (m_childList != NULL)
+    if (m_childList != NULL) {
         delete m_childList;
+        m_childList = NULL;
+    }
 
     DestroyDropTarget();
 
@@ -348,6 +354,9 @@ void AwtComponent::Dispose()
         m_brushBackground->Release();
         m_brushBackground = NULL;
     }
+
+    /* Disconnect all links. */
+    UnlinkObjects();
 
     // The component instance is deleted using AwtObject::Dispose() method
     AwtObject::Dispose();
@@ -6381,21 +6390,35 @@ ret:
     return result;
 }
 
-void AwtComponent::SetParent(void * param) {
+void AwtComponent::_SetParent(void * param) {
     if (AwtToolkit::IsMainThread()) {
-        AwtComponent** comps = (AwtComponent**)param;
-        if ((comps[0] != NULL) && (comps[1] != NULL)) {
-            HWND selfWnd = comps[0]->GetHWnd();
-            HWND parentWnd = comps[1]->GetHWnd();
-            if (::IsWindow(selfWnd) && ::IsWindow(parentWnd)) {
-                sm_suppressFocusAndActivation = TRUE;
-                ::SetParent(selfWnd, parentWnd);
-                sm_suppressFocusAndActivation = FALSE;
-            }
+        JNIEnv *env = (JNIEnv *)JNU_GetEnv(jvm, JNI_VERSION_1_2);
+        SetParentStruct *data = (SetParentStruct*) param;
+        jobject self = data->component;
+        jobject parent = data->parentComp;
+
+        AwtComponent *awtComponent = NULL;
+        AwtComponent *awtParent = NULL;
+
+        PDATA pData;
+        JNI_CHECK_PEER_GOTO(self, ret);
+        awtComponent = (AwtComponent *)pData;
+        JNI_CHECK_PEER_GOTO(parent, ret);
+        awtParent = (AwtComponent *)pData;
+
+        HWND selfWnd = awtComponent->GetHWnd();
+        HWND parentWnd = awtParent->GetHWnd();
+        if (::IsWindow(selfWnd) && ::IsWindow(parentWnd)) {
+            sm_suppressFocusAndActivation = TRUE;
+            ::SetParent(selfWnd, parentWnd);
+            sm_suppressFocusAndActivation = FALSE;
         }
-        delete[] comps;
+ret:
+        env->DeleteGlobalRef(self);
+        env->DeleteGlobalRef(parent);
+        delete data;
     } else {
-        AwtToolkit::GetInstance().InvokeFunction(AwtComponent::SetParent, param);
+        AwtToolkit::GetInstance().InvokeFunction(AwtComponent::_SetParent, param);
     }
 }
 
@@ -7169,15 +7192,12 @@ JNIEXPORT void JNICALL
 Java_sun_awt_windows_WComponentPeer_pSetParent(JNIEnv* env, jobject self, jobject parent) {
     TRY;
 
-    typedef AwtComponent* PComponent;
-    AwtComponent** comps = new PComponent[2];
-    AwtComponent* comp = (AwtComponent*)JNI_GET_PDATA(self);
-    AwtComponent* parentComp = (AwtComponent*)JNI_GET_PDATA(parent);
-    comps[0] = comp;
-    comps[1] = parentComp;
+    SetParentStruct * data = new SetParentStruct;
+    data->component = env->NewGlobalRef(self);
+    data->parentComp = env->NewGlobalRef(parent);
 
-    AwtToolkit::GetInstance().SyncCall(AwtComponent::SetParent, comps);
-    // comps is deleted in SetParent
+    AwtToolkit::GetInstance().SyncCall(AwtComponent::_SetParent, data);
+    // global refs and data are deleted in SetParent
 
     CATCH_BAD_ALLOC;
 }

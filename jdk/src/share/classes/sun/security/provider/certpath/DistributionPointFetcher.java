@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,6 +35,7 @@ import javax.security.auth.x500.X500Principal;
 import sun.security.action.GetBooleanAction;
 import sun.security.util.Debug;
 import sun.security.util.DerOutputStream;
+import sun.security.validator.Validator;
 import sun.security.x509.*;
 
 /**
@@ -84,7 +85,8 @@ public class DistributionPointFetcher {
                                               List<CertStore> certStores,
                                               boolean[] reasonsMask,
                                               Set<TrustAnchor> trustAnchors,
-                                              Date validity)
+                                              Date validity,
+                                              String variant)
         throws CertStoreException
     {
         if (USE_CRLDP == false) {
@@ -116,7 +118,7 @@ public class DistributionPointFetcher {
                 DistributionPoint point = t.next();
                 Collection<X509CRL> crls = getCRLs(selector, certImpl,
                     point, reasonsMask, signFlag, prevKey, provider,
-                    certStores, trustAnchors, validity);
+                    certStores, trustAnchors, validity, variant);
                 results.addAll(crls);
             }
             if (debug != null) {
@@ -138,7 +140,7 @@ public class DistributionPointFetcher {
         X509CertImpl certImpl, DistributionPoint point, boolean[] reasonsMask,
         boolean signFlag, PublicKey prevKey, String provider,
         List<CertStore> certStores, Set<TrustAnchor> trustAnchors,
-        Date validity) {
+        Date validity, String variant) {
 
         // check for full name
         GeneralNames fullName = point.getFullName();
@@ -191,7 +193,7 @@ public class DistributionPointFetcher {
                 selector.setIssuerNames(null);
                 if (selector.match(crl) && verifyCRL(certImpl, point, crl,
                         reasonsMask, signFlag, prevKey, provider, trustAnchors,
-                        certStores, validity)) {
+                        certStores, validity, variant)) {
                     crls.add(crl);
                 }
             } catch (Exception e) {
@@ -283,7 +285,7 @@ public class DistributionPointFetcher {
         X509CRL crl, boolean[] reasonsMask, boolean signFlag,
         PublicKey prevKey, String provider,
         Set<TrustAnchor> trustAnchors, List<CertStore> certStores,
-        Date validity) throws CRLException, IOException {
+        Date validity, String variant) throws CRLException, IOException {
 
         boolean indirectCRL = false;
         X509CRLImpl crlImpl = X509CRLImpl.toImpl(crl);
@@ -401,7 +403,7 @@ public class DistributionPointFetcher {
                         }
                         if (indirectCRL) {
                             if (pointCrlIssuers.size() != 1) {
-                                // RFC 3280: there must be only 1 CRL issuer
+                                // RFC 5280: there must be only 1 CRL issuer
                                 // name when relativeName is present
                                 if (debug != null) {
                                     debug.println("must only be one CRL " +
@@ -616,7 +618,7 @@ public class DistributionPointFetcher {
 
         // check the crl signature algorithm
         try {
-            AlgorithmChecker.check(prevKey, crl);
+            AlgorithmChecker.check(prevKey, crl, variant);
         } catch (CertPathValidatorException cpve) {
             if (debug != null) {
                 debug.println("CRL signature algorithm check failed: " + cpve);

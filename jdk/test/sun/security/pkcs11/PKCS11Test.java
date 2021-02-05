@@ -29,6 +29,8 @@ import java.util.*;
 import java.lang.reflect.*;
 
 import java.security.*;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.ECParameterSpec;
 
 public abstract class PKCS11Test {
 
@@ -64,6 +66,22 @@ public abstract class PKCS11Test {
 
     static String NSPR_PREFIX = "";
 
+    // NSS version info
+    public static enum ECCState { None, Basic, Extended };
+    static double nss_version = -1;
+    static ECCState nss_ecc_status = ECCState.Extended;
+
+    // The NSS library we need to search for in getNSSLibDir()
+    // Default is "libsoftokn3.so", listed as "softokn3"
+    // The other is "libnss3.so", listed as "nss3".
+    static String nss_library = "softokn3";
+
+    // NSS versions of each library.  It is simplier to keep nss_version
+    // for quick checking for generic testing than many if-else statements.
+    static double softoken3_version = -1;
+    static double nss3_version = -1;
+
+
     static Provider getSunPKCS11(String config) throws Exception {
         Class clazz = Class.forName("sun.security.pkcs11.SunPKCS11");
         Constructor cons = clazz.getConstructor(new Class[] {String.class});
@@ -92,8 +110,9 @@ public abstract class PKCS11Test {
             Provider[] newProviders = Security.getProviders();
             // Do not restore providers if nothing changed. This is especailly
             // useful for ./Provider/Login.sh, where a SecurityManager exists.
+            boolean found = false;
             if (oldProviders.length == newProviders.length) {
-                boolean found = false;
+                found = false;
                 for (int i = 0; i<oldProviders.length; i++) {
                     if (oldProviders[i] != newProviders[i]) {
                         found = true;
@@ -102,11 +121,13 @@ public abstract class PKCS11Test {
                 }
                 if (!found) return;
             }
-            for (Provider p: newProviders) {
-                Security.removeProvider(p.getName());
-            }
-            for (Provider p: oldProviders) {
-                Security.addProvider(p);
+            if (found) {
+                for (Provider p : newProviders) {
+                    Security.removeProvider(p.getName());
+                }
+                for (Provider p : oldProviders) {
+                    Security.addProvider(p);
+                }
             }
         }
     }
@@ -211,6 +232,130 @@ public abstract class PKCS11Test {
         return true;
     }
 
+    // Check the provider being used is NSS
+    public static boolean isNSS(Provider p) {
+        return p.getName().toUpperCase().equals("SUNPKCS11-NSS");
+    }
+
+    static double getNSSVersion() {
+        if (nss_version == -1)
+            getNSSInfo();
+        return nss_version;
+    }
+
+    static ECCState getNSSECC() {
+        if (nss_version == -1)
+            getNSSInfo();
+        return nss_ecc_status;
+    }
+
+    /* Read the library to find out the verison */
+    static void getNSSInfo() {
+        getNSSInfo(nss_library);
+    }
+
+    static double getNSSInfo(String library) {
+        String nssHeader = "$Header: NSS";
+        boolean found = false;
+        String s = null;
+        int i = 0;
+        String libfile = "";
+
+        if (library.compareTo("softokn3") == 0 && softoken3_version > -1)
+            return softoken3_version;
+        if (library.compareTo("nss3") == 0 && nss3_version > -1)
+            return nss3_version;
+
+        try {
+            libfile = getNSSLibDir() + System.mapLibraryName(library);
+            FileInputStream is = new FileInputStream(libfile);
+            byte[] data = new byte[1000];
+            int read = 0;
+
+            while (is.available() > 0) {
+                if (read == 0) {
+                    read = is.read(data, 0, 1000);
+                } else {
+                    // Prepend last 100 bytes in case the header was split
+                    // between the reads.
+                    System.arraycopy(data, 900, data, 0, 100);
+                    read = 100 + is.read(data, 100, 900);
+                }
+
+                s = new String(data, 0, read);
+                if ((i = s.indexOf(nssHeader)) > 0) {
+                    found = true;
+                    // If the nssHeader is before 920 we can break, otherwise
+                    // we may not have the whole header so do another read.  If
+                    // no bytes are in the stream, that is ok, found is true.
+                    if (i < 920) {
+                        break;
+                    }
+                }
+            }
+
+            is.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        if (!found) {
+            System.out.println("lib" + library +
+                    " version not found, set to 0.0: " + libfile);
+            nss_version = 0.0;
+            return nss_version;
+        }
+
+        // the index after whitespace after nssHeader
+        int afterheader = s.indexOf("NSS", i) + 4;
+        String version = s.substring(afterheader, s.indexOf(' ', afterheader));
+
+        // If a "dot dot" release, strip the extra dots for double parsing
+        String[] dot = version.split("\\.");
+        if (dot.length > 2) {
+            version = dot[0]+"."+dot[1];
+            for (int j = 2; dot.length > j; j++) {
+                version += dot[j];
+            }
+        }
+
+        // Convert to double for easier version value checking
+        try {
+            nss_version = Double.parseDouble(version);
+        } catch (NumberFormatException e) {
+            System.out.println("Failed to parse lib" + library +
+                    " version. Set to 0.0");
+            e.printStackTrace();
+        }
+
+        System.out.print("lib" + library + " version = "+version+".  ");
+
+        // Check for ECC
+        if (s.indexOf("Basic") > 0) {
+            nss_ecc_status = ECCState.Basic;
+            System.out.println("ECC Basic.");
+        } else if (s.indexOf("Extended") > 0) {
+            nss_ecc_status = ECCState.Extended;
+            System.out.println("ECC Extended.");
+        } else {
+            System.out.println("ECC None.");
+        }
+
+        if (library.compareTo("softokn3") == 0) {
+            softoken3_version = nss_version;
+        } else if (library.compareTo("nss3") == 0) {
+            nss3_version = nss_version;
+        }
+
+        return nss_version;
+    }
+
+    // Used to set the nss_library file to search for libsoftokn3.so
+    public static void useNSS() {
+        nss_library = "nss3";
+    }
+
     public static void testNSS(PKCS11Test test) throws Exception {
         if (!(new File(NSS_BASE)).exists()) return;
 
@@ -244,6 +389,18 @@ public abstract class PKCS11Test {
         test.premain(p);
     }
 
+
+   // Check support for a curve with a provided Vector of EC support
+    boolean checkSupport(Vector<ECParameterSpec> supportedEC,
+                         ECParameterSpec curve) {
+        boolean found = false;
+        for (ECParameterSpec ec: supportedEC) {
+            if (ec.equals(curve)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     private static final Map<String,String> osMap;
 
@@ -327,4 +484,79 @@ public abstract class PKCS11Test {
         return r;
     }
 
+    // Generate a vector of supported elliptic curves of a given provider
+    static Vector<ECParameterSpec> getKnownCurves(Provider p) throws Exception {
+        int index;
+        int begin;
+        int end;
+        String curve;
+        KeyPair kp = null;
+
+        Vector<ECParameterSpec> results = new Vector<ECParameterSpec>();
+        // Get Curves to test from SunEC.
+        String kcProp = Security.getProvider("SunEC").
+                getProperty("AlgorithmParameters.EC SupportedCurves");
+
+        if (kcProp == null) {
+            throw new RuntimeException(
+                    "\"AlgorithmParameters.EC SupportedCurves property\" not found");
+        }
+
+        System.out.println("Finding supported curves using list from SunEC\n");
+        index = 0;
+        for (;;) {
+            // Each set of curve names is enclosed with brackets.
+            begin = kcProp.indexOf('[', index);
+            end = kcProp.indexOf(']', index);
+            if (begin == -1 || end == -1) {
+                break;
+            }
+
+            /*
+             * Each name is separated by a comma.
+             * Just get the first name in the set.
+             */
+            index = end + 1;
+            begin++;
+            end = kcProp.indexOf(',', begin);
+            if (end == -1) {
+                // Only one name in the set.
+                end = index -1;
+            }
+
+            curve = kcProp.substring(begin, end);
+            ECParameterSpec e = getECParameterSpec(p, curve);
+            System.out.print("\t "+ curve + ": ");
+            try {
+                KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC", p);
+                kpg.initialize(e);
+                kp = kpg.generateKeyPair();
+                results.add(e);
+                System.out.println("Supported");
+            } catch (ProviderException ex) {
+                System.out.println("Unsupported: PKCS11: " +
+                        ex.getCause().getMessage());
+            } catch (InvalidAlgorithmParameterException ex) {
+                System.out.println("Unsupported: Key Length: " +
+                        ex.getMessage());
+            }
+        }
+
+        if (results.size() == 0) {
+            throw new RuntimeException("No supported EC curves found");
+        }
+
+        return results;
+    }
+
+    private static ECParameterSpec getECParameterSpec(Provider p, String name)
+            throws Exception {
+
+        AlgorithmParameters parameters =
+                AlgorithmParameters.getInstance("EC", p);
+
+        parameters.init(new ECGenParameterSpec(name));
+
+        return parameters.getParameterSpec(ECParameterSpec.class);
+    }
 }

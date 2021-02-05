@@ -31,10 +31,7 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.*;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
@@ -269,5 +266,24 @@ public final class Utils {
             transferred += read;
         }
         return transferred;
+    }
+
+    public static String join(String delimiter, String[] elements) {
+        return join(delimiter, Arrays.asList(elements));
+    }
+
+    public static String join(String delimiter, Iterable<String> elements) {
+        Iterator<String> iterator = elements.iterator();
+        if (!iterator.hasNext()) {
+            return "";
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.append(iterator.next());
+        while (iterator.hasNext()) {
+            builder.append(delimiter);
+            builder.append(iterator.next());
+        }
+        return builder.toString();
     }
 }

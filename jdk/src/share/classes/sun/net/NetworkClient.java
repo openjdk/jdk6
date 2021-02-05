@@ -65,8 +65,8 @@ public class NetworkClient {
         AccessController.doPrivileged(
                 new PrivilegedAction<Void>() {
                     public Void run() {
-                        vals[0] = Integer.getInteger("sun.net.client.defaultReadTimeout", 0).intValue();
-                        vals[1] = Integer.getInteger("sun.net.client.defaultConnectTimeout", 0).intValue();
+                        vals[0] = Integer.getInteger("sun.net.client.defaultReadTimeout", 300000).intValue();
+                        vals[1] = Integer.getInteger("sun.net.client.defaultConnectTimeout", 300000).intValue();
                         encs[0] = System.getProperty("file.encoding", "ISO8859_1");
                         return null;
             }

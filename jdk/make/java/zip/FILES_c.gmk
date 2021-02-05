@@ -1,5 +1,5 @@
 #
-# Copyright (c) 1996, 2002, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 1996, 2014, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -30,15 +30,15 @@ FILES_c = \
 	Inflater.c \
 	ZipFile.c \
 	ZipEntry.c \
+	zip_util.c \
+	compress.c \
+	deflate.c \
+	infback.c \
+	inffast.c \
+	inflate.c \
+	inftrees.c \
+	trees.c \
+	uncompr.c \
 	zadler32.c \
 	zcrc32.c \
-	deflate.c \
-	trees.c \
-	zutil.c \
-	inflate.c \
-	infblock.c \
-	inftrees.c \
-	infcodes.c \
-	infutil.c \
-	inffast.c \
-	zip_util.c
+	zutil.c

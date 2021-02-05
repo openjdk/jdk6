@@ -264,7 +264,7 @@ final class PBECipherCore {
 
         if (algo.equals("DES")) {
             // P || S (password concatenated with salt)
-            byte[] concat = new byte[passwdBytes.length + salt.length];
+            byte[] concat = new byte[CipherCore.addExact(passwdBytes.length, salt.length)];
             System.arraycopy(passwdBytes, 0, concat, 0, passwdBytes.length);
             java.util.Arrays.fill(passwdBytes, (byte)0x00);
             System.arraycopy(salt, 0, concat, passwdBytes.length, salt.length);
@@ -288,7 +288,7 @@ final class PBECipherCore {
                 for (i=0; i<2; i++) {
                     byte tmp = salt[i];
                     salt[i] = salt[3-i];
-                    salt[3-1] = tmp;
+                    salt[3-i] = tmp;
                 }
             }
 

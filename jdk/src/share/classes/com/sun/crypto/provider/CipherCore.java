@@ -268,7 +268,7 @@ final class CipherCore {
      * @return the required output buffer size (in bytes)
      */
     int getOutputSize(int inputLen) {
-        int totalLen = buffered + inputLen;
+        int totalLen = addExact(buffered, inputLen);
 
         if (padding == null)
             return totalLen;
@@ -277,13 +277,14 @@ final class CipherCore {
             return totalLen;
 
         if (unitBytes != blockSize) {
-            if (totalLen < diffBlocksize)
+            if (totalLen < diffBlocksize) {
                 return diffBlocksize;
-            else
-                return (totalLen + blockSize -
-                        ((totalLen - diffBlocksize) % blockSize));
+            } else {
+                int residue = (totalLen - diffBlocksize) % blockSize;
+                return addExact(totalLen, (blockSize - residue));
+            }
         } else {
-            return totalLen + padding.padLength(totalLen);
+            return addExact(totalLen, padding.padLength(totalLen));
         }
     }
 
@@ -568,7 +569,8 @@ final class CipherCore {
     int update(byte[] input, int inputOffset, int inputLen, byte[] output,
                int outputOffset) throws ShortBufferException {
         // figure out how much can be sent to crypto function
-        int len = buffered + inputLen - minBytes;
+        int len = addExact(buffered, inputLen);
+        len -= minBytes;
         if (padding != null && decrypting) {
             // do not include the padding bytes when decrypting
             len -= blockSize;
@@ -619,8 +621,8 @@ final class CipherCore {
             }
 
             inputLen -= inputConsumed;
-            inputOffset += inputConsumed;
-            outputOffset += len;
+            inputOffset = addExact(inputOffset, inputConsumed);
+            outputOffset = addExact(outputOffset, len);
             buffered -= bufferedConsumed;
             if (buffered > 0) {
                 System.arraycopy(buffer, bufferedConsumed, buffer, 0,
@@ -632,7 +634,7 @@ final class CipherCore {
             System.arraycopy(input, inputOffset, buffer, buffered,
                              inputLen);
         }
-        buffered += inputLen;
+        buffered = addExact(buffered, inputLen);
         return len;
     }
 
@@ -728,7 +730,7 @@ final class CipherCore {
                BadPaddingException {
 
         // calculate the total input length
-        int totalLen = buffered + inputLen;
+        int totalLen = addExact(buffered, inputLen);
         int paddedLen = totalLen;
         int paddingLen = 0;
 
@@ -753,7 +755,7 @@ final class CipherCore {
 
         // if encrypting and padding not null, add padding
         if (!decrypting && padding != null)
-            paddedLen += paddingLen;
+            paddedLen = addExact(paddedLen, paddingLen);
 
         // check output buffer capacity.
         // if we are decrypting with padding applied, we can perform this
@@ -938,5 +940,44 @@ final class CipherCore {
         }
         return ConstructKeys.constructKey(encodedKey, wrappedKeyAlgorithm,
                                           wrappedKeyType);
+    }
+
+    /* Taken from java.lang.Math in OpenJDK  8 */
+
+    /**
+     * Returns the sum of its arguments,
+     * throwing an exception if the result overflows an {@code int}.
+     *
+     * @param x the first value
+     * @param y the second value
+     * @return the result
+     * @throws ArithmeticException if the result overflows an int
+     * @since 1.8
+     */
+    public static int addExact(int x, int y) {
+        int r = x + y;
+        // HD 2-12 Overflow iff both arguments have the opposite sign of the result
+        if (((x ^ r) & (y ^ r)) < 0) {
+            throw new ArithmeticException("integer overflow");
+        }
+        return r;
+    }
+
+    /**
+     * Returns the product of the arguments,
+     * throwing an exception if the result overflows an {@code int}.
+     *
+     * @param x the first value
+     * @param y the second value
+     * @return the result
+     * @throws ArithmeticException if the result overflows an int
+     * @since 1.8
+     */
+    public static int multiplyExact(int x, int y) {
+        long r = (long)x * (long)y;
+        if ((int)r != r) {
+            throw new ArithmeticException("integer overflow");
+        }
+        return (int)r;
     }
 }
