@@ -39,8 +39,8 @@ import com.sun.org.apache.xerces.internal.util.DOMInputSource;
 import com.sun.org.apache.xerces.internal.util.ErrorHandlerWrapper;
 import com.sun.org.apache.xerces.internal.util.SAXInputSource;
 import com.sun.org.apache.xerces.internal.util.SAXMessageFormatter;
-import com.sun.org.apache.xerces.internal.util.SecurityManager;
 import com.sun.org.apache.xerces.internal.util.XMLGrammarPoolImpl;
+import com.sun.org.apache.xerces.internal.utils.XMLSecurityManager;
 import com.sun.org.apache.xerces.internal.xni.XNIException;
 import com.sun.org.apache.xerces.internal.xni.grammars.Grammar;
 import com.sun.org.apache.xerces.internal.xni.grammars.XMLGrammarDescription;
@@ -74,7 +74,7 @@ public final class XMLSchemaFactory extends SchemaFactory {
     private static final String XMLGRAMMAR_POOL =
         Constants.XERCES_PROPERTY_PREFIX + Constants.XMLGRAMMAR_POOL_PROPERTY;
     
-    /** Property identifier: SecurityManager. */
+    /** Property identifier: XMLSecurityManager. */
     private static final String SECURITY_MANAGER =
         Constants.XERCES_PROPERTY_PREFIX + Constants.SECURITY_MANAGER_PROPERTY;
     
@@ -98,7 +98,7 @@ public final class XMLSchemaFactory extends SchemaFactory {
     private ErrorHandlerWrapper fErrorHandlerWrapper;
     
     /** The SecurityManager. */
-    private SecurityManager fSecurityManager;
+    private XMLSecurityManager fSecurityManager;
     
     /** The container for the real grammar pool. */ 
     private XMLGrammarPoolWrapper fXMLGrammarPoolWrapper;
@@ -113,7 +113,7 @@ public final class XMLSchemaFactory extends SchemaFactory {
         fXMLSchemaLoader.setErrorHandler(fErrorHandlerWrapper);
 
         // Enable secure processing feature by default
-        fSecurityManager = new SecurityManager();
+        fSecurityManager = new XMLSecurityManager(true);
         fXMLSchemaLoader.setProperty(SECURITY_MANAGER, fSecurityManager);
     }
     
@@ -239,6 +239,7 @@ public final class XMLSchemaFactory extends SchemaFactory {
         else {
             schema = new EmptyXMLSchema();
         }
+        propagateProperties(schema);
         propagateFeatures(schema);
         return schema;
     }
@@ -247,6 +248,7 @@ public final class XMLSchemaFactory extends SchemaFactory {
         // Use a Schema that uses the system id as the equality source.
         AbstractXMLSchema schema = new WeakReferenceXMLSchema();
         propagateFeatures(schema);
+        propagateProperties(schema);
         return schema;
     }
     
@@ -257,7 +259,7 @@ public final class XMLSchemaFactory extends SchemaFactory {
                     "FeatureNameNull", null));
         }
         if (name.equals(XMLConstants.FEATURE_SECURE_PROCESSING)) {
-            return (fSecurityManager != null);
+            return (fSecurityManager !=null && fSecurityManager.isSecureProcessing());
         }
         try {
             return fXMLSchemaLoader.getFeature(name);
@@ -292,7 +294,7 @@ public final class XMLSchemaFactory extends SchemaFactory {
                     "property-not-supported", new Object [] {name}));
         }
         try {
-            return fXMLSchemaLoader.getProperty(name);
+	    return fXMLSchemaLoader.getProperty(name);
         }
         catch (XMLConfigurationException e) {
             String identifier = e.getIdentifier();
@@ -321,7 +323,8 @@ public final class XMLSchemaFactory extends SchemaFactory {
                         SAXMessageFormatter.formatMessage(null, 
                         "jaxp-secureprocessing-feature", null));
             }
-            fSecurityManager = value ? new SecurityManager() : null;
+
+            fSecurityManager.setSecureProcessing(value);
             fXMLSchemaLoader.setProperty(SECURITY_MANAGER, fSecurityManager);
             return;
         }
@@ -350,7 +353,7 @@ public final class XMLSchemaFactory extends SchemaFactory {
                     "ProperyNameNull", null));
         }
         if (name.equals(SECURITY_MANAGER)) {
-            fSecurityManager = (SecurityManager) object;
+            fSecurityManager = XMLSecurityManager.convert(object, fSecurityManager);
             fXMLSchemaLoader.setProperty(SECURITY_MANAGER, fSecurityManager);
             return;
         }
@@ -360,7 +363,12 @@ public final class XMLSchemaFactory extends SchemaFactory {
                     "property-not-supported", new Object [] {name}));
         }
         try {
-            fXMLSchemaLoader.setProperty(name, object);
+            //check if the property is managed by security manager
+            if (fSecurityManager == null ||
+                    !fSecurityManager.setLimit(name, XMLSecurityManager.State.APIPROPERTY, object)) {
+		//fall back to the existing property manager
+		fXMLSchemaLoader.setProperty(name, object);
+	    }
         }
         catch (XMLConfigurationException e) {
             String identifier = e.getIdentifier();
@@ -386,6 +394,15 @@ public final class XMLSchemaFactory extends SchemaFactory {
         }
     }
     
+    private void propagateProperties(AbstractXMLSchema schema) {
+        String[] properties = fXMLSchemaLoader.getRecognizedProperties();
+        for (int i = 0; i < properties.length; ++i) {
+            Object state = fXMLSchemaLoader.getProperty(properties[i]);
+            schema.setProperty(properties[i], state);
+        }
+    }
+
+
     /** 
      * Extension of XMLGrammarPoolImpl which exposes the number of
      * grammars stored in the grammar pool.

@@ -133,6 +133,8 @@ package.access=sun.,\
                com.sun.imageio.,\
                com.sun.istack.internal.,\
                com.sun.jmx.,\
+               com.sun.proxy.,\
+               com.sun.script.,\
                com.sun.org.apache.bcel.internal.,\
                com.sun.org.apache.regexp.internal.,\
                com.sun.org.apache.xerces.internal.,\
@@ -141,6 +143,7 @@ package.access=sun.,\
                com.sun.org.apache.xalan.internal.lib.,\
                com.sun.org.apache.xalan.internal.res.,\
                com.sun.org.apache.xalan.internal.templates.,\
+	       com.sun.org.apache.xalan.internal.utils.\
                com.sun.org.apache.xalan.internal.xslt.,\
                com.sun.org.apache.xalan.internal.xsltc.cmdline.,\
                com.sun.org.apache.xalan.internal.xsltc.compiler.,\
@@ -168,6 +171,8 @@ package.definition=sun.,\
                    com.sun.imageio.,\
                    com.sun.istack.internal.,\
                    com.sun.jmx.,\
+                   com.sun.proxy.,\
+                   com.sun.script.,\
                    com.sun.org.apache.bcel.internal.,\
                    com.sun.org.apache.regexp.internal.,\
                    com.sun.org.apache.xerces.internal.,\

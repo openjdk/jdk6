@@ -25,6 +25,7 @@
 package java.lang;
 
 import java.io.*;
+import java.security.AccessControlContext;
 import java.util.Properties;
 import java.util.PropertyPermission;
 import java.util.StringTokenizer;
@@ -35,6 +36,7 @@ import java.nio.channels.Channel;
 import java.nio.channels.spi.SelectorProvider;
 import sun.nio.ch.Interruptible;
 import sun.net.InetAddressCachePolicy;
+import sun.reflect.CallerSensitive;
 import sun.reflect.Reflection;
 import sun.security.util.SecurityConstants;
 import sun.reflect.annotation.AnnotationType;
@@ -1018,8 +1020,9 @@ public final class System {
      * @see        java.lang.Runtime#load(java.lang.String)
      * @see        java.lang.SecurityManager#checkLink(java.lang.String)
      */
+    @CallerSensitive
     public static void load(String filename) {
-        Runtime.getRuntime().load0(getCallerClass(), filename);
+        Runtime.getRuntime().load0(Reflection.getCallerClass(), filename);
     }
 
     /**
@@ -1043,8 +1046,9 @@ public final class System {
      * @see        java.lang.Runtime#loadLibrary(java.lang.String)
      * @see        java.lang.SecurityManager#checkLink(java.lang.String)
      */
+    @CallerSensitive
     public static void loadLibrary(String libname) {
-        Runtime.getRuntime().loadLibrary0(getCallerClass(), libname);
+        Runtime.getRuntime().loadLibrary0(Reflection.getCallerClass(), libname);
     }
 
     /**
@@ -1155,12 +1159,9 @@ public final class System {
             public void blockedOn(Thread t, Interruptible b) {
                 t.blockedOn(b);
             }
+            public Thread newThreadWithAcc(Runnable target, AccessControlContext acc) {
+                return new Thread(target, acc);
+            }
         });
-    }
-
-    /* returns the class of the caller. */
-    static Class getCallerClass() {
-        // NOTE use of more generic Reflection.getCallerClass()
-        return Reflection.getCallerClass(3);
     }
 }

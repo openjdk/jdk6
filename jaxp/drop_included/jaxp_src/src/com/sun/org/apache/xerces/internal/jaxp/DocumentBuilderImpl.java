@@ -34,7 +34,7 @@ import com.sun.org.apache.xerces.internal.impl.validation.ValidationManager;
 import com.sun.org.apache.xerces.internal.impl.xs.XMLSchemaValidator;
 import com.sun.org.apache.xerces.internal.jaxp.validation.XSGrammarPoolContainer;
 import com.sun.org.apache.xerces.internal.parsers.DOMParser;
-import com.sun.org.apache.xerces.internal.util.SecurityManager;
+import com.sun.org.apache.xerces.internal.utils.XMLSecurityManager;
 import com.sun.org.apache.xerces.internal.xni.XMLDocumentHandler;
 import com.sun.org.apache.xerces.internal.xni.parser.XMLComponent;
 import com.sun.org.apache.xerces.internal.xni.parser.XMLComponentManager;
@@ -108,6 +108,8 @@ public class DocumentBuilderImpl extends DocumentBuilder
     /** Initial EntityResolver */
     private final EntityResolver fInitEntityResolver;
     
+    private XMLSecurityManager fSecurityManager;
+
     DocumentBuilderImpl(DocumentBuilderFactoryImpl dbf, Hashtable dbfAttrs, Hashtable features)
         throws SAXNotRecognizedException, SAXNotSupportedException {
         this(dbf, dbfAttrs, features, false);
@@ -151,10 +153,8 @@ public class DocumentBuilderImpl extends DocumentBuilder
             domParser.setFeature(XINCLUDE_FEATURE, true);
         }
         
-        // If the secure processing feature is on set a security manager.
-        if (secureProcessing) {
-            domParser.setProperty(SECURITY_MANAGER, new SecurityManager());
-        }
+        fSecurityManager = new XMLSecurityManager(secureProcessing);
+        domParser.setProperty(SECURITY_MANAGER, fSecurityManager);
         
         this.grammar = dbf.getSchema();
         if (grammar != null) {
@@ -202,8 +202,8 @@ public class DocumentBuilderImpl extends DocumentBuilder
                 String feature = (String)e.nextElement();
                 boolean value = ((Boolean)features.get(feature)).booleanValue();
                 domParser.setFeature(feature, value);
-            }
         }
+    }
     }
 
     /**
@@ -253,12 +253,16 @@ public class DocumentBuilderImpl extends DocumentBuilder
 						}
 					}
             	} else {
-                    // Let Xerces code handle the property
-                    domParser.setProperty(name, val);
-				}
-			}
+                    //check if the property is managed by security manager
+                    if (fSecurityManager == null ||
+                            !fSecurityManager.setLimit(name, XMLSecurityManager.State.APIPROPERTY, val)) {
+                            //fall back to the existing property manager
+                            domParser.setProperty(name, val);
+		    }
 		}
+	    }
 	}
+    }
 
     /**
      * Non-preferred: use the getDOMImplementation() method instead of this
