@@ -25,7 +25,7 @@
 
 /*
  *
- * (C) Copyright IBM Corp. 1998-2004 - All Rights Reserved
+ * (C) Copyright IBM Corp. 1998-2008 - All Rights Reserved
  *
  */
 
@@ -37,8 +37,14 @@
 #include "GlyphIterator.h"
 #include "LESwaps.h"
 
-le_uint32 MultipleSubstitutionSubtable::process(GlyphIterator *glyphIterator, const LEGlyphFilter *filter) const
+U_NAMESPACE_BEGIN
+
+le_uint32 MultipleSubstitutionSubtable::process(const LETableReference &base, GlyphIterator *glyphIterator, LEErrorCode& success, const LEGlyphFilter *filter) const
 {
+    if (LE_FAILURE(success)) {
+        return 0;
+    }
+
     LEGlyphID glyph = glyphIterator->getCurrGlyphID();
 
     // If there's a filter, we only want to do the
@@ -52,7 +58,7 @@ le_uint32 MultipleSubstitutionSubtable::process(GlyphIterator *glyphIterator, co
         return 0;
     }
 
-    le_int32 coverageIndex = getGlyphCoverage(glyph);
+    le_int32 coverageIndex = getGlyphCoverage(base, glyph, success);
     le_uint16 seqCount = SWAPW(sequenceCount);
 
     if (coverageIndex >= 0 && coverageIndex < seqCount) {
@@ -85,7 +91,11 @@ le_uint32 MultipleSubstitutionSubtable::process(GlyphIterator *glyphIterator, co
                 }
             }
 
-            LEGlyphID *newGlyphs = glyphIterator->insertGlyphs(glyphCount);
+            LEGlyphID *newGlyphs = glyphIterator->insertGlyphs(glyphCount, success);
+            if (LE_FAILURE(success)) {
+                return 0;
+            }
+
             le_int32 insert = 0, direction = 1;
 
             if (glyphIterator->isRightToLeft()) {
@@ -106,3 +116,5 @@ le_uint32 MultipleSubstitutionSubtable::process(GlyphIterator *glyphIterator, co
 
     return 0;
 }
+
+U_NAMESPACE_END

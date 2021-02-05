@@ -39,6 +39,8 @@
 #include "GlyphIterator.h"
 #include "LESwaps.h"
 
+U_NAMESPACE_BEGIN
+
 LEGlyphID MarkToLigaturePositioningSubtable::findLigatureGlyph(GlyphIterator *glyphIterator) const
 {
     if (glyphIterator->prev()) {
@@ -48,10 +50,10 @@ LEGlyphID MarkToLigaturePositioningSubtable::findLigatureGlyph(GlyphIterator *gl
     return 0xFFFF;
 }
 
-le_int32 MarkToLigaturePositioningSubtable::process(GlyphIterator *glyphIterator, const LEFontInstance *fontInstance) const
+le_int32 MarkToLigaturePositioningSubtable::process(const LETableReference &base, GlyphIterator *glyphIterator, const LEFontInstance *fontInstance, LEErrorCode &success) const
 {
     LEGlyphID markGlyph = glyphIterator->getCurrGlyphID();
-    le_int32 markCoverage = getGlyphCoverage((LEGlyphID) markGlyph);
+    le_int32 markCoverage = getGlyphCoverage(base, (LEGlyphID) markGlyph, success);
 
     if (markCoverage < 0) {
         // markGlyph isn't a covered mark glyph
@@ -72,7 +74,7 @@ le_int32 MarkToLigaturePositioningSubtable::process(GlyphIterator *glyphIterator
     // FIXME: we probably don't want to find a ligature before a previous base glyph...
     GlyphIterator ligatureIterator(*glyphIterator, (le_uint16) (lfIgnoreMarks /*| lfIgnoreBaseGlyphs*/));
     LEGlyphID ligatureGlyph = findLigatureGlyph(&ligatureIterator);
-    le_int32 ligatureCoverage = getBaseCoverage((LEGlyphID) ligatureGlyph);
+    le_int32 ligatureCoverage = getBaseCoverage(base, (LEGlyphID) ligatureGlyph, success);
     const LigatureArray *ligatureArray = (const LigatureArray *) ((char *) this + SWAPW(baseArrayOffset));
     le_uint16 ligatureCount = SWAPW(ligatureArray->ligatureCount);
 
@@ -117,9 +119,10 @@ le_int32 MarkToLigaturePositioningSubtable::process(GlyphIterator *glyphIterator
         fontInstance->getGlyphAdvance(ligatureGlyph, pixels);
         fontInstance->pixelsToUnits(pixels, ligatureAdvance);
 
-        glyphIterator->setCurrGlyphPositionAdjustment(anchorDiffX - ligatureAdvance.fX,
-            anchorDiffY - ligatureAdvance.fY, -markAdvance.fX, -markAdvance.fY);
+        glyphIterator->setCurrGlyphPositionAdjustment(anchorDiffX - ligatureAdvance.fX, anchorDiffY - ligatureAdvance.fY, -markAdvance.fX, -markAdvance.fY);
     }
 
     return 1;
 }
+
+U_NAMESPACE_END

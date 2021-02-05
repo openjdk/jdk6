@@ -37,10 +37,12 @@
 #include "OpenTypeUtilities.h"
 #include "LESwaps.h"
 
-le_uint32 CursiveAttachmentSubtable::process(GlyphIterator *glyphIterator, const LEFontInstance *fontInstance) const
+U_NAMESPACE_BEGIN
+
+le_uint32 CursiveAttachmentSubtable::process(const LEReferenceTo<CursiveAttachmentSubtable> &base, GlyphIterator *glyphIterator, const LEFontInstance *fontInstance, LEErrorCode &success) const
 {
     LEGlyphID glyphID       = glyphIterator->getCurrGlyphID();
-    le_int32  coverageIndex = getGlyphCoverage(glyphID);
+    le_int32  coverageIndex = getGlyphCoverage(base, glyphID, success);
     le_uint16 eeCount       = SWAPW(entryExitCount);
 
     if (coverageIndex < 0 || coverageIndex >= eeCount) {
@@ -49,7 +51,7 @@ le_uint32 CursiveAttachmentSubtable::process(GlyphIterator *glyphIterator, const
     }
 
     LEPoint entryAnchor, exitAnchor;
-    Offset entryOffset = SWAPW(entryExitRecords[coverageIndex].entryAnchor);
+    Offset entryOffset = SWAPW(entryExitRecords[coverageIndex].entryAnchor); // TODO
     Offset exitOffset  = SWAPW(entryExitRecords[coverageIndex].exitAnchor);
 
     if (entryOffset != 0) {
@@ -57,6 +59,8 @@ le_uint32 CursiveAttachmentSubtable::process(GlyphIterator *glyphIterator, const
 
         entryAnchorTable->getAnchor(glyphID, fontInstance, entryAnchor);
         glyphIterator->setCursiveEntryPoint(entryAnchor);
+    } else {
+        //glyphIterator->clearCursiveEntryPoint();
     }
 
     if (exitOffset != 0) {
@@ -64,7 +68,11 @@ le_uint32 CursiveAttachmentSubtable::process(GlyphIterator *glyphIterator, const
 
         exitAnchorTable->getAnchor(glyphID, fontInstance, exitAnchor);
         glyphIterator->setCursiveExitPoint(exitAnchor);
+    } else {
+        //glyphIterator->clearCursiveExitPoint();
     }
 
     return 1;
 }
+
+U_NAMESPACE_END

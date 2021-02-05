@@ -25,12 +25,17 @@
 
 /*
  *
- * (C) Copyright IBM Corp. 1998-2004 - All Rights Reserved
+ * (C) Copyright IBM Corp. 1998-2010 - All Rights Reserved
  *
  */
 
 #ifndef __SUBSTITUTIONLOOKUPS_H
 #define __SUBSTITUTIONLOOKUPS_H
+
+/**
+ * \file
+ * \internal
+ */
 
 #include "LETypes.h"
 #include "LEFontInstance.h"
@@ -38,6 +43,8 @@
 #include "GlyphSubstitutionTables.h"
 #include "GlyphIterator.h"
 #include "LookupProcessor.h"
+
+U_NAMESPACE_BEGIN
 
 struct SubstitutionLookupRecord
 {
@@ -53,7 +60,10 @@ struct SubstitutionLookup
         le_uint16 substCount,
         GlyphIterator *glyphIterator,
         const LEFontInstance *fontInstance,
-        le_int32 position);
+        le_int32 position,
+                LEErrorCode& success);
 };
 
+U_NAMESPACE_END
 #endif
+

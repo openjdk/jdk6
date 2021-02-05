@@ -38,26 +38,36 @@
 #include "LEGlyphStorage.h"
 #include "LESwaps.h"
 
+U_NAMESPACE_BEGIN
+
+UOBJECT_DEFINE_RTTI_IMPLEMENTATION(TrimmedArrayProcessor)
+
 TrimmedArrayProcessor::TrimmedArrayProcessor()
 {
 }
 
-TrimmedArrayProcessor::TrimmedArrayProcessor(const MorphSubtableHeader *morphSubtableHeader)
-  : NonContextualGlyphSubstitutionProcessor(morphSubtableHeader)
+TrimmedArrayProcessor::TrimmedArrayProcessor(const LEReferenceTo<MorphSubtableHeader> &morphSubtableHeader, LEErrorCode &success)
+  : NonContextualGlyphSubstitutionProcessor(morphSubtableHeader, success), firstGlyph(0), lastGlyph(0)
 {
-    const NonContextualGlyphSubstitutionHeader *header = (const NonContextualGlyphSubstitutionHeader *) morphSubtableHeader;
+  LEReferenceTo<NonContextualGlyphSubstitutionHeader> header(morphSubtableHeader, success);
 
-    trimmedArrayLookupTable = (const TrimmedArrayLookupTable *) &header->table;
-    firstGlyph = SWAPW(trimmedArrayLookupTable->firstGlyph);
-    lastGlyph = firstGlyph + SWAPW(trimmedArrayLookupTable->glyphCount);
+  if(LE_FAILURE(success)) return;
+
+  trimmedArrayLookupTable = LEReferenceTo<TrimmedArrayLookupTable>(morphSubtableHeader, success, (const TrimmedArrayLookupTable*)&header->table);
+
+  if(LE_FAILURE(success)) return;
+
+  firstGlyph = SWAPW(trimmedArrayLookupTable->firstGlyph);
+  lastGlyph = firstGlyph + SWAPW(trimmedArrayLookupTable->glyphCount);
 }
 
 TrimmedArrayProcessor::~TrimmedArrayProcessor()
 {
 }
 
-void TrimmedArrayProcessor::process(LEGlyphStorage &glyphStorage)
+void TrimmedArrayProcessor::process(LEGlyphStorage &glyphStorage, LEErrorCode &success)
 {
+  if(LE_FAILURE(success)) return;
     le_int32 glyphCount = glyphStorage.getGlyphCount();
     le_int32 glyph;
 
@@ -72,3 +82,5 @@ void TrimmedArrayProcessor::process(LEGlyphStorage &glyphStorage)
         }
     }
 }
+
+U_NAMESPACE_END

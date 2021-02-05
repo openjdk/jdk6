@@ -38,22 +38,24 @@
 #include "Lookups.h"
 #include "LESwaps.h"
 
+U_NAMESPACE_BEGIN
 
-GlyphIterator::GlyphIterator(LEGlyphStorage &theGlyphStorage,
-    GlyphPositionAdjustments *theGlyphPositionAdjustments,
-    le_bool rightToLeft, le_uint16 theLookupFlags, FeatureMask theFeatureMask,
-    const GlyphDefinitionTableHeader *theGlyphDefinitionTableHeader)
+GlyphIterator::GlyphIterator(LEGlyphStorage &theGlyphStorage, GlyphPositionAdjustments *theGlyphPositionAdjustments, le_bool rightToLeft, le_uint16 theLookupFlags,
+                             FeatureMask theFeatureMask, const LEReferenceTo<GlyphDefinitionTableHeader> &theGlyphDefinitionTableHeader)
   : direction(1), position(-1), nextLimit(-1), prevLimit(-1),
     glyphStorage(theGlyphStorage), glyphPositionAdjustments(theGlyphPositionAdjustments),
-    srcIndex(-1), destIndex(-1), lookupFlags(theLookupFlags), featureMask(theFeatureMask),
-    glyphClassDefinitionTable(NULL), markAttachClassDefinitionTable(NULL)
+    srcIndex(-1), destIndex(-1), lookupFlags(theLookupFlags), featureMask(theFeatureMask), glyphGroup(0),
+    glyphClassDefinitionTable(), markAttachClassDefinitionTable()
 
 {
+  LEErrorCode success = LE_NO_ERROR; // TODO
     le_int32 glyphCount = glyphStorage.getGlyphCount();
 
-    if (theGlyphDefinitionTableHeader != NULL) {
-        glyphClassDefinitionTable = theGlyphDefinitionTableHeader->getGlyphClassDefinitionTable();
-        markAttachClassDefinitionTable = theGlyphDefinitionTableHeader->getMarkAttachClassDefinitionTable();
+    if (theGlyphDefinitionTableHeader.isValid()) {
+      glyphClassDefinitionTable = theGlyphDefinitionTableHeader
+        -> getGlyphClassDefinitionTable(theGlyphDefinitionTableHeader, success);
+      markAttachClassDefinitionTable = theGlyphDefinitionTableHeader
+        ->getMarkAttachClassDefinitionTable(theGlyphDefinitionTableHeader, success);
     }
 
     nextLimit = glyphCount;
@@ -79,6 +81,7 @@ GlyphIterator::GlyphIterator(GlyphIterator &that)
     destIndex = that.destIndex;
     lookupFlags = that.lookupFlags;
     featureMask = that.featureMask;
+    glyphGroup  = that.glyphGroup;
     glyphClassDefinitionTable = that.glyphClassDefinitionTable;
     markAttachClassDefinitionTable = that.markAttachClassDefinitionTable;
 }
@@ -96,6 +99,7 @@ GlyphIterator::GlyphIterator(GlyphIterator &that, FeatureMask newFeatureMask)
     destIndex = that.destIndex;
     lookupFlags = that.lookupFlags;
     featureMask = newFeatureMask;
+    glyphGroup  = 0;
     glyphClassDefinitionTable = that.glyphClassDefinitionTable;
     markAttachClassDefinitionTable = that.markAttachClassDefinitionTable;
 }
@@ -113,6 +117,7 @@ GlyphIterator::GlyphIterator(GlyphIterator &that, le_uint16 newLookupFlags)
     destIndex = that.destIndex;
     lookupFlags = newLookupFlags;
     featureMask = that.featureMask;
+    glyphGroup  = that.glyphGroup;
     glyphClassDefinitionTable = that.glyphClassDefinitionTable;
     markAttachClassDefinitionTable = that.markAttachClassDefinitionTable;
 }
@@ -126,12 +131,13 @@ void GlyphIterator::reset(le_uint16 newLookupFlags, FeatureMask newFeatureMask)
 {
     position     = prevLimit;
     featureMask  = newFeatureMask;
+    glyphGroup   = 0;
     lookupFlags  = newLookupFlags;
 }
 
-LEGlyphID *GlyphIterator::insertGlyphs(le_int32 count)
+LEGlyphID *GlyphIterator::insertGlyphs(le_int32 count, LEErrorCode& success)
 {
-    return glyphStorage.insertGlyphs(position, count);
+    return glyphStorage.insertGlyphs(position, count, success);
 }
 
 le_int32 GlyphIterator::applyInsertions()
@@ -262,8 +268,8 @@ void GlyphIterator::setCurrGlyphBaseOffset(le_int32 baseOffset)
     glyphPositionAdjustments->setBaseOffset(position, baseOffset);
 }
 
-void GlyphIterator::adjustCurrGlyphPositionAdjustment(float xPlacementAdjust,
-    float yPlacementAdjust, float xAdvanceAdjust, float yAdvanceAdjust)
+void GlyphIterator::adjustCurrGlyphPositionAdjustment(float xPlacementAdjust, float yPlacementAdjust,
+                                                      float xAdvanceAdjust, float yAdvanceAdjust)
 {
     if (direction < 0) {
         if (position <= nextLimit || position >= prevLimit) {
@@ -281,8 +287,8 @@ void GlyphIterator::adjustCurrGlyphPositionAdjustment(float xPlacementAdjust,
     glyphPositionAdjustments->adjustYAdvance(position, yAdvanceAdjust);
 }
 
-void GlyphIterator::setCurrGlyphPositionAdjustment(float xPlacementAdjust,
-    float yPlacementAdjust, float xAdvanceAdjust, float yAdvanceAdjust)
+void GlyphIterator::setCurrGlyphPositionAdjustment(float xPlacementAdjust, float yPlacementAdjust,
+                                                      float xAdvanceAdjust, float yAdvanceAdjust)
 {
     if (direction < 0) {
         if (position <= nextLimit || position >= prevLimit) {
@@ -298,6 +304,36 @@ void GlyphIterator::setCurrGlyphPositionAdjustment(float xPlacementAdjust,
     glyphPositionAdjustments->setYPlacement(position, yPlacementAdjust);
     glyphPositionAdjustments->setXAdvance(position, xAdvanceAdjust);
     glyphPositionAdjustments->setYAdvance(position, yAdvanceAdjust);
+}
+
+void GlyphIterator::clearCursiveEntryPoint()
+{
+    if (direction < 0) {
+        if (position <= nextLimit || position >= prevLimit) {
+            return;
+        }
+    } else {
+        if (position <= prevLimit || position >= nextLimit) {
+            return;
+        }
+    }
+
+    glyphPositionAdjustments->clearEntryPoint(position);
+}
+
+void GlyphIterator::clearCursiveExitPoint()
+{
+    if (direction < 0) {
+        if (position <= nextLimit || position >= prevLimit) {
+            return;
+        }
+    } else {
+        if (position <= prevLimit || position >= nextLimit) {
+            return;
+        }
+    }
+
+    glyphPositionAdjustments->clearExitPoint(position);
 }
 
 void GlyphIterator::setCursiveEntryPoint(LEPoint &entryPoint)
@@ -347,6 +383,7 @@ void GlyphIterator::setCursiveGlyph()
 
 le_bool GlyphIterator::filterGlyph(le_uint32 index) const
 {
+    LEErrorCode success = LE_NO_ERROR;
     LEGlyphID glyphID = glyphStorage[index];
     le_int32 glyphClass = gcdNoGlyphClass;
 
@@ -354,8 +391,8 @@ le_bool GlyphIterator::filterGlyph(le_uint32 index) const
         return TRUE;
     }
 
-    if (glyphClassDefinitionTable != NULL) {
-        glyphClass = glyphClassDefinitionTable->getGlyphClass(glyphID);
+    if (glyphClassDefinitionTable.isValid()) {
+      glyphClass = glyphClassDefinitionTable->getGlyphClass(glyphClassDefinitionTable, glyphID, success);
     }
 
     switch (glyphClass)
@@ -377,8 +414,9 @@ le_bool GlyphIterator::filterGlyph(le_uint32 index) const
 
         le_uint16 markAttachType = (lookupFlags & lfMarkAttachTypeMask) >> lfMarkAttachTypeShift;
 
-        if ((markAttachType != 0) && (markAttachClassDefinitionTable != NULL)) {
-            return markAttachClassDefinitionTable->getGlyphClass(glyphID) != markAttachType;
+        if ((markAttachType != 0) && (markAttachClassDefinitionTable.isValid())) {
+          return markAttachClassDefinitionTable
+            -> getGlyphClass(markAttachClassDefinitionTable, glyphID, success) != markAttachType;
         }
 
         return FALSE;
@@ -392,7 +430,7 @@ le_bool GlyphIterator::filterGlyph(le_uint32 index) const
     }
 }
 
-le_bool GlyphIterator::hasFeatureTag() const
+le_bool GlyphIterator::hasFeatureTag(le_bool matchGroup) const
 {
     if (featureMask == 0) {
         return TRUE;
@@ -401,14 +439,18 @@ le_bool GlyphIterator::hasFeatureTag() const
     LEErrorCode success = LE_NO_ERROR;
     FeatureMask fm = glyphStorage.getAuxData(position, success);
 
-    return (fm & featureMask) != 0;
+    return ((fm & featureMask) == featureMask) && (!matchGroup || (le_int32)(fm & LE_GLYPH_GROUP_MASK) == glyphGroup);
 }
 
 le_bool GlyphIterator::findFeatureTag()
 {
+  //glyphGroup = 0;
+
     while (nextInternal()) {
-        if (hasFeatureTag()) {
-            prevInternal();
+        if (hasFeatureTag(FALSE)) {
+            LEErrorCode success = LE_NO_ERROR;
+
+            glyphGroup = (glyphStorage.getAuxData(position, success) & LE_GLYPH_GROUP_MASK);
             return TRUE;
         }
     }
@@ -424,6 +466,7 @@ le_bool GlyphIterator::nextInternal(le_uint32 delta)
     while (newPosition != nextLimit && delta > 0) {
         do {
             newPosition += direction;
+            //fprintf(stderr,"%s:%d:%s: newPosition = %d, delta = %d\n", __FILE__, __LINE__, __FUNCTION__, newPosition, delta);
         } while (newPosition != nextLimit && filterGlyph(newPosition));
 
         delta -= 1;
@@ -431,12 +474,13 @@ le_bool GlyphIterator::nextInternal(le_uint32 delta)
 
     position = newPosition;
 
+    //fprintf(stderr,"%s:%d:%s: exit position = %d, delta = %d\n", __FILE__, __LINE__, __FUNCTION__, position, delta);
     return position != nextLimit;
 }
 
 le_bool GlyphIterator::next(le_uint32 delta)
 {
-    return nextInternal(delta) && hasFeatureTag();
+    return nextInternal(delta) && hasFeatureTag(TRUE);
 }
 
 le_bool GlyphIterator::prevInternal(le_uint32 delta)
@@ -446,6 +490,7 @@ le_bool GlyphIterator::prevInternal(le_uint32 delta)
     while (newPosition != prevLimit && delta > 0) {
         do {
             newPosition -= direction;
+            //fprintf(stderr,"%s:%d:%s: newPosition = %d, delta = %d\n", __FILE__, __LINE__, __FUNCTION__, newPosition, delta);
         } while (newPosition != prevLimit && filterGlyph(newPosition));
 
         delta -= 1;
@@ -453,12 +498,13 @@ le_bool GlyphIterator::prevInternal(le_uint32 delta)
 
     position = newPosition;
 
+    //fprintf(stderr,"%s:%d:%s: exit position = %d, delta = %d\n", __FILE__, __LINE__, __FUNCTION__, position, delta);
     return position != prevLimit;
 }
 
 le_bool GlyphIterator::prev(le_uint32 delta)
 {
-    return prevInternal(delta) && hasFeatureTag();
+    return prevInternal(delta) && hasFeatureTag(TRUE);
 }
 
 le_int32 GlyphIterator::getMarkComponent(le_int32 markPosition) const
@@ -484,10 +530,11 @@ le_bool GlyphIterator::findMark2Glyph()
 
     do {
         newPosition -= direction;
-    } while (newPosition != prevLimit && glyphStorage[newPosition] != 0xFFFE &&
-        filterGlyph(newPosition));
+    } while (newPosition != prevLimit && glyphStorage[newPosition] != 0xFFFE && filterGlyph(newPosition));
 
     position = newPosition;
 
     return position != prevLimit;
 }
+
+U_NAMESPACE_END

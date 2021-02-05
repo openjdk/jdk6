@@ -128,7 +128,31 @@ system.scope=sun.security.provider.IdentityDatabase
 # passed to checkPackageAccess unless the
 # corresponding RuntimePermission ("accessClassInPackage."+package) has
 # been granted.
-package.access=sun.,com.sun.xml.internal.ws.,com.sun.xml.internal.bind.,com.sun.imageio.
+package.access=sun.,\
+               com.sun.xml.internal.,\
+               com.sun.imageio.,\
+               com.sun.istack.internal.,\
+               com.sun.jmx.,\
+               com.sun.org.apache.bcel.internal.,\
+               com.sun.org.apache.regexp.internal.,\
+               com.sun.org.apache.xerces.internal.,\
+               com.sun.org.apache.xpath.internal.,\
+               com.sun.org.apache.xalan.internal.extensions.,\
+               com.sun.org.apache.xalan.internal.lib.,\
+               com.sun.org.apache.xalan.internal.res.,\
+               com.sun.org.apache.xalan.internal.templates.,\
+               com.sun.org.apache.xalan.internal.xslt.,\
+               com.sun.org.apache.xalan.internal.xsltc.cmdline.,\
+               com.sun.org.apache.xalan.internal.xsltc.compiler.,\
+               com.sun.org.apache.xalan.internal.xsltc.trax.,\
+               com.sun.org.apache.xalan.internal.xsltc.util.,\
+               com.sun.org.apache.xml.internal.res.,\
+               com.sun.org.apache.xml.internal.serializer.utils.,\
+               com.sun.org.apache.xml.internal.utils.,\
+               com.sun.org.apache.xml.internal.security.,\
+               com.sun.org.glassfish.,\
+               org.jcp.xml.dsig.internal.\
+               com.sun.java.accessibility.
 
 #
 # List of comma-separated packages that start with or equal this string
@@ -140,7 +164,31 @@ package.access=sun.,com.sun.xml.internal.ws.,com.sun.xml.internal.bind.,com.sun.
 # by default, none of the class loaders supplied with the JDK call
 # checkPackageDefinition.
 #
-package.definition=sun.,com.sun.xml.internal.ws.,com.sun.xml.internal.bind.,com.sun.imageio.
+package.definition=sun.,\
+                   com.sun.xml.internal.,\
+                   com.sun.imageio.,\
+                   com.sun.istack.internal.,\
+                   com.sun.jmx.,\
+                   com.sun.org.apache.bcel.internal.,\
+                   com.sun.org.apache.regexp.internal.,\
+                   com.sun.org.apache.xerces.internal.,\
+                   com.sun.org.apache.xpath.internal.,\
+                   com.sun.org.apache.xalan.internal.extensions.,\
+                   com.sun.org.apache.xalan.internal.lib.,\
+                   com.sun.org.apache.xalan.internal.res.,\
+                   com.sun.org.apache.xalan.internal.templates.,\
+                   com.sun.org.apache.xalan.internal.xslt.,\
+                   com.sun.org.apache.xalan.internal.xsltc.cmdline.,\
+                   com.sun.org.apache.xalan.internal.xsltc.compiler.,\
+                   com.sun.org.apache.xalan.internal.xsltc.trax.,\
+                   com.sun.org.apache.xalan.internal.xsltc.util.,\
+                   com.sun.org.apache.xml.internal.res.,\
+                   com.sun.org.apache.xml.internal.serializer.utils.,\
+                   com.sun.org.apache.xml.internal.utils.,\
+                   com.sun.org.apache.xml.internal.security.,\
+                   com.sun.org.glassfish.,\
+                   org.jcp.xml.dsig.internal.\
+                   com.sun.java.accessibility.
 
 #
 # Determines whether this properties file can be appended to

@@ -2,7 +2,6 @@
  * reserved comment block
  * DO NOT REMOVE OR ALTER!
  */
-
 /*
  * Copyright  1999-2004 The Apache Software Foundation.
  *
@@ -22,6 +21,7 @@
 package com.sun.org.apache.xml.internal.security.utils.resolver;
 
 
+import java.util.HashMap;
 import java.util.Map;
 
 import com.sun.org.apache.xml.internal.security.signature.XMLSignatureInput;
@@ -31,7 +31,7 @@ import org.w3c.dom.Attr;
 /**
  * During reference validation, we have to retrieve resources from somewhere.
  *
- * @author $Author: raul $
+ * @author $Author: mullan $
  */
 public abstract class ResourceResolverSpi {
 
@@ -41,7 +41,9 @@ public abstract class ResourceResolverSpi {
                     ResourceResolverSpi.class.getName());
 
    /** Field _properties */
-   protected java.util.Map _properties = new java.util.HashMap(10);
+   protected java.util.Map<String,String> _properties = null;
+
+   protected boolean secureValidation;
 
    /**
     * This is the workhorse method used to resolve resources.
@@ -62,19 +64,9 @@ public abstract class ResourceResolverSpi {
     * @param value
     */
    public void engineSetProperty(String key, String value) {
-
-      java.util.Iterator i = this._properties.keySet().iterator();
-
-      while (i.hasNext()) {
-         String c = (String) i.next();
-
-         if (c.equals(key)) {
-            key = c;
-
-            break;
-         }
-      }
-
+          if (_properties==null) {
+                  _properties=new HashMap<String,String>();
+          }
       this._properties.put(key, value);
    }
 
@@ -85,30 +77,33 @@ public abstract class ResourceResolverSpi {
     * @return the value of the property
     */
    public String engineGetProperty(String key) {
-
-      java.util.Iterator i = this._properties.keySet().iterator();
-
-      while (i.hasNext()) {
-         String c = (String) i.next();
-
-         if (c.equals(key)) {
-            key = c;
-
-            break;
-         }
-      }
-
-      return (String) this._properties.get(key);
+          if (_properties==null) {
+                        return null;
+          }
+      return this._properties.get(key);
    }
 
    /**
     *
     * @param properties
     */
-   public void engineAddProperies(Map properties) {
-      this._properties.putAll(properties);
+   public void engineAddProperies(Map<String,String> properties) {
+          if (properties!=null) {
+                  if (_properties==null) {
+                          _properties=new HashMap<String,String>();
+                  }
+                  this._properties.putAll(properties);
+          }
    }
-
+   /**
+    * Tells if the implementation does can be reused by several threads safely.
+    * It normally means that the implemantation does not have any member, or there is
+    * member change betwen engineCanResolve & engineResolve invocations. Or it mantians all
+    * member info in ThreadLocal methods.
+    */
+   public boolean engineIsThreadSafe() {
+           return false;
+   }
    /**
     * This method helps the {@link ResourceResolver} to decide whether a
     * {@link ResourceResolverSpi} is able to perform the requested action.
@@ -174,8 +169,8 @@ public abstract class ResourceResolverSpi {
                                   && (ch3 != '/'));
 
          if (isDosFilename) {
-            if (true)
-                if (log.isLoggable(java.util.logging.Level.FINE))                                     log.log(java.util.logging.Level.FINE, "Found DOS filename: " + str);
+            if (log.isLoggable(java.util.logging.Level.FINE))
+                log.log(java.util.logging.Level.FINE, "Found DOS filename: " + str);
          }
       }
 

@@ -32,26 +32,24 @@
 #ifndef __GLYPHITERATOR_H
 #define __GLYPHITERATOR_H
 
+/**
+ * \file
+ * \internal
+ */
+
 #include "LETypes.h"
 #include "OpenTypeTables.h"
 #include "GlyphDefinitionTables.h"
 
-struct InsertionRecord
-{
-    InsertionRecord *next;
-    le_int32 position;
-    le_int32 count;
-    LEGlyphID glyphs[ANY_NUMBER];
-};
+U_NAMESPACE_BEGIN
 
 class LEGlyphStorage;
 class GlyphPositionAdjustments;
 
-class GlyphIterator {
+class GlyphIterator : public UMemory {
 public:
-    GlyphIterator(LEGlyphStorage &theGlyphStorage, GlyphPositionAdjustments *theGlyphPositionAdjustments,
-        le_bool rightToLeft, le_uint16 theLookupFlags, FeatureMask theFeatureMask,
-        const GlyphDefinitionTableHeader *theGlyphDefinitionTableHeader);
+    GlyphIterator(LEGlyphStorage &theGlyphStorage, GlyphPositionAdjustments *theGlyphPositionAdjustments, le_bool rightToLeft, le_uint16 theLookupFlags,
+                  FeatureMask theFeatureMask, const LEReferenceTo<GlyphDefinitionTableHeader> &theGlyphDefinitionTableHeader);
 
     GlyphIterator(GlyphIterator &that);
 
@@ -90,16 +88,18 @@ public:
     void setCurrGlyphPositionAdjustment(float xPlacementAdjust, float yPlacementAdjust,
                                         float xAdvanceAdjust,   float yAdvanceAdjust);
 
+    void clearCursiveEntryPoint();
+    void clearCursiveExitPoint();
     void setCursiveEntryPoint(LEPoint &entryPoint);
     void setCursiveExitPoint(LEPoint &exitPoint);
     void setCursiveGlyph();
 
-    LEGlyphID *insertGlyphs(le_int32 count);
+    LEGlyphID *insertGlyphs(le_int32 count, LEErrorCode& success);
     le_int32 applyInsertions();
 
 private:
     le_bool filterGlyph(le_uint32 index) const;
-    le_bool hasFeatureTag() const;
+    le_bool hasFeatureTag(le_bool matchGroup) const;
     le_bool nextInternal(le_uint32 delta = 1);
     le_bool prevInternal(le_uint32 delta = 1);
 
@@ -115,11 +115,13 @@ private:
     le_int32    destIndex;
     le_uint16   lookupFlags;
     FeatureMask featureMask;
+    le_int32    glyphGroup;
 
-    const GlyphClassDefinitionTable *glyphClassDefinitionTable;
-    const MarkAttachClassDefinitionTable *markAttachClassDefinitionTable;
+    LEReferenceTo<GlyphClassDefinitionTable> glyphClassDefinitionTable;
+    LEReferenceTo<MarkAttachClassDefinitionTable> markAttachClassDefinitionTable;
 
     GlyphIterator &operator=(const GlyphIterator &other); // forbid copying of this class
 };
 
+U_NAMESPACE_END
 #endif

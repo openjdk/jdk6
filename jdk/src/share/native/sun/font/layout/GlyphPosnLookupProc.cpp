@@ -24,7 +24,6 @@
  */
 
 /*
- *
  * (C) Copyright IBM Corp. 1998 - 2005 - All Rights Reserved
  *
  */
@@ -32,7 +31,7 @@
 #include "LETypes.h"
 #include "LEFontInstance.h"
 #include "OpenTypeTables.h"
-#include "Features.h"
+#include "ICUFeatures.h"
 #include "Lookups.h"
 #include "ScriptAndLanguage.h"
 #include "GlyphDefinitionTables.h"
@@ -50,21 +49,33 @@
 #include "GlyphPosnLookupProc.h"
 #include "LESwaps.h"
 
+U_NAMESPACE_BEGIN
+
 // Aside from the names, the contextual positioning subtables are
 // the same as the contextual substitution subtables.
 typedef ContextualSubstitutionSubtable ContextualPositioningSubtable;
 typedef ChainingContextualSubstitutionSubtable ChainingContextualPositioningSubtable;
 
 GlyphPositioningLookupProcessor::GlyphPositioningLookupProcessor(
-        const GlyphPositioningTableHeader *glyphPositioningTableHeader,
-        LETag scriptTag, LETag languageTag,
-        const FeatureMap *featureMap, le_int32 featureMapCount, le_bool featureOrder)
+        const LEReferenceTo<GlyphPositioningTableHeader> &glyphPositioningTableHeader,
+        LETag scriptTag,
+        LETag languageTag,
+        const FeatureMap *featureMap,
+        le_int32 featureMapCount,
+        le_bool featureOrder,
+        LEErrorCode& success)
     : LookupProcessor(
-                      (char *) glyphPositioningTableHeader,
+                      glyphPositioningTableHeader,
                       SWAPW(glyphPositioningTableHeader->scriptListOffset),
                       SWAPW(glyphPositioningTableHeader->featureListOffset),
                       SWAPW(glyphPositioningTableHeader->lookupListOffset),
-                      scriptTag, languageTag, featureMap, featureMapCount, featureOrder)
+                      scriptTag,
+                      languageTag,
+                      featureMap,
+                      featureMapCount,
+                      featureOrder,
+                      success
+                      )
 {
     // anything?
 }
@@ -73,10 +84,15 @@ GlyphPositioningLookupProcessor::GlyphPositioningLookupProcessor()
 {
 }
 
-le_uint32 GlyphPositioningLookupProcessor::applySubtable(const LookupSubtable *lookupSubtable, le_uint16 lookupType,
+le_uint32 GlyphPositioningLookupProcessor::applySubtable(const LEReferenceTo<LookupSubtable> &lookupSubtable, le_uint16 lookupType,
                                                        GlyphIterator *glyphIterator,
-                                                       const LEFontInstance *fontInstance) const
+                                                       const LEFontInstance *fontInstance,
+                                                       LEErrorCode& success) const
 {
+    if (LE_FAILURE(success)) {
+        return 0;
+    }
+
     le_uint32 delta = 0;
 
     switch(lookupType)
@@ -86,73 +102,73 @@ le_uint32 GlyphPositioningLookupProcessor::applySubtable(const LookupSubtable *l
 
     case gpstSingle:
     {
-        const SinglePositioningSubtable *subtable = (const SinglePositioningSubtable *) lookupSubtable;
+      LEReferenceTo<SinglePositioningSubtable> subtable(lookupSubtable, success);
 
-        delta = subtable->process(glyphIterator, fontInstance);
+        delta = subtable->process(subtable, glyphIterator, fontInstance, success);
         break;
     }
 
     case gpstPair:
     {
-        const PairPositioningSubtable *subtable = (const PairPositioningSubtable *) lookupSubtable;
+        LEReferenceTo<PairPositioningSubtable> subtable(lookupSubtable, success);
 
-        delta = subtable->process(glyphIterator, fontInstance);
+        delta = subtable->process(subtable, glyphIterator, fontInstance, success);
         break;
     }
 
     case gpstCursive:
     {
-        const CursiveAttachmentSubtable *subtable = (const CursiveAttachmentSubtable *) lookupSubtable;
+        LEReferenceTo<CursiveAttachmentSubtable> subtable(lookupSubtable, success);
 
-        delta = subtable->process(glyphIterator, fontInstance);
+        delta = subtable->process(subtable, glyphIterator, fontInstance, success);
         break;
     }
 
     case gpstMarkToBase:
     {
-        const MarkToBasePositioningSubtable *subtable = (const MarkToBasePositioningSubtable *) lookupSubtable;
+        LEReferenceTo<MarkToBasePositioningSubtable> subtable(lookupSubtable, success);
 
-        delta = subtable->process(glyphIterator, fontInstance);
+        delta = subtable->process(subtable, glyphIterator, fontInstance, success);
         break;
     }
 
      case gpstMarkToLigature:
     {
-        const MarkToLigaturePositioningSubtable *subtable = (const MarkToLigaturePositioningSubtable *) lookupSubtable;
+        LEReferenceTo<MarkToLigaturePositioningSubtable> subtable(lookupSubtable, success);
 
-        delta = subtable->process(glyphIterator, fontInstance);
+        delta = subtable->process(subtable, glyphIterator, fontInstance, success);
         break;
     }
 
     case gpstMarkToMark:
     {
-        const MarkToMarkPositioningSubtable *subtable = (const MarkToMarkPositioningSubtable *) lookupSubtable;
+        LEReferenceTo<MarkToMarkPositioningSubtable> subtable(lookupSubtable, success);
 
-        delta = subtable->process(glyphIterator, fontInstance);
+        delta = subtable->process(subtable, glyphIterator, fontInstance, success);
         break;
     }
 
    case gpstContext:
     {
-        const ContextualPositioningSubtable *subtable = (const ContextualPositioningSubtable *) lookupSubtable;
+        LEReferenceTo<ContextualPositioningSubtable> subtable(lookupSubtable, success);
 
-        delta = subtable->process(this, glyphIterator, fontInstance);
+        delta = subtable->process(this, glyphIterator, fontInstance, success);
         break;
     }
 
     case gpstChainedContext:
     {
-        const ChainingContextualPositioningSubtable *subtable = (const ChainingContextualPositioningSubtable *) lookupSubtable;
+        LEReferenceTo<ChainingContextualPositioningSubtable> subtable(lookupSubtable, success);
 
-        delta = subtable->process(this, glyphIterator, fontInstance);
+        delta = subtable->process(this, glyphIterator, fontInstance, success);
         break;
     }
 
     case gpstExtension:
     {
-        const ExtensionSubtable *subtable = (const ExtensionSubtable *) lookupSubtable;
+        LEReferenceTo<ExtensionSubtable> subtable(lookupSubtable, success);
 
-        delta = subtable->process(this, lookupType, glyphIterator, fontInstance);
+        delta = subtable->process(this, lookupType, glyphIterator, fontInstance, success);
         break;
     }
 
@@ -166,3 +182,5 @@ le_uint32 GlyphPositioningLookupProcessor::applySubtable(const LookupSubtable *l
 GlyphPositioningLookupProcessor::~GlyphPositioningLookupProcessor()
 {
 }
+
+U_NAMESPACE_END
