@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009 Sun Microsystems, Inc.  All Rights Reserved.
+ * Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -16,9 +16,9 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  *
  */
 
@@ -250,6 +250,11 @@ class GraphKit : public Phase {
   // The JVMS must allow the bytecode to be re-executed
   // via an uncommon trap.
   void builtin_throw(Deoptimization::DeoptReason reason, Node* arg = NULL);
+
+  // Helper to check the JavaThread::_should_post_on_exceptions flag
+  // and branch to an uncommon_trap if it is true (with the specified reason and must_throw)
+  void uncommon_trap_if_should_post_on_exceptions(Deoptimization::DeoptReason reason,
+                                                  bool must_throw) ;
 
   // Helper Functions for adding debug information
   void kill_dead_locals();
@@ -636,7 +641,8 @@ class GraphKit : public Phase {
   void sync_kit(IdealKit& ideal);
 
   // vanilla/CMS post barrier
-  void write_barrier_post(Node *store, Node* obj, Node* adr, Node* val, bool use_precise);
+  void write_barrier_post(Node *store, Node* obj,
+                          Node* adr,  uint adr_idx, Node* val, bool use_precise);
 
   // G1 pre/post barriers
   void g1_write_barrier_pre(Node* obj,
@@ -655,7 +661,8 @@ class GraphKit : public Phase {
                              bool use_precise);
   // Helper function for g1
   private:
-  void g1_mark_card(IdealKit& ideal, Node* card_adr, Node* store,  Node* index, Node* index_adr,
+  void g1_mark_card(IdealKit& ideal, Node* card_adr, Node* store, uint oop_alias_idx,
+                    Node* index, Node* index_adr,
                     Node* buffer, const TypeFunc* tf);
 
   public:
