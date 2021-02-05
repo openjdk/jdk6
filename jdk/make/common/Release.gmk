@@ -885,28 +885,8 @@ initial-image-jdk-sol64:: initial-image-jdk-setup \
 			  initial-image-jdk64-bindemos \
 			  $(JDK_LICENSES) $(JDK64_LICENSES)
 
-# DB files to add
-ifdef OPENJDK
-
-initial-image-jdk-db:
-
-else
-
-# Create the list of db *.zip files to bundle with jdk
-ABS_DB_PATH  :=$(call FullPath,$(CLOSED_SHARE_SRC)/db)
-DB_ZIP_LIST = $(shell $(LS) $(ABS_DB_PATH)/*.zip 2>/dev/null)
-
-initial-image-jdk-db: $(DB_ZIP_LIST)
-	$(MKDIR) -p $(JDK_IMAGE_DIR)/db
-	for d in $(DB_ZIP_LIST); do \
-          ($(CD) $(JDK_IMAGE_DIR)/db && $(UNZIP) -o $$d); \
-	done
-
-endif
-
 # Standard jdk image
 initial-image-jdk:: initial-image-jdk-setup \
-		    initial-image-jdk-db \
 		    $(JDK_LICENSES) $(JDK_DOCFILES)
 	$(MKDIR) -p $(JDK_IMAGE_DIR)/lib
 	@#
@@ -1244,7 +1224,6 @@ images images-clobber::
 	initial-image-jre initial-image-jdk \
 	initial-image-jre-sol64 initial-image-jdk-sol64 \
         initial-image-jdk-setup \
-	initial-image-jdk-db \
         initial-image-jdk64-bindemos \
         initial-image-jre-setup \
 	trim-image-jre trim-image-jdk \

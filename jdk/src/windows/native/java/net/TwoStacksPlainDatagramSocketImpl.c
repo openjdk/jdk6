@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -440,12 +440,13 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_bind0(JNIEnv *env, jobject this,
     int address;
 
     family = getInetAddress_family(env, addressObj);
+    JNU_CHECK_EXCEPTION(env);
     if (family == IPv6 && !ipv6_supported) {
         JNU_ThrowByName(env, JNU_JAVANETPKG "SocketException",
                         "Protocol family not supported");
         return;
     }
-
+    JNU_CHECK_EXCEPTION(env);
     if (IS_NULL(fdObj) || (ipv6_supported && IS_NULL(fd1Obj))) {
         JNU_ThrowByName(env, JNU_JAVANETPKG "SocketException", "socket closed");
         return;
@@ -460,6 +461,7 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_bind0(JNIEnv *env, jobject this,
         return;
     } else {
         address = getInetAddress_addr(env, addressObj);
+        JNU_CHECK_EXCEPTION(env);
     }
 
     if (NET_InetAddressToSockaddr(env, addressObj, port, (struct sockaddr *)&lcladdr, &lcladdrlen, JNI_FALSE) != 0) {
@@ -560,8 +562,9 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_connect0(JNIEnv *env, jobject thi
     }
 
     addr = getInetAddress_addr(env, address);
-
+    JNU_CHECK_EXCEPTION(env);
     family = getInetAddress_family(env, address);
+    JNU_CHECK_EXCEPTION(env);
     if (family == IPv6 && !ipv6_supported) {
         JNU_ThrowByName(env, JNU_JAVANETPKG "SocketException",
                         "Protocol family not supported");
@@ -678,6 +681,7 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_send(JNIEnv *env, jobject this,
     }
 
     family = getInetAddress_family(env, iaObj);
+    JNU_CHECK_EXCEPTION(env);
     if (family == IPv4) {
         fdObj = (*env)->GetObjectField(env, this, pdsi_fdID);
     } else {
@@ -722,6 +726,7 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_send(JNIEnv *env, jobject this,
                       * Check is not necessary on these OSes */
             if (connected) {
                 address = getInetAddress_addr(env, iaObj);
+                JNU_CHECK_EXCEPTION(env);
             } else {
                 address = ntohl(rmtaddr.him4.sin_addr.s_addr);
             }
@@ -831,6 +836,7 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_peek(JNIEnv *env, jobject this,
         JNU_ThrowNullPointerException(env, "Null address in peek()");
     } else {
         address = getInetAddress_addr(env, addressObj);
+        JNU_CHECK_EXCEPTION_RETURN(env, -1);
         /* We only handle IPv4 for now. Will support IPv6 once its in the os */
         family = AF_INET;
     }
@@ -913,7 +919,9 @@ Java_java_net_TwoStacksPlainDatagramSocketImpl_peek(JNIEnv *env, jobject this,
         return 0;
     }
     setInetAddress_addr(env, addressObj, ntohl(remote_addr.sin_addr.s_addr));
+    JNU_CHECK_EXCEPTION_RETURN(env, -1);
     setInetAddress_family(env, addressObj, IPv4);
+    JNU_CHECK_EXCEPTION_RETURN(env, -1);
 
     /* return port */
     return ntohs(remote_addr.sin_port);
@@ -1608,6 +1616,7 @@ static int getInetAddrFromIf (JNIEnv *env, int family, jobject nif, jobject *iad
         int fam;
         addr = (*env)->GetObjectArrayElement(env, addrArray, i);
         fam = getInetAddress_family(env, addr);
+        JNU_CHECK_EXCEPTION_RETURN(env, -1);
         if (fam == family) {
             *iaddr = addr;
             return 0;
@@ -1626,6 +1635,7 @@ static int getInet4AddrFromIf (JNIEnv *env, jobject nif, struct in_addr *iaddr)
     }
 
     iaddr->s_addr = htonl(getInetAddress_addr(env, addr));
+    JNU_CHECK_EXCEPTION_RETURN(env, -1);
     return 0;
 }
 
@@ -1703,6 +1713,7 @@ static void setMulticastInterface(JNIEnv *env, jobject this, int fd, int fd1,
             struct in_addr in;
 
             in.s_addr = htonl(getInetAddress_addr(env, value));
+            JNU_CHECK_EXCEPTION(env);
 
             if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF,
                                (const char*)&in, sizeof(in)) < 0) {
@@ -1967,7 +1978,7 @@ jobject getMulticastInterface(JNIEnv *env, jobject this, int fd, int fd1, jint o
         CHECK_NULL_RETURN(addr, NULL);
 
         setInetAddress_addr(env, addr, ntohl(in.s_addr));
-
+        JNU_CHECK_EXCEPTION_RETURN(env, NULL);
         /*
          * For IP_MULTICAST_IF return InetAddress
          */

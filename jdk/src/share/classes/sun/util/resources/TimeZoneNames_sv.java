@@ -361,7 +361,7 @@ public final class TimeZoneNames_sv extends TimeZoneNamesBundle {
             {"America/Godthab", new String[] {"V\u00e4stra Gr\u00f6nland, normaltid", "WGT",
                                               "V\u00e4stra Gr\u00f6nland, sommartid", "WGST"}},
             {"America/Goose_Bay", AST},
-            {"America/Grand_Turk", AST},
+            {"America/Grand_Turk", EST},
             {"America/Grenada", AST},
             {"America/Guadeloupe", AST},
             {"America/Guatemala", CST},

@@ -515,7 +515,7 @@ public static final String ER_IGNORABLE_WHITESPACE_NOT_HANDLED =
 //  public static final int ER_EXTRA_ILLEGAL_TOKENS = 25;
 
   { ER_EXTRA_ILLEGAL_TOKENS,
-     "Zus\u00e4tzliche nicht zul\u00e4ssige Token: {0}"},
+     "Zus\u00E4tzliche unzul\u00E4ssige Tokens: {0}"},
 
   /** Field ER_EXPECTED_DOUBLE_QUOTE          */
 //  public static final int ER_EXPECTED_DOUBLE_QUOTE = 26;
@@ -569,13 +569,13 @@ public static final String ER_IGNORABLE_WHITESPACE_NOT_HANDLED =
 //  public static final int ER_PREDICATE_ILLEGAL_SYNTAX = 34;
 
   { ER_PREDICATE_ILLEGAL_SYNTAX,
-      "'..[predicate]' oder '.[predicate]' ist eine nicht zul\u00e4ssige Syntax.  Verwenden Sie stattdessen 'self::node()[predicate]'."},
+      "'..[predicate]' oder '.[predicate]' ist unzul\u00E4ssige Syntax. Verwenden Sie stattdessen 'self::node()[predicate]'."},
 
   /** Field ER_ILLEGAL_AXIS_NAME          */
 //  public static final int ER_ILLEGAL_AXIS_NAME = 35;
 
   { ER_ILLEGAL_AXIS_NAME,
-     "Nicht zul\u00e4ssiger Achsenname: {0}"},
+     "Unzul\u00E4ssiger Achsenname: {0}"},
 
   /** Field ER_UNKNOWN_NODETYPE          */
 //  public static final int ER_UNKNOWN_NODETYPE = 36;

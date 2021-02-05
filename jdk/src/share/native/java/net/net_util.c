@@ -210,6 +210,7 @@ void JNICALL setInetAddress_addr(JNIEnv *env, jobject iaObj, int address) {
     jobject holder;
     init(env);
     holder = (*env)->GetObjectField(env, iaObj, ia_holderID);
+    CHECK_NULL_THROW_NPE(env, holder, "InetAddress holder is null");
     (*env)->SetIntField(env, holder, iac_addressID, address);
 }
 
@@ -218,6 +219,7 @@ void JNICALL setInetAddress_family(JNIEnv *env, jobject iaObj, int family) {
     jobject holder;
     init(env);
     holder = (*env)->GetObjectField(env, iaObj, ia_holderID);
+    CHECK_NULL_THROW_NPE(env, holder, "InetAddress holder is null");
     (*env)->SetIntField(env, holder, iac_familyID, family);
 }
 
@@ -225,6 +227,7 @@ void setInetAddress_hostName(JNIEnv *env, jobject iaObj, jobject host) {
     jobject holder;
     init(env);
     holder = (*env)->GetObjectField(env, iaObj, ia_holderID);
+    CHECK_NULL_THROW_NPE(env, holder, "InetAddress holder is null");
     (*env)->SetObjectField(env, holder, iac_hostNameID, host);
     (*env)->SetObjectField(env, holder, iac_origHostNameID, host);
 }
@@ -234,6 +237,7 @@ int JNICALL getInetAddress_addr(JNIEnv *env, jobject iaObj) {
     jobject holder;
     init(env);
     holder = (*env)->GetObjectField(env, iaObj, ia_holderID);
+    CHECK_NULL_THROW_NPE_RETURN(env, holder, "InetAddress holder is null", -1);
     return (*env)->GetIntField(env, holder, iac_addressID);
 }
 
@@ -242,6 +246,7 @@ int JNICALL getInetAddress_family(JNIEnv *env, jobject iaObj) {
     jobject holder;
     init(env);
     holder = (*env)->GetObjectField(env, iaObj, ia_holderID);
+    CHECK_NULL_THROW_NPE_RETURN(env, holder, "InetAddress holder is null", -1);
     return (*env)->GetIntField(env, holder, iac_familyID);
 }
 
@@ -249,6 +254,7 @@ jobject getInetAddress_hostName(JNIEnv *env, jobject iaObj) {
     jobject holder;
     init(env);
     holder = (*env)->GetObjectField(env, iaObj, ia_holderID);
+    CHECK_NULL_THROW_NPE_RETURN(env, holder, "InetAddress holder is null", NULL);
     return (*env)->GetObjectField(env, holder, iac_hostNameID);
 }
 
@@ -279,7 +285,9 @@ NET_SockaddrToInetAddress(JNIEnv *env, struct sockaddr *him, int *port) {
             CHECK_NULL_RETURN(iaObj, NULL);
             address = NET_IPv4MappedToIPv4(caddr);
             setInetAddress_addr(env, iaObj, address);
+            JNU_CHECK_EXCEPTION_RETURN(env, NULL);
             setInetAddress_family(env, iaObj, IPv4);
+            JNU_CHECK_EXCEPTION_RETURN(env, NULL);
         } else {
             static jclass inet6Cls = 0;
             int ret;
@@ -295,6 +303,7 @@ NET_SockaddrToInetAddress(JNIEnv *env, struct sockaddr *him, int *port) {
             ret = setInet6Address_ipaddress(env, iaObj, (char *)&(him6->sin6_addr));
             CHECK_NULL_RETURN(ret, NULL);
             setInetAddress_family(env, iaObj, IPv6);
+            JNU_CHECK_EXCEPTION_RETURN(env, NULL);
 	    setInet6Address_scopeid(env, iaObj, getScopeID(him));
         }
         *port = ntohs(him6->sin6_port);
@@ -314,7 +323,9 @@ NET_SockaddrToInetAddress(JNIEnv *env, struct sockaddr *him, int *port) {
             iaObj = (*env)->NewObject(env, inet4Cls, ia4_ctrID);
             CHECK_NULL_RETURN(iaObj, NULL);
             setInetAddress_family(env, iaObj, IPv4);
+            JNU_CHECK_EXCEPTION_RETURN(env, NULL);
             setInetAddress_addr(env, iaObj, ntohl(him4->sin_addr.s_addr));
+            JNU_CHECK_EXCEPTION_RETURN(env, NULL);
             *port = ntohs(him4->sin_port);
         }
     return iaObj;
@@ -324,7 +335,7 @@ jint
 NET_SockaddrEqualsInetAddress(JNIEnv *env, struct sockaddr *him, jobject iaObj)
 {
     jint family = getInetAddress_family(env, iaObj) == IPv4?AF_INET : AF_INET6;
-
+    JNU_CHECK_EXCEPTION_RETURN(env, JNI_FALSE);
 #ifdef AF_INET6
     if (him->sa_family == AF_INET6) {
 #ifdef WIN32
@@ -341,6 +352,7 @@ NET_SockaddrEqualsInetAddress(JNIEnv *env, struct sockaddr *him, jobject iaObj)
             }
             addrNew = NET_IPv4MappedToIPv4(caddrNew);
             addrCur = getInetAddress_addr(env, iaObj);
+            JNU_CHECK_EXCEPTION_RETURN(env, JNI_FALSE);
             if (addrNew == addrCur) {
                 return JNI_TRUE;
             } else {
@@ -372,6 +384,7 @@ NET_SockaddrEqualsInetAddress(JNIEnv *env, struct sockaddr *him, jobject iaObj)
             }
             addrNew = ntohl(him4->sin_addr.s_addr);
             addrCur = getInetAddress_addr(env, iaObj);
+            JNU_CHECK_EXCEPTION_RETURN(env, JNI_FALSE);
             if (addrNew == addrCur) {
                 return JNI_TRUE;
             } else {
