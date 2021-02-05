@@ -391,6 +391,14 @@ abstract class Handshaker {
         }
     }
 
+    String getEndpointIdentificationAlgorithmSE() {
+        if (conn != null) {
+            return conn.getHostnameVerification();
+        } else {
+            return engine.getHostnameVerification();
+        }
+    }
+
     private void setVersionSE(ProtocolVersion protocolVersion) {
         if (conn != null) {
             conn.setVersion(protocolVersion);

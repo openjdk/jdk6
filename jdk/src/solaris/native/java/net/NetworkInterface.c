@@ -276,8 +276,20 @@ JNIEXPORT jobject JNICALL Java_java_net_NetworkInterface_getByInetAddress0
     netif *ifs, *curr;
     jobject obj = NULL;
     jboolean match = JNI_FALSE;
-    int family = (getInetAddress_family(env, iaObj) == IPv4) ? AF_INET : AF_INET6;
+#ifdef AF_INET6
+    int family = getInetAddress_family(env, iaObj);
     JNU_CHECK_EXCEPTION_RETURN(env, NULL);
+
+    if (family == IPv4) {
+      family = AF_INET;
+    } else if (family == IPv6) {
+      family = AF_INET6;
+    } else {
+      return NULL; // Invalid family
+    }
+#else
+    int family = AF_INET;
+#endif
 
     ifs = enumInterfaces(env);
     if (ifs == NULL) {
